@@ -3,8 +3,6 @@ import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
-import path from "path";
-import fs from "fs";
 
 // Page metadata for SEO
 export const metadata = {
@@ -21,19 +19,23 @@ interface BlogPost {
   published: string;
 }
 
-// Fetch blog posts from Google Blogger API
+// Fetch blog posts from Google Blogger API using Base64-encoded credentials
 async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
-  const keyFilePath = path.join(process.cwd(), "service-account.json");
+  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64; // Base64 encoded credentials
 
-  if (!fs.existsSync(keyFilePath)) {
-    console.error("Service account key file not found.");
+  if (!BLOG_ID || !encodedCredentials) {
+    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
     return [];
   }
 
   try {
+    // Decode the Base64 string and parse the JSON
+    const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
+    const credentials = JSON.parse(credentialsJSON);
+
     const auth = new google.auth.GoogleAuth({
-      keyFile: keyFilePath,
+      credentials,
       scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
     });
 
@@ -46,16 +48,20 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       blogId: BLOG_ID,
     });
 
-    return response.data.items?.map((post) => ({
+    if (!response.data.items) {
+      console.warn("⚠️ No blog posts found.");
+      return [];
+    }
+
+    return response.data.items.map((post) => ({
       id: post.id || "",
       title: post.title || "Untitled",
       content: post.content || "",
       url: post.url || "#",
       published: post.published || new Date().toISOString(),
-    })) || [];
-
+    }));
   } catch (error) {
-    console.error("Error fetching blog posts:", error);
+    console.error("❌ Error fetching blog posts:", error);
     return [];
   }
 }
