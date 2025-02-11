@@ -1,16 +1,19 @@
+// app/blogs/page.tsx
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
 
-// Page metadata for SEO
+// Set the revalidation interval (in seconds)
+export const revalidate = 60;
+
 export const metadata = {
   title: "Blog Posts",
   description: "Insights and articles about cybersecurity, technology, and more",
 };
 
-// Define a TypeScript interface for blog posts
 interface BlogPost {
   id: string;
   title: string;
@@ -19,10 +22,9 @@ interface BlogPost {
   published: string;
 }
 
-// Fetch blog posts from Google Blogger API using Base64-encoded credentials
 async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
-  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64; // Base64 encoded credentials
+  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
 
   if (!BLOG_ID || !encodedCredentials) {
     console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
@@ -30,7 +32,6 @@ async function getBlogPosts(): Promise<BlogPost[]> {
   }
 
   try {
-    // Decode the Base64 string and parse the JSON
     const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
     const credentials = JSON.parse(credentialsJSON);
 
@@ -39,14 +40,8 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
     });
 
-    const blogger = google.blogger({
-      version: "v3",
-      auth,
-    });
-
-    const response = await blogger.posts.list({
-      blogId: BLOG_ID,
-    });
+    const blogger = google.blogger({ version: "v3", auth });
+    const response = await blogger.posts.list({ blogId: BLOG_ID });
 
     if (!response.data.items) {
       console.warn("⚠️ No blog posts found.");
@@ -66,22 +61,19 @@ async function getBlogPosts(): Promise<BlogPost[]> {
   }
 }
 
-// Extract the first image from blog content
 function extractFirstImage(content: string): string {
   const imgRegex = /<img[^>]+src="([^">]+)"/;
   const match = content.match(imgRegex);
   return match
     ? match[1]
-    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop"; // Default image
+    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
 }
 
-// Extract plain text excerpt from content
 function extractExcerpt(content: string, maxLength: number = 200): string {
-  const text = content.replace(/<[^>]*>/g, ""); // Strip HTML tags
+  const text = content.replace(/<[^>]*>/g, "");
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-// Blog page component
 export default async function BlogsPage() {
   const posts = await getBlogPosts();
 
@@ -93,7 +85,6 @@ export default async function BlogsPage() {
           Insights and articles about cybersecurity, technology, and more
         </p>
       </div>
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {posts.length > 0 ? (
           posts.map((post) => (
