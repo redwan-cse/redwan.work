@@ -4,13 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
 
+// Force Node.js runtime (required for googleapis and Buffer)
+export const runtime = "nodejs";
+
 // Page metadata for SEO
 export const metadata = {
   title: "Blog Posts",
   description: "Insights and articles about cybersecurity, technology, and more",
 };
 
-// Implement ISR: Revalidate the page at most every 60 seconds
+// Implement ISR: revalidate the page at most every 60 seconds.
 export const revalidate = 60;
 
 // Define a TypeScript interface for blog posts
