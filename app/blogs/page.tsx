@@ -4,17 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
 
-// Force Node.js runtime (required for googleapis and Buffer)
-export const runtime = "nodejs";
-
 // Page metadata for SEO
 export const metadata = {
   title: "Blog Posts",
   description: "Insights and articles about cybersecurity, technology, and more",
 };
-
-// Implement ISR: revalidate the page at most every 60 seconds.
-export const revalidate = 60;
 
 // Define a TypeScript interface for blog posts
 interface BlogPost {
@@ -25,13 +19,16 @@ interface BlogPost {
   published: string;
 }
 
+// Enable ISR with a revalidate period of 1 hour as fallback
+export const revalidate = 3600;
+
 // Fetch blog posts from Google Blogger API using Base64-encoded credentials
 async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
-  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64; // Base64 encoded credentials
+  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
 
   if (!BLOG_ID || !encodedCredentials) {
-    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
+    console.error("Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
     return [];
   }
 
@@ -67,7 +64,7 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       published: post.published || new Date().toISOString(),
     }));
   } catch (error) {
-    console.error("❌ Error fetching blog posts:", error);
+    console.error("Error fetching blog posts:", error);
     return [];
   }
 }
@@ -78,12 +75,12 @@ function extractFirstImage(content: string): string {
   const match = content.match(imgRegex);
   return match
     ? match[1]
-    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop"; // Default image
+    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
 }
 
 // Extract plain text excerpt from content
 function extractExcerpt(content: string, maxLength: number = 200): string {
-  const text = content.replace(/<[^>]*>/g, ""); // Strip HTML tags
+  const text = content.replace(/<[^>]*>/g, "");
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
