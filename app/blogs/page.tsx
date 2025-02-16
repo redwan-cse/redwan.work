@@ -1,11 +1,19 @@
 // app/blogs/page.tsx
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
 
-// Define a TypeScript interface for blog posts
+// Set the revalidation interval (in seconds)
+export const revalidate = 60;
+
+export const metadata = {
+  title: "Blog Posts",
+  description: "Insights and articles about cybersecurity, technology, and more",
+};
+
 interface BlogPost {
   id: string;
   title: string;
@@ -14,17 +22,12 @@ interface BlogPost {
   published: string;
 }
 
-// Fetch blog posts from Google Blogger API
 async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
   const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
 
-  if (!BLOG_ID) {
-    console.error("❌ Missing environment variable: BLOGGER_ID");
-    return [];
-  }
-  if (!encodedCredentials) {
-    console.error("❌ Missing environment variable: GOOGLE_CREDENTIALS_B64");
+  if (!BLOG_ID || !encodedCredentials) {
+    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
     return [];
   }
 
@@ -37,17 +40,11 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
     });
 
-    const blogger = google.blogger({
-      version: "v3",
-      auth,
-    });
-
-    const response = await blogger.posts.list({
-      blogId: BLOG_ID,
-    });
+    const blogger = google.blogger({ version: "v3", auth });
+    const response = await blogger.posts.list({ blogId: BLOG_ID });
 
     if (!response.data.items) {
-      console.warn("⚠️ No blog posts found from Blogger API.");
+      console.warn("⚠️ No blog posts found.");
       return [];
     }
 
@@ -58,26 +55,25 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       url: post.url || "#",
       published: post.published || new Date().toISOString(),
     }));
-  } catch (error: any) { // Explicitly type error as any for broader catch
-    console.error("❌ Error fetching blog posts:", error.message || error); // Log error message if available, otherwise the error object
+  } catch (error) {
+    console.error("❌ Error fetching blog posts:", error);
     return [];
   }
 }
 
-// Utility Functions (kept as-is, but made slightly more robust)
 function extractFirstImage(content: string): string {
-    const imgRegex = /<img[^>]+src="([^">]+)"/;
-    const match = content.match(imgRegex);
-    return match ? match[1] : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
+  const imgRegex = /<img[^>]+src="([^">]+)"/;
+  const match = content.match(imgRegex);
+  return match
+    ? match[1]
+    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
 }
 
 function extractExcerpt(content: string, maxLength: number = 200): string {
-    const text = content.replace(/<[^>]*>/g, "").trim(); // Strip HTML and trim whitespace
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+  const text = content.replace(/<[^>]*>/g, "");
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
-
-// Blog page component
 export default async function BlogsPage() {
   const posts = await getBlogPosts();
 
@@ -89,7 +85,6 @@ export default async function BlogsPage() {
           Insights and articles about cybersecurity, technology, and more
         </p>
       </div>
-
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {posts.length > 0 ? (
           posts.map((post) => (
@@ -131,12 +126,3 @@ export default async function BlogsPage() {
     </div>
   );
 }
-
-// ISR configuration: revalidate every 60 seconds
-export const revalidate = 60;
-
-// Page metadata for SEO
-export const metadata = {
-  title: "Blog Posts",
-  description: "Insights and articles about cybersecurity, technology, and more",
-};
