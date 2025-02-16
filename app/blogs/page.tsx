@@ -4,6 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { google } from "googleapis";
 
+// Replace revalidateInterval with segment config
+export const revalidate = 3600; // 1 hour in seconds
+
 // Page metadata for SEO
 export const metadata = {
   title: "Blog Posts",
@@ -19,16 +22,13 @@ interface BlogPost {
   published: string;
 }
 
-// Enable ISR with a revalidate period of 1 hour as fallback
-export const revalidate = 3600;
-
 // Fetch blog posts from Google Blogger API using Base64-encoded credentials
 async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
-  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
+  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64; // Base64 encoded credentials
 
   if (!BLOG_ID || !encodedCredentials) {
-    console.error("Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
+    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
     return [];
   }
 
@@ -64,7 +64,7 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       published: post.published || new Date().toISOString(),
     }));
   } catch (error) {
-    console.error("Error fetching blog posts:", error);
+    console.error("❌ Error fetching blog posts:", error);
     return [];
   }
 }
@@ -75,12 +75,12 @@ function extractFirstImage(content: string): string {
   const match = content.match(imgRegex);
   return match
     ? match[1]
-    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
+    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop"; // Default image
 }
 
 // Extract plain text excerpt from content
 function extractExcerpt(content: string, maxLength: number = 200): string {
-  const text = content.replace(/<[^>]*>/g, "");
+  const text = content.replace(/<[^>]*>/g, ""); // Strip HTML tags
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
