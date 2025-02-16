@@ -19,8 +19,12 @@ async function getBlogPosts(): Promise<BlogPost[]> {
   const BLOG_ID = process.env.BLOGGER_ID;
   const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
 
-  if (!BLOG_ID || !encodedCredentials) {
-    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
+  if (!BLOG_ID) {
+    console.error("❌ Missing environment variable: BLOGGER_ID");
+    return [];
+  }
+  if (!encodedCredentials) {
+    console.error("❌ Missing environment variable: GOOGLE_CREDENTIALS_B64");
     return [];
   }
 
@@ -43,7 +47,7 @@ async function getBlogPosts(): Promise<BlogPost[]> {
     });
 
     if (!response.data.items) {
-      console.warn("⚠️ No blog posts found.");
+      console.warn("⚠️ No blog posts found from Blogger API.");
       return [];
     }
 
@@ -54,8 +58,8 @@ async function getBlogPosts(): Promise<BlogPost[]> {
       url: post.url || "#",
       published: post.published || new Date().toISOString(),
     }));
-  } catch (error) {
-    console.error("❌ Error fetching blog posts:", error);
+  } catch (error: any) { // Explicitly type error as any for broader catch
+    console.error("❌ Error fetching blog posts:", error.message || error); // Log error message if available, otherwise the error object
     return [];
   }
 }
