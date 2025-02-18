@@ -6,7 +6,7 @@ import {
   Twitter,
   Mail,
   Globe,
-  MessageSquare,
+  Briefcase,
 } from "lucide-react"
 
 const socialLinks = [
@@ -43,13 +43,13 @@ const socialLinks = [
   {
     name: "Upwork",
     href: "https://www.upwork.com/freelancers/redwancse",
-    icon: Globe,
+    icon: Briefcase,
     color: "#6FDA44",
   },
   {
     name: "Fiverr",
     href: "https://www.fiverr.com/redwancse",
-    icon: MessageSquare,
+    icon: Briefcase,
     color: "#1DBF73",
   },
   {
