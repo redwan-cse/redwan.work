@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Mail, MessageSquare, Send, Linkedin } from "lucide-react"
+import { Mail, MessageSquare, Send} from "lucide-react"
 
 export default function Contact() {
   return (
@@ -16,12 +16,12 @@ export default function Contact() {
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-8 text-center text-4xl font-bold">Get in Touch</h1>
         <Card>
-          <CardHeader>
-            <CardTitle>Contact Me</CardTitle>
+            <CardHeader className="text-center">
+            <CardTitle></CardTitle>
             <CardDescription>
               Fill out the form below and I&apos;ll get back to you as soon as possible.
             </CardDescription>
-          </CardHeader>
+            </CardHeader>
           <CardContent>
             <form className="space-y-6">
               <div className="space-y-4">
@@ -65,28 +65,32 @@ export default function Contact() {
         </Card>
 
         <div className="mt-12 grid gap-8 sm:grid-cols-2">
-          <Card>
+            <Card>
             <CardContent className="flex items-center gap-4 p-6">
               <Mail className="h-8 w-8 text-primary" />
               <div>
-                <h3 className="font-semibold">Email</h3>
-                <p className="text-sm text-muted-foreground">
-                  contact@redwan.work
-                </p>
+              <h3 className="font-semibold">Email</h3>
+              <p className="text-sm text-muted-foreground">
+                <a href="mailto:contact@redwan.work" className="hover:underline">
+                contact@redwan.work
+                </a>
+              </p>
               </div>
             </CardContent>
-          </Card>
-          <Card>
+            </Card>
+            <Card>
             <CardContent className="flex items-center gap-4 p-6">
-              <Linkedin className="h-8 w-8 text-primary" />
+              <MessageSquare className="h-8 w-8 text-primary" />
               <div>
-                <h3 className="font-semibold">Linkedin</h3>
-                <p className="text-sm text-muted-foreground">
-                  in/redwancse on LinkedIn
-                </p>
+              <h3 className="font-semibold">Book a Consultation</h3>
+              <p className="text-sm text-muted-foreground">
+                <a href="https://calendly.com/redwancse/consultation" className="hover:underline" target="_blank" rel="noopener noreferrer">
+                Schedule a meeting
+                </a>
+              </p>
               </div>
             </CardContent>
-          </Card>
+            </Card>
         </div>
       </div>
     </div>
