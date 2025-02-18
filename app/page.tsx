@@ -119,7 +119,7 @@ export default function Home() {
             </Button>
             <Button asChild variant="outline" size="lg">
               <a
-                href="https://calendly.com/redwancse"
+                href="https://calendly.com/redwancse/consultation"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center"
