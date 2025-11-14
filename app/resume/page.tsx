@@ -1,3 +1,7 @@
+"use client"
+
+import { useRef } from "react"
+import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -8,21 +12,17 @@ import {
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Download, ExternalLink, Mail, Phone, MapPin, Linkedin, Github, Globe, Briefcase, GraduationCap, Award, Users, BookOpen, Heart } from "lucide-react"
+import { Download, ExternalLink, Mail, Phone, MapPin, Linkedin, Github, Globe, Briefcase, GraduationCap, Award, Users, BookOpen, Heart, FileText, Printer } from "lucide-react"
 import Link from "next/link"
-
-export const metadata = {
-  title: "Resume - Md Redwan Ahmed",
-  description: "Professional resume of Md Redwan Ahmed - Cybersecurity Expert, Penetration Tester, and System Administrator",
-}
+import { PrintableResume } from "@/components/printable-resume"
 
 const personalInfo = {
-  name: "Md Redwan Ahmed",
-  title: "Founder & CEO of Fast Cyber Defense",
-  subtitle: "Cybersecurity Expert | Penetration Tester | System Administrator",
-  email: "redwan@example.com",
-  phone: "+880 123 456 7890",
-  location: "Dhaka, Bangladesh",
+  name: "Md. Redwan Ahmed",
+  title: "Computer Science & Engineering Professional",
+  subtitle: "Cybersecurity Researcher | Information Security Freelancer | Educator",
+  email: "contact@redwan.work",
+  phone: "+88017-7638-7624",
+  location: "Dhaka, BD",
   linkedin: "https://www.linkedin.com/in/redwancse",
   github: "https://github.com/redwan-cse",
   website: "https://redwan.work",
@@ -36,57 +36,81 @@ const technicalSkills = {
     "Cryptography",
     "Networking Protocols & Standards",
     "Network Troubleshooting & Security",
-    "Security Tools & Exploits",
+    "Security Tools (Burp Suite, Nessus, EnCase, FTK, Autopsy)",
   ],
   "System Administration": [
     "Linux System Administration (CentOS, Ubuntu Server)",
     "Configuration Management (Ansible)",
     "Virtualization & Containerization (Docker, Kubernetes)",
     "Backup & Recovery Solutions",
-    "Cloud Computing (AWS, DigitalOcean, Azure)",
-    "Identity & Access Management (IAM)",
   ],
   "Cloud & DevOps": [
-    "Command-Line Interface (CLI) Proficiency",
-    "Infrastructure as Code (IaC)",
+    "AWS (EC2 Instance, IAM)",
+    "Digital Ocean",
+    "Azure IAM",
     "CI/CD Pipelines (GitHub Actions, Jenkins)",
-    "Cloud Security Best Practices",
-    "Monitoring & Logging",
+    "Git & GitHub",
+    "Command-Line Interface (CLI) Proficiency",
+    "Jira",
   ],
   "Programming & Scripting": [
-    "Python, Java, C, C++",
-    "MySQL, PHP, C#",
-    "PowerShell & Shell Scripting",
+    "Python",
+    "Java",
+    "C/C++",
+    "MySQL",
+    "PHP",
+    "C#",
+    "PowerShell Scripting",
+    "Shell Scripting",
     "Batch Scripting",
   ],
 }
 
 const softSkills = [
-  "Analytical Thinking & Problem-Solving",
-  "Team Collaboration & Leadership",
-  "Effective Communication & Public Speaking",
-  "Project & Time Management",
-  "Commitment & Adaptability",
+  "Analytical Skills",
+  "Team Collaboration",
+  "Team Management",
+  "Leadership",
+  "Time Management",
+  "Commitment",
+  "Communication",
+  "Emotional Intelligence",
+  "Public Speaking",
 ]
 
 const otherSkills = [
-  "MS Office 365 & Google Workspace",
-  "Technical Support & Troubleshooting",
-  "Self-Learning & Research Capabilities",
+  "MS Office 365",
+  "Google Workspace",
+  "Tech Support",
+  "Troubleshooting",
+  "Self-Learning Capability",
+  "Documentation",
 ]
 
 const hobbies = [
   {
-    name: "Coding & Programming",
-    description: "Skilled in multiple languages and eager to develop cybersecurity solutions.",
+    name: "Cybersecurity Research",
+    description: "Actively researching emerging threats, vulnerabilities, and security methodologies to stay ahead in the field.",
+  },
+  {
+    name: "Open Source Contribution",
+    description: "Contributing to security tools and frameworks on GitHub, collaborating with the global developer community.",
   },
   {
     name: "Capture The Flag (CTF) Challenges",
-    description: "Passionate about cybersecurity problem-solving and ethical hacking competitions.",
+    description: "Participating in cybersecurity competitions to sharpen problem-solving skills and explore ethical hacking techniques.",
   },
   {
-    name: "Traveling",
-    description: "Enthusiastic traveler, exploring diverse cultures and environments to enhance adaptability.",
+    name: "Technical Writing & Documentation",
+    description: "Creating guides, tutorials, and technical documentation to share knowledge with the security community.",
+  },
+  {
+    name: "Teaching & Mentoring",
+    description: "Training aspiring cybersecurity professionals and students, sharing practical knowledge and industry best practices.",
+  },
+  {
+    name: "Technology Exploration",
+    description: "Continuously learning new programming languages, frameworks, and security tools to expand technical expertise.",
   },
 ]
 
@@ -95,10 +119,10 @@ const research = {
     title: "Data-Driven Strategies for Digital Native Market Segmentation Using Clustering",
     details: [
       "Journal: International Journal of Cognitive Computing in Engineering",
-      "Indexing: Scopus",
+      "Indexing: Scopus (Open Access)",
       "Quartile: Q1",
-      "Cite Score: 8",
       "Publisher: Elsevier",
+      "Online ISSN: 2666-3074",
     ],
   },
   conference: {
@@ -107,99 +131,149 @@ const research = {
       "Conference: IEEE CS BDC SYMPOSIUM 2024",
       "Date: November 22-23, 2024",
       "Location: Jagannath University, Dhaka, Bangladesh",
-      "Organizer: IEEE Computer Society Bangladesh Chapter",
     ],
   },
 }
 
 const certifications = [
   {
-    name: "Certified Network Security Practitioner (CNSP)",
-    issuer: "The SecOps Group",
-    date: "June 2024",
-  },
-  {
-    name: "Certified AppSec Practitioner (CAP)",
-    issuer: "The SecOps Group",
-    date: "March 2023",
-  },
-  {
-    name: "Jr Penetration Tester",
-    issuer: "TryHackMe",
-    date: "April 2024",
+    name: "IBM Cybersecurity Analyst Professional Certificate (V2)",
+    issuer: "Coursera",
+    date: "2025",
   },
   {
     name: "GitHub Foundations",
     issuer: "GitHub",
-    date: "Oct 2024",
+    date: "2024",
+  },
+  {
+    name: "Certified Network Security Practitioner (CNSP)",
+    issuer: "The SecOps Group",
+    date: "2024",
+  },
+  {
+    name: "Jr Penetration Tester",
+    issuer: "TryHackMe",
+    date: "2024",
+  },
+  {
+    name: "Certified AppSec Practitioner (CAP)",
+    issuer: "The SecOps Group",
+    date: "2023",
+  },
+  {
+    name: "Cyber Security",
+    issuer: "Arena Web Security",
+    date: "2023",
   },
 ]
 
 const experience = [
   {
-    title: "Cyber Security Instructor & Pentester",
-    company: "SMP CyberSecurity",
-    type: "Contract",
-    location: "Dhaka",
-    period: "10/2024 - Present",
-  },
-  {
-    title: "Freelancer",
+    title: "Professional Information Security Freelancer",
     company: "Upwork",
     type: "Remote",
     location: "Worldwide",
-    period: "04/2023 - 09/2023",
+    period: "04/2023 - Present",
     highlights: [
-      "Provided Vulnerability Assessment & Penetration Testing",
-      "Conducted OSINT investigations",
+      "Leveraged VA/PT tools to conduct vulnerability assessments and penetration tests using Burp Suite and Nessus.",
+      "Delivered data recovery and digital security solutions.",
+      "Directed forensic investigation using EnCase, FTK, and Autopsy.",
+      "Provided technical task management and consultation.",
     ],
   },
   {
-    title: "IT Technician",
-    company: "ThorTech",
-    type: "Part-Time",
+    title: "Trainer – Machine Learning with Python",
+    company: "EDGE Project, Jagannath University",
+    type: "Training",
     location: "Dhaka",
-    period: "07/2021 - 10/2023",
+    period: "09/2024 - 05/2025",
+    highlights: [
+      "Conducted hands-on training on Python-based machine learning concepts.",
+      "Guided participants through supervised and unsupervised learning techniques.",
+    ],
   },
   {
-    title: "System Administrator Trainer",
-    company: "AsiaInfo Technologies Ltd",
+    title: "Trainer – Basic Computer Course",
+    company: "Jagannath University IT Society",
+    type: "Training",
+    location: "Dhaka",
+    period: "08/2024 - 02/2025",
+    highlights: [
+      "Conducted training on computer fundamentals and MS Office (Word, PowerPoint, Excel).",
+      "Focused on practical learning to promote digital literacy.",
+    ],
+  },
+  {
+    title: "Trainer – Microsoft Office",
+    company: "EDGE Project, Jagannath University",
+    type: "Training",
+    location: "Dhaka",
+    period: "08/2024 - 12/2024",
+    highlights: [
+      "Conducted practical sessions on Microsoft Office applications including Word, Excel, and PowerPoint.",
+      "Delivered foundational IT training as part of the national EDGE capacity-building initiative.",
+    ],
+  },
+  {
+    title: "Assistant Trainer",
+    company: "AsiaInfo Innovation Technologies (Nanjing) Co. Ltd",
     type: "Contract",
-    location: "China",
-    period: "03/2024 - 04/2024",
+    location: "Dhaka",
+    period: "04/2024 - 04/2024",
+    highlights: [
+      "Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on Linux system and server administration.",
+      "Covered system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).",
+    ],
   },
   {
     title: "Cloud Computing Trainee",
     company: "Prime Tech Solutions Ltd.",
     type: "Internship",
     location: "Dhaka",
-    period: "09/2023 - 12/2023",
+    period: "09/2023 - 03/2024",
+    highlights: [
+      "Gained hands-on experience with Git, GitHub, AWS, Heroku, and Digital Ocean.",
+      "Applied skills in web development with Django framework and CI/CD.",
+    ],
   },
   {
-    title: "Cybersecurity Trainee",
-    company: "Arena Web Security",
+    title: "Cybersecurity Internship",
+    company: "Arena Web Security - The Hacker's Arena",
     type: "Internship",
     location: "Dhaka",
     period: "06/2023 - 07/2023",
+    highlights: [
+      "Completed comprehensive 5-month Cybersecurity course with 1-month hands-on internship.",
+      "Participated in ethical hacking, vulnerability assessments, and penetration testing.",
+    ],
   },
 ]
 
 const leadership = [
   {
-    title: "Coordinator",
-    organization: "ITRRC Cybersecurity Research Lab",
-    period: "09/2024 - Present",
+    title: "Research Fellow",
+    organization: "ITRRC Cybersecurity Research Lab, Jagannath University",
+    period: "06/2024 - Present",
+    description: "Mentoring cybersecurity research trainees and connecting lab trainees with university professors",
   },
   {
-    title: "President",
+    title: "Former President",
     organization: "Jagannath University IT Society",
-    period: "07/2023 - Present",
-    description: "Leading 200+ members",
+    period: "07/2023 - 07/2025",
+    description: "Leading 200+ members, coordinating IT-related events and workshops",
   },
   {
-    title: "Vice President",
-    organization: "Sherpur District Student Welfare Council",
-    period: "2018 - 2021",
+    title: "General Member to Vice President",
+    organization: "Jagannath University IT Society",
+    period: "11/2017 - 07/2023",
+    description: "Developed organizational and leadership skills",
+  },
+  {
+    title: "Former Vice-President",
+    organization: "Sherpur District Student Welfare Council, Jagannath University",
+    period: "01/2018 - 11/2021",
+    description: "Co-founded student welfare council to address educational and social needs",
   },
 ]
 
@@ -207,20 +281,101 @@ const education = [
   {
     degree: "MSc in Computer Science & Engineering",
     institution: "Jagannath University",
-    location: "Dhaka",
-    period: "2022 - 2024",
+    location: "Dhaka, Bangladesh",
+    period: "Ongoing",
   },
   {
     degree: "BSc in Computer Science & Engineering",
     institution: "Jagannath University",
-    location: "Dhaka",
-    period: "2017 - 2021",
+    location: "Dhaka, Bangladesh",
+    period: "2020",
+  },
+  {
+    degree: "Higher Secondary Certificate",
+    institution: "Cambrian College",
+    location: "Dhaka, Bangladesh",
+    period: "2016",
+  },
+  {
+    degree: "Secondary School Certificate",
+    institution: "Sonkanda Dr. M. T Hossain High School",
+    location: "Sherpur, Bangladesh",
+    period: "2014",
+  },
+]
+
+const summary = "Early-career Computer Science & Engineering professional developing practical skills in information security, cyber defense, and system administration, with growing experience as a freelancer and trainer. I am actively building my expertise through hands-on security work, teaching activities, and continuous self-learning, with a focus on applying Machine Learning and Artificial Intelligence to real-world security problems. I'm particularly interested in roles and environments that allow me to strengthen my technical foundations, contribute to secure system design, support others through mentoring and training, and gradually transition into more advanced responsibilities in both the information security industry and research."
+
+const researchInterests = [
+  "Cyber Security",
+  "Machine Learning",
+  "Artificial Intelligence",
+]
+
+const references = [
+  {
+    name: "Prof. Dr. Md. Abu Layek",
+    title: "Professor, Department of Computer Science and Engineering",
+    institution: "Jagannath University, Dhaka-1100, Bangladesh",
+    email: "layek@cse.jnu.ac.bd",
+    phone: "+880 1841-465733",
+  },
+  {
+    name: "Prof. Dr. Uzzal Kumar Acharjee",
+    title: "Professor, Department of Computer Science and Engineering",
+    institution: "Jagannath University, Dhaka-1100, Bangladesh",
+    email: "uzzal@cse.jnu.ac.bd",
+    phone: "+880 1625-099037",
   },
 ]
 
 export default function Resume() {
+  const printRef = useRef<HTMLDivElement>(null)
+  
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: "Md_Redwan_Ahmed_Resume",
+    pageStyle: `
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      @media print {
+        body {
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        html, body {
+          height: 100%;
+          overflow: visible;
+        }
+        @page { size: A4; margin: 0; }
+      }
+    `,
+  })
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Hidden printable version */}
+      <div className="hidden">
+        <PrintableResume
+          ref={printRef}
+          personalInfo={personalInfo}
+          summary={summary}
+          researchInterests={researchInterests}
+          technicalSkills={technicalSkills}
+          softSkills={softSkills}
+          otherSkills={otherSkills}
+          experience={experience}
+          education={education}
+          certifications={certifications}
+          research={research}
+          leadership={leadership}
+          hobbies={hobbies}
+          references={references}
+        />
+      </div>
+
       <div className="container py-12">
         <div className="mx-auto max-w-5xl">
           
@@ -242,6 +397,16 @@ export default function Resume() {
                     
                     {/* Contact Info */}
                     <div className="flex flex-wrap items-center justify-center gap-4 text-sm md:justify-start">
+                      <a href={`mailto:${personalInfo.email}`} className="flex items-center gap-2 hover:text-primary">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <span>{personalInfo.email}</span>
+                      </a>
+                      <Separator orientation="vertical" className="h-4" />
+                      <a href={`tel:${personalInfo.phone.replace(/[^+\d]/g, '')}`} className="flex items-center gap-2 hover:text-primary">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        <span>{personalInfo.phone}</span>
+                      </a>
+                      <Separator orientation="vertical" className="h-4" />
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
                         <span>{personalInfo.location}</span>
@@ -252,24 +417,28 @@ export default function Resume() {
                         <span>LinkedIn</span>
                       </a>
                       <Separator orientation="vertical" className="h-4" />
-                      <a href={personalInfo.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-primary">
-                        <Globe className="h-4 w-4" />
-                        <span>Portfolio</span>
+                      <a href={personalInfo.github} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-primary">
+                        <Github className="h-4 w-4" />
+                        <span>GitHub</span>
                       </a>
                     </div>
                   </div>
                   
-                  {/* Download Button */}
+                  {/* Download Buttons */}
                   <div className="flex flex-col gap-3">
-                    <Button asChild size="lg" className="gap-2">
+                    <Button onClick={handlePrint} size="lg" className="gap-2">
+                      <Printer className="h-5 w-5" />
+                      Generate PDF
+                    </Button>
+                    <Button asChild variant="outline" size="lg" className="gap-2">
                       <a href="/resume.pdf" download="Md_Redwan_Ahmed_Resume.pdf">
                         <Download className="h-5 w-5" />
-                        Download PDF
+                        Download Existing
                       </a>
                     </Button>
                     <Button asChild variant="outline" size="lg" className="gap-2">
                       <a href="/resume.pdf" target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-5 w-5" />
+                        <FileText className="h-5 w-5" />
                         View PDF
                       </a>
                     </Button>
@@ -284,13 +453,32 @@ export default function Resume() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl">
                 <Briefcase className="h-6 w-6 text-primary" />
-                Career Objective
+                Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="leading-relaxed text-muted-foreground">
-                As a technology enthusiast with a strong background in Computer Science & Engineering, I am now expanding my horizons to include Cybersecurity and System Administration. I aim to contribute to secure and efficient IT environments while continuously improving my skills. I am particularly passionate about implementing robust security measures and promoting secure coding practices while being driven by the opportunity to constantly acquire new technological knowledge and apply it effectively in dynamic work settings. I am actively seeking a full-time cybersecurity position while also open to freelance projects in penetration testing, security consulting, and system administration.
+                {summary}
               </p>
+            </CardContent>
+          </Card>
+
+          {/* Research Interests */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <BookOpen className="h-6 w-6 text-primary" />
+                Research Interests
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {researchInterests.map((interest) => (
+                  <Badge key={interest} variant="secondary" className="px-3 py-1.5 text-sm">
+                    {interest}
+                  </Badge>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
@@ -523,7 +711,7 @@ export default function Resume() {
                 Hobbies & Interests
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-3">
+            <CardContent className="grid gap-4 sm:grid-cols-2">
               {hobbies.map((hobby, index) => (
                 <div key={index} className="rounded-lg border bg-card p-4">
                   <h3 className="mb-2 font-semibold">{hobby.name}</h3>
@@ -557,23 +745,15 @@ export default function Resume() {
 
           {/* Footer Actions */}
           <div className="flex flex-wrap justify-center gap-4 pt-8">
-            <Button asChild size="lg" className="gap-2">
+            <Button onClick={handlePrint} size="lg" className="gap-2">
+              <Printer className="h-5 w-5" />
+              Generate PDF
+            </Button>
+            <Button asChild variant="outline" size="lg" className="gap-2">
               <Link href="/contact">
                 <Mail className="h-5 w-5" />
                 Contact Me
               </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a href={personalInfo.linkedin} target="_blank" rel="noopener noreferrer">
-                <Linkedin className="h-5 w-5" />
-                LinkedIn Profile
-              </a>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="gap-2">
-              <a href="/resume.pdf" download="Md_Redwan_Ahmed_Resume.pdf">
-                <Download className="h-5 w-5" />
-                Download Resume
-              </a>
             </Button>
           </div>
         </div>
