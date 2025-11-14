@@ -4,75 +4,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
-import { google } from "googleapis";
+import { getBlogPosts, extractFirstImage, extractExcerpt } from "@/lib/blogger";
 
-// Set the revalidation interval (in seconds)
+// ISR: Revalidate every 60 seconds (1 minute)
+// This means the page will be regenerated at most once per minute
 export const revalidate = 60;
 
+// Enable dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
-  title: "Blog Posts",
-  description: "Insights and articles about cybersecurity, technology, and more",
+  title: "Blog Posts - Md Redwan Ahmed",
+  description: "Latest insights and articles about cybersecurity, technology, and more",
 };
-
-interface BlogPost {
-  id: string;
-  title: string;
-  content: string;
-  url: string;
-  published: string;
-}
-
-async function getBlogPosts(): Promise<BlogPost[]> {
-  const BLOG_ID = process.env.BLOGGER_ID;
-  const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
-
-  if (!BLOG_ID || !encodedCredentials) {
-    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
-    return [];
-  }
-
-  try {
-    const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
-    const credentials = JSON.parse(credentialsJSON);
-
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
-    });
-
-    const blogger = google.blogger({ version: "v3", auth });
-    const response = await blogger.posts.list({ blogId: BLOG_ID });
-
-    if (!response.data.items) {
-      console.warn("⚠️ No blog posts found.");
-      return [];
-    }
-
-    return response.data.items.map((post) => ({
-      id: post.id || "",
-      title: post.title || "Untitled",
-      content: post.content || "",
-      url: post.url || "#",
-      published: post.published || new Date().toISOString(),
-    }));
-  } catch (error) {
-    console.error("❌ Error fetching blog posts:", error);
-    return [];
-  }
-}
-
-function extractFirstImage(content: string): string {
-  const imgRegex = /<img[^>]+src="([^">]+)"/;
-  const match = content.match(imgRegex);
-  return match
-    ? match[1]
-    : "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&h=400&fit=crop";
-}
-
-function extractExcerpt(content: string, maxLength: number = 200): string {
-  const text = content.replace(/<[^>]*>/g, "");
-  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
-}
 
 export default async function BlogsPage() {
   const posts = await getBlogPosts();
