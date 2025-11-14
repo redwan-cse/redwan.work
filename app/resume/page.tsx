@@ -7,8 +7,26 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Download, ExternalLink } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import { Download, ExternalLink, Mail, Phone, MapPin, Linkedin, Github, Globe, Briefcase, GraduationCap, Award, Users, BookOpen, Heart } from "lucide-react"
 import Link from "next/link"
+
+export const metadata = {
+  title: "Resume - Md Redwan Ahmed",
+  description: "Professional resume of Md Redwan Ahmed - Cybersecurity Expert, Penetration Tester, and System Administrator",
+}
+
+const personalInfo = {
+  name: "Md Redwan Ahmed",
+  title: "Founder & CEO of Fast Cyber Defense",
+  subtitle: "Cybersecurity Expert | Penetration Tester | System Administrator",
+  email: "redwan@example.com",
+  phone: "+880 123 456 7890",
+  location: "Dhaka, Bangladesh",
+  linkedin: "https://www.linkedin.com/in/redwancse",
+  github: "https://github.com/redwan-cse",
+  website: "https://redwan.work",
+}
 
 const technicalSkills = {
   "Cybersecurity & Networking": [
@@ -202,255 +220,362 @@ const education = [
 
 export default function Resume() {
   return (
-    <div className="container py-12">
-      <div className="mx-auto max-w-4xl">
-        {/* Header */}
-        <div className="mb-12 flex flex-col items-center gap-6 text-center">
-          <h1 className="text-4xl font-bold">Professional Resume</h1>
-          <p className="max-w-2xl text-lg text-muted-foreground">
-            Cybersecurity expert specializing in penetration testing, vulnerability assessments, and security consulting.
-          </p>
-          <Button asChild>
-            <a href="/resume.pdf" download>
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
-            </a>
-          </Button>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="container py-12">
+        <div className="mx-auto max-w-5xl">
+          
+          {/* Header Section with Download */}
+          <div className="mb-12">
+            <Card className="overflow-hidden border-2">
+              <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-background p-8">
+                <div className="flex flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
+                  <div className="flex-1">
+                    <h1 className="mb-2 text-4xl font-bold tracking-tight md:text-5xl">
+                      {personalInfo.name}
+                    </h1>
+                    <p className="mb-2 text-xl font-semibold text-primary">
+                      {personalInfo.title}
+                    </p>
+                    <p className="mb-4 text-lg text-muted-foreground">
+                      {personalInfo.subtitle}
+                    </p>
+                    
+                    {/* Contact Info */}
+                    <div className="flex flex-wrap items-center justify-center gap-4 text-sm md:justify-start">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span>{personalInfo.location}</span>
+                      </div>
+                      <Separator orientation="vertical" className="h-4" />
+                      <a href={personalInfo.linkedin} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-primary">
+                        <Linkedin className="h-4 w-4" />
+                        <span>LinkedIn</span>
+                      </a>
+                      <Separator orientation="vertical" className="h-4" />
+                      <a href={personalInfo.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-primary">
+                        <Globe className="h-4 w-4" />
+                        <span>Portfolio</span>
+                      </a>
+                    </div>
+                  </div>
+                  
+                  {/* Download Button */}
+                  <div className="flex flex-col gap-3">
+                    <Button asChild size="lg" className="gap-2">
+                      <a href="/resume.pdf" download="Md_Redwan_Ahmed_Resume.pdf">
+                        <Download className="h-5 w-5" />
+                        Download PDF
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" size="lg" className="gap-2">
+                      <a href="/resume.pdf" target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-5 w-5" />
+                        View PDF
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
 
-        {/* Career Objective */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Career Objective</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              As a technology enthusiast with a strong background in Computer Science & Engineering, I am now expanding my horizons to include Cybersecurity and System Administration. I aim to contribute to secure and efficient IT environments while continuously improving my skills. I am particularly passionate about implementing robust security measures and promoting secure coding practices while being driven by the opportunity to constantly acquire new technological knowledge and apply it effectively in dynamic work settings. I am actively seeking a full-time cybersecurity position while also open to freelance projects in penetration testing, security consulting, and system administration.
-            </p>
-          </CardContent>
-        </Card>
+          {/* Career Objective */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Briefcase className="h-6 w-6 text-primary" />
+                Career Objective
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="leading-relaxed text-muted-foreground">
+                As a technology enthusiast with a strong background in Computer Science & Engineering, I am now expanding my horizons to include Cybersecurity and System Administration. I aim to contribute to secure and efficient IT environments while continuously improving my skills. I am particularly passionate about implementing robust security measures and promoting secure coding practices while being driven by the opportunity to constantly acquire new technological knowledge and apply it effectively in dynamic work settings. I am actively seeking a full-time cybersecurity position while also open to freelance projects in penetration testing, security consulting, and system administration.
+              </p>
+            </CardContent>
+          </Card>
 
-        {/* Technical Skills */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Technical Skills</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            {Object.entries(technicalSkills).map(([category, skills]) => (
-              <div key={category}>
-                <h3 className="mb-3 font-semibold">{category}</h3>
+          {/* Professional Experience */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Briefcase className="h-6 w-6 text-primary" />
+                Professional Experience
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {experience.map((job, index) => (
+                <div key={index} className="relative pl-6 before:absolute before:left-0 before:top-2 before:h-3 before:w-3 before:rounded-full before:bg-primary">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{job.title}</h3>
+                      <p className="text-base text-primary">
+                        {job.company}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {job.type} · {job.location}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="w-fit">
+                      {job.period}
+                    </Badge>
+                  </div>
+                  {job.highlights && (
+                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      {job.highlights.map((highlight, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/60" />
+                          <span>{highlight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {index < experience.length - 1 && (
+                    <Separator className="mt-6" />
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Education */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <GraduationCap className="h-6 w-6 text-primary" />
+                Education
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {education.map((edu, index) => (
+                <div key={index}>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{edu.degree}</h3>
+                      <p className="text-base text-primary">
+                        {edu.institution}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {edu.location}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="w-fit">
+                      {edu.period}
+                    </Badge>
+                  </div>
+                  {index < education.length - 1 && (
+                    <Separator className="mt-6" />
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Technical Skills */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Award className="h-6 w-6 text-primary" />
+                Technical Skills
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {Object.entries(technicalSkills).map(([category, skills]) => (
+                <div key={category}>
+                  <h3 className="mb-3 text-base font-semibold text-primary">{category}</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {skills.map((skill) => (
+                      <Badge key={skill} variant="secondary" className="px-3 py-1">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Soft Skills */}
+              <div className="pt-4">
+                <h3 className="mb-3 text-base font-semibold text-primary">Soft Skills</h3>
                 <div className="flex flex-wrap gap-2">
-                  {skills.map((skill) => (
-                    <Badge key={skill} variant="secondary">
+                  {softSkills.map((skill) => (
+                    <Badge key={skill} variant="outline" className="px-3 py-1">
                       {skill}
                     </Badge>
                   ))}
                 </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+              
+              {/* Other Skills */}
+              <div className="pt-4">
+                <h3 className="mb-3 text-base font-semibold text-primary">Other Skills</h3>
+                <div className="flex flex-wrap gap-2">
+                  {otherSkills.map((skill) => (
+                    <Badge key={skill} variant="outline" className="px-3 py-1">
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Soft Skills */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Soft Skills</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {softSkills.map((skill) => (
-                <Badge key={skill} variant="secondary">
-                  {skill}
-                </Badge>
+          {/* Certifications */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Award className="h-6 w-6 text-primary" />
+                Certifications
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              {certifications.map((cert, index) => (
+                <div key={index} className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
+                  <h3 className="mb-1 font-semibold">{cert.name}</h3>
+                  <p className="text-sm text-muted-foreground">{cert.issuer}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{cert.date}</p>
+                </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Other Skills */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Other Skills</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {otherSkills.map((skill) => (
-                <Badge key={skill} variant="secondary">
-                  {skill}
-                </Badge>
+          {/* Research & Publications */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <BookOpen className="h-6 w-6 text-primary" />
+                Research & Publications
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="rounded-lg border bg-card p-6">
+                <div className="mb-2 flex items-center gap-2">
+                  <Badge variant="default">Journal Paper</Badge>
+                  <Badge variant="secondary">Q1 · Scopus</Badge>
+                </div>
+                <h3 className="mb-3 text-lg font-semibold">{research.journal.title}</h3>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {research.journal.details.map((detail, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/60" />
+                      <span>{detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <div className="rounded-lg border bg-card p-6">
+                <div className="mb-2 flex items-center gap-2">
+                  <Badge variant="default">Conference Paper</Badge>
+                  <Badge variant="secondary">IEEE</Badge>
+                </div>
+                <h3 className="mb-3 text-lg font-semibold">{research.conference.title}</h3>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {research.conference.details.map((detail, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/60" />
+                      <span>{detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Leadership Experience */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Users className="h-6 w-6 text-primary" />
+                Leadership Experience
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {leadership.map((role, index) => (
+                <div key={index}>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{role.title}</h3>
+                      <p className="text-base text-primary">
+                        {role.organization}
+                      </p>
+                      {role.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {role.description}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="w-fit">
+                      {role.period}
+                    </Badge>
+                  </div>
+                  {index < leadership.length - 1 && (
+                    <Separator className="mt-6" />
+                  )}
+                </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Experience */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Professional Experience</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            {experience.map((job, index) => (
-              <div key={index} className="grid gap-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">{job.title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {job.company} · {job.type} · {job.location}
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{job.period}</span>
+          {/* Hobbies & Interests */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Heart className="h-6 w-6 text-primary" />
+                Hobbies & Interests
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-3">
+              {hobbies.map((hobby, index) => (
+                <div key={index} className="rounded-lg border bg-card p-4">
+                  <h3 className="mb-2 font-semibold">{hobby.name}</h3>
+                  <p className="text-sm text-muted-foreground">{hobby.description}</p>
                 </div>
-                {job.highlights && (
-                  <ul className="ml-4 list-disc text-sm text-muted-foreground">
-                    {job.highlights.map((highlight, i) => (
-                      <li key={i}>{highlight}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              ))}
+            </CardContent>
+          </Card>
 
-        {/* Leadership */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Leadership Experience</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            {leadership.map((role, index) => (
-              <div key={index} className="grid gap-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">{role.title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {role.organization}
-                      {role.description && ` · ${role.description}`}
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{role.period}</span>
+          {/* Languages */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Globe className="h-6 w-6 text-primary" />
+                Languages
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+                  <span className="font-semibold">Bengali</span>
+                  <Badge variant="default">Native</Badge>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+                  <span className="font-semibold">English</span>
+                  <Badge variant="default">Fluent</Badge>
                 </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Education */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Education</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            {education.map((edu, index) => (
-              <div key={index} className="grid gap-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">{edu.degree}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {edu.institution} · {edu.location}
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{edu.period}</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Research & Publications */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Research & Publications</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            <div>
-              <h3 className="mb-3 font-semibold">Journal Paper</h3>
-              <h4 className="mb-2 text-lg">{research.journal.title}</h4>
-              <ul className="ml-4 list-disc text-sm text-muted-foreground">
-                {research.journal.details.map((detail, index) => (
-                  <li key={index}>{detail}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="mb-3 font-semibold">Conference Paper</h3>
-              <h4 className="mb-2 text-lg">{research.conference.title}</h4>
-              <ul className="ml-4 list-disc text-sm text-muted-foreground">
-                {research.conference.details.map((detail, index) => (
-                  <li key={index}>{detail}</li>
-                ))}
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Hobbies & Interests */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Hobbies & Interests</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            {hobbies.map((hobby, index) => (
-              <div key={index}>
-                <h3 className="font-semibold">{hobby.name}</h3>
-                <p className="text-sm text-muted-foreground">{hobby.description}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Certifications */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Certifications</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-6">
-            {certifications.map((cert, index) => (
-              <div key={index} className="grid gap-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold">{cert.name}</h3>
-                    <p className="text-sm text-muted-foreground">{cert.issuer}</p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{cert.date}</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Languages */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Languages</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <span>Bengali</span>
-                <span className="text-muted-foreground">Native</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>English</span>
-                <span className="text-muted-foreground">Fluent</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact */}
-        <div className="flex justify-center gap-4">
-          <Button asChild variant="outline">
-            <Link href="/contact">
-              Contact Me
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <a href="https://www.linkedin.com/in/redwancse" target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              LinkedIn
-            </a>
-          </Button>
+          {/* Footer Actions */}
+          <div className="flex flex-wrap justify-center gap-4 pt-8">
+            <Button asChild size="lg" className="gap-2">
+              <Link href="/contact">
+                <Mail className="h-5 w-5" />
+                Contact Me
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="gap-2">
+              <a href={personalInfo.linkedin} target="_blank" rel="noopener noreferrer">
+                <Linkedin className="h-5 w-5" />
+                LinkedIn Profile
+              </a>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="gap-2">
+              <a href="/resume.pdf" download="Md_Redwan_Ahmed_Resume.pdf">
+                <Download className="h-5 w-5" />
+                Download Resume
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
