@@ -127,8 +127,8 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-16 flex flex-col items-center gap-6">
-                <div className="flex items-center gap-3">
+              <div className="col-span-full mt-16 flex flex-col items-center gap-6">
+                <div className="flex items-center justify-center gap-3 w-full">
                   {/* Previous Button */}
                   <Button
                     asChild
@@ -215,7 +215,7 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
                 </div>
 
                 {/* Page Info */}
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground text-center">
                   Showing <span className="font-medium">{startIndex + 1}-{Math.min(endIndex, totalPosts)}</span> of <span className="font-medium">{totalPosts}</span>
                 </p>
               </div>
