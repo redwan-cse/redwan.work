@@ -87,7 +87,7 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
                       </div>
                     </BlogPreviewModal>
 
-                    <CardHeader className="space-y-3 pb-3">
+                    <CardHeader className="space-y-3 pb-4">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Calendar className="h-3.5 w-3.5" />
                         <time>
@@ -101,16 +101,12 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
                       </BlogPreviewModal>
                     </CardHeader>
 
-                    <CardContent className="flex flex-1 flex-col justify-between gap-4 pt-0">
-                      <CardDescription className="line-clamp-3 text-sm leading-relaxed">
-                        {excerpt.slice(0, 140)}...
-                      </CardDescription>
-                      
+                    <CardContent className="flex flex-col gap-4 pt-0">
                       <Link
                         href={post.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex w-full"
+                        className="inline-flex w-full mt-auto"
                       >
                         <Button 
                           variant="outline" 

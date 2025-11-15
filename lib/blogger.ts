@@ -78,6 +78,21 @@ export function extractFirstImage(content: string): string {
  * Extract plain text excerpt from HTML content
  */
 export function extractExcerpt(content: string, maxLength: number = 200): string {
-  const text = content.replace(/<[^>]*>/g, "").trim();
+  // Remove HTML tags
+  let text = content.replace(/<[^>]*>/g, "");
+  
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&hellip;/g, "...");
+  
+  // Trim whitespace and remove extra spaces
+  text = text.trim().replace(/\s+/g, " ");
+  
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }

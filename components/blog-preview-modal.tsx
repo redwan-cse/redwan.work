@@ -40,58 +40,56 @@ export function BlogPreviewModal({ post, imageUrl, excerpt, children }: BlogPrev
       </div>
       
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold leading-tight pr-6 line-clamp-3">
-              {post.title}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-5">
-            {/* Cover Image */}
-            <div className="relative h-72 w-full overflow-hidden rounded-lg bg-muted -mx-6 -mt-2 mb-6">
-              <Image
-                src={imageUrl}
-                alt={post.title}
-                fill
-                className="object-cover"
-                priority
-              />
-            </div>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>button]:hidden border-0 shadow-2xl">
+          {/* Cover Image - Full Width */}
+          <div className="relative w-full aspect-video overflow-hidden bg-muted rounded-t-xl">
+            <Image
+              src={imageUrl}
+              alt={post.title}
+              fill
+              className="object-cover"
+              priority
+            />
+          </div>
 
-            {/* Meta Information */}
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <time>
-                  {formatDistanceToNow(new Date(post.published), { addSuffix: true })}
-                </time>
-              </div>
-              
-              {post.labels && post.labels.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex flex-wrap gap-2">
-                    {post.labels.slice(0, 3).map((label) => (
-                      <Badge key={label} variant="secondary" className="text-xs">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
+          <div className="p-6 md:p-8 space-y-6">
+            <DialogHeader className="space-y-4">
+              <DialogTitle className="text-2xl md:text-3xl font-bold leading-tight">
+                {post.title}
+              </DialogTitle>
+
+              {/* Meta Information */}
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <time>
+                    {formatDistanceToNow(new Date(post.published), { addSuffix: true })}
+                  </time>
                 </div>
-              )}
-            </div>
+                
+                {post.labels && post.labels.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex flex-wrap gap-2">
+                      {post.labels.slice(0, 3).map((label) => (
+                        <Badge key={label} variant="secondary" className="text-xs">
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogHeader>
 
             {/* Excerpt */}
-            <div className="prose prose-sm max-w-none">
-              <p className="text-muted-foreground leading-relaxed text-base">
-                {excerpt}
-              </p>
-            </div>
+            <p className="text-muted-foreground leading-relaxed text-base pb-2">
+              {excerpt.slice(0, 250)}{excerpt.length > 250 ? '...' : ''}
+            </p>
 
-            {/* Call to Action */}
-            <div className="flex gap-3 pt-2">
-              <Button asChild className="flex-1 h-11" size="lg">
+            {/* Action Buttons */}
+            <div className="flex flex-row gap-3 pt-4">
+              <Button asChild className="h-11 flex-1" size="lg">
                 <a
                   href={post.url}
                   target="_blank"
@@ -101,6 +99,14 @@ export function BlogPreviewModal({ post, imageUrl, excerpt, children }: BlogPrev
                   Read Full Article
                   <ExternalLink className="h-4 w-4" />
                 </a>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-11 px-6" 
+                size="lg"
+                onClick={() => setOpen(false)}
+              >
+                Close
               </Button>
             </div>
           </div>
