@@ -39,30 +39,25 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
   const posts = allPosts.slice(startIndex, endIndex);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="container py-12">
       {/* Hero Section */}
-      <section className="border-b bg-gradient-to-r from-primary/10 via-primary/5 to-background">
-        <div className="container py-12 md:py-14">
-          <div className="mx-auto max-w-2xl text-center space-y-3">
-            <Badge className="text-xs" variant="secondary">
-              {totalPosts} Articles
-            </Badge>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Blog & Insights
-            </h1>
-            <p className="text-sm text-muted-foreground md:text-base max-w-xl mx-auto">
-              Exploring cybersecurity, technology trends, and best practices
-            </p>
-          </div>
-        </div>
-      </section>
+      <div className="mx-auto max-w-2xl text-center space-y-3 mb-12">
+        <Badge className="text-xs" variant="secondary">
+          {totalPosts} Articles
+        </Badge>
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+          Blog & Insights
+        </h1>
+        <p className="text-sm text-muted-foreground md:text-base max-w-xl mx-auto">
+          Exploring cybersecurity, technology trends, and best practices
+        </p>
+      </div>
 
       {/* Blog Grid */}
-      <section className="container py-12 md:py-16">
+      <div className="grid gap-8 md:gap-10 sm:grid-cols-2 lg:grid-cols-3">
         {posts.length > 0 ? (
           <>
-            <div className="grid gap-8 md:gap-10 sm:grid-cols-2 lg:grid-cols-3">
-              {posts.map((post, index) => {
+            {posts.map((post, index) => {
                 const imageUrl = extractFirstImage(post.content);
                 const excerpt = extractExcerpt(post.content, 300);
                 
@@ -129,7 +124,6 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
                   </Card>
                 );
               })}
-            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -240,7 +234,7 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
             </div>
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
