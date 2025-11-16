@@ -1,96 +1,115 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Mail, MessageSquare, Send} from "lucide-react"
+import { MessageCircle, Calendar, ArrowRight } from "lucide-react"
+import Link from "next/link"
+import EnhancedContactForm from "@/components/enhanced-contact-form"
+
+export const metadata = {
+  title: "Contact - Md Redwan Ahmed",
+  description: "Get in touch with Md Redwan Ahmed for cybersecurity consulting, penetration testing, and security services.",
+}
 
 export default function Contact() {
   return (
-    <div className="container py-12">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="mb-8 text-center text-4xl font-bold">Get in Touch</h1>
-        <Card>
-            <CardHeader className="text-center">
-            <CardTitle></CardTitle>
-            <CardDescription>
-              Fill out the form below and I&apos;ll get back to you as soon as possible.
-            </CardDescription>
-            </CardHeader>
-          <CardContent>
-            <form className="space-y-6">
-              <div className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="text-sm font-medium">
-                      Name
-                    </label>
-                    <Input id="name" placeholder="Your name" />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium">
-                      Email
-                    </label>
-                    <Input id="email" type="email" placeholder="Your email" />
-                  </div>
+    <div className="container py-12 px-4 md:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4">
+            Get in <span className="text-primary">Touch</span>
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Have a security concern or need expert consultation? 
+            I'm here to help protect your digital assets.
+          </p>
+        </div>
+
+        {/* Quick Contact Options */}
+        <div className="grid gap-6 md:grid-cols-2 mb-12">
+          {/* WhatsApp Card */}
+          <Card className="relative overflow-hidden border-2 border-green-500/20 hover:border-green-500/40 transition-all hover:shadow-lg group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/10 to-transparent rounded-full blur-2xl group-hover:scale-150 transition-transform" />
+            <CardHeader className="relative">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-lg bg-green-500/10 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                  <MessageCircle className="h-6 w-6" />
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="subject" className="text-sm font-medium">
-                    Subject
-                  </label>
-                  <Input id="subject" placeholder="How can I help you?" />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="message" className="text-sm font-medium">
-                    Message
-                  </label>
-                  <Textarea
-                    id="message"
-                    placeholder="Tell me about your project..."
-                    className="min-h-[150px]"
-                  />
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-1.5">WhatsApp for Urgent Matters</CardTitle>
+                  <CardDescription className="text-sm">
+                    For immediate assistance or quick questions
+                  </CardDescription>
                 </div>
               </div>
-              <Button className="w-full" size="lg">
-                <Send className="mr-2 h-4 w-4" />
-                Send Message
-              </Button>
-            </form>
+            </CardHeader>
+            <CardContent className="relative pb-6">
+              <Link 
+                href="https://wa.me/8801776387624"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button 
+                  variant="outline" 
+                  className="w-full group/btn border-green-500/30 hover:border-green-500 hover:bg-green-500/10 transition-all"
+                >
+                  <span className="text-2xl mr-2">💬</span>
+                  <span className="font-semibold">Chat on WhatsApp</span>
+                  <ArrowRight className="ml-auto h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Cal.com Card */}
+          <Card className="relative overflow-hidden border-2 border-primary/20 hover:border-primary/40 transition-all hover:shadow-lg group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-2xl group-hover:scale-150 transition-transform" />
+            <CardHeader className="relative">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                  <Calendar className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-xl mb-1.5">Schedule a Consultation</CardTitle>
+                  <CardDescription className="text-sm">
+                    Book a time that works best for you
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="relative">
+              <Link 
+                href="https://cal.com/redwancse"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button 
+                  variant="outline" 
+                  className="w-full group/btn border-primary/30 hover:border-primary hover:bg-primary/10 transition-all"
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  <span className="font-semibold">Book on Cal.com</span>
+                  <ArrowRight className="ml-auto h-4 w-4 group-hover/btn:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-primary/20">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Request a Service</CardTitle>
+            <CardDescription className="text-base max-w-2xl mx-auto">
+              Fill out the form below with detailed information about your needs. I'll review your request and get back to you within 24 hours.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EnhancedContactForm />
           </CardContent>
         </Card>
 
-        <div className="mt-12 grid gap-8 sm:grid-cols-2">
-            <Card>
-            <CardContent className="flex items-center gap-4 p-6">
-              <Mail className="h-8 w-8 text-primary" />
-              <div>
-              <h3 className="font-semibold">Email</h3>
-              <p className="text-sm text-muted-foreground">
-                <a href="mailto:contact@redwan.work" className="hover:underline">
-                contact@redwan.work
-                </a>
-              </p>
-              </div>
-            </CardContent>
-            </Card>
-            <Card>
-            <CardContent className="flex items-center gap-4 p-6">
-              <MessageSquare className="h-8 w-8 text-primary" />
-              <div>
-              <h3 className="font-semibold">Book a Consultation</h3>
-              <p className="text-sm text-muted-foreground">
-                <a href="https://calendly.com/redwancse/consultation" className="hover:underline" target="_blank" rel="noopener noreferrer">
-                Schedule a meeting
-                </a>
-              </p>
-              </div>
-            </CardContent>
-            </Card>
+        <div className="mt-12 text-center text-sm text-muted-foreground">
+          <p>
+            All communications are confidential and protected under professional cybersecurity standards.
+          </p>
         </div>
       </div>
     </div>
