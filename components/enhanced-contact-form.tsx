@@ -1339,39 +1339,41 @@ export default function EnhancedContactForm() {
 
       {/* Validation Dialog */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Info className="h-5 w-5 text-amber-500" />
-              Please complete the required fields
+        <DialogContent hideCloseButton className="w-[90vw] max-w-sm md:max-w-md my-6 rounded-2xl shadow-xl p-0 gap-0 animate-in fade-in-0 zoom-in-95 duration-150">
+          <DialogHeader className="px-6 pt-5 pb-3 space-y-3">
+            <DialogTitle className="text-base md:text-lg font-semibold flex items-center justify-center gap-2 leading-tight">
+              <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <span>Please complete the required fields</span>
             </DialogTitle>
-            <DialogDescription className="text-base pt-2">
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed text-center">
               Before sending your request, please fill in the following:
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <ul className="space-y-2">
+          
+          <div className="px-6 pb-6">
+            <ul className="space-y-1.5 mb-6 pl-2">
               {validationErrors.map((error, index) => (
-                <li key={index} className="flex items-start gap-2 text-sm">
-                  <span className="text-destructive mt-0.5">•</span>
-                  <span className="text-foreground">{error}</span>
+                <li key={index} className="flex items-start gap-2.5 text-sm group">
+                  <span className="flex-shrink-0 w-1 h-1 rounded-full bg-destructive mt-2" />
+                  <span className="text-foreground leading-relaxed">{error}</span>
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={() => {
-                setShowValidationDialog(false);
-                // Scroll to first error after dialog closes
-                setTimeout(() => {
-                  scrollToFirstError();
-                }, 100);
-              }}
-              className="min-w-[120px]"
-            >
-              Got it
-            </Button>
+            
+            <div className="mt-6 flex justify-center">
+              <Button
+                onClick={() => {
+                  setShowValidationDialog(false);
+                  // Scroll to first error after dialog closes
+                  setTimeout(() => {
+                    scrollToFirstError();
+                  }, 100);
+                }}
+                className="w-full md:w-auto min-w-[140px] h-11 text-base font-medium bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
+              >
+                Got it
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
