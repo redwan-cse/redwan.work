@@ -195,11 +195,12 @@ export default function EnhancedContactForm() {
   const urgencyRef = React.useRef<HTMLButtonElement>(null);
   const gdprConsentRef = React.useRef<HTMLButtonElement>(null);
 
-  // Generate 8-character hex Ticket ID
+  // Generate 9-character ticket ID with # prefix + 8-character hex
   const generateTicketId = (): string => {
     const array = new Uint8Array(4);
     crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const hexId = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return '#' + hexId;
   };
 
   // Auto-detect timezone, country, and WhatsApp dial code on mount
@@ -552,7 +553,7 @@ export default function EnhancedContactForm() {
         'entry.663205754': submissionData.urgency,                  // Urgency (required)
         'entry.1932264358': submissionData.budgetRange,             // Budget Range (formatted as "$min - $max")
         'entry.1784832711': submissionData.howDidYouFindMe,         // How did you find me (optional)
-        'entry.233094040': submissionData.ticketId,                 // Ticket ID (8-char hex)
+        'entry.233094040': submissionData.ticketId,                 // Ticket ID (9-char: # + 8-char hex)
         
         // Hidden/derived fields
         'entry.209109331': submissionData.sourcePage,               // Source Page (e.g., "/contact")
