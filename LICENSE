@@ -1,117 +1,117 @@
-# Proprietary License
+Proprietary License
 
-**Copyright © 2025 Md Redwan Ahmed. All Rights Reserved.**
+Copyright (c) 2025 Md Redwan Ahmed. All Rights Reserved.
 
-## 1. Ownership
+1. OWNERSHIP
 
 This software, website, and all associated content, including but not limited to:
-- Source code and compiled binaries
-- Design, graphics, and visual assets
-- Text content, blog posts, and documentation
-- Personal data and professional information
-- Business logic and proprietary algorithms
+  - Source code and compiled binaries
+  - Design, graphics, and visual assets
+  - Text content, blog posts, and documentation
+  - Personal data and professional information
+  - Business logic and proprietary algorithms
 
-are the exclusive property of **Md Redwan Ahmed** ("the Owner").
+are the exclusive property of Md Redwan Ahmed ("the Owner").
 
-## 2. License Grant
+2. LICENSE GRANT
 
 The Owner grants you a limited, non-exclusive, non-transferable, revocable license to:
 
-### You MAY:
+You MAY:
+  - View and Study - Examine the source code for educational purposes
+  - Learn - Use this project as a learning resource for web development
+  - Reference - Copy small code snippets (< 50 lines) with proper attribution
+  - Inspire - Draw inspiration for your own original projects
 
-✅ **View and Study** - Examine the source code for educational purposes  
-✅ **Learn** - Use this project as a learning resource for web development  
-✅ **Reference** - Copy small code snippets (< 50 lines) with proper attribution  
-✅ **Inspire** - Draw inspiration for your own original projects
+You MAY NOT:
+  - Use As-Is - Deploy this project or modified versions for yourself or others
+  - Republish - Distribute, sublicense, or make available this software
+  - Commercial Use - Use any part of this project commercially without explicit 
+    written permission
+  - Clone - Create substantially similar websites or applications
+  - Rebrand - Replace personal information and present as your own work
+  - Extract Data - Scrape, copy, or use personal data, content, or designs
+  - Remove Attribution - Remove or obscure copyright notices or author information
 
-### You MAY NOT:
+3. PERSONAL DATA PROTECTION
 
-❌ **Use As-Is** - Deploy this project or modified versions for yourself or others  
-❌ **Republish** - Distribute, sublicense, or make available this software  
-❌ **Commercial Use** - Use any part of this project commercially without explicit written permission  
-❌ **Clone** - Create substantially similar websites or applications  
-❌ **Rebrand** - Replace personal information and present as your own work  
-❌ **Extract Data** - Scrape, copy, or use personal data, content, or designs  
-❌ **Remove Attribution** - Remove or obscure copyright notices or author information
+This project contains personal and confidential information, including:
+  - Professional credentials and certifications
+  - Client information and testimonials
+  - Proprietary business processes
+  - Personal contact details
 
-## 3. Personal Data Protection
+You expressly agree NOT to:
+  - Use, copy, or distribute any personal data
+  - Impersonate or misrepresent yourself as the Owner
+  - Use the Owner's name, likeness, or branding without permission
 
-This project contains **personal and confidential information**, including:
-- Professional credentials and certifications
-- Client information and testimonials
-- Proprietary business processes
-- Personal contact details
-
-**You expressly agree NOT to:**
-- Use, copy, or distribute any personal data
-- Impersonate or misrepresent yourself as the Owner
-- Use the Owner's name, likeness, or branding without permission
-
-## 4. Attribution Requirement
+4. ATTRIBUTION REQUIREMENT
 
 If you reference code snippets from this project (within the 50-line limit):
 
-1. Include a comment with:
-   ```
-   // Source: redwan.work by Md Redwan Ahmed
-   // https://github.com/redwan-cse/redwan.work
-   ```
+  1. Include a comment with:
+     // Source: redwan.work by Md Redwan Ahmed
+     // https://github.com/redwan-cse/redwan.work
 
-2. Do not claim authorship of the referenced code
+  2. Do not claim authorship of the referenced code
 
-3. Ensure the snippet is used in a different context than the original
+  3. Ensure the snippet is used in a different context than the original
 
-## 5. No Warranty
+5. NO WARRANTY
 
-This software is provided "AS IS" without warranty of any kind, express or implied, including but not limited to:
-- Merchantability
-- Fitness for a particular purpose
-- Non-infringement
+This software is provided "AS IS" without warranty of any kind, express or 
+implied, including but not limited to:
+  - Merchantability
+  - Fitness for a particular purpose
+  - Non-infringement
 
-The Owner shall not be liable for any damages arising from the use or inability to use this software.
+The Owner shall not be liable for any damages arising from the use or inability 
+to use this software.
 
-## 6. Commercial Use
+6. COMMERCIAL USE
 
-Any commercial use requires **explicit written permission** from the Owner. This includes but is not limited to:
-- Using the code in products or services you sell
-- Offering customization or hosting services based on this project
-- Creating derivative works for commercial purposes
+Any commercial use requires explicit written permission from the Owner. This 
+includes but is not limited to:
+  - Using the code in products or services you sell
+  - Offering customization or hosting services based on this project
+  - Creating derivative works for commercial purposes
 
-To request permission, contact: **contact@redwan.work**
+To request permission, contact: contact@redwan.work
 
-## 7. Termination
+7. TERMINATION
 
-This license is automatically terminated if you breach any of these terms. Upon termination:
-- You must immediately cease all use of the software
-- Delete all copies in your possession
-- Cease any distribution or publication
+This license is automatically terminated if you breach any of these terms. Upon 
+termination:
+  - You must immediately cease all use of the software
+  - Delete all copies in your possession
+  - Cease any distribution or publication
 
-## 8. Enforcement
+8. ENFORCEMENT
 
 Violations of this license may result in:
-- Legal action for copyright infringement
-- DMCA takedown notices
-- Claims for damages and injunctive relief
+  - Legal action for copyright infringement
+  - DMCA takedown notices
+  - Claims for damages and injunctive relief
 
-## 9. Jurisdiction
+9. JURISDICTION
 
-This license shall be governed by and construed in accordance with the laws of Bangladesh, without regard to its conflict of law provisions.
+This license shall be governed by and construed in accordance with the laws of 
+Bangladesh, without regard to its conflict of law provisions.
 
-## 10. Contact
+10. CONTACT
 
 For permissions, questions, or clarifications:
 
-**Md Redwan Ahmed**  
-Fast Cyber Defense  
-Email: contact@redwan.work  
-Website: https://redwan.work  
+Md Redwan Ahmed
+Fast Cyber Defense
+Email: contact@redwan.work
+Website: https://redwan.work
 LinkedIn: https://linkedin.com/in/redwancse
 
----
+===============================================================================
 
-## Summary
-
-**In Plain English:**
+SUMMARY (In Plain English)
 
 - This is my personal portfolio. It's not an open-source template.
 - You can look at the code and learn from it.
@@ -120,7 +120,7 @@ LinkedIn: https://linkedin.com/in/redwancse
 - You cannot use my personal information, designs, or branding.
 - For anything beyond learning, ask me first.
 
----
+===============================================================================
 
-**Last Updated:** November 17, 2025  
-**Version:** 1.0
+Last Updated: November 17, 2025
+Version: 1.0
