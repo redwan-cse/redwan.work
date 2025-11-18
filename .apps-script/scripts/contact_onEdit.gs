@@ -1,10 +1,32 @@
 /**
  * Contact Form Edit Handler
  * 
- * This file handles the onEdit trigger for status changes in the contact form.
- * It sends appropriate emails to clients when ticket status changes.
+ * FILE: /.apps-script/scripts/contact_onEdit.gs
  * 
- * SETUP: Install this as an onEdit trigger in Apps Script
+ * WHAT THIS SCRIPT DOES:
+ * - Monitors manual edits to the Google Sheet
+ * - Detects when Status column (column X / index 24) is changed
+ * - Sends appropriate email to client based on new status:
+ *   * "In Progress" → Status update email
+ *   * "Resolved" or "Closed" → Ticket resolved email
+ *   * Other statuses → No automatic email
+ * - Logs activity to console (viewable in Apps Script Executions)
+ * 
+ * COLUMN ARCHITECTURE:
+ * - Status is ALWAYS in column X (24)
+ * - Column W (23) is blank spacer (never used)
+ * - This script uses buildHeaderIndex_() to find Status dynamically
+ * - Works even if column headers move (as long as header name matches)
+ * 
+ * TRIGGER SETUP:
+ * - Function: onEdit
+ * - Event source: From spreadsheet
+ * - Event type: On edit
+ * 
+ * IMPORTANT:
+ * - Only edits to Status column trigger emails
+ * - Status = "Spam" does NOT send client email
+ * - All email activity is logged to console
  */
 
 /**

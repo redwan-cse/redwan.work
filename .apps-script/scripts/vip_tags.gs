@@ -1,8 +1,55 @@
 /**
  * VIP Detection and Tagging System
  * 
- * This file handles VIP detection from a separate sheet and
- * automatic tag generation for ticket categorization.
+ * ============================================================================
+ * HOW VIP DETECTION WORKS:
+ * ============================================================================
+ * 
+ * This system detects VIP clients based on a separate "VIP List" sheet within
+ * the same Google Spreadsheet.
+ * 
+ * VIP LIST SHEET STRUCTURE:
+ * --------------------------
+ * Sheet Name: "VIP List" (configurable in config.gs as CONFIG.vipSheetName)
+ * 
+ * Required Columns (row 1 headers):
+ *   - Email:  Full email address of VIP client (e.g., "ceo@company.com")
+ *   - Domain: Email domain for VIP organizations (e.g., "company.com" or "@company.com")
+ *   - Notes:  Free-text notes about why they're VIP or any special handling
+ * 
+ * DETECTION LOGIC:
+ * ----------------
+ * 1. Exact Email Match (highest priority):
+ *    - If incoming email exactly matches an entry in the Email column
+ *    - Returns: { isVip: true, reason: "Exact email match: ceo@company.com" }
+ * 
+ * 2. Domain Match (second priority):
+ *    - If incoming email's domain (part after @) matches an entry in Domain column
+ *    - Example: john@company.com matches Domain "company.com"
+ *    - Returns: { isVip: true, reason: "Domain match (company.com): Notes text" }
+ * 
+ * 3. No Match:
+ *    - Returns: { isVip: false, reason: '' }
+ * 
+ * HOW TO POPULATE VIP LIST:
+ * -------------------------
+ * 1. Create a new sheet in your spreadsheet named "VIP List"
+ * 2. Add headers in row 1: Email | Domain | Notes
+ * 3. Add VIP entries:
+ * 
+ *    | Email             | Domain         | Notes                           |
+ *    |-------------------|----------------|---------------------------------|
+ *    | ceo@bigcorp.com   |                | CEO of major client            |
+ *    | vip@startup.com   |                | Premium support contract       |
+ *    |                   | enterprise.com | All emails from this company   |
+ *    |                   | partner.org    | Strategic partner organization |
+ * 
+ * 4. Leave Email blank if you want to match entire domain
+ * 5. Leave Domain blank if you want to match specific email only
+ * 
+ * ============================================================================
+ * File Location: /.apps-script/scripts/vip_tags.gs
+ * ============================================================================
  */
 
 /**

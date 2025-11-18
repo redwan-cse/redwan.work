@@ -1,8 +1,21 @@
 /**
  * Contact Form Submit Handler
  * 
- * This file handles the onFormSubmit trigger for new contact form submissions.
- * It sends HTML emails to clients and internal notifications.
+ * ============================================================================
+ * WHAT THIS SCRIPT DOES:
+ * ============================================================================
+ * 
+ * 1. Triggers on Google Form submission
+ * 2. Writes Status = "New" to column X (with dropdown validation)
+ * 3. Detects VIP clients from VIP List sheet (by email or domain)
+ * 4. Generates automatic tags based on submission data
+ * 5. Sends confirmation email to client
+ * 6. Sends notification email to internal team
+ * 7. Logs all email activity with timestamps (GMT+6)
+ * 
+ * ============================================================================
+ * File Location: /.apps-script/scripts/contact_onSubmit.gs
+ * ============================================================================
  * 
  * SETUP: Install this as an onFormSubmit trigger in Apps Script
  */
@@ -70,41 +83,67 @@ function onFormSubmit(e) {
     submission.ndaRequired = submission.ndaText.toLowerCase().includes('nda') || 
                              submission.ndaText.toLowerCase().includes('confidential');
     
-    // Check VIP status
+    //==========================================================================
+    // VIP DETECTION
+    //==========================================================================
+    // Check if email is VIP based on VIP List sheet (separate sheet in workbook)
+    // VIP List sheet columns: Email | Domain | Notes
+    // - Exact email match: Returns isVip=true with reason
+    // - Domain match (e.g., @company.com): Returns isVip=true with reason
+    // - No match: Returns isVip=false
     const vipInfo = isVip_(submission.email);
     
-    // Build tags
+    //==========================================================================
+    // TAG GENERATION
+    //==========================================================================
+    // Auto-generate tags based on submission data (service type, urgency, VIP, etc.)
     const tags = buildTags_(submission, vipInfo);
     
-    // Write Status (column W - managed by Apps Script)
-    const statusColIndex = findOrCreateHelperColumn_(sheet, COLS.STATUS);
-    sheet.getRange(row, statusColIndex).setValue('New');
+    //==========================================================================
+    // WRITE STATUS TO COLUMN X (24)
+    //==========================================================================
+    // Status is ALWAYS in column X, never in W (W is blank spacer)
+    // Sets Status = "New" for new submissions
+    // Also ensures dropdown validation is configured
+    setupStatusColumn_(sheet);  // Ensure column X has Status header + dropdown
+    sheet.getRange(row, 24).setValue('New');  // Column X = 24
+    Logger.log('Set Status = "New" in column X');
     
-    // Write tags and VIP status back to sheet
-    const tagsColIdx = getColumnIndex_(headerIndex, COLS.TAGS);
-    if (tagsColIdx !== -1) {
-      sheet.getRange(row, tagsColIdx + 1).setValue(tags);
-    }
+    //==========================================================================
+    // WRITE TAGS (Column AC / 29 or next available)
+    //==========================================================================
+    const tagsColIdx = findOrCreateManagedColumn_(sheet, COLS.TAGS);
+    sheet.getRange(row, tagsColIdx).setValue(tags);
+    Logger.log('Tags written: ' + tags);
     
-    // Write VIP status and notes
+    //==========================================================================
+    // WRITE VIP STATUS AND NOTES
+    //==========================================================================
+    const vipColIdx = findOrCreateManagedColumn_(sheet, COLS.IS_VIP);
+    
     if (vipInfo.isVip) {
-      // Write Is VIP column
-      const vipColIdx = findOrCreateHelperColumn_(sheet, COLS.IS_VIP);
+      // Write "Yes" to Is VIP column (Y / 25)
       sheet.getRange(row, vipColIdx).setValue('Yes');
       
-      // Write VIP reason to VIP Notes column
+      // Write VIP detection reason to VIP Notes column (AB / 28)
       appendToLog_(sheet, row, COLS.VIP_NOTES, vipInfo.reason);
+      
+      Logger.log('VIP detected: ' + vipInfo.reason);
     } else {
-      const vipColIdx = findOrCreateHelperColumn_(sheet, COLS.IS_VIP);
+      // Write "No" to Is VIP column
       sheet.getRange(row, vipColIdx).setValue('No');
+      Logger.log('Not a VIP client');
     }
     
-    // Context flags for emails
+    //==========================================================================
+    // EMAIL SENDING + LOGGING
+    //==========================================================================
+    // Context flags for email templates
     const isHighPriority = submission.priority.toLowerCase() === 'high' || 
                            submission.urgency.toLowerCase().includes('immediate');
     const isReferral = submission.howFound.toLowerCase().includes('referr');
     
-    // Send emails and log them
+    // Send client confirmation email
     Logger.log('Sending client autoresponder email...');
     try {
       sendClientNewTicketEmail_(submission, vipInfo, isHighPriority, isReferral);
@@ -114,6 +153,7 @@ function onFormSubmit(e) {
       appendToLog_(sheet, row, COLS.CLIENT_EMAIL_LOG, 'ERROR: Failed to send email - ' + emailError.toString());
     }
     
+    // Send internal notification email
     Logger.log('Sending internal notification email...');
     try {
       sendInternalNewTicketEmail_(submission, vipInfo, tags, isHighPriority);
@@ -122,9 +162,6 @@ function onFormSubmit(e) {
       Logger.log('Error sending internal email: ' + emailError.toString());
       appendToLog_(sheet, row, COLS.INTERNAL_EMAIL_LOG, 'ERROR: Failed to send email - ' + emailError.toString());
     }
-    
-    // Setup Status column with data validation (ensures dropdown is configured)
-    setupStatusColumn_(sheet);
     
     Logger.log('Form submission processed successfully for Ticket: ' + submission.ticketId);
     
@@ -189,12 +226,22 @@ function sendClientNewTicketEmail_(submission, vipInfo, isHighPriority, isReferr
  */
 function sendInternalNewTicketEmail_(submission, vipInfo, tags, isHighPriority) {
   try {
+    // Build preferred time info (client time vs my time)
+    const timeInfo = buildPreferredTimeInfo_(submission);
+    
+    // Get spreadsheet URL
+    const ss = SpreadsheetApp.getActive();
+    const sheetUrl = ss.getUrl();
+    
     // Render HTML template
     const htmlBody = renderTemplate_('Internal_NewTicket', {
       sub: submission,
       vip: vipInfo,
       tags: tags,
       isHighPriority: isHighPriority,
+      clientTimeDisplay: timeInfo.clientTimeDisplay,
+      myTimeDisplay: timeInfo.myTimeDisplay,
+      sheetUrl: sheetUrl,
       config: CONFIG
     });
     
@@ -224,5 +271,100 @@ function sendInternalNewTicketEmail_(submission, vipInfo, tags, isHighPriority) 
   } catch (error) {
     Logger.log('Error sending internal email: ' + error.toString());
     throw error;
+  }
+}
+
+/**
+ * Build preferred contact time information for internal email
+ * 
+ * Converts client's preferred contact time to my local time (Asia/Dhaka)
+ * 
+ * @param {Object} submission - The submission data object
+ * @returns {Object} { clientTimeDisplay: string, myTimeDisplay: string }
+ */
+function buildPreferredTimeInfo_(submission) {
+  try {
+    // Check if we have required fields
+    const hasDate = submission.preferredContactDate && submission.preferredContactDate.trim() !== '';
+    const hasBestTime = submission.bestTime && submission.bestTime.trim() !== '';
+    const hasTimeZone = submission.timeZone && submission.timeZone.trim() !== '';
+    
+    // If flexible or missing data, return flexible status
+    if (!hasDate || !hasBestTime || !hasTimeZone || 
+        submission.bestTime.toLowerCase() === 'flexible') {
+      return {
+        clientTimeDisplay: 'Flexible',
+        myTimeDisplay: ''
+      };
+    }
+    
+    // Map Best Time to approximate hour in 24-hour format
+    const timeOfDayMap = {
+      'morning': 10,
+      'afternoon': 15,
+      'evening': 20
+    };
+    
+    const bestTimeLower = submission.bestTime.toLowerCase();
+    let hour = timeOfDayMap[bestTimeLower];
+    
+    if (!hour) {
+      // Unknown time, treat as flexible
+      return {
+        clientTimeDisplay: 'Flexible',
+        myTimeDisplay: ''
+      };
+    }
+    
+    // Parse the preferred contact date
+    let contactDate;
+    if (submission.preferredContactDate instanceof Date) {
+      contactDate = submission.preferredContactDate;
+    } else {
+      // Try parsing the date string
+      contactDate = new Date(submission.preferredContactDate);
+    }
+    
+    // Check if date is valid
+    if (isNaN(contactDate.getTime())) {
+      return {
+        clientTimeDisplay: submission.bestTime,
+        myTimeDisplay: ''
+      };
+    }
+    
+    // Set the hour in the date
+    contactDate.setHours(hour, 0, 0, 0);
+    
+    // Format client's time in their timezone
+    const clientTimeStr = Utilities.formatDate(
+      contactDate, 
+      submission.timeZone, 
+      "dd MMM yyyy, hh:mm a"
+    );
+    
+    const clientTimeDisplay = clientTimeStr + ' (' + submission.timeZone + ')';
+    
+    // Convert to my timezone (Asia/Dhaka)
+    const myTimeStr = Utilities.formatDate(
+      contactDate,
+      CONFIG.myTimeZone,
+      "dd MMM yyyy, hh:mm a"
+    );
+    
+    const myTimeDisplay = myTimeStr + ' (' + CONFIG.myTimeZone + ', GMT+6)';
+    
+    return {
+      clientTimeDisplay: clientTimeDisplay,
+      myTimeDisplay: myTimeDisplay
+    };
+    
+  } catch (error) {
+    Logger.log('Error building time info: ' + error.toString());
+    // Return safe defaults on error
+    return {
+      clientTimeDisplay: '',
+      myTimeDisplay: ''
+    };
   }
 }

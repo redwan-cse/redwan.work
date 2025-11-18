@@ -178,6 +178,33 @@
             </td>
           </tr>
           
+          <!-- Preferred Contact Time (if provided) -->
+          <? if (clientTimeDisplay) { ?>
+          <tr>
+            <td style="padding: 20px 30px; background-color: #0f172a; border-top: 2px solid #334155;">
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                &#9679; Preferred Contact Time
+              </h2>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1e293b; border-radius: 6px; padding: 15px;">
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Client's Preferred Time</span>
+                    <span style="color: #60a5fa; font-size: 15px; font-weight: 600;"><?= clientTimeDisplay ?></span>
+                  </td>
+                </tr>
+                <? if (myTimeDisplay) { ?>
+                <tr>
+                  <td style="padding: 8px 0; border-top: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Your Local Time (Asia/Dhaka, GMT+6)</span>
+                    <span style="color: #34d399; font-size: 15px; font-weight: 600;"><?= myTimeDisplay ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+            </td>
+          </tr>
+          <? } ?>
+          
           <!-- Project Summary -->
           <tr>
             <td style="padding: 0 30px 25px 30px;">
@@ -255,7 +282,7 @@
               <a href="mailto:<?= sub.email ?>" style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 0 5px;">
                 Reply to Client
               </a>
-              <a href="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 0 5px;">
+              <a href="<?= sheetUrl ?>" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 0 5px;">
                 Open Sheet
               </a>
             </td>

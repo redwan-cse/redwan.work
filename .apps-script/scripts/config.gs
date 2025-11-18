@@ -10,8 +10,11 @@ const CONFIG = {
   sheetName: 'Form Responses 1',
   vipSheetName: 'VIP List',
   
+  // Time zone settings
+  myTimeZone: 'Asia/Dhaka',  // Your local time zone for time conversions
+  
   // Email settings
-  internalEmail: 'your-email@example.com', // TODO: Update with your actual email
+  internalEmail: 'concat@redwan.work', // TODO: Update with your actual email
   senderName: 'Md. Redwan Ahmed',
   
   // Brand information
