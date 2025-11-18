@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request Received</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; color: #e2e8f0;">
+  
+  <!-- Main Container -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        
+        <!-- Content Card -->
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                <?= config.personalName ?>
+              </h1>
+              <p style="margin: 10px 0 0 0; color: #bfdbfe; font-size: 14px;">
+                <?= config.tagline ?>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- VIP Badge (if applicable) -->
+          <? if (vip && vip.isVip) { ?>
+          <tr>
+            <td style="padding: 20px 30px; background-color: #fef3c7; border-bottom: 3px solid #fbbf24;">
+              <p style="margin: 0; text-align: center; color: #92400e; font-weight: 600; font-size: 15px;">
+                &#9733; VIP Client &ndash; You'll receive priority attention
+              </p>
+            </td>
+          </tr>
+          <? } ?>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              
+              <!-- Greeting -->
+              <p style="margin: 0 0 20px 0; color: #e2e8f0; font-size: 16px; line-height: 1.6;">
+                Hi <strong><?= sub.name ?></strong>,
+              </p>
+              
+              <p style="margin: 0 0 25px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                Thank you for reaching out to me. I have successfully received your request and created a ticket for tracking.
+              </p>
+              
+              <!-- Ticket ID Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 30px 0; background-color: #334155; border-left: 4px solid #3b82f6; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                      Your Ticket ID
+                    </p>
+                    <p style="margin: 0; color: #ffffff; font-family: 'Courier New', monospace; font-size: 24px; font-weight: 700; letter-spacing: 1px;">
+                      <?= sub.ticketId ?>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <? if (isHighPriority) { ?>
+              <!-- High Priority Notice -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0; background-color: #7f1d1d; border-left: 4px solid #ef4444; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 15px 20px;">
+                    <p style="margin: 0; color: #fca5a5; font-size: 14px; line-height: 1.6;">
+                      &#9888; <strong>High Priority:</strong> I recognize the urgency of your request and will prioritize it accordingly. You can expect a faster response time.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <? } ?>
+              
+              <? if (isReferral) { ?>
+              <!-- Referral Thank You -->
+              <p style="margin: 0 0 25px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                Thank you for coming to me through a referral. I truly appreciate the trust and recommendation!
+              </p>
+              <? } ?>
+              
+              <!-- Request Summary -->
+              <h2 style="margin: 0 0 20px 0; color: #f1f5f9; font-size: 18px; font-weight: 600;">
+                &bull; Request Summary
+              </h2>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 30px 0;">
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Service Type:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.serviceTypeRaw ?></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Urgency:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.urgency ?></span>
+                  </td>
+                </tr>
+                <? if (sub.budgetRange) { ?>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Budget Range:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.budgetRange ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.preferredContactMethod) { ?>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Preferred Contact:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.preferredContactMethod ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.preferredContactDate) { ?>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Preferred Date:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.preferredContactDate ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.bestTime) { ?>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Best Time:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.bestTime ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <tr>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 14px;">Location:</span>
+                  </td>
+                  <td style="padding: 12px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 14px; font-weight: 500;"><?= sub.country ?> (<?= sub.timeZone ?>)</span>
+                  </td>
+                </tr>
+                <? if (sub.ndaText) { ?>
+                <tr>
+                  <td colspan="2" style="padding: 12px 0;">
+                    <span style="color: #94a3b8; font-size: 14px;">NDA/Confidentiality:</span>
+                    <p style="margin: 8px 0 0 0; color: #cbd5e1; font-size: 14px; line-height: 1.6;">
+                      <?= sub.ndaText ?>
+                    </p>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+              
+              <!-- What's Next -->
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 18px; font-weight: 600;">
+                &raquo; What Happens Next?
+              </h2>
+              
+              <p style="margin: 0 0 15px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                I will personally review your request and respond within <strong>24-48 hours</strong> (or sooner for high-priority cases). Here's what you can expect:
+              </p>
+              
+              <ul style="margin: 0 0 25px 0; padding-left: 20px; color: #cbd5e1; font-size: 15px; line-height: 1.9;">
+                <li>Initial assessment and clarification questions (if needed)</li>
+                <li>Detailed proposal with timeline and pricing</li>
+                <li>Next steps for moving forward</li>
+              </ul>
+              
+              <!-- Important Note -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0; background-color: #1e3a5f; border-left: 4px solid #3b82f6; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 15px 20px;">
+                    <p style="margin: 0; color: #bfdbfe; font-size: 14px; line-height: 1.6;">
+                      &#9656; <strong>Pro Tip:</strong> If you reply to this email, please keep the ticket ID (<strong><?= sub.ticketId ?></strong>) in the subject line so I can track our conversation thread efficiently.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Closing -->
+              <p style="margin: 0 0 10px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                Looking forward to working with you!
+              </p>
+              
+              <p style="margin: 0; color: #e2e8f0; font-size: 15px; line-height: 1.7;">
+                Best regards,<br>
+                <strong><?= config.personalName ?></strong><br>
+                <span style="color: #94a3b8; font-size: 14px;"><?= config.personalRole ?></span>
+              </p>
+              
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 30px; background-color: #0f172a; text-align: center; border-top: 1px solid #334155;">
+              <p style="margin: 0 0 15px 0; color: #64748b; font-size: 13px;">
+                <a href="<?= config.website ?>" style="color: #3b82f6; text-decoration: none;">Visit Website</a> •
+                <a href="<?= config.website ?>/services" style="color: #3b82f6; text-decoration: none;">Our Services</a> •
+                <a href="<?= config.website ?>/contact" style="color: #3b82f6; text-decoration: none;">Contact</a>
+              </p>
+              <p style="margin: 0; color: #475569; font-size: 12px; line-height: 1.6;">
+                &copy; 2025 <?= config.personalName ?>. All rights reserved.<br>
+                This is an automated confirmation email for ticket <?= sub.ticketId ?>.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+        
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>

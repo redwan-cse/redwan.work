@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Ticket Alert</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; color: #e2e8f0;">
+  
+  <!-- Main Container -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; padding: 20px;">
+    <tr>
+      <td align="center">
+        
+        <!-- Content Card -->
+        <table width="700" cellpadding="0" cellspacing="0" style="max-width: 700px; background-color: #1e293b; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);">
+          
+          <!-- Header with Badges -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 25px 30px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700;">
+                      &#9888; New Ticket Alert
+                    </h1>
+                  </td>
+                  <td align="right">
+                    <span style="background-color: rgba(255,255,255,0.2); color: #ffffff; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; font-family: 'Courier New', monospace;">
+                      <?= sub.ticketId ?>
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Status Badges Row -->
+          <tr>
+            <td style="padding: 15px 30px; background-color: #0f172a; border-bottom: 2px solid #334155;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <? if (vip && vip.isVip) { ?>
+                    <span style="display: inline-block; background-color: #fbbf24; color: #78350f; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px; text-transform: uppercase; letter-spacing: 0.5px;">&#9733; VIP</span>
+                    <? } ?>
+                    <? if (isHighPriority) { ?>
+                    <span style="display: inline-block; background-color: #ef4444; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px; text-transform: uppercase; letter-spacing: 0.5px;">HIGH</span>
+                    <? } ?>
+                    <? if (sub.ndaRequired) { ?>
+                    <span style="display: inline-block; background-color: #8b5cf6; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px; text-transform: uppercase; letter-spacing: 0.5px;">&#128274; NDA</span>
+                    <? } ?>
+                    <span style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">NEW</span>
+                  </td>
+                  <td align="right">
+                    <span style="color: #64748b; font-size: 12px;"><?= sub.timestamp ?></span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Client Information -->
+          <tr>
+            <td style="padding: 25px 30px;">
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                &#9679; Client Information
+              </h2>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; border-radius: 6px; padding: 15px;">
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Name</span>
+                    <span style="color: #f1f5f9; font-size: 15px; font-weight: 600;"><?= sub.name ?></span>
+                  </td>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Country</span>
+                    <span style="color: #f1f5f9; font-size: 15px; font-weight: 600;"><?= sub.country ?></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Email</span>
+                    <a href="mailto:<?= sub.email ?>" style="color: #3b82f6; font-size: 14px; text-decoration: none;"><?= sub.email ?></a>
+                  </td>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Time Zone</span>
+                    <span style="color: #f1f5f9; font-size: 14px;"><?= sub.timeZone ?></span>
+                  </td>
+                </tr>
+                <? if (sub.whatsapp) { ?>
+                <tr>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">WhatsApp</span>
+                    <a href="https://wa.me/<?= sub.whatsapp.replace(/[^0-9]/g, '') ?>" style="color: #10b981; font-size: 14px; text-decoration: none;"><?= sub.whatsapp ?></a>
+                  </td>
+                  <td style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Device</span>
+                    <span style="color: #f1f5f9; font-size: 14px;"><?= sub.deviceType ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.company) { ?>
+                <tr>
+                  <td colspan="2" style="padding: 8px 0;">
+                    <span style="color: #64748b; font-size: 13px; display: block; margin-bottom: 4px;">Company</span>
+                    <span style="color: #f1f5f9; font-size: 14px;"><?= sub.company ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Service & Request Details -->
+          <tr>
+            <td style="padding: 0 30px 25px 30px;">
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                &#9679; Service & Details
+              </h2>
+              
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Service Type</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="background-color: #0ea5e9; color: #ffffff; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: 600;"><?= sub.serviceTypeRaw ?></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Priority</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #f1f5f9; font-size: 14px; font-weight: 600;"><?= sub.priority ?></span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Urgency</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #f1f5f9; font-size: 14px; font-weight: 600;"><?= sub.urgency ?></span>
+                  </td>
+                </tr>
+                <? if (sub.budgetRange) { ?>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Budget Range</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #10b981; font-size: 14px; font-weight: 600;"><?= sub.budgetRange ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.howFound) { ?>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Source</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #f1f5f9; font-size: 14px;"><?= sub.howFound ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.preferredContactMethod) { ?>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 13px;">Preferred Contact</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #f1f5f9; font-size: 14px;"><?= sub.preferredContactMethod ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Project Summary -->
+          <tr>
+            <td style="padding: 0 30px 25px 30px;">
+              <h2 style="margin: 0 0 10px 0; color: #f1f5f9; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                &#9679; Project Summary
+              </h2>
+              <div style="background-color: #0f172a; border-left: 3px solid #3b82f6; padding: 15px; border-radius: 4px;">
+                <pre style="margin: 0; color: #cbd5e1; font-size: 13px; line-height: 1.6; font-family: 'Courier New', monospace; white-space: pre-wrap; word-wrap: break-word;"><?= sub.projectSummary ?></pre>
+              </div>
+              
+              <? if (sub.projectUrl) { ?>
+              <p style="margin: 10px 0 0 0; color: #64748b; font-size: 13px;">
+                &#9656; Project Files/URL: <a href="<?= sub.projectUrl ?>" style="color: #3b82f6; text-decoration: none;"><?= sub.projectUrl ?></a>
+              </p>
+              <? } ?>
+              
+              <? if (sub.ndaText) { ?>
+              <div style="background-color: #4c1d95; border-left: 3px solid #8b5cf6; padding: 12px; border-radius: 4px; margin-top: 15px;">
+                <p style="margin: 0; color: #e9d5ff; font-size: 13px; line-height: 1.5;">
+                  <strong>&#128274; NDA/Confidentiality:</strong> <?= sub.ndaText ?>
+                </p>
+              </div>
+              <? } ?>
+            </td>
+          </tr>
+          
+          <!-- Tags & Metadata -->
+          <tr>
+            <td style="padding: 0 30px 25px 30px;">
+              <h2 style="margin: 0 0 10px 0; color: #f1f5f9; font-size: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                &#9679; Tags & Metadata
+              </h2>
+              <div style="background-color: #0f172a; padding: 12px; border-radius: 4px;">
+                <p style="margin: 0; color: #cbd5e1; font-size: 12px; line-height: 1.8;">
+                  <?= tags ?>
+                </p>
+              </div>
+              
+              <? if (vip && vip.isVip && vip.reason) { ?>
+              <div style="background-color: #78350f; border-left: 3px solid #fbbf24; padding: 12px; border-radius: 4px; margin-top: 10px;">
+                <p style="margin: 0; color: #fde68a; font-size: 13px;">
+                  <strong>&#9733; VIP Reason:</strong> <?= vip.reason ?>
+                </p>
+              </div>
+              <? } ?>
+            </td>
+          </tr>
+          
+          <!-- Technical Details (Collapsed) -->
+          <tr>
+            <td style="padding: 0 30px 30px 30px;">
+              <details style="background-color: #0f172a; padding: 15px; border-radius: 4px;">
+                <summary style="color: #94a3b8; font-size: 13px; cursor: pointer; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                  &#9679; Technical Details
+                </summary>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #334155;">
+                  <p style="margin: 0 0 8px 0; color: #64748b; font-size: 12px;">
+                    <strong>Source Page:</strong> <span style="color: #cbd5e1; font-family: 'Courier New', monospace;"><?= sub.sourcePage ?></span>
+                  </p>
+                  <p style="margin: 0 0 8px 0; color: #64748b; font-size: 12px;">
+                    <strong>Device Type:</strong> <span style="color: #cbd5e1;"><?= sub.deviceType ?></span>
+                  </p>
+                  <p style="margin: 0; color: #64748b; font-size: 11px; line-height: 1.5;">
+                    <strong>User Agent:</strong><br>
+                    <span style="color: #94a3b8; font-family: 'Courier New', monospace; font-size: 10px;"><?= sub.userAgent ?></span>
+                  </p>
+                </div>
+              </details>
+            </td>
+          </tr>
+          
+          <!-- Quick Actions -->
+          <tr>
+            <td style="padding: 25px 30px; background-color: #0f172a; border-top: 2px solid #334155; text-align: center;">
+              <a href="mailto:<?= sub.email ?>" style="display: inline-block; background-color: #3b82f6; color: #ffffff; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 0 5px;">
+                Reply to Client
+              </a>
+              <a href="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 0 5px;">
+                Open Sheet
+              </a>
+            </td>
+          </tr>
+          
+        </table>
+        
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>

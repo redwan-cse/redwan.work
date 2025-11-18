@@ -140,7 +140,6 @@ interface HiddenFields {
   userAgent: string;
   deviceType: 'Mobile' | 'Desktop' | 'Tablet';
   priority: 'High' | 'Medium' | 'Low';
-  status: 'New';
   timestamp: string;
 }
 
@@ -470,7 +469,6 @@ export default function EnhancedContactForm() {
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
         deviceType: typeof navigator !== 'undefined' ? getDeviceType(navigator.userAgent) : 'Desktop',
         priority: getPriority(formData.urgency),
-        status: 'New',
         timestamp: new Date().toISOString()
       };
 
@@ -518,8 +516,8 @@ export default function EnhancedContactForm() {
         userAgent: hiddenFields.userAgent,
         deviceType: hiddenFields.deviceType,
         priority: hiddenFields.priority,
-        status: hiddenFields.status,
         
+        // Note: Status is managed by Apps Script (default = "New"), not from form
         // Note: automatedMailSent will be set by Apps Script after sending confirmation
       };
 
@@ -560,7 +558,6 @@ export default function EnhancedContactForm() {
         'entry.1734132568': submissionData.userAgent,               // User Agent
         'entry.1030161553': submissionData.deviceType,              // Device Type (Mobile/Desktop/Tablet)
         'entry.279561249': submissionData.priority,                 // Priority (High/Medium/Low)
-        'entry.754732240': submissionData.status,                   // Status ("New")
       };
 
       const formBody = new URLSearchParams(formFields as Record<string, string>);

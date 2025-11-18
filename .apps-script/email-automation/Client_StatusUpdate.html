@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status Update</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; color: #e2e8f0;">
+  
+  <!-- Main Container -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        
+        <!-- Content Card -->
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center;">
+              <div style="background-color: rgba(255,255,255,0.2); width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 20px auto; text-align: center; line-height: 80px; font-size: 40px; color: #ffffff;">
+                &raquo;
+              </div>
+              <h1 style="margin: 0; color: #ffffff; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
+                Great News!
+              </h1>
+              <p style="margin: 10px 0 0 0; color: #d1fae5; font-size: 15px;">
+                We've started working on your request
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              
+              <!-- Greeting -->
+              <p style="margin: 0 0 20px 0; color: #e2e8f0; font-size: 16px; line-height: 1.6;">
+                Hi <strong><?= sub.name ?></strong>,
+              </p>
+              
+              <p style="margin: 0 0 25px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                I wanted to let you know that I've reviewed your request and have started working on it. Your ticket status has been updated.
+              </p>
+              
+              <!-- Status Change Box -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 30px 0; background-color: #0f172a; border-radius: 8px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td align="center" style="padding: 0 10px;">
+                          <? if (oldStatus) { ?>
+                          <div style="background-color: #334155; padding: 12px 20px; border-radius: 6px;">
+                            <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                              Previous Status
+                            </p>
+                            <p style="margin: 0; color: #cbd5e1; font-size: 14px; font-weight: 500;">
+                              <?= oldStatus ?>
+                            </p>
+                          </div>
+                          <? } ?>
+                        </td>
+                        <td align="center" style="color: #3b82f6; font-size: 24px; width: 40px;">
+                          →
+                        </td>
+                        <td align="center" style="padding: 0 10px;">
+                          <div style="background-color: #059669; padding: 12px 20px; border-radius: 6px;">
+                            <p style="margin: 0 0 5px 0; color: #d1fae5; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                              New Status
+                            </p>
+                            <p style="margin: 0; color: #ffffff; font-size: 14px; font-weight: 600;">
+                              <?= newStatus ?>
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Ticket Reference -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 30px 0; background-color: #334155; border-left: 4px solid #10b981; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 15px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td>
+                          <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
+                            Ticket ID
+                          </p>
+                          <p style="margin: 0; color: #ffffff; font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700;">
+                            <?= sub.ticketId ?>
+                          </p>
+                        </td>
+                        <td style="text-align: right; vertical-align: top;">
+                          <p style="margin: 0 0 5px 0; color: #94a3b8; font-size: 12px;">
+                            Service
+                          </p>
+                          <p style="margin: 0; color: #cbd5e1; font-size: 13px;">
+                            <?= sub.serviceTypeRaw ?>
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- What This Means -->
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 18px; font-weight: 600;">
+                &bull; What This Means
+              </h2>
+              
+              <p style="margin: 0 0 15px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                Your request is now in my active queue. Here's what you can expect:
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0;">
+                <tr>
+                  <td style="padding: 12px; background-color: #0f172a; border-radius: 6px;">
+                    <p style="margin: 0 0 10px 0; color: #e2e8f0; font-size: 14px; line-height: 1.7;">
+                      &#10003; <strong>Initial analysis and research</strong> (if required)
+                    </p>
+                    <p style="margin: 0 0 10px 0; color: #e2e8f0; font-size: 14px; line-height: 1.7;">
+                      &#10003; <strong>Preparing detailed proposal/scope</strong> with timeline
+                    </p>
+                    <p style="margin: 0; color: #e2e8f0; font-size: 14px; line-height: 1.7;">
+                      &#10003; <strong>Regular updates</strong> on progress
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Timeline Notice -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0; background-color: #1e3a5f; border-left: 4px solid #3b82f6; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 15px 20px;">
+                    <p style="margin: 0; color: #bfdbfe; font-size: 14px; line-height: 1.6;">
+                      &bull; <strong>Next Steps:</strong> I'll be in touch with more details within <strong>24-48 hours</strong>. If you have any questions in the meantime, feel free to reply to this email.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Quick Summary -->
+              <? if (sub.country || sub.timeZone) { ?>
+              <h2 style="margin: 0 0 15px 0; color: #f1f5f9; font-size: 16px; font-weight: 600;">
+                &bull; Your Request Summary
+              </h2>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0;">
+                <? if (sub.serviceTypeRaw) { ?>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 13px;">Service</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 13px; font-weight: 500;"><?= sub.serviceTypeRaw ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+                <? if (sub.country) { ?>
+                <tr>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155;">
+                    <span style="color: #94a3b8; font-size: 13px;">Location</span>
+                  </td>
+                  <td style="padding: 10px 0; border-bottom: 1px solid #334155; text-align: right;">
+                    <span style="color: #e2e8f0; font-size: 13px; font-weight: 500;"><?= sub.country ?></span>
+                  </td>
+                </tr>
+                <? } ?>
+              </table>
+              <? } ?>
+              
+              <!-- Reply Reminder -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 25px 0; background-color: #334155; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 15px 20px;">
+                    <p style="margin: 0; color: #cbd5e1; font-size: 14px; line-height: 1.6;">
+                      <strong>Need to add something?</strong> Simply reply to this email. Please keep the ticket ID (<strong><?= sub.ticketId ?></strong>) in the subject line for easy tracking.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Closing -->
+              <p style="margin: 0 0 10px 0; color: #cbd5e1; font-size: 15px; line-height: 1.7;">
+                I appreciate your patience and look forward to delivering excellent results!
+              </p>
+              
+              <p style="margin: 0; color: #e2e8f0; font-size: 15px; line-height: 1.7;">
+                Best regards,<br>
+                <strong><?= config.personalName ?></strong><br>
+                <span style="color: #94a3b8; font-size: 14px;"><?= config.personalRole ?></span>
+              </p>
+              
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 30px; background-color: #0f172a; text-align: center; border-top: 1px solid #334155;">
+              <p style="margin: 0 0 15px 0; color: #64748b; font-size: 13px;">
+                <a href="<?= config.website ?>" style="color: #3b82f6; text-decoration: none;">Visit Website</a> •
+                <a href="<?= config.website ?>/services" style="color: #3b82f6; text-decoration: none;">Our Services</a> •
+                <a href="<?= config.website ?>/contact" style="color: #3b82f6; text-decoration: none;">Contact</a>
+              </p>
+              <p style="margin: 0; color: #475569; font-size: 12px; line-height: 1.6;">
+                © 2025 <?= config.personalName ?>. All rights reserved.<br>
+                This is an automated status update for ticket <?= sub.ticketId ?>.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+        
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
