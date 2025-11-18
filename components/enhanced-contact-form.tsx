@@ -104,6 +104,58 @@ const urgencyOptions = [
   { value: "flexible", label: "Flexible", priority: "Low" }
 ];
 
+/**
+ * Convert 24-hour time (HH:MM) to 12-hour format (hh:mm AM/PM)
+ * @param time24 - Time in 24-hour format, e.g., "13:30"
+ * @returns Time in 12-hour format, e.g., "01:30 PM"
+ */
+function convertTo12Hour(time24: string): string {
+  if (!time24) return '';
+  
+  const [hourStr, minuteStr] = time24.split(':');
+  let hour = parseInt(hourStr, 10);
+  const minute = minuteStr;
+  
+  const period = hour >= 12 ? 'PM' : 'AM';
+  
+  // Convert to 12-hour format
+  if (hour === 0) {
+    hour = 12;
+  } else if (hour > 12) {
+    hour = hour - 12;
+  }
+  
+  // Format with leading zero for minutes, but not for hours
+  return `${hour}:${minute} ${period}`;
+}
+
+/**
+ * Convert 12-hour time (hh:mm AM/PM) to 24-hour format (HH:MM)
+ * @param time12 - Time in 12-hour format, e.g., "01:30 PM"
+ * @returns Time in 24-hour format, e.g., "13:30"
+ */
+function convertTo24Hour(time12: string): string {
+  if (!time12) return '';
+  
+  const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return '';
+  
+  let hour = parseInt(match[1], 10);
+  const minute = match[2];
+  const period = match[3].toUpperCase();
+  
+  // Convert to 24-hour format
+  if (period === 'PM' && hour !== 12) {
+    hour += 12;
+  } else if (period === 'AM' && hour === 12) {
+    hour = 0;
+  }
+  
+  // Format with leading zeros
+  const hourStr = hour.toString().padStart(2, '0');
+  return `${hourStr}:${minute}`;
+}
+
 interface FormData {
   // Visible fields
   name: string;
@@ -114,7 +166,7 @@ interface FormData {
   preferredContactMethod: 'Email' | 'WhatsApp' | 'Both' | '';
   timeZone: string;
   preferredContactDate: string; // Optional ISO date
-  bestTimeToContact: string;    // Morning/Afternoon/Evening/Flexible
+  bestTimeToContact: string;    // Time string in 12-hour format ("10:00 AM") or empty
   serviceType: string[];
   serviceTypeOther: string;     // Additional input when "Other" is selected
   company: string;
@@ -874,23 +926,128 @@ export default function EnhancedContactForm() {
               <Label htmlFor="bestTimeToContact">
                 Best Time to Contact <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
-              <Select 
-                value={formData.bestTimeToContact} 
-                onValueChange={(value) => handleInputChange('bestTimeToContact', value)}
-              >
-                <SelectTrigger id="bestTimeToContact">
-                  <SelectValue placeholder="Select time" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Flexible">Flexible</SelectItem>
-                  <SelectItem value="Morning (your local time)">Morning</SelectItem>
-                  <SelectItem value="Afternoon (your local time)">Afternoon</SelectItem>
-                  <SelectItem value="Evening (your local time)">Evening</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                What time works best for you?
-              </p>
+              
+              {/* Time Picker - Segmented Control */}
+              <div className="flex items-center gap-2">
+                {/* Clock icon (standalone) */}
+                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                
+                {/* Hour Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.split(':')[0] : ''}
+                  onValueChange={(hour) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const minute = parts ? parts[2] : '00';
+                    const period = parts ? parts[3] : 'AM';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.25rem]">
+                    <SelectValue placeholder="HH">
+                      {formData.bestTimeToContact 
+                        ? formData.bestTimeToContact.split(':')[0].padStart(2, '0')
+                        : 'HH'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.25rem] w-auto">
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const hour = (i + 1).toString();
+                      return (
+                        <SelectItem key={hour} value={hour}>
+                          {hour.padStart(2, '0')}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* Separator */}
+                <span className="text-muted-foreground font-medium">:</span>
+
+                {/* Minute Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.match(/:(\d{2})/)?.[1] : ''}
+                  onValueChange={(minute) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const hour = parts ? parts[1] : '10';
+                    const period = parts ? parts[3] : 'AM';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.25rem]">
+                    <SelectValue placeholder="MM">
+                      {formData.bestTimeToContact?.match(/:(\d{2})/)?.[1] || 'MM'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.25rem] w-auto max-h-[200px]">
+                    {Array.from({ length: 60 }, (_, i) => {
+                      const minute = i.toString().padStart(2, '0');
+                      return (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* AM/PM Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.match(/\s*(AM|PM)/i)?.[1] : ''}
+                  onValueChange={(period) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const hour = parts ? parts[1] : '10';
+                    const minute = parts ? parts[2] : '00';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.5rem]">
+                    <SelectValue placeholder="AM">
+                      {formData.bestTimeToContact?.match(/\s*(AM|PM)/i)?.[1] || 'AM'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.5rem] w-auto">
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Clear button */}
+                {formData.bestTimeToContact && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleInputChange('bestTimeToContact', '')}
+                    className="h-10 w-10 flex-shrink-0"
+                  >
+                    <span className="sr-only">Clear time</span>
+                    <span className="text-muted-foreground hover:text-foreground">✕</span>
+                  </Button>
+                )}
+              </div>
+              
+              {/* Conditional helper text and selected time display */}
+              {(() => {
+                // Check if we have a complete, valid time selected
+                const hasTimeSelected = formData.bestTimeToContact && 
+                  /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(formData.bestTimeToContact);
+                
+                return hasTimeSelected ? (
+                  // Show selected time when complete
+                  <p className="text-[0.8rem] font-medium text-foreground">
+                    Selected: {formData.bestTimeToContact}
+                  </p>
+                ) : (
+                  // Show helper text when empty or incomplete
+                  <p className="text-[0.8rem] text-muted-foreground">
+                    Pick a specific time or leave blank for flexible scheduling
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="space-y-2">
