@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +71,49 @@ import { cn } from "@/lib/utils";
  * This allows easy updates without modifying code.
  */
 const GOOGLE_FORM_ACTION_URL = process.env.NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL;
+
+/**
+ * WhatsApp Number Validation Helper
+ * 
+ * Validates a WhatsApp number using libphonenumber-js.
+ * 
+ * @param countryIso - ISO 3166-1 alpha-2 country code (e.g., "BD")
+ * @param callingCode - Country calling code with + (e.g., "+880")
+ * @param local - Local phone number digits only
+ * @returns true if valid, error message string if invalid
+ */
+function validateWhatsappNumber(
+  countryIso: string,
+  callingCode: string,
+  local: string
+): string | true {
+  // If empty, it's valid (field is optional)
+  if (!local.trim()) {
+    return true;
+  }
+
+  // Strip any non-digit characters from local input
+  const cleanLocal = local.replace(/\D/g, '');
+
+  // Build full E.164 number
+  const fullNumber = `${callingCode}${cleanLocal}`;
+
+  try {
+    // Validate using libphonenumber-js
+    if (!isValidPhoneNumber(fullNumber, countryIso as any)) {
+      // Get country name for better error message
+      const country = countries.find(c => c.code === countryIso);
+      const countryName = country?.name || countryIso;
+      return `Invalid phone number format for ${countryName}`;
+    }
+    return true;
+  } catch (error) {
+    // If parsing fails, return generic error
+    const country = countries.find(c => c.code === countryIso);
+    const countryName = country?.name || countryIso;
+    return `Invalid phone number format for ${countryName}`;
+  }
+}
 
 // Service type options - easily extensible
 const serviceTypes = [
@@ -400,10 +444,17 @@ export default function EnhancedContactForm() {
       newErrors.whatsAppNumber = 'WhatsApp number is required when WhatsApp is selected as a contact method';
       missingFields.push('WhatsApp Number (required for selected contact method)');
     }
-    // 2. If provided, should have enough digits (7+ digits)
-    else if (formData.whatsAppNumber && !/\d{7,}/.test(formData.whatsAppNumber.replace(/\D/g, ''))) {
-      newErrors.whatsAppNumber = 'Please provide a valid WhatsApp number';
-      missingFields.push('Valid WhatsApp Number');
+    // 2. If provided, validate using libphonenumber-js
+    else if (formData.whatsAppNumber.trim()) {
+      const validationResult = validateWhatsappNumber(
+        selectedWhatsAppCountryCode || 'BD',
+        formData.whatsAppCountryCode || '+880',
+        formData.whatsAppNumber
+      );
+      if (validationResult !== true) {
+        newErrors.whatsAppNumber = validationResult;
+        missingFields.push('Valid WhatsApp Number');
+      }
     }
 
     // GDPR consent is required
@@ -843,8 +894,17 @@ export default function EnhancedContactForm() {
                   id="whatsApp"
                   ref={whatsAppNumberRef}
                   type="tel"
+                  inputMode="numeric"
                   value={formData.whatsAppNumber}
-                  onChange={(e) => handleInputChange('whatsAppNumber', e.target.value)}
+                  onChange={(e) => {
+                    // Strip non-digits and enforce max length based on E.164
+                    const digitsOnly = e.target.value.replace(/\D/g, '');
+                    const callingCodeDigits = (formData.whatsAppCountryCode || '+880').replace(/\D/g, '');
+                    const maxLocalLength = 15 - callingCodeDigits.length;
+                    const truncated = digitsOnly.slice(0, maxLocalLength);
+                    handleInputChange('whatsAppNumber', truncated);
+                  }}
+                  maxLength={15 - (formData.whatsAppCountryCode || '+880').replace(/\D/g, '').length}
                   placeholder="1234567890"
                   aria-invalid={!!errors.whatsAppNumber}
                   aria-describedby={errors.whatsAppNumber ? "whatsApp-error" : undefined}
@@ -1038,12 +1098,12 @@ export default function EnhancedContactForm() {
                 
                 return hasTimeSelected ? (
                   // Show selected time when complete
-                  <p className="text-[0.8rem] font-medium text-foreground">
+                  <p className="text-xs text-muted-foreground font-normal mt-1">
                     Selected: {formData.bestTimeToContact}
                   </p>
                 ) : (
                   // Show helper text when empty or incomplete
-                  <p className="text-[0.8rem] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Pick a specific time or leave blank for flexible scheduling
                   </p>
                 );
