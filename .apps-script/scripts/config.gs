@@ -14,7 +14,7 @@ const CONFIG = {
   myTimeZone: 'Asia/Dhaka',  // Your local time zone for time conversions
   
   // Email settings
-  internalEmail: 'concat@redwan.work', // TODO: Update with your actual email
+  internalEmail: 'contact@redwan.work', // TODO: Update with your actual email
   senderName: 'Md. Redwan Ahmed',
   
   // Brand information
