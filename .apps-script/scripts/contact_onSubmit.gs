@@ -289,37 +289,41 @@ function buildPreferredTimeInfo_(submission) {
     const hasBestTime = submission.bestTime && submission.bestTime.trim() !== '';
     const hasTimeZone = submission.timeZone && submission.timeZone.trim() !== '';
     
-    // If flexible or missing data, return flexible status
-    if (!hasDate || !hasBestTime || !hasTimeZone || 
-        submission.bestTime.toLowerCase() === 'flexible') {
+    // If missing data, return flexible status
+    if (!hasDate || !hasBestTime || !hasTimeZone) {
       return {
         clientTimeDisplay: 'Flexible',
         myTimeDisplay: ''
       };
     }
     
-    // Map Best Time to approximate hour in 24-hour format
-    const timeOfDayMap = {
-      'morning': 10,
-      'afternoon': 15,
-      'evening': 20
-    };
+    // Parse the 12-hour time string (e.g., "10:00 AM" or "02:30 PM")
+    const timeMatch = submission.bestTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
     
-    const bestTimeLower = submission.bestTime.toLowerCase();
-    let hour = timeOfDayMap[bestTimeLower];
-    
-    if (!hour) {
-      // Unknown time, treat as flexible
+    if (!timeMatch) {
+      // Invalid time format, treat as flexible
+      Logger.log('Invalid time format: ' + submission.bestTime);
       return {
         clientTimeDisplay: 'Flexible',
         myTimeDisplay: ''
       };
+    }
+    
+    let hour = parseInt(timeMatch[1], 10);
+    const minute = parseInt(timeMatch[2], 10);
+    const period = timeMatch[3].toUpperCase();
+    
+    // Convert 12-hour to 24-hour format
+    if (period === 'PM' && hour !== 12) {
+      hour += 12;
+    } else if (period === 'AM' && hour === 12) {
+      hour = 0;
     }
     
     // Parse the preferred contact date
     let contactDate;
     if (submission.preferredContactDate instanceof Date) {
-      contactDate = submission.preferredContactDate;
+      contactDate = new Date(submission.preferredContactDate.getTime());
     } else {
       // Try parsing the date string
       contactDate = new Date(submission.preferredContactDate);
@@ -327,14 +331,15 @@ function buildPreferredTimeInfo_(submission) {
     
     // Check if date is valid
     if (isNaN(contactDate.getTime())) {
+      Logger.log('Invalid date: ' + submission.preferredContactDate);
       return {
         clientTimeDisplay: submission.bestTime,
         myTimeDisplay: ''
       };
     }
     
-    // Set the hour in the date
-    contactDate.setHours(hour, 0, 0, 0);
+    // Set the hour and minute in the date
+    contactDate.setHours(hour, minute, 0, 0);
     
     // Format client's time in their timezone
     const clientTimeStr = Utilities.formatDate(
