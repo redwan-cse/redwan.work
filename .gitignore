@@ -39,4 +39,7 @@ next-env.d.ts
 ### Github ###
 /.github/
 
+### App Scripts ###
+/.apps-script/docs
+
 # End of .gitignore
