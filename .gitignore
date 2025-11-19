@@ -40,6 +40,9 @@ next-env.d.ts
 /.github/
 
 ### App Scripts ###
-/.apps-script/docs
+/.google-apps-script/docs
+
+### Blogger ###
+/.google-blogger-theme/docs
 
 # End of .gitignore
