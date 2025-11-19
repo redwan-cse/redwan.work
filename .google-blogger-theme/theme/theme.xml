@@ -46,10 +46,10 @@
   <Variable name="body.background" description="Background"
       color="$(body.background.color)"
       type="background"
-      default="$(color) none repeat scroll top left"  value="$(color) url(https://themes.googleusercontent.com/image?id=rabMT9PC10wCtkMoMM2KrjGV5ejCGidFlmg3elSmmoRNnd0FxKwY5T0RGV948R08752LcEb6qEXa) no-repeat scroll top center /* Credit: Radius Images (http://www.offset.com/photos/225860) */;"/>
+      default="$(color) none repeat scroll top left"  value="$(color) none repeat scroll top left"/>
   <Variable name="body.background.color" description="Body background color"
       type="color"
-      default="#eee"  value="#444444"/>
+      default="#eee"  value="transparent"/>
   <Variable name="posts.background.color" description="Post background color"
       type="color"
       default="#fff"  value="#1d1d1d"/>
@@ -1305,6 +1305,7 @@ width:1px;
 overflow:hidden
 }
 .Attribution{
+display:none;
 margin-top:4rem;
 padding:3rem 0;
 text-align:center;
@@ -2457,6 +2458,7 @@ fill:$(sharing.icons.color)
 }
 body{
 background-color:$(body.background.color);
+background:var(--body-bg, var(--bg));
 color:$(body.text.color);
 font:$(body.text.font);
 margin:0;
@@ -2627,9 +2629,13 @@ display:inline-block;
 opacity:0.5;
 cursor:not-allowed;
 }
+html{
+background:var(--body-bg, var(--bg));
+}
 .page_body{
 position:relative;
-z-index:20
+z-index:20;
+background:transparent;
 }
 .page_body .widget{
 margin-bottom:16px
@@ -2649,6 +2655,7 @@ margin:0 auto;
 max-width:1200px;
 min-height:100vh;
 padding:2rem 1rem;
+background:transparent;
 }
 .page_body .centered>*{
 -webkit-box-flex:0;
@@ -2916,7 +2923,9 @@ justify-content:center;
 margin:0;
 }
 
-.blog-nav .widget h2{
+.blog-nav .widget h2,
+.blog-nav .widget-title,
+.blog-nav .title{
 display:none;
 }
 
@@ -3061,6 +3070,33 @@ margin-top:0.5rem;
 
 .blog-header-right .search-action:hover{
 opacity:0.9;
+}
+
+/* Header Search Icon */
+.blog-header-search-icon{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+width:2.25rem;
+height:2.25rem;
+padding:0.5rem;
+border:1px solid var(--border-color);
+background:var(--bg);
+color:var(--text);
+cursor:pointer;
+border-radius:0.5rem;
+transition:all 0.2s;
+}
+
+.blog-header-search-icon:hover{
+background:var(--bg-elevated);
+border-color:var(--accent-color);
+transform:scale(1.05);
+}
+
+.blog-header-search-icon svg{
+width:1.125rem;
+height:1.125rem;
 }
 
 .blog-header-right .theme-toggle{
@@ -3612,16 +3648,37 @@ vertical-align:top
 display:none
 }
 
+/* Comments Section Card Styling */
+#comments,
+.comments,
+section.comments{
+background:var(--bg-elevated);
+border:1px solid var(--border-color);
+border-radius:1rem;
+box-shadow:0 1px 3px rgba(0,0,0,0.05);
+padding:1.5rem;
+margin-top:2rem;
+margin-bottom:2rem;
+}
+
+#comments h3.title,
+.comments h3.title{
+color:var(--text);
+font-size:1.25rem;
+font-weight:600;
+margin:0 0 1.5rem 0;
+}
+
 /* Comment Form Styling */
 .comment-form,
 #comments .comment-form,
 #comment-form{
-background:var(--bg-elevated) !important;
-border:1px solid var(--border-color);
-border-radius:1rem;
-padding:1.5rem;
+background:transparent !important;
+border:none;
+border-radius:0;
+padding:0;
 margin-top:1.5rem;
-box-shadow:0 1px 3px rgba(0,0,0,0.05);
+box-shadow:none;
 }
 
 .comment-form h4,
@@ -3990,12 +4047,14 @@ margin-top:36px
    FOOTER & ATTRIBUTION STYLING
    ============================================ */
 .footer{
+display:none;
 margin-top:3rem;
 padding:2rem 1rem;
 border-top:1px solid var(--border-color);
 }
 
 .Attribution{
+display:none;
 text-align:center;
 color:var(--text-muted);
 font-size:0.875rem;
@@ -4233,34 +4292,51 @@ line-height:1.4;
 }
 
 /* BlogSearch Widget in Sidebar */
-.sidebar-container .BlogSearch{
-margin-bottom:0;
+.sidebar-container .BlogSearch,
+#sidebar-search{
+margin-bottom:1rem;
+background:var(--bg-elevated);
+border:1px solid var(--border-color);
+border-radius:1rem;
+box-shadow:0 1px 3px rgba(0,0,0,0.05);
+padding:1rem;
 }
 
 .sidebar-container .BlogSearch h2,
-.sidebar-container .BlogSearch h3{
-font-size:1rem;
-margin-bottom:1rem;
+.sidebar-container .BlogSearch h3,
+#sidebar-search h2,
+#sidebar-search h3{
+font-size:0.875rem;
+font-weight:700;
+text-transform:uppercase;
+letter-spacing:0.06em;
+margin:0 0 0.75rem 0;
+color:var(--text);
 }
 
-.sidebar-container .BlogSearch .widget-content{
+.sidebar-container .BlogSearch .widget-content,
+#sidebar-search .widget-content{
 margin:0;
 }
 
-.sidebar-container .BlogSearch form{
+.sidebar-container .BlogSearch form,
+#sidebar-search form{
 margin:0;
 }
 
-.sidebar-container .BlogSearch .search-input{
+.sidebar-container .BlogSearch .search-input,
+#sidebar-search .search-input{
 margin-bottom:0.5rem;
 }
 
 .sidebar-container .BlogSearch .search-input input,
-.sidebar-container .BlogSearch input[name="q"]{
+.sidebar-container .BlogSearch input[name="q"],
+#sidebar-search input[type="text"],
+#sidebar-search input[type="search"]{
 width:100%;
 padding:0.5rem 0.75rem;
 border:1px solid var(--border-color);
-border-radius:0.375rem;
+border-radius:9999px;
 background:var(--bg);
 color:var(--text);
 font-size:0.875rem;
@@ -4269,34 +4345,40 @@ box-sizing:border-box;
 }
 
 .sidebar-container .BlogSearch .search-input input:focus,
-.sidebar-container .BlogSearch input[name="q"]:focus{
+.sidebar-container .BlogSearch input[name="q"]:focus,
+#sidebar-search input[type="text"]:focus,
+#sidebar-search input[type="search"]:focus{
 outline:none;
 border-color:var(--accent-color);
 box-shadow:0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .sidebar-container .BlogSearch .search-input input::placeholder,
-.sidebar-container .BlogSearch input[name="q"]::placeholder{
+.sidebar-container .BlogSearch input[name="q"]::placeholder,
+#sidebar-search input::placeholder{
 color:var(--text-muted);
 }
 
 .sidebar-container .BlogSearch .search-action,
-.sidebar-container .BlogSearch input[type="submit"]{
+.sidebar-container .BlogSearch input[type="submit"],
+#sidebar-search input[type="submit"]{
+width:100%;
+margin-top:0.5rem;
+padding:0.4rem 0.75rem;
+border-radius:9999px;
+border:none;
 background:var(--accent-color);
 color:white;
-border:none;
-padding:0.5rem 1rem;
-border-radius:0.375rem;
-cursor:pointer;
-font-size:0.875rem;
 font-weight:500;
+font-size:0.875rem;
+cursor:pointer;
 transition:opacity 0.2s;
-width:100%;
 box-sizing:border-box;
 }
 
 .sidebar-container .BlogSearch .search-action:hover,
-.sidebar-container .BlogSearch input[type="submit"]:hover{
+.sidebar-container .BlogSearch input[type="submit"]:hover,
+#sidebar-search input[type="submit"]:hover{
 opacity:0.9;
 }
 
@@ -5663,44 +5745,11 @@ display:none;
                     </b:section>
                   </nav>
 
-                <b:comment>Right: Search + Theme Toggle</b:comment>
+                <b:comment>Right: Search Icon + Theme Toggle + Hire Me</b:comment>
                 <div class='blog-header-right'>
-                  <b:if cond='data:view.isLayoutMode or data:widgets any (w =&gt; w.sectionId == &quot;search_top&quot;)'>
-                    <div class='search'>
-                      <b:class cond='data:view.isSearch and data:view.search.query' name='focused'/>
-                      <button class='search-expand touch-icon-button' expr:aria-label='data:messages.search.escaped'>
-                        <div class='flat-icon-button ripple'>
-                          <b:include data='{ iconClass: &quot;search-expand-icon&quot; }' name='searchIcon'/>
-                        </div>
-                      </button>
-                      <b:section id='search_top' name='Search (Top)' showaddelement='false'>
-                        <b:widget id='BlogSearch1' locked='true' title='Search This Blog' type='BlogSearch' visible='true'>
-                          <b:includable id='main'>
-  <b:include name='widget-title'/>
-  <b:include name='content'/>
-</b:includable>
-                          <b:includable id='content'>
-  <div class='widget-content' role='search'>
-    <b:include name='searchForm'/>
-  </div>
-</b:includable>
-                          <b:includable id='searchForm'>
-  <form expr:action='data:blog.searchUrl'>
-    <b:attr cond='not data:view.isPreview' name='target' value='_top'/>
-    <b:include name='urlParamsAsFormInput'/>
-    <div class='search-input'>
-      <input autocomplete='off' expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:messages.searchThisBlog' expr:value='data:view.isSearch ? data:view.search.query.escaped : &quot;&quot;' name='q'/>
-    </div>
-    <b:include name='searchSubmit'/>
-  </form>
-</b:includable>
-                          <b:includable id='searchSubmit'>
-          <input class='search-action flat-button' expr:value='data:messages.search.escaped' type='submit'/>
-        </b:includable>
-                        </b:widget>
-                      </b:section>
-                    </div>
-                  </b:if>
+                  <button class='blog-header-search-icon' type='button' onclick='document.getElementById("BlogSearch2")?.scrollIntoView({behavior:"smooth"});' aria-label='Search' title='Search'>
+                    <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>
+                  </button>
                   
                   <button class='theme-toggle' onclick='toggleTheme()' aria-label='Toggle theme' type='button'>
                     <svg class='sun-icon' xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='4'/><path d='M12 2v2'/><path d='M12 20v2'/><path d='m4.93 4.93 1.41 1.41'/><path d='m17.66 17.66 1.41 1.41'/><path d='M2 12h2'/><path d='M20 12h2'/><path d='m6.34 17.66-1.41 1.41'/><path d='m19.07 4.93-1.41 1.41'/></svg>
@@ -5908,7 +5957,7 @@ display:none;
   </div>
 </b:includable>
                     <b:includable id='addComments'>
-  <a expr:href='data:post.commentsUrl' expr:onclick='data:post.commentsUrlOnclick'>
+  <a class='comment-link-duplicate' expr:href='data:post.commentsUrl' expr:onclick='data:post.commentsUrlOnclick' style='display:none;'>
     <b:message name='messages.postAComment'/>
   </a>
 </b:includable>
@@ -6417,7 +6466,7 @@ display:none;
               </main>
             </div>
             <b:section class='footer' id='footer' name='Footer' showaddelement='false' tag='footer'>
-              <b:widget id='Attribution1' locked='true' title='' type='Attribution' visible='true'>
+              <b:widget id='Attribution1' locked='true' title='' type='Attribution' visible='false'>
                 <b:widget-settings>
                   <b:widget-setting name='copyright'/>
                 </b:widget-settings>
@@ -6464,30 +6513,6 @@ display:none;
         <b:class cond='data:widgets none w =&gt; w.sectionId == &quot;sidebar_top&quot;' name='no-items'/>
 
         <b:section class='sidebar_top' id='sidebar_top' name='Sidebar (Top)'>
-          <b:widget id='BlogSearch2' locked='false' title='Search Blog' type='BlogSearch' visible='true'>
-            <b:includable id='main'>
-  <b:include name='widget-title'/>
-  <b:include name='content'/>
-</b:includable>
-            <b:includable id='content'>
-  <div class='widget-content' role='search'>
-    <b:include name='searchForm'/>
-  </div>
-</b:includable>
-            <b:includable id='searchForm'>
-  <form expr:action='data:blog.searchUrl'>
-    <b:attr cond='not data:view.isPreview' name='target' value='_top'/>
-    <b:include name='urlParamsAsFormInput'/>
-    <div class='search-input'>
-      <input autocomplete='off' expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:messages.searchThisBlog' expr:value='data:view.isSearch ? data:view.search.query.escaped : &quot;&quot;' name='q' type='text'/>
-    </div>
-    <b:include name='searchSubmit'/>
-  </form>
-</b:includable>
-            <b:includable id='searchSubmit'>
-          <input class='search-action flat-button' expr:value='data:messages.search.escaped' type='submit'/>
-        </b:includable>
-          </b:widget>
           <b:widget id='Profile1' locked='true' title='About Me' type='Profile' visible='true'>
             <b:widget-settings>
               <b:widget-setting name='showaboutme'>true</b:widget-setting>
@@ -6661,6 +6686,28 @@ display:none;
   </ul>
 </b:includable>
         </b:widget>
+        <b:widget id='BlogSearch2' locked='false' title='Search This Blog' type='BlogSearch' visible='true'>
+          <b:includable id='main'>
+  <b:include name='widget-title'/>
+  <b:include name='content'/>
+</b:includable>
+          <b:includable id='content'>
+  <div class='widget-content' role='search'>
+    <b:include name='searchForm'/>
+  </div>
+</b:includable>
+          <b:includable id='searchForm'>
+  <form expr:action='data:blog.searchUrl'>
+    <b:attr cond='not data:view.isPreview' name='target' value='_top'/>
+    <b:include name='urlParamsAsFormInput'/>
+    <input autocomplete='off' expr:aria-label='data:messages.searchThisBlog' expr:placeholder='data:messages.searchThisBlog' expr:value='data:view.isSearch ? data:view.search.query.escaped : &quot;&quot;' name='q'/>
+    <b:include name='searchSubmit'/>
+  </form>
+</b:includable>
+          <b:includable id='searchSubmit'>
+  <input class='search-action' expr:value='data:messages.search.escaped' type='submit'/>
+</b:includable>
+        </b:widget>
         <b:widget id='Label1' locked='false' title='Labels' type='Label' visible='true'>
           <b:widget-settings>
             <b:widget-setting name='sorting'>ALPHA</b:widget-setting>
@@ -6778,19 +6825,19 @@ display:none;
             <a href='https://facebook.com/redwancse' target='_blank' rel='noopener noreferrer' aria-label='Facebook' title='Facebook'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z'/></svg>
             </a>
-            <a href='https://twitter.com/redwan_cse' target='_blank' rel='noopener noreferrer' aria-label='Twitter' title='Twitter/X'>
+            <a href='https://twitter.com/redwancse' target='_blank' rel='noopener noreferrer' aria-label='Twitter' title='Twitter/X'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z'/></svg>
             </a>
-            <a href='https://linkedin.com/in/redwan-cse' target='_blank' rel='noopener noreferrer' aria-label='LinkedIn' title='LinkedIn'>
+            <a href='https://linkedin.com/in/redwancse' target='_blank' rel='noopener noreferrer' aria-label='LinkedIn' title='LinkedIn'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z'/></svg>
             </a>
-            <a href='https://instagram.com/redwan.ahmed' target='_blank' rel='noopener noreferrer' aria-label='Instagram' title='Instagram'>
+            <a href='https://instagram.com/redwancse' target='_blank' rel='noopener noreferrer' aria-label='Instagram' title='Instagram'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z'/></svg>
             </a>
             <a href='https://github.com/redwan-cse' target='_blank' rel='noopener noreferrer' aria-label='GitHub' title='GitHub'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/></svg>
             </a>
-            <a href='https://youtube.com/@redwancse' target='_blank' rel='noopener noreferrer' aria-label='YouTube' title='YouTube'>
+            <a href='https://youtube.com/@redwanceh' target='_blank' rel='noopener noreferrer' aria-label='YouTube' title='YouTube'>
               <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='currentColor'><path d='M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z'/></svg>
             </a>
           </div>
