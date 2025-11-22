@@ -820,24 +820,6 @@ export default function Resume() {
             </CardContent>
           </Card>
 
-          {/* Hobbies & Interests */}
-          <Card className="mb-8 border-l-4 border-l-primary">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-2xl">
-                <Heart className="h-6 w-6 text-primary" />
-                Hobbies & Interests
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              {hobbies.map((hobby, index) => (
-                <div key={index} className="rounded-lg border bg-card p-4">
-                  <h3 className="mb-2 font-semibold">{hobby.name}</h3>
-                  <p className="text-sm text-muted-foreground">{hobby.description}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
           {/* Languages */}
           <Card className="mb-8 border-l-4 border-l-primary">
             <CardHeader>
@@ -857,6 +839,24 @@ export default function Resume() {
                   <Badge variant="default">Fluent</Badge>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Hobbies & Interests */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Heart className="h-6 w-6 text-primary" />
+                Hobbies & Interests
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              {hobbies.map((hobby, index) => (
+                <div key={index} className="rounded-lg border bg-card p-4">
+                  <h3 className="mb-2 font-semibold">{hobby.name}</h3>
+                  <p className="text-sm text-muted-foreground">{hobby.description}</p>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
