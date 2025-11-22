@@ -117,6 +117,7 @@ const hobbies = [
 const research = {
   journal: {
     title: "Data-Driven Strategies for Digital Native Market Segmentation Using Clustering",
+    url: "https://doi.org/10.1016/j.ijcce.2024.04.002",
     details: [
       "Journal: International Journal of Cognitive Computing in Engineering",
       "Indexing: Scopus (Open Access)",
@@ -127,6 +128,7 @@ const research = {
   },
   conference: {
     title: "Phishing URL Detection Using Comprehensive Feature Extraction and Machine Learning Techniques",
+    url: "https://s24.ieeecsbdc.org/papers/156",
     details: [
       "Conference: IEEE CS BDC SYMPOSIUM 2024",
       "Date: November 22-23, 2024",
@@ -199,7 +201,7 @@ const professionalCertificates = [
     name: "Cyber Security",
     issuer: "Arena Web Security",
     date: "Jul 2023",
-    verificationUrl: "https://drive.google.com/file/d/1YdtPX2ChUNW72REv3rDjASFhr9rGIChc/view?usp=sharing",
+    verificationUrl: "https://admission.arenawebsecurity.net/certificate/apiview/verify/?query=A43W1911S016",
   },
 ]
 
@@ -710,10 +712,11 @@ export default function Resume() {
                   href="https://drive.google.com/drive/folders/1JZvV08biy77fcW0_R9BJQEvBZuPH4ZVj?usp=sharing" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="group flex items-center gap-2"
+                  className="group flex items-center gap-2 text-primary hover:underline"
                 >
-                  <span className="font-semibold group-hover:text-primary">View full list of course certificates</span>
-                  <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="font-semibold">View full list of course certificates</span>
+                  <ExternalLink className="h-4 w-4 opacity-0" />
                 </Link>
               </div>
             </CardContent>
@@ -733,7 +736,17 @@ export default function Resume() {
                   <Badge variant="default">Journal Paper</Badge>
                   <Badge variant="secondary">Q1 · Scopus</Badge>
                 </div>
-                <h3 className="mb-3 text-lg font-semibold">{research.journal.title}</h3>
+                <Link 
+                  href={research.journal.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <h3 className="mb-3 text-lg font-semibold group-hover:text-primary flex items-center gap-2">
+                    {research.journal.title}
+                    <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </h3>
+                </Link>
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {research.journal.details.map((detail, index) => (
                     <li key={index} className="flex items-start gap-2">
@@ -749,7 +762,17 @@ export default function Resume() {
                   <Badge variant="default">Conference Paper</Badge>
                   <Badge variant="secondary">IEEE</Badge>
                 </div>
-                <h3 className="mb-3 text-lg font-semibold">{research.conference.title}</h3>
+                <Link 
+                  href={research.conference.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <h3 className="mb-3 text-lg font-semibold group-hover:text-primary flex items-center gap-2">
+                    {research.conference.title}
+                    <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </h3>
+                </Link>
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {research.conference.details.map((detail, index) => (
                     <li key={index} className="flex items-start gap-2">

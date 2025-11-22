@@ -46,10 +46,12 @@ interface PrintableResumeProps {
   research: {
     journal: {
       title: string
+      url: string
       details: string[]
     }
     conference: {
       title: string
+      url: string
       details: string[]
     }
   }
@@ -654,7 +656,11 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
               <span className="research-badge" style={{ background: '#059669' }}>Q1</span>
               <span className="research-badge" style={{ background: '#7c3aed' }}>Scopus</span>
             </div>
-            <div className="research-title">{research.journal.title}</div>
+            <div className="research-title">
+              <a href={research.journal.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                {research.journal.title}
+              </a>
+            </div>
             <ul style={{ marginTop: '4pt' }}>
               {research.journal.details.map((detail, index) => (
                 <li key={index}>{detail}</li>
@@ -667,7 +673,11 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
               <span className="research-badge">Conference</span>
               <span className="research-badge" style={{ background: '#dc2626' }}>IEEE</span>
             </div>
-            <div className="research-title">{research.conference.title}</div>
+            <div className="research-title">
+              <a href={research.conference.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                {research.conference.title}
+              </a>
+            </div>
             <ul style={{ marginTop: '4pt' }}>
               {research.conference.details.map((detail, index) => (
                 <li key={index}>{detail}</li>
