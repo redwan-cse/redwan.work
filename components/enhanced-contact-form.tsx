@@ -282,6 +282,11 @@ export default function EnhancedContactForm() {
   const [showValidationDialog, setShowValidationDialog] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   
+  // Turnstile verification state
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [isTurnstileVerified, setIsTurnstileVerified] = useState(false);
+  
   // Refs for form fields to enable scrolling and focusing
   const nameRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
@@ -330,6 +335,39 @@ export default function EnhancedContactForm() {
         timeZone: detectedTimezone
       }));
     }
+  }, []);
+
+  // Turnstile callback functions
+  // These are called by the Turnstile widget via data-callback attributes
+  useEffect(() => {
+    // Define global callback functions for Turnstile
+    (window as any).onTurnstileSuccess = (token: string) => {
+      console.log('✅ Turnstile verification successful');
+      setTurnstileToken(token);
+      setIsTurnstileVerified(true);
+      setTurnstileError(null);
+    };
+
+    (window as any).onTurnstileError = () => {
+      console.error('❌ Turnstile verification error');
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError('Security verification failed. Please refresh the page and try again.');
+    };
+
+    (window as any).onTurnstileExpired = () => {
+      console.warn('⚠️ Turnstile token expired');
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError('Security verification expired. The widget will automatically refresh.');
+    };
+
+    // Cleanup
+    return () => {
+      delete (window as any).onTurnstileSuccess;
+      delete (window as any).onTurnstileError;
+      delete (window as any).onTurnstileExpired;
+    };
   }, []);
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
@@ -664,19 +702,14 @@ export default function EnhancedContactForm() {
       formFields.append('entry.1030161553', submissionData.deviceType);
       formFields.append('entry.279561249', submissionData.priority);
 
-      // Get the Turnstile token from the form (implicitly rendered widget)
+      // Validate Turnstile token
       // Only required if Turnstile is configured
-      const turnstileResponse = (e.target as HTMLFormElement).querySelector<HTMLInputElement>(
-        'input[name="cf-turnstile-response"]'
-      )?.value;
-
-      if (!turnstileResponse && TURNSTILE_SITE_KEY) {
-        throw new Error('Security verification failed. Please refresh the page and try again.');
-      }
-
-      // Add Turnstile token to form data if available
-      if (turnstileResponse) {
-        formFields.append('cf-turnstile-response', turnstileResponse);
+      if (TURNSTILE_SITE_KEY) {
+        if (!isTurnstileVerified || !turnstileToken) {
+          throw new Error('Please complete the security verification before submitting.');
+        }
+        // Add the token from state (more reliable than DOM query)
+        formFields.append('cf-turnstile-response', turnstileToken);
       }
 
       // Submit to our API route (which validates Turnstile and forwards to Google Forms)
@@ -722,6 +755,15 @@ export default function EnhancedContactForm() {
       });
       setSelectedCountryCode('+880');
       setSelectedWhatsAppCountryCode('');
+
+      // Reset Turnstile widget and state
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError(null);
+      // Trigger Turnstile widget reset if available
+      if (typeof (window as any).turnstile !== 'undefined') {
+        (window as any).turnstile.reset();
+      }
 
       // Auto-hide success message after 5 seconds
       setTimeout(() => {
@@ -1553,7 +1595,7 @@ export default function EnhancedContactForm() {
 
           {/* Center: Cloudflare Turnstile Widget */}
           {TURNSTILE_SITE_KEY ? (
-            <div className="flex items-center justify-center">
+            <div className="flex items-center justify-center min-h-[65px]">
               <div
                 className="cf-turnstile"
                 data-sitekey={TURNSTILE_SITE_KEY}
@@ -1563,10 +1605,13 @@ export default function EnhancedContactForm() {
                 data-retry="auto"
                 data-retry-interval="8000"
                 data-refresh-expired="auto"
+                data-callback="onTurnstileSuccess"
+                data-error-callback="onTurnstileError"
+                data-expired-callback="onTurnstileExpired"
               />
             </div>
           ) : (
-            <div className="flex items-center justify-center">
+            <div className="flex items-center justify-center min-h-[65px]">
               <Card className="border-amber-500/50 bg-amber-500/10">
                 <CardContent className="p-2">
                   <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -1581,8 +1626,13 @@ export default function EnhancedContactForm() {
           <Button
             type="submit"
             size="lg"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
             className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+            title={
+              TURNSTILE_SITE_KEY && !isTurnstileVerified 
+                ? "Please complete the security verification" 
+                : undefined
+            }
           >
             {isSubmitting ? (
               <>
@@ -1597,6 +1647,17 @@ export default function EnhancedContactForm() {
             )}
           </Button>
         </div>
+
+        {/* Turnstile Error Message - Below the form row */}
+        {turnstileError && (
+          <Card className="border-destructive/50 bg-destructive/10 -mt-2">
+            <CardContent className="p-3">
+              <p className="text-xs text-destructive text-center">
+                {turnstileError}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </form>
 
       {/* Validation Dialog */}
