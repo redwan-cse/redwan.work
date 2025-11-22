@@ -31,10 +31,17 @@ interface PrintableResumeProps {
     location: string
     period: string
   }>
-  certifications: Array<{
+  vendorCertifications: Array<{
     name: string
     issuer: string
     date: string
+    verificationUrl?: string
+  }>
+  professionalCertificates: Array<{
+    name: string
+    issuer: string
+    date: string
+    verificationUrl?: string
   }>
   research: {
     journal: {
@@ -76,7 +83,8 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
       otherSkills,
       experience,
       education,
-      certifications,
+      vendorCertifications,
+      professionalCertificates,
       research,
       leadership,
       hobbies,
@@ -593,13 +601,43 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
           ))}
         </div>
 
-        {/* Certifications */}
+        {/* Certifications (Exam/Vendor) */}
         <div className="section">
           <h2 className="section-header">Certifications</h2>
           <div className="cert-grid">
-            {certifications.map((cert, index) => (
+            {vendorCertifications.map((cert, index) => (
               <div key={index} className="cert-item avoid-break">
-                <div className="cert-name">{cert.name}</div>
+                <div className="cert-name">
+                  {cert.verificationUrl ? (
+                    <a href={cert.verificationUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                      {cert.name}
+                    </a>
+                  ) : (
+                    cert.name
+                  )}
+                </div>
+                <div className="cert-issuer">{cert.issuer}</div>
+                <div className="cert-date">{cert.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Professional Certificates & Course Completions */}
+        <div className="section">
+          <h2 className="section-header">Professional Certificates & Course Completions</h2>
+          <div className="cert-grid">
+            {professionalCertificates.map((cert, index) => (
+              <div key={index} className="cert-item avoid-break">
+                <div className="cert-name">
+                  {cert.verificationUrl ? (
+                    <a href={cert.verificationUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                      {cert.name}
+                    </a>
+                  ) : (
+                    cert.name
+                  )}
+                </div>
                 <div className="cert-issuer">{cert.issuer}</div>
                 <div className="cert-date">{cert.date}</div>
               </div>

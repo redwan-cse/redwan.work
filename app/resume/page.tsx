@@ -135,36 +135,71 @@ const research = {
   },
 }
 
-const certifications = [
+// Exam and vendor certifications
+const vendorCertifications = [
   {
-    name: "IBM Cybersecurity Analyst Professional Certificate (V2)",
-    issuer: "Coursera",
-    date: "2025",
+    name: "Certified Cybersecurity Educator Professional (CCEP)",
+    issuer: "Red Team Leaders",
+    date: "Nov 2025",
+    verificationUrl: "https://courses.redteamleaders.com/exam-completion/8c0a8dde8e93c63e",
   },
   {
     name: "GitHub Foundations",
     issuer: "GitHub",
-    date: "2024",
+    date: "Oct 2024",
+    verificationUrl: "https://www.credly.com/badges/f98045ea-b50d-4d57-82a0-af7863ca99b3",
   },
   {
     name: "Certified Network Security Practitioner (CNSP)",
     issuer: "The SecOps Group",
-    date: "2024",
-  },
-  {
-    name: "Jr Penetration Tester",
-    issuer: "TryHackMe",
-    date: "2024",
+    date: "Jun 2024",
+    verificationUrl: "https://candidate.speedexam.net/certificate.aspx?SSTATE=am4131EniU8ntjp4bO5mXXavp+YURgGKbVJXOmMyS+V2I8II4rmpHeukqY/dquFBgL7CG9IflgMKW24kDcDENaTU5tQ+NGz8g6ZJkXWlvdU=",
   },
   {
     name: "Certified AppSec Practitioner (CAP)",
     issuer: "The SecOps Group",
-    date: "2023",
+    date: "Mar 2023",
+    verificationUrl: "https://candidate.speedexam.net/certificate.aspx?SSTATE=am4131EniU8ntjp4bO5mXeivFC8I+nhKTJxcDik4I8GciDzBMMaLBCQtwD6nT3sskY1NsNO4LbFS/u4FEzLyN+iKTamOZcv+Bk3aSG/Ez+I=",
+  },
+]
+
+// Professional certificates and course completions
+const professionalCertificates = [
+  {
+    name: "Mastering Ethical Hacking Tools",
+    issuer: "EC-Council | Learning",
+    date: "Nov 2025",
+    verificationUrl: "https://learn.eccouncil.org/certificate/30e719db-9782-4f31-89a6-4c491b814e76?logged=true",
+  },
+  {
+    name: "IBM Cybersecurity Analyst (V2)",
+    issuer: "Coursera",
+    date: "Jul 2025",
+    verificationUrl: "https://www.coursera.org/account/accomplishments/specialization/RQLW1C63J7EP",
+  },
+  {
+    name: "Cloud Computing",
+    issuer: "ICT Division, Bangladesh",
+    date: "Sep 2024",
+    verificationUrl: "https://drive.google.com/file/d/1nLkBFU1f4eDN6f19236i4Jk3BXC7MMdc/view?usp=sharing",
+  },
+  {
+    name: "Jr Penetration Tester",
+    issuer: "TryHackMe",
+    date: "Apr 2024",
+    verificationUrl: "https://tryhackme-certificates.s3-eu-west-1.amazonaws.com/THM-1F9FZJ3YIU.png",
+  },
+  {
+    name: "21st Century Employability Skilling Program - Advanced",
+    issuer: "Wadhwani Foundation",
+    date: "Nov 2023",
+    verificationUrl: "https://web.certificate.wfglobal.org/en/certificate?certificateId=655e4528cbe74e70300d680a",
   },
   {
     name: "Cyber Security",
     issuer: "Arena Web Security",
-    date: "2023",
+    date: "Jul 2023",
+    verificationUrl: "https://drive.google.com/file/d/1YdtPX2ChUNW72REv3rDjASFhr9rGIChc/view?usp=sharing",
   },
 ]
 
@@ -368,7 +403,8 @@ export default function Resume() {
           otherSkills={otherSkills}
           experience={experience}
           education={education}
-          certifications={certifications}
+          vendorCertifications={vendorCertifications}
+          professionalCertificates={professionalCertificates}
           research={research}
           leadership={leadership}
           hobbies={hobbies}
@@ -606,7 +642,7 @@ export default function Resume() {
             </CardContent>
           </Card>
 
-          {/* Certifications */}
+          {/* Certifications (Exam/Vendor) */}
           <Card className="mb-8 border-l-4 border-l-primary">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl">
@@ -615,13 +651,71 @@ export default function Resume() {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              {certifications.map((cert, index) => (
+              {vendorCertifications.map((cert, index) => (
                 <div key={index} className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
-                  <h3 className="mb-1 font-semibold">{cert.name}</h3>
+                  {cert.verificationUrl ? (
+                    <Link 
+                      href={cert.verificationUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="group"
+                    >
+                      <h3 className="mb-1 font-semibold group-hover:text-primary flex items-center gap-2">
+                        {cert.name}
+                        <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h3>
+                    </Link>
+                  ) : (
+                    <h3 className="mb-1 font-semibold">{cert.name}</h3>
+                  )}
                   <p className="text-sm text-muted-foreground">{cert.issuer}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{cert.date}</p>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          {/* Professional Certificates & Course Completions */}
+          <Card className="mb-8 border-l-4 border-l-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-2xl">
+                <Award className="h-6 w-6 text-primary" />
+                Professional Certificates & Course Completions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              {professionalCertificates.map((cert, index) => (
+                <div key={index} className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent">
+                  {cert.verificationUrl ? (
+                    <Link 
+                      href={cert.verificationUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="group"
+                    >
+                      <h3 className="mb-1 font-semibold group-hover:text-primary flex items-center gap-2">
+                        {cert.name}
+                        <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </h3>
+                    </Link>
+                  ) : (
+                    <h3 className="mb-1 font-semibold">{cert.name}</h3>
+                  )}
+                  <p className="text-sm text-muted-foreground">{cert.issuer}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{cert.date}</p>
+                </div>
+              ))}
+              <div className="rounded-lg border bg-card p-4 transition-colors hover:bg-accent col-span-full">
+                <Link 
+                  href="https://drive.google.com/drive/folders/1JZvV08biy77fcW0_R9BJQEvBZuPH4ZVj?usp=sharing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="group flex items-center gap-2"
+                >
+                  <span className="font-semibold group-hover:text-primary">View full list of course certificates</span>
+                  <ExternalLink className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              </div>
             </CardContent>
           </Card>
 
