@@ -702,13 +702,13 @@ export default function EnhancedContactForm() {
       formFields.append('entry.1030161553', submissionData.deviceType);
       formFields.append('entry.279561249', submissionData.priority);
 
-      // Validate Turnstile token
-      // Only required if Turnstile is configured
+      // Validate Turnstile token (only for API validation, NOT stored in Google Forms)
+      // The API route will validate the token with Cloudflare and remove it before forwarding
       if (TURNSTILE_SITE_KEY) {
         if (!isTurnstileVerified || !turnstileToken) {
           throw new Error('Please complete the security verification before submitting.');
         }
-        // Add the token from state (more reliable than DOM query)
+        // Add token temporarily - API route will validate and delete it
         formFields.append('cf-turnstile-response', turnstileToken);
       }
 
