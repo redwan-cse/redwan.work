@@ -11,6 +11,7 @@ Personal portfolio website for **Md Redwan Ahmed** (Founder & CEO of Fast Cyber 
 - **Styling:** Tailwind CSS + shadcn/ui
 - **Deployment:** Vercel
 - **CMS:** Google Blogger (for blog posts)
+- **Bot Protection:** Cloudflare Turnstile
 - **Icons:** Lucide React
 
 ## Key Features
@@ -19,7 +20,7 @@ Personal portfolio website for **Md Redwan Ahmed** (Founder & CEO of Fast Cyber 
 
 - **Blogs Page** - Fetches posts from Google Blogger with pagination (9 posts/page), card layout with hover effects, and preview modal for quick viewing without leaving the site.
 - **Resume Page** - Interactive web resume with print-to-PDF functionality. Content stays synchronized between web and PDF versions.
-- **Contact Form** - Rich lead capture form with Google Forms backend, field validation popup, automatic ticket ID generation, country/timezone auto-detection, and WhatsApp/email contact options.
+- **Contact Form** - Rich lead capture form with Google Forms backend, **Cloudflare Turnstile bot protection**, field validation popup, automatic ticket ID generation, country/timezone auto-detection, and WhatsApp/email contact options.
 - **Dark/Light Mode** - Theme switcher with persistent storage and system preference detection.
 - **Responsive Design** - Mobile-first approach, works seamlessly across all devices.
 
@@ -112,6 +113,10 @@ GOOGLE_CREDENTIALS_B64=base64_encoded_service_account_json
 # Required for contact form
 NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL=https://docs.google.com/forms/d/e/FORM_ID/formResponse
 
+# Required for Cloudflare Turnstile (bot protection)
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=your_turnstile_site_key
+TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+
 # Optional
 REVALIDATION_SECRET=your_secret_for_api_revalidation
 ```
@@ -127,6 +132,12 @@ REVALIDATION_SECRET=your_secret_for_api_revalidation
 1. Create a Google Form with 19 fields (see `/docs/contact/`)
 2. Get the form action URL (replace `/viewform` with `/formResponse`)
 3. Add to `NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL`
+
+**Cloudflare Turnstile Setup:**
+1. Enable Turnstile in your Cloudflare dashboard
+2. Add your domain (redwan.work)
+3. Copy Site Key and Secret Key
+4. Add to environment variables (see `/docs/contact/turnstile-integration.md` for details)
 
 ## Documentation
 

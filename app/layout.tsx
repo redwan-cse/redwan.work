@@ -23,6 +23,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-title" content="Redwan" />
+        {/* Preconnect to Cloudflare Turnstile for performance optimization */}
+        <link rel="preconnect" href="https://challenges.cloudflare.com" />
       </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

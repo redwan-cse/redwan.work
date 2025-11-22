@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import Script from 'next/script';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,16 +44,20 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 /**
- * Enhanced Contact Form Component
+ * Enhanced Contact Form Component with Cloudflare Turnstile Protection
  * 
  * This component collects rich lead data for cybersecurity services.
- * It submits directly to Google Forms using the no-cors mode.
+ * It submits to an API route (/api/contact) which validates the Turnstile token
+ * and then forwards the data to Google Forms.
  * 
  * SETUP INSTRUCTIONS:
  * 1. Create a Google Form with all required fields (19 fields total)
  * 2. Get the form's "formResponse" URL (replace /viewform with /formResponse)
  * 3. Inspect each field to get entry IDs (entry.XXXXXXXXX)
- * 4. Update the GOOGLE_FORM_URL and entry IDs in the handleSubmit function below
+ * 4. Set environment variables:
+ *    - NEXT_PUBLIC_TURNSTILE_SITE_KEY: Cloudflare Turnstile site key
+ *    - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (server-only)
+ *    - GOOGLE_FORM_ACTION_URL: Google Forms submission URL
  * 5. Apps Script in Google Sheets will handle email notifications and data processing
  * 
  * FIELD MAPPING:
@@ -63,14 +68,12 @@ import { cn } from "@/lib/utils";
  */
 
 /**
- * Google Form Configuration
+ * Turnstile Configuration
  * 
- * The form submission URL is stored in environment variables:
- * NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL=https://docs.google.com/forms/d/e/FORM_ID/formResponse
- * 
- * This allows easy updates without modifying code.
+ * The Turnstile site key is used to render the security widget.
+ * The secret key is stored server-side in the API route.
  */
-const GOOGLE_FORM_ACTION_URL = process.env.NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL;
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 /**
  * WhatsApp Number Validation Helper
@@ -636,53 +639,59 @@ export default function EnhancedContactForm() {
        * NOTE: budgetMin/budgetMax are merged into budgetRange (e.g., "$500 - $5000")
        * NOTE: timestamp is NOT included - Google Forms adds its own timestamp automatically
        */
-      const formFields = {
-        // Visible fields
-        'entry.1040615996': submissionData.name,                    // Name (required)
-        'entry.527020986': submissionData.email,                    // Email (required)
-        'entry.275586996': submissionData.country,                  // Country (required)
-        'entry.691109542': submissionData.whatsAppNumber,           // WhatsApp Number (merged "+code + number")
-        'entry.2004275388': submissionData.preferredContactMethod,  // Preferred Contact Method
-        'entry.876535023': submissionData.timeZone,                 // Time Zone (required)
-        'entry.825634052': submissionData.preferredContactDate,     // Preferred Contact Date (optional)
-        'entry.2142614790': submissionData.bestTimeToContact,       // Best Time to Contact (optional)
-        'entry.762760499': submissionData.serviceType,              // Service Type(s) (required)
-        'entry.554909735': submissionData.company,                  // Company (optional)
-        'entry.688437948': submissionData.projectUrlOrFiles,        // Project URL/Files (optional)
-        'entry.428546032': submissionData.projectSummary,           // Project Summary (required)
-        'entry.739578366': submissionData.ndaConfidentiality,       // NDA / Confidentiality (optional)
-        'entry.663205754': submissionData.urgency,                  // Urgency (required)
-        'entry.1932264358': submissionData.budgetRange,             // Budget Range (formatted as "$min - $max")
-        'entry.1784832711': submissionData.howDidYouFindMe,         // How did you find me (optional)
-        'entry.233094040': submissionData.ticketId,                 // Ticket ID (9-char: # + 8-char hex)
-        
-        // Hidden/derived fields
-        'entry.209109331': submissionData.sourcePage,               // Source Page (e.g., "/contact")
-        'entry.1734132568': submissionData.userAgent,               // User Agent
-        'entry.1030161553': submissionData.deviceType,              // Device Type (Mobile/Desktop/Tablet)
-        'entry.279561249': submissionData.priority,                 // Priority (High/Medium/Low)
-      };
+      const formFields = new FormData();
+      
+      // Add all form fields
+      formFields.append('entry.1040615996', submissionData.name);
+      formFields.append('entry.527020986', submissionData.email);
+      formFields.append('entry.275586996', submissionData.country);
+      formFields.append('entry.691109542', submissionData.whatsAppNumber);
+      formFields.append('entry.2004275388', submissionData.preferredContactMethod);
+      formFields.append('entry.876535023', submissionData.timeZone);
+      formFields.append('entry.825634052', submissionData.preferredContactDate);
+      formFields.append('entry.2142614790', submissionData.bestTimeToContact);
+      formFields.append('entry.762760499', submissionData.serviceType);
+      formFields.append('entry.554909735', submissionData.company);
+      formFields.append('entry.688437948', submissionData.projectUrlOrFiles);
+      formFields.append('entry.428546032', submissionData.projectSummary);
+      formFields.append('entry.739578366', submissionData.ndaConfidentiality);
+      formFields.append('entry.663205754', submissionData.urgency);
+      formFields.append('entry.1932264358', submissionData.budgetRange);
+      formFields.append('entry.1784832711', submissionData.howDidYouFindMe);
+      formFields.append('entry.233094040', submissionData.ticketId);
+      formFields.append('entry.209109331', submissionData.sourcePage);
+      formFields.append('entry.1734132568', submissionData.userAgent);
+      formFields.append('entry.1030161553', submissionData.deviceType);
+      formFields.append('entry.279561249', submissionData.priority);
 
-      const formBody = new URLSearchParams(formFields as Record<string, string>);
+      // Get the Turnstile token from the form (implicitly rendered widget)
+      // Only required if Turnstile is configured
+      const turnstileResponse = (e.target as HTMLFormElement).querySelector<HTMLInputElement>(
+        'input[name="cf-turnstile-response"]'
+      )?.value;
 
-      // Validate environment variable is set
-      if (!GOOGLE_FORM_ACTION_URL) {
-        throw new Error('Google Form URL is not configured. Please set NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL in your environment variables.');
+      if (!turnstileResponse && TURNSTILE_SITE_KEY) {
+        throw new Error('Security verification failed. Please refresh the page and try again.');
       }
 
-      // Submit to Google Forms
-      await fetch(GOOGLE_FORM_ACTION_URL, {
+      // Add Turnstile token to form data if available
+      if (turnstileResponse) {
+        formFields.append('cf-turnstile-response', turnstileResponse);
+      }
+
+      // Submit to our API route (which validates Turnstile and forwards to Google Forms)
+      const response = await fetch('/api/contact', {
         method: 'POST',
-        body: formBody,
-        mode: 'no-cors', // Required for Google Forms cross-origin submission
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        body: formFields,
       });
 
-      // Since we use no-cors mode, we can't read the response
-      // Assume success if no error is thrown
-      console.log('✅ Form submitted successfully to Google Forms');
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to submit form');
+      }
+
+      console.log('✅ Form submitted successfully with Turnstile validation');
 
       // Show success message
       setSubmitSuccess(true);
@@ -739,6 +748,15 @@ export default function EnhancedContactForm() {
 
   return (
     <div className="w-full">
+      {/* Load Cloudflare Turnstile script - MUST use exact URL (no proxying/caching) */}
+      {/* https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/ */}
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        async
+        defer
+        strategy="afterInteractive"
+      />
+      
       <form onSubmit={handleSubmit} className="space-y-8" noValidate>
         {/* Contact Details Section */}
         <div className="space-y-6">
@@ -1526,11 +1544,40 @@ export default function EnhancedContactForm() {
           </Card>
         )}
 
-        {/* Submit Button */}
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-4">
+        {/* Bottom Row: Required fields text + Turnstile widget + Submit button */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-4">
+          {/* Left: Required fields text */}
           <p className="text-sm text-muted-foreground">
             <span className="text-destructive">*</span> Required fields
           </p>
+
+          {/* Center: Cloudflare Turnstile Widget */}
+          {TURNSTILE_SITE_KEY ? (
+            <div className="flex items-center justify-center">
+              <div
+                className="cf-turnstile"
+                data-sitekey={TURNSTILE_SITE_KEY}
+                data-theme="auto"
+                data-size="normal"
+                data-action="contact-form"
+                data-retry="auto"
+                data-retry-interval="8000"
+                data-refresh-expired="auto"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center">
+              <Card className="border-amber-500/50 bg-amber-500/10">
+                <CardContent className="p-2">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <strong>⚠️ Dev:</strong> Turnstile not configured
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Right: Submit button */}
           <Button
             type="submit"
             size="lg"
