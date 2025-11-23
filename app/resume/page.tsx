@@ -225,10 +225,11 @@ const experience = [
     location: "Worldwide",
     period: "04/2023 - Present",
     highlights: [
-      "Leveraged VA/PT tools to conduct vulnerability assessments and penetration tests using Burp Suite and Nessus.",
-      "Delivered data recovery and digital security solutions.",
-      "Directed forensic investigation using EnCase, FTK, and Autopsy.",
-      "Provided technical task management and consultation.",
+      "Completed few penetration testing project for an international client.",
+      "Performed an OSINT investigation on a scam website and related scammer network.",
+      "Helped clients recover hacked or transferred online accounts, including social media and business assets.",
+      "Restored permanently deleted Google Drive files and a lost Word document from OneDrive.",
+      "Provided technical and cybersecurity support, from proxy and fingerprint consulting to e-commerce and website tasks.",
     ],
   },
   {
@@ -239,7 +240,7 @@ const experience = [
     period: "09/2024 - 05/2025",
     highlights: [
       "Conducted hands-on training on Python-based machine learning concepts.",
-      "Guided participants through supervised and unsupervised learning techniques.",
+      "Guided participants through supervised and unsupervised learning techniques, data preprocessing, and model evaluation.",
     ],
   },
   {
@@ -273,6 +274,7 @@ const experience = [
     highlights: [
       "Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on Linux system and server administration.",
       "Covered system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).",
+      "Credential: Certificate of completion received for the module delivered.",
     ],
   },
   {
@@ -282,8 +284,8 @@ const experience = [
     location: "Dhaka",
     period: "09/2023 - 03/2024",
     highlights: [
-      "Gained hands-on experience with Git, GitHub, AWS, Heroku, and Digital Ocean.",
-      "Applied skills in web development with Django framework and CI/CD.",
+      "Implemented cloud technology initiatives, gaining hands-on experience with Linux Server(Ubuntu), Git, GitHub, MySQL, Nginx, AWS, Heroku, and Digital Ocean Droplets.",
+      "Applied skills in web development with Django framework and CI/CD, optimising project workflows through GitHub Actions.",
     ],
   },
   {
@@ -294,7 +296,8 @@ const experience = [
     period: "06/2023 - 07/2023",
     highlights: [
       "Completed comprehensive 5-month Cybersecurity course with 1-month hands-on internship.",
-      "Participated in ethical hacking, vulnerability assessments, and penetration testing.",
+      "Conducted vulnerability assessments and penetration testing on web applications and networks.",
+      "Implemented Wazuh as a SIEM platform in a lab environment to centralize log collection, alerts, and basic security event analysis.",
     ],
   },
 ]
@@ -370,7 +373,7 @@ const education = [
   },
 ]
 
-const summary = "Early-career Computer Science & Engineering professional developing practical skills in information security, cyber defense, and system administration, with growing experience as a freelancer and trainer. I am actively building my expertise through hands-on security work, teaching activities, and continuous self-learning, with a focus on applying Machine Learning and Artificial Intelligence to real-world security problems. I'm particularly interested in roles and environments that allow me to strengthen my technical foundations, contribute to secure system design, support others through mentoring and training, and gradually transition into more advanced responsibilities in both the information security industry and research."
+const summary = "Computer Science & Engineering professional developing practical skills in information security, cyber defense, and system administration, with growing experience as a freelancer and trainer. I am actively building my expertise through hands-on security work, teaching activities, and continuous self-learning, with a focus on applying Machine Learning and Artificial Intelligence to real-world security problems. I'm particularly interested in roles and environments that allow me to strengthen my technical foundations, contribute to secure system design, support others through mentoring and training, and gradually transition into more advanced responsibilities in both the information security industry and research."
 
 const researchInterests = [
   "Cyber Security",
