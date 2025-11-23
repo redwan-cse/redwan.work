@@ -29,62 +29,74 @@ const personalInfo = {
 }
 
 const technicalSkills = {
-  "Cybersecurity & Networking": [
+  "Cybersecurity": [
     "Ethical Hacking",
-    "Vulnerability Assessment & Penetration Testing (VAPT)",
+    "Vulnerability Assessment & Penetration Testing",
     "Open-Source Intelligence (OSINT)",
-    "Cryptography",
-    "Networking Protocols & Standards",
-    "Network Troubleshooting & Security",
-    "Security Tools (Burp Suite, Nessus, EnCase, FTK, Autopsy)",
+    "Network Security",
+    "Cryptography (fundamentals)",
   ],
-  "System Administration": [
-    "Linux System Administration (CentOS, Ubuntu Server)",
-    "Configuration Management (Ansible)",
-    "Virtualization & Containerization (Docker, Kubernetes)",
-    "Backup & Recovery Solutions",
+  "Networking": [
+    "Cyber Security & Networking",
+    "Networking Protocols & Standards",
+    "Network Troubleshooting",
+  ],
+  "Security Tools": [
+    "Burp Suite",
+    "OWASP ZAP",
+    "Nmap",
+    "Nessus",
+    "OpenVAS",
+    "Metasploit",
+    "SQLmap",
+    "Hydra",
+    "gobuster",
+    "wpscan",
+    "Postman (API testing)",
+    "Wazuh (SEIM)",
+  ],
+  "Systems & Infrastructure": [
+    "System Administration",
+    "Linux System Administration (Ubuntu, CentOS)",
+    "Virtualization & Containerization",
+    "Configuration Management",
+    "Backup & Recovery",
   ],
   "Cloud & DevOps": [
-    "AWS (EC2 Instance, IAM)",
-    "Digital Ocean",
+    "AWS",
     "Azure IAM",
-    "CI/CD Pipelines (GitHub Actions, Jenkins)",
-    "Git & GitHub",
-    "Command-Line Interface (CLI) Proficiency",
-    "Jira",
+    "DigitalOcean",
+    "EC2",
+    "Docker",
+    "CI/CD (Jenkins, GitHub Actions)",
+    "Kubernetes (basics)",
+    "Git",
   ],
   "Programming & Scripting": [
     "Python",
-    "Java",
     "C/C++",
-    "MySQL",
+    "Java",
     "PHP",
     "C#",
-    "PowerShell Scripting",
+    "MySQL",
     "Shell Scripting",
+    "PowerShell Scripting",
     "Batch Scripting",
   ],
 }
 
 const softSkills = [
-  "Analytical Skills",
-  "Team Collaboration",
-  "Team Management",
-  "Leadership",
-  "Time Management",
-  "Commitment",
+  "Analytical Thinking",
   "Communication",
-  "Emotional Intelligence",
+  "Team Collaboration & Leadership",
   "Public Speaking",
 ]
 
 const otherSkills = [
+  "Technical Documentation",
   "MS Office 365",
   "Google Workspace",
   "Tech Support",
-  "Troubleshooting",
-  "Self-Learning Capability",
-  "Documentation",
 ]
 
 const hobbies = [
@@ -238,7 +250,7 @@ const experience = [
     period: "08/2024 - 02/2025",
     highlights: [
       "Conducted training on computer fundamentals and MS Office (Word, PowerPoint, Excel).",
-      "Focused on practical learning to promote digital literacy.",
+      "Helped participants build confidence in everyday digital tasks and professional documentation.",
     ],
   },
   {
@@ -254,7 +266,7 @@ const experience = [
   },
   {
     title: "Assistant Trainer",
-    company: "AsiaInfo Innovation Technologies (Nanjing) Co. Ltd",
+    company: "AsiaInfo Innovation Technologies (Nanjing) Co. Ltd.",
     type: "Contract",
     location: "Dhaka",
     period: "04/2024 - 04/2024",
@@ -292,25 +304,42 @@ const leadership = [
     title: "Research Fellow",
     organization: "ITRRC Cybersecurity Research Lab, Jagannath University",
     period: "06/2024 - Present",
-    description: "Mentoring cybersecurity research trainees and connecting lab trainees with university professors",
+    highlights: [
+      "Coordinate lab activities and maintain the cybersecurity research community.",
+      "Lead bi-weekly training and assessments for lab members on cybersecurity topics.",
+      "Conduct cybersecurity research and support trainees working on security-focused projects and publications under lab mentors.",
+      "Help lab members connect and discuss ideas with Jagannath University faculty and Bangladeshi-origin professors now based abroad.",
+    ],
   },
   {
     title: "Former President",
     organization: "Jagannath University IT Society",
     period: "07/2023 - 07/2025",
-    description: "Leading 200+ members, coordinating IT-related events and workshops",
+    highlights: [
+      "Led a 200+ member student IT society, coordinating IT-focused events and workshops.",
+      "Mentored members through learning activities and career-focused guidance.",
+      "Organized and supported programs to build practical tech skills and peer collaboration.",
+      "Now, serve as an alumni / advisor to the new committee, sharing context and guidance when needed.",
+    ],
   },
   {
     title: "General Member to Vice President",
     organization: "Jagannath University IT Society",
     period: "11/2017 - 07/2023",
-    description: "Developed organizational and leadership skills",
+    highlights: [
+      "Progressed from general member to elected Vice President of the society.",
+      "Helped plan and organize IT events, seminars, and workshops for students.",
+      "Developed strong organizational and leadership skills through coordinating activities and working with members.",
+    ],
   },
   {
     title: "Former Vice-President",
     organization: "Sherpur District Student Welfare Council, Jagannath University",
     period: "01/2018 - 11/2021",
-    description: "Co-founded student welfare council to address educational and social needs",
+    highlights: [
+      "Co-founded and helped lead the council to support the educational and social needs of students from Sherpur District.",
+      "Organized welfare and fundraising activities to assist underprivileged students with access to education and essential resources.",
+    ],
   },
 ]
 
@@ -802,16 +831,21 @@ export default function Resume() {
                       <p className="text-base text-primary">
                         {role.organization}
                       </p>
-                      {role.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {role.description}
-                        </p>
-                      )}
                     </div>
                     <Badge variant="outline" className="w-fit">
                       {role.period}
                     </Badge>
                   </div>
+                  {role.highlights && (
+                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      {role.highlights.map((highlight, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/60" />
+                          <span>{highlight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {index < leadership.length - 1 && (
                     <Separator className="mt-6" />
                   )}

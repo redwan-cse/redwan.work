@@ -59,7 +59,7 @@ interface PrintableResumeProps {
     title: string
     organization: string
     period: string
-    description?: string
+    highlights?: string[]
   }>
   hobbies: Array<{
     name: string
@@ -696,8 +696,12 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
                 <div className="date-range">{role.period}</div>
               </div>
               <div className="company-info">{role.organization}</div>
-              {role.description && (
-                <div className="job-meta">{role.description}</div>
+              {role.highlights && (
+                <ul style={{ marginTop: '4pt' }}>
+                  {role.highlights.map((highlight, i) => (
+                    <li key={i}>{highlight}</li>
+                  ))}
+                </ul>
               )}
             </div>
           ))}
