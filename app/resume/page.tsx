@@ -219,7 +219,7 @@ const professionalCertificates = [
 
 const experience = [
   {
-    title: "Professional Information Security Freelancer",
+    title: "Information Security Freelancer",
     company: "Upwork",
     type: "Remote",
     location: "Worldwide",
