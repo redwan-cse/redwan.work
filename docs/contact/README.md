@@ -295,7 +295,70 @@ Contains:
 - Check `handleCountryChange()` is updating `whatsAppCountryCode`
 - Verify Select component is using correct value prop
 
+## Phase 1: Supabase Leads Sink
+
+The `/api/contact` route now supports a Supabase Postgres sink alongside Google Forms, controlled by the `LEADS_SINK` environment variable.
+
+### Sink Modes
+
+Set in the server environment:
+
+```env
+LEADS_SINK=forms   # legacy behavior (default): forward to Google Forms
+LEADS_SINK=supabase # insert into Supabase `leads` table via service role
+LEADS_SINK=both     # dual-write: Supabase first, then Google Forms
+```
+
+**Dual-write semantics (`both`):**
+
+1. Lead is inserted into Supabase first; failure returns a 502 to the user
+2. On success, the form is forwarded to Google Forms in the background (`after()`), with the **server ticket ref written into `entry.233094040`** (server ref wins in Forms too)
+3. A Google Forms failure is logged but does **not** fail the request — the user already has their ticket ref
+
+Other notes:
+
+- `LEADS_SINK=supabase` with missing Supabase env vars falls back to the Forms sink (logged server-side)
+- RLS is enabled on both tables with **zero policies** — anon/authenticated clients are denied; only the service role reads/writes
+
+### `leads` Table Schema
+
+Defined in `supabase/migrations/0001_leads_and_rate_limits.sql`. The migration is pushed manually once the Supabase environment variables land.
+
+Key columns:
+
+- **`ticket_number`** - int from a sequence (starts at 1000); rendered to users as `TKT-<n>`
+- **`name`**, **`email`**, **`country`** - identity fields
+- **`whatsapp_e164`** - WhatsApp number normalized to E.164
+- **`timezone`** - IANA timezone string
+- **`services`** - jsonb array of selected service types
+- **`budget_min`** / **`budget_max`** - budget range ints
+- **`urgency`**, **`project_summary`** - enquiry details
+- **`source_page`**, **`device_type`**, **`user_agent`** - technical/auto fields
+- **`ip_hash`** - **salted SHA-256 of the client IP; raw IPs are never stored**
+- **`consent_at`** - timestamptz recording when consent was given (not null)
+- **`status`** - enum `lead_status`: `new` / `contacted` / `won` / `lost`
+- **`email_verified_at`**, **`marketing_opt_in`** - reserved for future phases
+
+Plus optional fields (company, project_url, nda_required, how_found, preferred_contact_date, best_time_to_contact) and `created_at`/`updated_at`.
+
+### Server Ticket Refs Replace Client IDs
+
+With the Supabase sink active, the ticket shown to the user is **generated server-side** (`TKT-<ticket_number>`) and returned in the API response only after the row insert succeeds. The success card now displays this server-issued ref.
+
+This replaces the previous client-generated 8-character hex ID, which was spoofable — anyone POSTing directly to Google Forms could inject arbitrary ticket IDs (known S6 issue, now closed). The client-generated hex ID survives only as a legacy Forms field and is overwritten by the server ref during dual-write. The client also mirrors raw field names alongside Google entry IDs so both sinks receive the same payload.
+
+### Rate Limiting & Replay Guard
+
+Two layers, keyed only by one-way hashes (no plaintext identifiers persisted):
+
+1. **Memory pre-layer** - per-instance sliding window (5 requests/hour/IP) rejects floods before any DB call
+2. **DB layer** - atomic `consume_rate_limit(kind, key_hash, window_seconds, max_count)` RPC over the `rate_limits` table (kind + key_hash + window counters):
+   - `kind='ip'` - key is the salted SHA-256 IP hash (active when `LEAD_IP_HASH_SALT` is set)
+   - `kind='turnstile'` - key is the hashed Turnstile token with a 1-per-5-minute window → **single-use replay guard**
+
+If Supabase is unconfigured, only the memory pre-layer applies. Expired windows reset automatically; rows older than 7 days are pruned by the RPC.
+
 ---
 
-**Last Updated:** November 2025  
+**Last Updated:** August 2026  
 **Maintainer:** Md Redwan Ahmed
