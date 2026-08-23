@@ -2,9 +2,14 @@ import { Button } from "@/components/ui/button"
 import { ExternalLink } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import type { Metadata } from "next"
 import { TestimonialCarousel } from "@/components/testimonial-carousel"
 import { ProjectCarousel } from "@/components/project-carousel"
 import { ServicesGrid } from "@/components/services-grid"
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+}
 
 export default function Home() {
   return (
@@ -14,7 +19,7 @@ export default function Home() {
         <div className="grid min-h-[calc(100vh-6rem)] items-center gap-8 py-20 md:min-h-[calc(100vh-7rem)] md:grid-cols-2">
           <div className="flex flex-col gap-6">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-              Hi, I'm{" "}
+              Hi, I&apos;m{" "}
               <span className="bg-gradient-to-r from-primary to-primary/50 bg-clip-text text-transparent">
                 Md Redwan Ahmed
               </span>

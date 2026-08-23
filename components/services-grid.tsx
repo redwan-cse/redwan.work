@@ -1,52 +1,12 @@
 "use client"
 
 import * as React from "react"
-import {
-  Shield,
-  Target,
-  Bell,
-  Search,
-  Server,
-  Lock
-} from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import Link from "next/link"
 import useEmblaCarousel from "embla-carousel-react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-
-const services = [
-  {
-    icon: Shield,
-    title: "Penetration Testing & Vulnerability Assessment",
-    description: "Comprehensive security testing to identify and exploit vulnerabilities in your systems.",
-  },
-  {
-    icon: Target,
-    title: "Red Teaming & Ethical Hacking",
-    description: "Advanced adversary simulation to test your organization's detection and response capabilities.",
-  },
-  {
-    icon: Bell,
-    title: "SOC as a Service",
-    description: "24/7 security monitoring and incident response to protect your digital assets.",
-  },
-  {
-    icon: Search,
-    title: "Digital Forensics & Incident Response",
-    description: "Professional investigation of security incidents and data breaches.",
-  },
-  {
-    icon: Lock,
-    title: "OSINT & Dark Web Monitoring",
-    description: "Continuous monitoring of dark web for leaked credentials and sensitive information.",
-  },
-  {
-    icon: Server,
-    title: "System Administration & Hardening",
-    description: "Secure configuration and maintenance of servers and network infrastructure.",
-  },
-]
+import { SERVICES_HIGHLIGHTS } from "@/lib/content/services"
 
 export function ServicesGrid() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ 
@@ -67,7 +27,7 @@ export function ServicesGrid() {
     <div className="relative">
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex">
-          {services.map((service, index) => (
+          {SERVICES_HIGHLIGHTS.map((service, index) => (
             <div key={index} className="flex-[0_0_100%] min-w-0 pl-4 sm:flex-[0_0_50%] lg:flex-[0_0_33.333%]">
               <Card className="group h-full flex flex-col">
                 <CardHeader>
@@ -90,6 +50,7 @@ export function ServicesGrid() {
       <Button
         variant="ghost"
         size="icon"
+        aria-label="Previous service"
         className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 backdrop-blur-sm"
         onClick={scrollPrev}
       >
@@ -98,6 +59,7 @@ export function ServicesGrid() {
       <Button
         variant="ghost"
         size="icon"
+        aria-label="Next service"
         className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-background/80 backdrop-blur-sm"
         onClick={scrollNext}
       >

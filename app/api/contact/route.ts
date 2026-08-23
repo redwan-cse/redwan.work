@@ -35,8 +35,99 @@ const TURNSTILE_TIMEOUT = 10000;
 // Maximum token length (as per Cloudflare specs)
 const MAX_TOKEN_LENGTH = 2048;
 
+// ==============================================
+// Same-origin protection
+// ==============================================
+
+/**
+ * Reject cross-site form posts. Browsers always send Origin on fetch()
+ * POSTs; non-browser clients that omit it must present a same-origin
+ * Sec-Fetch-Site metadata header.
+ */
+function isSameOrigin(request: NextRequest): boolean {
+  const host = request.headers.get('host');
+  const origin = request.headers.get('origin');
+
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
+    }
+  }
+
+  const fetchSite = request.headers.get('sec-fetch-site');
+  return fetchSite === 'same-origin' || fetchSite === 'none';
+}
+
+// ==============================================
+// Interim in-memory rate limiting
+//
+// NOTE: On Vercel each serverless instance keeps its own counters, so
+// this is an approximation. Real enforcement arrives with Supabase
+// (see docs/plan/next-stage-plan.md Phase 1).
+// ==============================================
+
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT_MAX_REQUESTS = 5;
+const RATE_LIMIT_PRUNE_THRESHOLD = 5000;
+
+const rateLimitMap = new Map<string, number[]>();
+
+function checkRateLimit(clientIp: string): boolean {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+
+  if (rateLimitMap.size > RATE_LIMIT_PRUNE_THRESHOLD) {
+    Array.from(rateLimitMap.entries()).forEach(([key, stamps]) => {
+      const recent = stamps.filter((t) => t > windowStart);
+      if (recent.length === 0) {
+        rateLimitMap.delete(key);
+      } else {
+        rateLimitMap.set(key, recent);
+      }
+    });
+  }
+
+  const timestamps = (rateLimitMap.get(clientIp) ?? []).filter((t) => t > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    rateLimitMap.set(clientIp, timestamps);
+    return false;
+  }
+
+  timestamps.push(now);
+  rateLimitMap.set(clientIp, timestamps);
+  return true;
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // Reject cross-site submissions before doing any work
+    if (!isSameOrigin(request)) {
+      console.warn('Contact form rejected: cross-origin request', {
+        origin: request.headers.get('origin'),
+        host: request.headers.get('host'),
+      });
+      return NextResponse.json(
+        { error: 'Request origin not allowed.' },
+        { status: 403 }
+      );
+    }
+
+    // Rate limit per client IP
+    const clientIpForRate =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+
+    if (!checkRateLimit(clientIpForRate)) {
+      return NextResponse.json(
+        { error: 'Too many submissions. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     // Parse the incoming form data
     const formData = await request.formData();
     
@@ -190,7 +281,7 @@ export async function POST(request: NextRequest) {
     const googleFormsTimeoutId = setTimeout(() => googleFormsController.abort(), 15000);
 
     try {
-      await fetch(googleFormUrl, {
+      const googleResponse = await fetch(googleFormUrl, {
         method: 'POST',
         body: googleFormData,
         headers: {
@@ -201,7 +292,18 @@ export async function POST(request: NextRequest) {
 
       clearTimeout(googleFormsTimeoutId);
 
-      // Google Forms doesn't return useful response, but we reached here without error
+      // Verify the upstream accepted the submission before telling the user it succeeded
+      if (!googleResponse.ok) {
+        console.error('Google Forms rejected the submission:', {
+          status: googleResponse.status,
+          statusText: googleResponse.statusText,
+        });
+        return NextResponse.json(
+          { error: 'We could not process your message right now. Please try again or email us directly.' },
+          { status: 502 }
+        );
+      }
+
       console.log('✅ Contact form submitted successfully to Google Forms');
 
       return NextResponse.json(

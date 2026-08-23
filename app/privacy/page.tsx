@@ -3,10 +3,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Shield, Lock, Eye, Clock, Globe, Mail, AlertCircle, FileText, Users, Server } from "lucide-react"
 import Link from "next/link"
+import type { Metadata } from "next"
 
-export const metadata = {
-  title: "Data & Privacy | Md Redwan Ahmed",
+export const metadata: Metadata = {
+  title: "Data & Privacy",
   description: "How your data is collected, used, and protected when you contact Md Redwan Ahmed for cybersecurity services.",
+  alternates: { canonical: "/privacy" },
 }
 
 export default function Privacy() {
@@ -109,7 +111,7 @@ export default function Privacy() {
                 <CardContent className="pt-6 space-y-4">
                   <p className="text-muted-foreground leading-relaxed">
                     This website is operated by <strong className="text-foreground">Md Redwan Ahmed</strong>. 
-                    References to "I", "me" or "we" mean Md Redwan Ahmed and any trusted collaborators working 
+                    References to &quot;I&quot;, &quot;me&quot; or &quot;we&quot; mean Md Redwan Ahmed and any trusted collaborators working 
                     under his direction (for example, when delivering security services).
                   </p>
                   <p className="text-muted-foreground leading-relaxed">
@@ -319,7 +321,7 @@ export default function Privacy() {
                         <div>
                           <p className="font-medium text-foreground">Consent</p>
                           <p className="text-sm text-muted-foreground">
-                            When you tick the "I agree…" checkbox on the contact form, you confirm that you have 
+                            When you tick the &quot;I agree…&quot; checkbox on the contact form, you confirm that you have 
                             read this page and allow processing of your details for the purposes described.
                           </p>
                         </div>
@@ -340,7 +342,7 @@ export default function Privacy() {
                     <div className="flex items-start gap-3">
                       <Shield className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
                       <div>
-                        <p className="font-medium text-green-900 dark:text-green-100 mb-1">What We Don't Do</p>
+                        <p className="font-medium text-green-900 dark:text-green-100 mb-1">What We Don&apos;t Do</p>
                         <ul className="text-sm text-green-800 dark:text-green-200 space-y-1 list-disc list-inside">
                           <li>Data is not used to build marketing profiles</li>
                           <li>Data is not used for unrelated advertising</li>
@@ -682,7 +684,7 @@ export default function Privacy() {
                         rel="noopener noreferrer"
                         className="text-primary hover:underline"
                       >
-                        Cloudflare's Turnstile privacy page
+                        Cloudflare&apos;s Turnstile privacy page
                       </Link>
                       .
                     </p>

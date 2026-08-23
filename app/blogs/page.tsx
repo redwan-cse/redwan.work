@@ -6,19 +6,23 @@ import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import Image from "next/image";
 import Link from "next/link";
-import { getBlogPosts, extractFirstImage, extractExcerpt } from "@/lib/blogger";
+import { getBlogPostsPage, extractFirstImage, extractExcerpt } from "@/lib/blogger";
 import { Calendar, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { BlogPreviewModal } from "@/components/blog-preview-modal";
+import type { Metadata } from "next";
 
-// ISR: Revalidate every 60 seconds (1 minute)
-export const revalidate = 60;
+// Data fetching is cached in lib/blogger.ts via unstable_cache (60s ISR).
+// The page itself renders dynamically because it reads searchParams.
 
-// Enable dynamic rendering for this page
-export const dynamic = 'force-dynamic';
-
-export const metadata = {
-  title: "Blog Posts - Md Redwan Ahmed",
+export const metadata: Metadata = {
+  title: "Blog Posts",
   description: "Latest insights and articles about cybersecurity, technology, and more",
+  alternates: { canonical: "/blogs" },
+  openGraph: {
+    title: "Blog Posts - Md Redwan Ahmed",
+    description: "Latest insights and articles about cybersecurity, technology, and more",
+    type: "website",
+  },
 };
 
 const POSTS_PER_PAGE = 9;
@@ -30,13 +34,11 @@ interface BlogsPageProps {
 export default async function BlogsPage({ searchParams }: BlogsPageProps) {
   const params = await searchParams;
   const currentPage = Number(params.page) || 1;
-  const allPosts = await getBlogPosts(100); // Fetch more posts to enable pagination
-  
-  const totalPosts = allPosts.length;
+  const { posts: allPosts, totalItems: totalPosts } = await getBlogPostsPage(currentPage, POSTS_PER_PAGE);
+
   const totalPages = Math.ceil(totalPosts / POSTS_PER_PAGE);
   const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
-  const endIndex = startIndex + POSTS_PER_PAGE;
-  const posts = allPosts.slice(startIndex, endIndex);
+  const endIndex = startIndex + allPosts.length;
 
   return (
     <div className="container py-12">
@@ -55,9 +57,9 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
 
       {/* Blog Grid */}
       <div className="grid gap-8 md:gap-10 sm:grid-cols-2 lg:grid-cols-3">
-        {posts.length > 0 ? (
+        {allPosts.length > 0 ? (
           <>
-            {posts.map((post, index) => {
+            {allPosts.map((post, index) => {
                 const imageUrl = extractFirstImage(post.content);
                 const excerpt = extractExcerpt(post.content, 300);
                 

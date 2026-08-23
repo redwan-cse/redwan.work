@@ -2,11 +2,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { MessageCircle, Calendar, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import type { Metadata } from "next"
 import EnhancedContactForm from "@/components/enhanced-contact-form"
 
-export const metadata = {
-  title: "Contact - Md Redwan Ahmed",
+export const metadata: Metadata = {
+  title: "Contact",
   description: "Get in touch with Md Redwan Ahmed for cybersecurity consulting, penetration testing, and security services.",
+  alternates: { canonical: "/contact" },
 }
 
 export default function Contact() {
@@ -19,7 +21,7 @@ export default function Contact() {
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Have a security concern or need expert consultation? 
-            I'm here to help protect your digital assets.
+            I&apos;m here to help protect your digital assets.
           </p>
         </div>
 
@@ -98,7 +100,7 @@ export default function Contact() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Request a Service</CardTitle>
             <CardDescription className="text-base max-w-2xl mx-auto">
-              Fill out the form below with detailed information about your needs. I'll review your request and get back to you within 24 hours.
+              Fill out the form below with detailed information about your needs. I&apos;ll review your request and get back to you within 24 hours.
             </CardDescription>
           </CardHeader>
           <CardContent>

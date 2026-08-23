@@ -665,9 +665,6 @@ export default function EnhancedContactForm() {
         // Note: automatedMailSent will be set by Apps Script after sending confirmation
       };
 
-      // Log data for debugging
-      console.log('📋 Form Submission Data:', submissionData);
-
       /**
        * GOOGLE FORMS ENTRY ID MAPPING
        * 
@@ -723,8 +720,6 @@ export default function EnhancedContactForm() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to submit form');
       }
-
-      console.log('✅ Form submitted successfully with Turnstile validation');
 
       // Show success message
       setSubmitSuccess(true);
@@ -1301,7 +1296,7 @@ export default function EnhancedContactForm() {
                 placeholder="https://example.com or mention files"
               />
               <p className="text-xs text-muted-foreground">
-                Share a URL or mention that you'll send files separately
+                Share a URL or mention that you&apos;ll send files separately
               </p>
             </div>
           </div>
@@ -1542,7 +1537,7 @@ export default function EnhancedContactForm() {
               <div className="flex-1">
                 <p className="font-semibold text-green-500">Thank you! Your request has been received.</p>
                 <p className="text-sm text-muted-foreground">
-                  I'll review your inquiry and get back to you within 24 hours.
+                  I&apos;ll review your inquiry and get back to you within 24 hours.
                 </p>
                 <div className="mt-3 flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium text-foreground">

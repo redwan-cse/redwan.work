@@ -11,56 +11,159 @@ export interface BlogPost {
   labels?: string[];
 }
 
+export interface BlogPostsPage {
+  posts: BlogPost[];
+  totalItems: number;
+}
+
 /**
- * Fetch blog posts from Google Blogger API
- * 
- * @param maxResults - Maximum number of posts to fetch (default: 20)
- * @returns Array of blog posts
+ * Module-level TTL cache for Blogger responses.
+ *
+ * NOTE: each serverless instance keeps its own cache, so the Blogger API
+ * may be hit once per TTL per instance — still a massive improvement over
+ * fetching on every request. unstable_cache is intentionally avoided here
+ * (it breaks with googleapis/gaxios under Next.js 16 + Turbopack).
  */
-export async function getBlogPosts(maxResults: number = 20): Promise<BlogPost[]> {
-  const BLOG_ID = process.env.BLOGGER_ID;
+const BLOGGER_CACHE_TTL_MS = 60_000;
+
+const blogCache = new Map<string, { data: BlogPostsPage; expiresAt: number }>();
+
+/** Drop all cached blog pages (called after on-demand revalidation). */
+export function clearBlogCache() {
+  blogCache.clear();
+}
+
+function createBloggerClient() {
+  const BLOG_ID = process.env.BLOGGER_BLOG_ID || process.env.BLOGGER_ID;
   const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
 
   if (!BLOG_ID || !encodedCredentials) {
-    console.error("❌ Missing environment variables: BLOGGER_ID or GOOGLE_CREDENTIALS_B64");
-    return [];
+    return null;
   }
 
+  const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
+  const credentials = JSON.parse(credentialsJSON);
+
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
+  });
+
+  return {
+    blogId: BLOG_ID,
+    blogger: google.blogger({ version: "v3", auth }),
+  };
+}
+
+/** Structural subset of a Blogger API post item (avoids deep namespace imports) */
+interface BloggerPostItem {
+  id?: string | null;
+  title?: string | null;
+  content?: string | null;
+  url?: string | null;
+  published?: string | null;
+  author?: { displayName?: string | null } | null;
+  labels?: string[] | null;
+}
+
+function mapPost(post: BloggerPostItem): BlogPost {
+  return {
+    id: post.id || "",
+    title: post.title || "Untitled",
+    content: post.content || "",
+    url: post.url || "#",
+    published: post.published || new Date().toISOString(),
+    author: post.author?.displayName ?? undefined,
+    labels: post.labels ?? undefined,
+  };
+}
+
+// Safety cap so a hand-crafted ?page=999999 cannot request huge result sets
+const MAX_POSTS_FETCH = 300;
+
+// Blogger caps a single posts.list response well below this
+const POSTS_PER_API_CALL = 100;
+
+async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
   try {
-    const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
-    const credentials = JSON.parse(credentialsJSON);
+    // Client creation can throw on malformed credentials — keep inside try
+    const client = createBloggerClient();
 
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
-    });
-
-    const blogger = google.blogger({ version: "v3", auth });
-    const response = await blogger.posts.list({ 
-      blogId: BLOG_ID,
-      maxResults,
-      fetchImages: true,
-      status: ['live'], // Only fetch published posts
-    });
-
-    if (!response.data.items) {
-      console.warn("⚠️ No blog posts found.");
-      return [];
+    if (!client) {
+      console.error("❌ Missing environment variables: BLOGGER_BLOG_ID or GOOGLE_CREDENTIALS_B64");
+      return { posts: [], totalItems: 0 };
     }
 
-    return response.data.items.map((post) => ({
-      id: post.id || "",
-      title: post.title || "Untitled",
-      content: post.content || "",
-      url: post.url || "#",
-      published: post.published || new Date().toISOString(),
-      author: post.author?.displayName,
-      labels: post.labels || undefined,
-    }));
+    // The Blogger API paginates with opaque pageTokens and exposes no
+    // total count, so collect posts newest-first (following nextPageToken)
+    // up to the requested page and slice the tail. Results are cached,
+    // so the API is hit at most once per TTL per instance.
+    const target = Math.min(page * perPage, MAX_POSTS_FETCH);
+    const allItems: BloggerPostItem[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const response = await client.blogger.posts.list({
+        blogId: client.blogId,
+        maxResults: Math.min(target - allItems.length, POSTS_PER_API_CALL),
+        pageToken,
+        fetchImages: true,
+        status: ['live'], // Only fetch published posts
+      });
+
+      const items = (response.data.items ?? []) as BloggerPostItem[];
+      allItems.push(...items);
+      pageToken =
+        allItems.length < target && response.data.nextPageToken
+          ? response.data.nextPageToken
+          : undefined;
+    } while (pageToken);
+
+    // The requested page is the tail of everything collected so far
+    const posts = allItems.slice(Math.max(0, allItems.length - perPage)).map(mapPost);
+
+    return {
+      posts,
+      totalItems: allItems.length,
+    };
   } catch (error) {
     console.error("❌ Error fetching blog posts:", error);
-    return [];
+    return { posts: [], totalItems: 0 };
   }
+}
+
+/**
+ * Fetch one page of blog posts, backed by the module TTL cache.
+ *
+ * Each (page, perPage) combination is cached for BLOGGER_CACHE_TTL_MS,
+ * so traffic between refreshes never hits the Blogger API.
+ */
+export async function getBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safePerPage = Number.isFinite(perPage) && perPage > 0 ? Math.floor(perPage) : 9;
+
+  const key = `p${safePage}-n${safePerPage}`;
+  const now = Date.now();
+  const hit = blogCache.get(key);
+
+  if (hit && hit.expiresAt > now) {
+    return hit.data;
+  }
+
+  const data = await fetchBlogPostsPage(safePage, safePerPage);
+  blogCache.set(key, { data, expiresAt: now + BLOGGER_CACHE_TTL_MS });
+
+  return data;
+}
+
+/**
+ * Fetch the most recent blog posts from Google Blogger API (cached).
+ *
+ * @param maxResults - Maximum number of posts to fetch (default: 20)
+ */
+export async function getBlogPosts(maxResults: number = 20): Promise<BlogPost[]> {
+  const result = await getBlogPostsPage(1, maxResults);
+  return result.posts;
 }
 
 /**
