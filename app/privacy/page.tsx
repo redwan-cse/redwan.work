@@ -151,9 +151,10 @@ export default function Privacy() {
                   <p className="text-muted-foreground leading-relaxed">
                     The contact form collects three categories of information: required fields, optional fields, 
                     and technical or auto-generated fields. When you submit the form, your details are sent over 
-                    HTTPS to my server and stored in a <strong className="text-foreground">Supabase Postgres database</strong> 
-                    (the <strong className="text-foreground">leads table</strong>); depending on configuration, a copy may also be 
-                    forwarded to a private Google Forms spreadsheet.
+                    HTTPS to my server and stored in my leads store — a{" "}
+                    <strong className="text-foreground">Supabase Postgres database</strong> and/or a{" "}
+                    <strong className="text-foreground">private Google Forms spreadsheet</strong>, depending on the 
+                    active configuration.
                   </p>
 
                   <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
@@ -269,7 +270,7 @@ export default function Privacy() {
                         <TableBody>
                           <TableRow>
                             <TableCell className="font-medium">Ticket ID</TableCell>
-                            <TableCell className="text-muted-foreground">Server-generated reference number (e.g., TKT-1000) issued when your submission is accepted, used to track your enquiry</TableCell>
+                            <TableCell className="text-muted-foreground">A reference number used to track your enquiry</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell className="font-medium">Source Page</TableCell>
