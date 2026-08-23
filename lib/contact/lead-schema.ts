@@ -85,7 +85,10 @@ export function parseLeadPayload(
       whatsapp_e164: whatsappE164,
       preferred_contact_method: nullable(str(formData, 'preferredContactMethod')),
       timezone: nullable(str(formData, 'timeZone')),
-      preferred_contact_date: contactDate ? new Date(contactDate).toISOString().slice(0, 10) : null,
+      preferred_contact_date:
+        contactDate && !Number.isNaN(new Date(contactDate).getTime())
+          ? new Date(contactDate).toISOString().slice(0, 10)
+          : null,
       best_time_to_contact: nullable(str(formData, 'bestTimeToContact')),
       services,
       company: nullable(str(formData, 'company')),
