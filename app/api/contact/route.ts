@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { sha256Hex, parseLeadPayload } from '@/lib/contact/lead-schema';
 import { insertLead } from '@/lib/contact/lead-store';
 
@@ -69,12 +69,22 @@ function isSameOrigin(request: NextRequest): boolean {
 
 const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 const RATE_LIMIT_MAX_REQUESTS = 5;
+const RATE_LIMIT_PRUNE_THRESHOLD = 5000;
 const TURNSTILE_REUSE_WINDOW_SECONDS = 5 * 60;
 
 const memoryRateMap = new Map<string, number[]>();
 
 function checkMemoryRateLimit(clientIp: string): boolean {
   const now = Date.now();
+
+  if (memoryRateMap.size > RATE_LIMIT_PRUNE_THRESHOLD) {
+    Array.from(memoryRateMap.entries()).forEach(([key, stamps]) => {
+      const recent = stamps.filter((t) => t > now - RATE_LIMIT_WINDOW_SECONDS * 1000);
+      if (recent.length === 0) memoryRateMap.delete(key);
+      else memoryRateMap.set(key, recent);
+    });
+  }
+
   const stamps = (memoryRateMap.get(clientIp) ?? []).filter(
     (t) => t > now - RATE_LIMIT_WINDOW_SECONDS * 1000
   );
@@ -310,8 +320,10 @@ export async function POST(request: NextRequest) {
       if (sink === 'both' && process.env.GOOGLE_FORM_ACTION_URL) {
         formData.delete('cf-turnstile-response');
         formData.set('entry.233094040', stored.ticketRef); // server ref wins in Forms too
-        void forwardToGoogleForms(formData).catch((err) =>
-          console.error('Dual-write to Google Forms failed:', err instanceof Error ? err.message : err)
+        after(() =>
+          forwardToGoogleForms(formData).catch((err) =>
+            console.error('Dual-write to Google Forms failed:', err instanceof Error ? err.message : err)
+          )
         );
       }
 
