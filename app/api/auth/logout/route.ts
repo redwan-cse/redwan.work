@@ -2,22 +2,26 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 async function handle(request: NextRequest): Promise<NextResponse> {
-  // Same-origin check (mirrors the contact API convention). POST must carry an
-  // Origin (browsers always send one on form posts); GET is exempt because it
-  // only serves the proxy's own deactivated-client bounce.
-  const origin = request.headers.get('origin');
-  const allowed = new Set([request.nextUrl.origin, 'https://redwan.work']);
-  const originOk =
-    origin !== null &&
-    (() => {
-      try {
-        return allowed.has(new URL(origin).origin);
-      } catch {
-        return false;
-      }
-    })();
-  if (!originOk) {
-    return NextResponse.json({ error: 'Request origin not allowed' }, { status: 403 });
+  // Same-origin check (mirrors the contact API convention), enforced on POST
+  // only: browsers always send an Origin on form posts, so a cross-origin or
+  // Origin-less POST is rejected with 403. GET skips the check entirely — it
+  // exists solely for the proxy's deactivated-client bounce, which arrives as
+  // a top-level browser GET navigation carrying no Origin header.
+  if (request.method === 'POST') {
+    const origin = request.headers.get('origin');
+    const allowed = new Set([request.nextUrl.origin, 'https://redwan.work']);
+    const originOk =
+      origin !== null &&
+      (() => {
+        try {
+          return allowed.has(new URL(origin).origin);
+        } catch {
+          return false;
+        }
+      })();
+    if (!originOk) {
+      return NextResponse.json({ error: 'Request origin not allowed' }, { status: 403 });
+    }
   }
 
   const supabase = await createSupabaseServerClient();
