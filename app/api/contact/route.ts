@@ -291,8 +291,8 @@ export async function POST(request: NextRequest) {
     // Turnstile token single-use guard (tokens live ~5 minutes)
     if (
       typeof turnstileToken === 'string' &&
-      process.env.SUPABASE_URL &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SECRET_KEY
     ) {
       const tokenHash = await sha256Hex(turnstileToken);
       const unused = await consumeDbRateLimit('turnstile', tokenHash, TURNSTILE_REUSE_WINDOW_SECONDS, 1);
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
       console.error('LEADS_SINK is not "forms" but LEAD_IP_HASH_SALT is unset: DB IP limiting disabled.');
     }
 
-    if ((sink === 'supabase' || sink === 'both') && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if ((sink === 'supabase' || sink === 'both') && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
       const parsed = parseLeadPayload(formData, {
         ipHash: ipHash,
         userAgent: request.headers.get('user-agent'),
