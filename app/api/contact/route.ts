@@ -1,20 +1,21 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { sha256Hex, parseLeadPayload } from '@/lib/contact/lead-schema';
 import { insertLead } from '@/lib/contact/lead-store';
 
 /**
  * Contact Form API Route with Cloudflare Turnstile Protection
- * 
+ *
  * This route:
  * 1. Receives form submission from the contact form
  * 2. Validates the Turnstile token with Cloudflare's siteverify endpoint
- * 3. If valid, forwards the form data to Google Forms
- * 4. Returns success/error response to the client
- * 
+ * 3. Rate-limits per IP (memory pre-layer + atomic Supabase RPC)
+ * 4. Stores the lead in Supabase Postgres and returns a server-issued ticket ref
+ *
  * Environment Variables Required:
  * - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (server-only)
- * - GOOGLE_FORM_ACTION_URL: Google Forms submission URL
- * 
+ * - NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY: Supabase project credentials
+ * - LEAD_IP_HASH_SALT: salt for one-way IP hashing before storage
+ *
  * Implementation follows Cloudflare's official best practices:
  * https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
  */
@@ -301,92 +302,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ---- Sink dispatch ----
-    const sink = (process.env.LEADS_SINK ?? 'forms').toLowerCase();
-
-    if (sink !== 'forms' && !ipSalt) {
-      console.error('LEADS_SINK is not "forms" but LEAD_IP_HASH_SALT is unset: DB IP limiting disabled.');
+    // ---- Supabase sink (sole storage) ----
+    if (!ipSalt) {
+      console.error('LEAD_IP_HASH_SALT is unset: DB IP limiting and replay guard disabled.');
     }
 
-    if ((sink === 'supabase' || sink === 'both') && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY) {
-      const parsed = parseLeadPayload(formData, {
-        ipHash: ipHash,
-        userAgent: request.headers.get('user-agent'),
-      });
-      if (!parsed.ok) {
-        return NextResponse.json({ error: parsed.error }, { status: 400 });
-      }
-
-      const stored = await insertLead(parsed.lead);
-      if (!stored.ok) {
-        return NextResponse.json(
-          { error: 'We could not process your message right now. Please try again or email us directly.' },
-          { status: 502 }
-        );
-      }
-
-      if (sink === 'both' && process.env.GOOGLE_FORM_ACTION_URL) {
-        formData.delete('cf-turnstile-response');
-        formData.set('entry.233094040', stored.ticketRef); // server ref wins in Forms too
-        after(() =>
-          forwardToGoogleForms(formData).catch((err) =>
-            console.error('Dual-write to Google Forms failed:', err instanceof Error ? err.message : err)
-          )
-        );
-      } else if (sink === 'both') {
-        console.warn('Dual-write requested but GOOGLE_FORM_ACTION_URL is unset; skipping Forms copy.');
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: 'Your message has been sent successfully!',
-        ticketRef: stored.ticketRef,
-      });
-    }
-
-    if (sink === 'supabase') {
-      console.error('LEADS_SINK=supabase but Supabase env missing; falling back to forms.');
-    }
-
-    // ---- Legacy Google Forms sink (unchanged behavior) ----
-    const googleFormUrl = process.env.GOOGLE_FORM_ACTION_URL;
-    if (!googleFormUrl) {
-      console.error('GOOGLE_FORM_ACTION_URL is not configured');
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      console.error('Supabase credentials missing: set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY');
       return NextResponse.json({ error: 'Server configuration error. Please contact support.' }, { status: 500 });
     }
 
-    formData.delete('cf-turnstile-response');
-    const forwarded = new URLSearchParams();
-    formData.forEach((value, key) => {
-      if (key.startsWith('entry.')) forwarded.append(key, value.toString());
+    const parsed = parseLeadPayload(formData, {
+      ipHash: ipHash,
+      userAgent: request.headers.get('user-agent'),
     });
-
-    const googleFormsController = new AbortController();
-    const googleFormsTimeoutId = setTimeout(() => googleFormsController.abort(), 15000);
-    try {
-      const googleResponse = await fetch(googleFormUrl, {
-        method: 'POST',
-        body: forwarded,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        signal: googleFormsController.signal,
-      });
-      clearTimeout(googleFormsTimeoutId);
-
-      if (!googleResponse.ok) {
-        console.error('Google Forms rejected the submission:', { status: googleResponse.status });
-        return NextResponse.json(
-          { error: 'We could not process your message right now. Please try again or email us directly.' },
-          { status: 502 }
-        );
-      }
-      return NextResponse.json({ success: true, message: 'Your message has been sent successfully!' });
-    } catch (error) {
-      clearTimeout(googleFormsTimeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        return NextResponse.json({ error: 'Form submission timeout. Please try again.' }, { status: 408 });
-      }
-      throw error;
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+
+    const stored = await insertLead(parsed.lead);
+    if (!stored.ok) {
+      return NextResponse.json(
+        { error: 'We could not process your message right now. Please try again or email us directly.' },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Your message has been sent successfully!',
+      ticketRef: stored.ticketRef,
+    });
 
   } catch (error) {
     // Catch-all error handler
@@ -397,27 +343,5 @@ export async function POST(request: NextRequest) {
       { error: 'An error occurred while processing your request. Please try again.' },
       { status: 500 }
     );
-  }
-}
-
-async function forwardToGoogleForms(formData: FormData): Promise<void> {
-  const url = process.env.GOOGLE_FORM_ACTION_URL;
-  if (!url) throw new Error('GOOGLE_FORM_ACTION_URL missing');
-  const body = new URLSearchParams();
-  formData.forEach((value, key) => {
-    if (key.startsWith('entry.')) body.append(key, value.toString());
-  });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      body,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`status ${res.status}`);
-  } finally {
-    clearTimeout(timeoutId);
   }
 }

@@ -46,3 +46,6 @@ next-env.d.ts
 /.google-blogger-theme/docs
 
 # End of .gitignore
+
+### Supabase CLI ###
+supabase/.temp/

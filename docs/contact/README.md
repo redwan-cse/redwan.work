@@ -297,32 +297,21 @@ Contains:
 
 ## Phase 1: Supabase Leads Sink
 
-The `/api/contact` route now supports a Supabase Postgres sink alongside Google Forms, controlled by the `LEADS_SINK` environment variable.
+The `/api/contact` route stores every lead in **Supabase Postgres only** — the Google Forms sink has been retired (2026-08-24). No `LEADS_SINK` flag exists anymore; missing Supabase credentials return a 500 config error rather than falling back.
 
-### Sink Modes
+### Storage Flow
 
-Set in the server environment:
+1. Same-origin check → Turnstile siteverify → memory + DB rate limits → replay guard
+2. `parseLeadPayload()` normalizes/validates the raw-named fields mirrored by the client
+3. `insertLead()` writes via the service-role admin client and returns the server ticket ref
+4. The API responds with `{ success, message, ticketRef }`
 
-```env
-LEADS_SINK=forms   # legacy behavior (default): forward to Google Forms
-LEADS_SINK=supabase # insert into Supabase `leads` table via service role
-LEADS_SINK=both     # dual-write: Supabase first, then Google Forms
-```
-
-**Dual-write semantics (`both`):**
-
-1. Lead is inserted into Supabase first; failure returns a 502 to the user
-2. On success, the form is forwarded to Google Forms in the background (`after()`), with the **server ticket ref written into `entry.233094040`** (server ref wins in Forms too)
-3. A Google Forms failure is logged but does **not** fail the request — the user already has their ticket ref
-
-Other notes:
-
-- `LEADS_SINK=supabase` with missing Supabase env vars falls back to the Forms sink (logged server-side)
 - RLS is enabled on both tables with **zero policies** — anon/authenticated clients are denied; only the service role reads/writes
+- The `rate_limits` RPC is locked to `service_role` (revoked from `public`/`anon`/`authenticated`)
 
 ### `leads` Table Schema
 
-Defined in `supabase/migrations/0001_leads_and_rate_limits.sql`. The migration is pushed manually once the Supabase environment variables land.
+Defined in `supabase/migrations/0001_leads_and_rate_limits.sql`. **Pushed to the remote project on 2026-08-24.**
 
 Key columns:
 
@@ -345,7 +334,7 @@ Plus optional fields (company, project_url, nda_required, how_found, preferred_c
 
 With the Supabase sink active, the ticket shown to the user is **generated server-side** (`TKT-<ticket_number>`) and returned in the API response only after the row insert succeeds. The success card now displays this server-issued ref.
 
-This replaces the previous client-generated 8-character hex ID, which was spoofable — anyone POSTing directly to Google Forms could inject arbitrary ticket IDs (known S6 issue, now closed). The client-generated hex ID survives only as a legacy Forms field and is overwritten by the server ref during dual-write. The client also mirrors raw field names alongside Google entry IDs so both sinks receive the same payload.
+This replaces the previous client-generated 8-character hex ID, which was spoofable — anyone POSTing directly to the legacy Google Forms sink could inject arbitrary ticket IDs (known S6 issue, now closed). The client still mirrors raw field names alongside Google entry IDs; the Supabase parser reads only the raw names.
 
 ### Rate Limiting & Replay Guard
 

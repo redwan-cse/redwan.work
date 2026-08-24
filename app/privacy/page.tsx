@@ -152,9 +152,8 @@ export default function Privacy() {
                     The contact form collects three categories of information: required fields, optional fields, 
                     and technical or auto-generated fields. When you submit the form, your details are sent over 
                     HTTPS to my server and stored in my leads store — a{" "}
-                    <strong className="text-foreground">Supabase Postgres database</strong> and/or a{" "}
-                    <strong className="text-foreground">private Google Forms spreadsheet</strong>, depending on the 
-                    active configuration.
+                    <strong className="text-foreground">Supabase Postgres database</strong> protected by 
+                    row-level security, accessible only to me.
                   </p>
 
                   <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
