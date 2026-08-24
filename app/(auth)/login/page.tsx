@@ -32,7 +32,7 @@ export default function LoginPage() {
 
   const searchParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const nextPath = searchParams?.get('next') ?? '/';
+  const nextPath = searchParams?.get('next') ?? '';
 
   return (
     <Card>

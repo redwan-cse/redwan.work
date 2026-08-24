@@ -6,9 +6,16 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type ActionState = { error?: string; notice?: string };
 
-function safeNext(raw: FormDataEntryValue | null, fallback = '/'): string {
-  if (typeof raw !== 'string') return fallback;
-  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
+function safeRelativePath(raw: FormDataEntryValue | null): string | null {
+  if (
+    typeof raw !== 'string' ||
+    !raw.startsWith('/') ||
+    raw.startsWith('//') ||
+    raw.startsWith('/\\') ||
+    raw.startsWith('\\')
+  ) {
+    return null;
+  }
   return raw;
 }
 
@@ -26,7 +33,7 @@ export async function signInWithPasswordAction(
 ): Promise<ActionState> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
-  const next = safeNext(formData.get('next'));
+  const next = safeRelativePath(formData.get('next'));
 
   if (!email || !password) return { error: 'Email and password are required.' };
 
@@ -34,7 +41,8 @@ export async function signInWithPasswordAction(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: 'Invalid email or password.' };
 
-  redirect(safeNext(next, await panelHomeForCurrentUser()));
+  if (next) redirect(next);
+  redirect(await panelHomeForCurrentUser());
 }
 
 export async function requestMagicLinkAction(
