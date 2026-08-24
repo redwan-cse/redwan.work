@@ -16,8 +16,8 @@ const email = argOf('--email');
 const password = argOf('--password');
 const invite = args.includes('--invite');
 const role = argOf('--role');
-const fullName = argOf('--full-name') ?? null;
-const company = argOf('--company') ?? null;
+const fullName = argOf('--full-name');
+const company = argOf('--company');
 
 if (!email || !role || (!password && !invite)) {
   console.error('usage: --email <addr> (--password <pw> | --invite) --role admin|client [--full-name n] [--company c]');
@@ -44,10 +44,14 @@ const admin = createClient(url, secretKey, {
 });
 
 async function ensureProfile(userId) {
-  const { error } = await admin.from('profiles').upsert(
-    { id: userId, role, full_name: fullName, company },
-    { onConflict: 'id' }
-  );
+  // Only write fields the operator explicitly passed, so an update-path run
+  // without --full-name/--company never nulls existing profile values.
+  const payload = { id: userId, role };
+  if (fullName !== undefined) payload.full_name = fullName;
+  if (company !== undefined) payload.company = company;
+  const { error } = await admin.from('profiles').upsert(payload, {
+    onConflict: 'id',
+  });
   if (error) throw new Error(`profile upsert failed: ${error.message}`);
 }
 
