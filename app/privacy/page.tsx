@@ -38,7 +38,7 @@ export default function Privacy() {
         {/* Last Updated */}
         <div className="text-center mb-8">
           <p className="text-xs text-muted-foreground">
-            Last updated: November 22, 2025
+            Last updated: August 24, 2026
           </p>
         </div>
 
@@ -150,7 +150,10 @@ export default function Privacy() {
                 <CardContent className="pt-6 space-y-6">
                   <p className="text-muted-foreground leading-relaxed">
                     The contact form collects three categories of information: required fields, optional fields, 
-                    and technical or auto-generated fields.
+                    and technical or auto-generated fields. When you submit the form, your details are sent over 
+                    HTTPS to my server and stored in my leads store — a{" "}
+                    <strong className="text-foreground">Supabase Postgres database</strong> protected by 
+                    row-level security, accessible only to me.
                   </p>
 
                   <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
@@ -266,7 +269,7 @@ export default function Privacy() {
                         <TableBody>
                           <TableRow>
                             <TableCell className="font-medium">Ticket ID</TableCell>
-                            <TableCell className="text-muted-foreground">Unique identifier to track your enquiry</TableCell>
+                            <TableCell className="text-muted-foreground">A reference number used to track your enquiry</TableCell>
                           </TableRow>
                           <TableRow>
                             <TableCell className="font-medium">Source Page</TableCell>
@@ -397,8 +400,9 @@ export default function Privacy() {
                     <div className="p-4 rounded-lg border bg-card">
                       <h3 className="font-semibold text-foreground mb-2">Contact Form Enquiries (No Contract)</h3>
                       <p className="text-sm text-muted-foreground">
-                        Kept for up to <strong className="text-foreground">24 months</strong> from the last meaningful 
-                        interaction, then securely deleted or anonymised.
+                        Lead records submitted through the contact form are deleted after up to{" "}
+                        <strong className="text-foreground">24 months</strong> of inactivity (measured from the last meaningful 
+                        interaction), then securely deleted or anonymised.
                       </p>
                     </div>
                     <div className="p-4 rounded-lg border bg-card">
@@ -412,7 +416,9 @@ export default function Privacy() {
                       <h3 className="font-semibold text-foreground mb-2">Technical & Security Logs</h3>
                       <p className="text-sm text-muted-foreground">
                         Including server and security logs, typically kept for up to <strong className="text-foreground">12 months</strong>, 
-                        unless they need to be kept longer for investigating security incidents, fraud, or legal disputes.
+                        unless they need to be kept longer for investigating security incidents, fraud, or legal disputes. 
+                        For abuse prevention, IP addresses are stored only as <strong className="text-foreground">salted one-way hashes</strong> — 
+                        raw IP addresses are never persisted.
                       </p>
                     </div>
                   </div>

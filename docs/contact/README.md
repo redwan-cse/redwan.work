@@ -295,7 +295,59 @@ Contains:
 - Check `handleCountryChange()` is updating `whatsAppCountryCode`
 - Verify Select component is using correct value prop
 
+## Phase 1: Supabase Leads Sink
+
+The `/api/contact` route stores every lead in **Supabase Postgres only** — the Google Forms sink has been retired (2026-08-24). No `LEADS_SINK` flag exists anymore; missing Supabase credentials return a 500 config error rather than falling back.
+
+### Storage Flow
+
+1. Same-origin check → Turnstile siteverify → memory + DB rate limits → replay guard
+2. `parseLeadPayload()` normalizes/validates the raw-named fields mirrored by the client
+3. `insertLead()` writes via the service-role admin client and returns the server ticket ref
+4. The API responds with `{ success, message, ticketRef }`
+
+- RLS is enabled on both tables with **zero policies** — anon/authenticated clients are denied; only the service role reads/writes
+- The `rate_limits` RPC is locked to `service_role` (revoked from `public`/`anon`/`authenticated`)
+
+### `leads` Table Schema
+
+Defined in `supabase/migrations/0001_leads_and_rate_limits.sql`. **Pushed to the remote project on 2026-08-24.**
+
+Key columns:
+
+- **`ticket_number`** - int from a sequence (starts at 1000); rendered to users as `TKT-<n>`
+- **`name`**, **`email`**, **`country`** - identity fields
+- **`whatsapp_e164`** - WhatsApp number normalized to E.164
+- **`timezone`** - IANA timezone string
+- **`services`** - jsonb array of selected service types
+- **`budget_min`** / **`budget_max`** - budget range ints
+- **`urgency`**, **`project_summary`** - enquiry details
+- **`source_page`**, **`device_type`**, **`user_agent`** - technical/auto fields
+- **`ip_hash`** - **salted SHA-256 of the client IP; raw IPs are never stored**
+- **`consent_at`** - timestamptz recording when consent was given (not null)
+- **`status`** - enum `lead_status`: `new` / `contacted` / `won` / `lost`
+- **`email_verified_at`**, **`marketing_opt_in`** - reserved for future phases
+
+Plus optional fields (company, project_url, nda_required, how_found, preferred_contact_date, best_time_to_contact) and `created_at`/`updated_at`.
+
+### Server Ticket Refs Replace Client IDs
+
+With the Supabase sink active, the ticket shown to the user is **generated server-side** (`TKT-<ticket_number>`) and returned in the API response only after the row insert succeeds. The success card now displays this server-issued ref.
+
+This replaces the previous client-generated 8-character hex ID, which was spoofable — anyone POSTing directly to the legacy Google Forms sink could inject arbitrary ticket IDs (known S6 issue, now closed). The client still mirrors raw field names alongside Google entry IDs; the Supabase parser reads only the raw names.
+
+### Rate Limiting & Replay Guard
+
+Two layers, keyed only by one-way hashes (no plaintext identifiers persisted):
+
+1. **Memory pre-layer** - per-instance sliding window (5 requests/hour/IP) rejects floods before any DB call
+2. **DB layer** - atomic `consume_rate_limit(kind, key_hash, window_seconds, max_count)` RPC over the `rate_limits` table (kind + key_hash + window counters):
+   - `kind='ip'` - key is the salted SHA-256 IP hash (active when `LEAD_IP_HASH_SALT` is set)
+   - `kind='turnstile'` - key is the hashed Turnstile token with a 1-per-5-minute window → **single-use replay guard**
+
+If Supabase is unconfigured, only the memory pre-layer applies. Expired windows reset automatically; rows older than 7 days are pruned by the RPC.
+
 ---
 
-**Last Updated:** November 2025  
+**Last Updated:** August 2026  
 **Maintainer:** Md Redwan Ahmed

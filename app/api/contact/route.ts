@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sha256Hex, parseLeadPayload } from '@/lib/contact/lead-schema';
+import { insertLead } from '@/lib/contact/lead-store';
 
 /**
  * Contact Form API Route with Cloudflare Turnstile Protection
- * 
+ *
  * This route:
  * 1. Receives form submission from the contact form
  * 2. Validates the Turnstile token with Cloudflare's siteverify endpoint
- * 3. If valid, forwards the form data to Google Forms
- * 4. Returns success/error response to the client
- * 
+ * 3. Rate-limits per IP (memory pre-layer + atomic Supabase RPC)
+ * 4. Stores the lead in Supabase Postgres and returns a server-issued ticket ref
+ *
  * Environment Variables Required:
  * - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (server-only)
- * - GOOGLE_FORM_ACTION_URL: Google Forms submission URL
- * 
+ * - NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY: Supabase project credentials
+ * - LEAD_IP_HASH_SALT: salt for one-way IP hashing before storage
+ *
  * Implementation follows Cloudflare's official best practices:
  * https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
  */
@@ -61,43 +64,60 @@ function isSameOrigin(request: NextRequest): boolean {
 }
 
 // ==============================================
-// Interim in-memory rate limiting
-//
-// NOTE: On Vercel each serverless instance keeps its own counters, so
-// this is an approximation. Real enforcement arrives with Supabase
-// (see docs/plan/next-stage-plan.md Phase 1).
+// Rate limiting (Supabase-backed, atomic)
+// Falls back to per-instance memory when Supabase is unconfigured.
 // ==============================================
 
-const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 const RATE_LIMIT_PRUNE_THRESHOLD = 5000;
+const TURNSTILE_REUSE_WINDOW_SECONDS = 5 * 60;
 
-const rateLimitMap = new Map<string, number[]>();
+const memoryRateMap = new Map<string, number[]>();
 
-function checkRateLimit(clientIp: string): boolean {
+function checkMemoryRateLimit(clientIp: string): boolean {
   const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
 
-  if (rateLimitMap.size > RATE_LIMIT_PRUNE_THRESHOLD) {
-    Array.from(rateLimitMap.entries()).forEach(([key, stamps]) => {
-      const recent = stamps.filter((t) => t > windowStart);
-      if (recent.length === 0) {
-        rateLimitMap.delete(key);
-      } else {
-        rateLimitMap.set(key, recent);
-      }
+  if (memoryRateMap.size > RATE_LIMIT_PRUNE_THRESHOLD) {
+    Array.from(memoryRateMap.entries()).forEach(([key, stamps]) => {
+      const recent = stamps.filter((t) => t > now - RATE_LIMIT_WINDOW_SECONDS * 1000);
+      if (recent.length === 0) memoryRateMap.delete(key);
+      else memoryRateMap.set(key, recent);
     });
   }
 
-  const timestamps = (rateLimitMap.get(clientIp) ?? []).filter((t) => t > windowStart);
-  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
-    rateLimitMap.set(clientIp, timestamps);
+  const stamps = (memoryRateMap.get(clientIp) ?? []).filter(
+    (t) => t > now - RATE_LIMIT_WINDOW_SECONDS * 1000
+  );
+  if (stamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    memoryRateMap.set(clientIp, stamps);
     return false;
   }
-
-  timestamps.push(now);
-  rateLimitMap.set(clientIp, timestamps);
+  stamps.push(now);
+  memoryRateMap.set(clientIp, stamps);
   return true;
+}
+
+async function consumeDbRateLimit(
+  kind: 'ip' | 'turnstile',
+  keyHash: string,
+  windowSeconds: number,
+  maxCount: number
+): Promise<boolean | null> {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const { data, error } = await getSupabaseAdmin().rpc('consume_rate_limit', {
+      p_kind: kind,
+      p_key_hash: keyHash,
+      p_window_seconds: windowSeconds,
+      p_max_count: maxCount,
+    });
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    console.error('DB rate limit unavailable:', err instanceof Error ? err.message : err);
+    return null; // signals fallback
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -111,20 +131,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Request origin not allowed.' },
         { status: 403 }
-      );
-    }
-
-    // Rate limit per client IP
-    const clientIpForRate =
-      request.headers.get('cf-connecting-ip') ||
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
-
-    if (!checkRateLimit(clientIpForRate)) {
-      return NextResponse.json(
-        { error: 'Too many submissions. Please try again later.' },
-        { status: 429 }
       );
     }
 
@@ -256,82 +262,82 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Turnstile validation successful - now forward to Google Forms
-    const googleFormUrl = process.env.GOOGLE_FORM_ACTION_URL;
-    
-    if (!googleFormUrl) {
-      console.error('GOOGLE_FORM_ACTION_URL is not configured');
+    // ---- Rate limiting ----
+    const clientIp =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
+
+    if (!checkMemoryRateLimit(clientIp)) {
       return NextResponse.json(
-        { error: 'Server configuration error. Please contact support.' },
-        { status: 500 }
+        { error: 'Too many submissions. Please try again later.' },
+        { status: 429 }
       );
     }
 
-    // Remove the Turnstile token from the form data before forwarding
-    formData.delete('cf-turnstile-response');
+    const ipSalt = process.env.LEAD_IP_HASH_SALT ?? '';
+    const ipHash = ipSalt ? await sha256Hex(ipSalt + clientIp) : null;
 
-    // Convert FormData to URLSearchParams for Google Forms
-    const googleFormData = new URLSearchParams();
-    formData.forEach((value, key) => {
-      googleFormData.append(key, value.toString());
+    if (ipHash) {
+      const allowed = await consumeDbRateLimit('ip', ipHash, RATE_LIMIT_WINDOW_SECONDS, RATE_LIMIT_MAX_REQUESTS);
+      if (allowed === false) {
+        return NextResponse.json(
+          { error: 'Too many submissions. Please try again later.' },
+          { status: 429 }
+        );
+      }
+    }
+
+    // Turnstile token single-use guard (tokens live ~5 minutes)
+    if (
+      typeof turnstileToken === 'string' &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SECRET_KEY
+    ) {
+      const tokenHash = await sha256Hex(turnstileToken);
+      const unused = await consumeDbRateLimit('turnstile', tokenHash, TURNSTILE_REUSE_WINDOW_SECONDS, 1);
+      if (unused === false) {
+        return NextResponse.json({ error: 'Verification token already used. Please reload the form.' }, { status: 400 });
+      }
+    }
+
+    // ---- Supabase sink (sole storage) ----
+    if (!ipSalt) {
+      console.error('LEAD_IP_HASH_SALT is unset: DB IP limiting and replay guard disabled.');
+    }
+
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      console.error('Supabase credentials missing: set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY');
+      return NextResponse.json({ error: 'Server configuration error. Please contact support.' }, { status: 500 });
+    }
+
+    const parsed = parseLeadPayload(formData, {
+      ipHash: ipHash,
+      userAgent: request.headers.get('user-agent'),
     });
-
-    // Forward the form data to Google Forms with timeout
-    const googleFormsController = new AbortController();
-    const googleFormsTimeoutId = setTimeout(() => googleFormsController.abort(), 15000);
-
-    try {
-      const googleResponse = await fetch(googleFormUrl, {
-        method: 'POST',
-        body: googleFormData,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        signal: googleFormsController.signal,
-      });
-
-      clearTimeout(googleFormsTimeoutId);
-
-      // Verify the upstream accepted the submission before telling the user it succeeded
-      if (!googleResponse.ok) {
-        console.error('Google Forms rejected the submission:', {
-          status: googleResponse.status,
-          statusText: googleResponse.statusText,
-        });
-        return NextResponse.json(
-          { error: 'We could not process your message right now. Please try again or email us directly.' },
-          { status: 502 }
-        );
-      }
-
-      console.log('✅ Contact form submitted successfully to Google Forms');
-
-      return NextResponse.json(
-        { 
-          success: true, 
-          message: 'Your message has been sent successfully!' 
-        },
-        { status: 200 }
-      );
-
-    } catch (error) {
-      clearTimeout(googleFormsTimeoutId);
-      
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error('Google Forms submission timeout');
-        return NextResponse.json(
-          { error: 'Form submission timeout. Please try again.' },
-          { status: 408 }
-        );
-      }
-
-      throw error; // Re-throw to be caught by outer catch
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+
+    const stored = await insertLead(parsed.lead);
+    if (!stored.ok) {
+      return NextResponse.json(
+        { error: 'We could not process your message right now. Please try again or email us directly.' },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Your message has been sent successfully!',
+      ticketRef: stored.ticketRef,
+    });
 
   } catch (error) {
     // Catch-all error handler
     console.error('❌ Contact form submission error:', error instanceof Error ? error.message : 'Unknown error');
-    
+
     // Don't expose internal error details to user
     return NextResponse.json(
       { error: 'An error occurred while processing your request. Please try again.' },

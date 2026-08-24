@@ -699,6 +699,31 @@ export default function EnhancedContactForm() {
       formFields.append('entry.1030161553', submissionData.deviceType);
       formFields.append('entry.279561249', submissionData.priority);
 
+      // Raw-named mirrors for the Supabase sink (Google ignores unknown params,
+      // and our forward paths strip non-entry.* keys anyway)
+      formFields.append('name', submissionData.name);
+      formFields.append('email', submissionData.email);
+      formFields.append('country', submissionData.country);
+      formFields.append('whatsAppNumber', submissionData.whatsAppNumber);
+      formFields.append('preferredContactMethod', submissionData.preferredContactMethod);
+      formFields.append('timeZone', submissionData.timeZone);
+      formFields.append('preferredContactDate', submissionData.preferredContactDate);
+      formFields.append('bestTimeToContact', submissionData.bestTimeToContact);
+      formFields.append('serviceType', submissionData.serviceType);
+      formFields.append('company', submissionData.company);
+      formFields.append('projectUrlOrFiles', submissionData.projectUrlOrFiles);
+      formFields.append('projectSummary', submissionData.projectSummary);
+      formFields.append('ndaConfidentiality', submissionData.ndaConfidentiality);
+      formFields.append('urgency', submissionData.urgency);
+      formFields.append('budgetRange', submissionData.budgetRange);
+      formFields.append('budgetMin', formData.budgetMin || '');
+      formFields.append('budgetMax', formData.budgetMax || '');
+      formFields.append('howDidYouFindMe', submissionData.howDidYouFindMe);
+      formFields.append('ticketId', submissionData.ticketId);
+      formFields.append('sourcePage', submissionData.sourcePage);
+      formFields.append('userAgent', submissionData.userAgent);
+      formFields.append('deviceType', submissionData.deviceType);
+
       // Validate Turnstile token (only for API validation, NOT stored in Google Forms)
       // The API route will validate the token with Cloudflare and remove it before forwarding
       if (TURNSTILE_SITE_KEY) {
@@ -716,6 +741,11 @@ export default function EnhancedContactForm() {
       });
 
       const result = await response.json();
+
+      // Prefer the server-generated ticket reference over the local placeholder
+      if (typeof result.ticketRef === 'string' && result.ticketRef.length > 0) {
+        setSubmittedTicketId(result.ticketRef);
+      }
 
       if (!response.ok) {
         throw new Error(result.error || 'Failed to submit form');
