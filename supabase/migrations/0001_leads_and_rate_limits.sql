@@ -54,6 +54,8 @@ create table public.rate_limits (
   unique (kind, key_hash)
 );
 
+create index rate_limits_window_idx on public.rate_limits (window_started_at);
+
 alter table public.rate_limits enable row level security;
 -- Same policy stance as leads.
 
@@ -71,6 +73,10 @@ declare
   v_now timestamptz := now();
   v_row public.rate_limits;
 begin
+  if p_window_seconds < 1 or p_max_count < 1 then
+    return false;
+  end if;
+
   delete from public.rate_limits where window_started_at < v_now - interval '7 days';
 
   insert into public.rate_limits (kind, key_hash, window_started_at, count)
@@ -95,3 +101,10 @@ begin
   return v_row is not null;
 end;
 $$;
+
+-- consume_rate_limit must only be callable via service key (SECURITY DEFINER
+-- otherwise exposes anon-executable writes on rate_limits).
+revoke execute on function public.consume_rate_limit from public;
+revoke execute on function public.consume_rate_limit from anon;
+revoke execute on function public.consume_rate_limit from authenticated;
+grant execute on function public.consume_rate_limit to service_role;

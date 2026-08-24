@@ -22,7 +22,7 @@ export interface NormalizedLead {
   source_page: string | null;
   device_type: string | null;
   user_agent: string | null;
-  ip_hash: string;
+  ip_hash: string | null;
   consent_at: string;
 }
 
@@ -46,7 +46,7 @@ export async function sha256Hex(input: string): Promise<string> {
 
 export function parseLeadPayload(
   formData: FormData,
-  meta: { ipHash: string; userAgent: string | null }
+  meta: { ipHash: string | null; userAgent: string | null }
 ): { ok: true; lead: NormalizedLead } | { ok: false; error: string } {
   const name = nullable(str(formData, 'name'), 200);
   const emailRaw = str(formData, 'email').toLowerCase();
@@ -63,7 +63,9 @@ export function parseLeadPayload(
   const whatsappRaw = str(formData, 'whatsAppNumber'); // client sends combined "+880…"
   if (whatsappRaw.length > 0) {
     const parsed = parsePhoneNumberFromString(whatsappRaw);
-    if (!parsed) return { ok: false, error: 'Invalid WhatsApp number.' };
+    if (!parsed || !parsed.isValid()) {
+      return { ok: false, error: 'Invalid WhatsApp number.' };
+    }
     whatsappE164 = parsed.number;
   }
 

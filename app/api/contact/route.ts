@@ -289,7 +289,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Turnstile token single-use guard (tokens live ~5 minutes)
-    if (typeof turnstileToken === 'string' && ipSalt) {
+    if (
+      typeof turnstileToken === 'string' &&
+      process.env.SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
       const tokenHash = await sha256Hex(turnstileToken);
       const unused = await consumeDbRateLimit('turnstile', tokenHash, TURNSTILE_REUSE_WINDOW_SECONDS, 1);
       if (unused === false) {
@@ -300,9 +304,13 @@ export async function POST(request: NextRequest) {
     // ---- Sink dispatch ----
     const sink = (process.env.LEADS_SINK ?? 'forms').toLowerCase();
 
+    if (sink !== 'forms' && !ipSalt) {
+      console.error('LEADS_SINK is not "forms" but LEAD_IP_HASH_SALT is unset: DB IP limiting disabled.');
+    }
+
     if ((sink === 'supabase' || sink === 'both') && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const parsed = parseLeadPayload(formData, {
-        ipHash: ipHash ?? '',
+        ipHash: ipHash,
         userAgent: request.headers.get('user-agent'),
       });
       if (!parsed.ok) {
@@ -325,6 +333,8 @@ export async function POST(request: NextRequest) {
             console.error('Dual-write to Google Forms failed:', err instanceof Error ? err.message : err)
           )
         );
+      } else if (sink === 'both') {
+        console.warn('Dual-write requested but GOOGLE_FORM_ACTION_URL is unset; skipping Forms copy.');
       }
 
       return NextResponse.json({
