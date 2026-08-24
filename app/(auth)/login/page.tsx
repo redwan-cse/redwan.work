@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +18,7 @@ import {
   signInWithPasswordAction,
   requestMagicLinkAction,
   requestPasswordResetAction,
+  consumeMagicLinkTokenAction,
   type ActionState,
 } from '@/lib/auth/actions';
 
@@ -34,6 +35,29 @@ export default function LoginPage() {
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const nextPath = searchParams?.get('next') ?? '';
 
+  const tokenHash = searchParams?.get('token_hash') ?? '';
+  const tokenType = searchParams?.get('type');
+
+  const [tokenState, setTokenState] = useState<'idle' | 'working' | 'failed'>(
+    tokenHash && tokenType === 'magiclink' ? 'working' : 'idle'
+  );
+
+  useEffect(() => {
+    if (tokenState !== 'working') return;
+    let cancelled = false;
+    consumeMagicLinkTokenAction(tokenHash).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        window.location.assign(result.home);
+      } else {
+        setTokenState('failed');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenState, tokenHash]);
+
   return (
     <Card>
       <CardHeader>
@@ -45,6 +69,12 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {tokenState === 'working' && (
+          <p className="text-sm text-muted-foreground">Signing you in…</p>
+        )}
+        {tokenState === 'failed' && (
+          <FormMessage state={{ error: 'That sign-in link is invalid or has expired.' }} />
+        )}
         {mode === 'signin' ? (
           <>
             <form action={signIn} className="space-y-3">

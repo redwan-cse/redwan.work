@@ -27,6 +27,19 @@ async function panelHomeForCurrentUser(): Promise<string> {
   return role === 'admin' ? '/admin' : '/portal';
 }
 
+const MIN_PASSWORD = 12;
+const INVALID_LINK = 'This link is invalid or has expired. Ask for a new one.';
+
+function validatePasswordPair(formData: FormData): { error: string } | { password: string } {
+  const password = String(formData.get('password') ?? '');
+  const confirm = String(formData.get('confirm') ?? '');
+  if (password.length < MIN_PASSWORD) {
+    return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
+  }
+  if (password !== confirm) return { error: 'Passwords do not match.' };
+  return { password };
+}
+
 export async function signInWithPasswordAction(
   _prev: ActionState,
   formData: FormData
@@ -88,4 +101,66 @@ export async function requestPasswordResetAction(
     return { error: 'Too many requests. Please wait a minute and try again.' };
   }
   return { notice: 'If that address has an account, a reset link is on its way.' };
+}
+
+export async function setNewPasswordFromRecoveryAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const tokenHash = String(formData.get('token_hash') ?? '');
+  if (!tokenHash) return { error: INVALID_LINK };
+
+  const checked = validatePasswordPair(formData);
+  if ('error' in checked) return { error: checked.error };
+
+  const supabase = await createSupabaseServerClient();
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    type: 'recovery',
+    token_hash: tokenHash,
+  });
+  if (verifyError) return { error: INVALID_LINK };
+
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: checked.password,
+  });
+  if (updateError) return { error: 'Could not update your password. Try again.' };
+
+  redirect(await panelHomeForCurrentUser());
+}
+
+export async function acceptInviteAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const tokenHash = String(formData.get('token_hash') ?? '');
+  if (!tokenHash) return { error: INVALID_LINK };
+
+  const checked = validatePasswordPair(formData);
+  if ('error' in checked) return { error: checked.error };
+
+  const supabase = await createSupabaseServerClient();
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    type: 'invite',
+    token_hash: tokenHash,
+  });
+  if (verifyError) return { error: INVALID_LINK };
+
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: checked.password,
+  });
+  if (updateError) return { error: 'Could not save your password. Try again.' };
+
+  redirect(await panelHomeForCurrentUser());
+}
+
+export async function consumeMagicLinkTokenAction(
+  tokenHash: string
+): Promise<{ ok: true; home: string } | { ok: false; error: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.verifyOtp({
+    type: 'magiclink',
+    token_hash: tokenHash,
+  });
+  if (error) return { ok: false, error: INVALID_LINK };
+  return { ok: true, home: await panelHomeForCurrentUser() };
 }
