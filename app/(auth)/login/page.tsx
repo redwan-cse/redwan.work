@@ -37,6 +37,7 @@ export default function LoginPage() {
 
   const tokenHash = searchParams?.get('token_hash') ?? '';
   const tokenType = searchParams?.get('type');
+  const deactivated = searchParams?.get('reason') === 'deactivated';
 
   const [tokenState, setTokenState] = useState<'idle' | 'working' | 'failed'>(
     tokenHash && tokenType === 'magiclink' ? 'working' : 'idle'
@@ -74,6 +75,9 @@ export default function LoginPage() {
         )}
         {tokenState === 'failed' && (
           <FormMessage state={{ error: 'That sign-in link is invalid or has expired.' }} />
+        )}
+        {deactivated && (
+          <FormMessage state={{ error: 'Your account has been deactivated. Contact the administrator.' }} />
         )}
         {mode === 'signin' ? (
           <>
