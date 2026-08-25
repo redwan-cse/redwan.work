@@ -81,7 +81,7 @@ async function main() {
     console.log(`updated existing user ${userId} (role=${role}${password ? ', password reset' : ''})`);
   } else if (invite) {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      options: { redirectTo: `${siteUrl}/invite/accept` },
+      redirectTo: `${siteUrl}/invite/accept`,
     });
     if (error) throw new Error(`invite failed: ${error.message}`);
     userId = data.user.id;
