@@ -87,8 +87,10 @@ export default async function AdminOverviewPage() {
                       <td className="px-4 py-2 text-right">
                         {!converted && lead.status !== 'won' ? (
                           <ConvertLeadButton leadId={lead.id} label={lead.email} />
-                        ) : (
+                        ) : converted ? (
                           <span className="text-xs text-muted-foreground">Converted</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>

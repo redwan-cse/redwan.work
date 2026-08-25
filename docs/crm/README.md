@@ -59,7 +59,7 @@ AUTH="apikey: $SK"; AH="Authorization: Bearer $SK"; CT="Content-Type: applicatio
 # Create a ticket for an existing client profile id
 TICKET_ID=$(curl -s -X POST "$URL/rest/v1/tickets" -H "$AUTH" -H "$AH" -H "$CT" \
   -H "Prefer: return=representation" \
-  -d '{"client_id":"<client-profile-uuid>","subject":"Seed ticket"}' | jq -r '.[0].number')
+  -d '{"client_id":"<client-profile-uuid>","subject":"Seed ticket"}' | jq -r '.[0].id')
 
 # Add a client-authored message (trigger auto-flips status: client → open)
 curl -s -X POST "$URL/rest/v1/ticket_messages" -H "$AUTH" -H "$AH" -H "$CT" \
@@ -94,7 +94,7 @@ node --env-file=.env.local -e '
 
 ### Cross-client RLS probes
 
-Sign in two different client accounts with password grants, keep each access token:
+Sign in two different client accounts with password grants, keep each access token. Define `URL` and `CT` as in the seed snippet above (project URL / content-type header); keep the publishable key in a local untracked env file such as `.env.client-probe`:
 
 ```bash
 PK=$(grep '^NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=' .env.client-probe | cut -d= -f2-)
@@ -140,6 +140,7 @@ Notes: trigger flips verified both directions at REST (Task 1) and through the r
 2. **Reset-link click-through:** request a recovery email for a real account and confirm the token-hash link lands on `/reset-password` and completes.
 3. **Real-admin bootstrap** if not yet done: see the owner follow-ups in `docs/auth/README.md`.
 4. **Resend-invite affordance** is a future nicety — today a lost invite email means converting/inviting cannot re-send to a claimed user; a small "resend invite" action would close that gap.
+5. **Probe fixture note:** the `probe.client@example.com` fixture referenced in the committed plan docs was deleted from production on 2026-08-25; its historical password in those plan docs must be considered burned, and future probes should use locally-created fixtures with uncommitted passwords.
 
 ## Non-goals (explicitly deferred)
 
