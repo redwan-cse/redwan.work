@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getCurrentSession } from '@/lib/auth/session';
-import { convertLead } from '@/lib/crm/clients';
+import { convertLead, inviteClient, setClientActive } from '@/lib/crm/clients';
 import { adminReply, setTicketStatus } from '@/lib/crm/tickets';
 
 export type CrmActionState = { error?: string; notice?: string };
@@ -61,5 +61,42 @@ export async function setTicketStatusAction(
   if (!result.ok) return { error: result.error };
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
+  return {};
+}
+
+export async function inviteClientAction(
+  _prev: CrmActionState,
+  formData: FormData
+): Promise<CrmActionState> {
+  const session = await requireAdmin();
+  if (!session) return { error: 'Unauthorized.' };
+
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'redwan.work';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+
+  const result = await inviteClient({
+    email: String(formData.get('email') ?? ''),
+    fullName: String(formData.get('fullName') ?? '') || undefined,
+    company: String(formData.get('company') ?? '') || undefined,
+    redirectToBase: `${proto}://${host}`,
+  });
+  if (!result.ok) return { error: result.error };
+  revalidatePath('/admin/clients');
+  revalidatePath('/admin');
+  return { notice: 'Invitation sent.' };
+}
+
+export async function setClientActiveAction(
+  clientId: string,
+  active: boolean
+): Promise<CrmActionState> {
+  const session = await requireAdmin();
+  if (!session) return { error: 'Unauthorized.' };
+
+  const result = await setClientActive(clientId, active);
+  if (!result.ok) return { error: result.error };
+  revalidatePath('/admin/clients');
+  revalidatePath('/admin');
   return {};
 }

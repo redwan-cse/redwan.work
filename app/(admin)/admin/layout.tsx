@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 const NAV = [
   { label: 'Overview', href: '/admin', enabled: true },
-  { label: 'Clients', href: '/admin/clients', enabled: false },
+  { label: 'Clients', href: '/admin/clients', enabled: true },
   { label: 'Tickets', href: '/admin/tickets', enabled: false },
   { label: 'Projects', href: '/admin/projects', enabled: false },
   { label: 'Invoices', href: '/admin/invoices', enabled: false },
