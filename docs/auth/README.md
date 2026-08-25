@@ -47,7 +47,7 @@ Behavior:
 - **Existing email** → updates that user: sets the role claim, resets the password if provided.
 - **New email + `--password`** → creates a pre-confirmed user (no verification email).
 - **New email + `--invite`** → sends an invite email; redirect target is `<site-url>/invite/accept`.
-- Either way it upserts the matching row into `public.profiles` (`id`, `role`, `full_name`, `company`).
+- Either way it upserts the matching row into `public.profiles` (`id`, `role` always; `full_name`, `company` only when their flags are passed).
 
 ## Role storage: claim vs column
 
@@ -82,6 +82,17 @@ Notes:
 
 ### Owner follow-ups after deploy
 
-1. Invite the real admin: run the bootstrap script with `--invite --role admin --site-url https://redwan.work` for `redwanceh@gmail.com` (production URL so the invite lands on the deployed site).
-2. From the invite email, click through `/invite/accept` on his own account and set a password.
+1. Invite the real admin: run the bootstrap script with `--invite --role admin --site-url https://redwan.work` for the owner account (`<owner-email>`; production URL so the invite lands on the deployed site).
+2. From the invite email, click through `/invite/accept` on that account and set a password.
 3. Confirm the first portal login at `https://redwan.work/admin` renders the admin Overview shell.
+
+## Deploy checklist
+
+Merging `feat/auth-foundation` to `main` auto-deploys to Vercel. Before merging:
+
+1. **Vercel env vars** — confirm both exist in Vercel project settings (names only, values live in Vercel, never in this repo):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - (`SUPABASE_SECRET_KEY` is already set from Phase 1 and stays untouched.)
+   Without the two public vars the proxy fail-closes every protected route to `/login` and sign-in submission throws at the client factory — the site stays up but auth is dead on arrival.
+2. **Supabase URL configuration** — Site URL must be `https://redwan.work` at merge time so the token-hash links in email templates resolve against production (see dashboard checklist above).

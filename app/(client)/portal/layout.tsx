@@ -25,11 +25,14 @@ export default async function PortalLayout({ children }: { children: React.React
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('is_active')
     .eq('id', session.userId)
     .maybeSingle();
+  if (error) {
+    console.error('profiles is_active check failed:', error.message);
+  }
   if (profile?.is_active !== true) {
     redirect('/api/auth/logout?reason=deactivated');
   }

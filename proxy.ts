@@ -87,11 +87,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     }
     if (role === 'client') {
       const userId = readClaimSub(data?.claims)!;
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('is_active')
         .eq('id', userId)
         .maybeSingle();
+      if (error) {
+        console.error('profiles is_active check failed:', error.message);
+      }
       if (profile?.is_active === true) return response;
     }
     // The logout route performs the actual sign-out with proper cookie context;

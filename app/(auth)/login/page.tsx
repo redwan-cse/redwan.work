@@ -43,17 +43,23 @@ export default function LoginPage() {
     tokenHash && tokenType === 'magiclink' ? 'working' : 'idle'
   );
 
+  // Dev-only StrictMode note: remount fires verifyOtp twice; the second call
+  // fails single-use validation but cookies are already set — prod unaffected.
   useEffect(() => {
     if (tokenState !== 'working') return;
     let cancelled = false;
-    consumeMagicLinkTokenAction(tokenHash).then((result) => {
-      if (cancelled) return;
-      if (result.ok) {
-        window.location.assign(result.home);
-      } else {
-        setTokenState('failed');
-      }
-    });
+    consumeMagicLinkTokenAction(tokenHash)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          window.location.assign(result.home);
+        } else {
+          setTokenState('failed');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTokenState('failed');
+      });
     return () => {
       cancelled = true;
     };
@@ -118,7 +124,7 @@ export default function LoginPage() {
             <form action={magic} className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="magic-email">Or get a one-time sign-in link</Label>
-                <Input id="magic-email" name="email" type="email" required />
+                <Input id="magic-email" name="email" type="email" autoComplete="email" required />
               </div>
               <FormMessage state={magicState} />
               <Button type="submit" variant="outline" className="w-full" disabled={magicPending}>
@@ -131,7 +137,7 @@ export default function LoginPage() {
             <form action={reset} className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="reset-email">Email</Label>
-                <Input id="reset-email" name="email" type="email" required />
+                <Input id="reset-email" name="email" type="email" autoComplete="email" required />
               </div>
               <FormMessage state={resetState} />
               <Button type="submit" className="w-full" disabled={resetPending}>
