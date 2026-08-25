@@ -169,3 +169,148 @@ export async function setTicketStatus(ticketId: string, status: TicketStatus): P
   if (error) return crmError(`Status update failed: ${error.message}`);
   return { ok: true };
 }
+
+export interface PortalTicketRow {
+  id: string;
+  number: number;
+  subject: string;
+  status: TicketStatus;
+  last_message_at: string;
+  created_at: string;
+}
+
+const MAX_SUBJECT = 200;
+const MAX_BODY = 10000;
+const TICKET_CAP_24H = 10;
+
+function trimField(value: string, max: number): string {
+  return value.trim().slice(0, max);
+}
+
+export async function createTicket(
+  clientId: string,
+  subject: string,
+  body: string
+): Promise<{ ok: true; ticketId: string } | { ok: false; error: string }> {
+  const trimmedSubject = trimField(subject, MAX_SUBJECT);
+  const trimmedBody = trimField(body, MAX_BODY);
+  if (trimmedSubject.length === 0) return { ok: false, error: 'Subject is required.' };
+  if (trimmedBody.length === 0) return { ok: false, error: 'Message is required.' };
+
+  const admin = getSupabaseAdmin();
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error: capError } = await admin
+    .from('tickets')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .gte('created_at', since);
+  if (capError) return { ok: false, error: `Could not create ticket: ${capError.message}` };
+  if ((count ?? 0) >= TICKET_CAP_24H) {
+    return {
+      ok: false,
+      error:
+        'You have created 10 tickets in the last 24 hours. Please reply to an existing ticket instead.',
+    };
+  }
+
+  const { data: ticket, error: ticketError } = await admin
+    .from('tickets')
+    .insert({ client_id: clientId, subject: trimmedSubject })
+    .select('id')
+    .single();
+  if (ticketError || !ticket)
+    return { ok: false, error: `Could not create ticket: ${ticketError?.message ?? 'no row'}` };
+
+  const { error: msgError } = await admin
+    .from('ticket_messages')
+    .insert({ ticket_id: ticket.id, author_id: clientId, body: trimmedBody });
+  if (msgError) return { ok: false, error: `Could not create ticket: ${msgError.message}` };
+
+  return { ok: true, ticketId: ticket.id };
+}
+
+export async function listOwnTickets(clientId: string, limit?: number): Promise<PortalTicketRow[]> {
+  const admin = getSupabaseAdmin();
+  let query = admin
+    .from('tickets')
+    .select('id, number, subject, status, last_message_at, created_at')
+    .eq('client_id', clientId)
+    .order('last_message_at', { ascending: false });
+  if (limit) query = query.limit(limit);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`own tickets query failed: ${error.message}`);
+  return (data ?? []) as PortalTicketRow[];
+}
+
+export async function countOwnOpenTickets(clientId: string): Promise<number> {
+  const admin = getSupabaseAdmin();
+  const { count, error } = await admin
+    .from('tickets')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .eq('status', 'open');
+  if (error) throw new Error(`open-ticket count failed: ${error.message}`);
+  return count ?? 0;
+}
+
+export async function getOwnTicketThread(clientId: string, ticketId: string) {
+  const admin = getSupabaseAdmin();
+
+  const { data: ticketData, error: ticketError } = await admin
+    .from('tickets')
+    .select('id, number, subject, status, last_message_at, created_at, client_id')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  if (ticketError) return crmError(`thread load failed: ${ticketError.message}`);
+  if (!ticketData || ticketData.client_id !== clientId) return crmError('Ticket not found.');
+
+  const { data: msgData, error: msgError } = await admin
+    .from('ticket_messages')
+    .select('id, body, created_at, profiles!ticket_messages_author_id_fkey ( full_name, role )')
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: true });
+  if (msgError) return crmError(`messages load failed: ${msgError.message}`);
+
+  const messages: ThreadMessage[] = ((msgData ?? []) as unknown as Array<{
+    id: string;
+    body: string;
+    created_at: string;
+    profiles: { full_name: string | null; role: string } | null;
+  }>).map((m) => ({
+    id: m.id,
+    body: m.body,
+    created_at: m.created_at,
+    author_name: m.profiles?.full_name ?? null,
+    author_role: m.profiles?.role === 'admin' ? 'admin' : 'client',
+  }));
+
+  const row = ticketData as unknown as PortalTicketRow & { client_id: string };
+  return { ok: true as const, ticket: row, messages };
+}
+
+export async function clientReply(
+  ticketId: string,
+  clientId: string,
+  body: string
+): Promise<CrmResult> {
+  const trimmed = trimField(body, MAX_BODY);
+  if (trimmed.length === 0) return crmError('Reply cannot be empty.');
+
+  const admin = getSupabaseAdmin();
+  const { data: ticket } = await admin
+    .from('tickets')
+    .select('id, client_id')
+    .eq('id', ticketId)
+    .maybeSingle();
+  if (!ticket || ticket.client_id !== clientId) return crmError('Ticket not found.');
+
+  const { error } = await admin
+    .from('ticket_messages')
+    .insert({ ticket_id: ticketId, author_id: clientId, body: trimmed });
+  if (error) return crmError(`Reply failed: ${error.message}`);
+
+  return { ok: true };
+}
