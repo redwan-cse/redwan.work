@@ -27,6 +27,18 @@ Statuses: `open` → `answered` → (`awaiting_client`) → `closed`. Two forces
 
 The trigger is `SECURITY DEFINER` with an empty `search_path` because clients have **no** `UPDATE` policy on `tickets` — invoker-rights would silently skip the flip for client authors. This also makes it correct for P3c, when clients reply from the portal instead of service-key paths.
 
+### Client portal flows (P3c)
+
+Clients manage tickets from `/portal/tickets`: a "New ticket" dialog (subject ≤ 200 chars, body ≤ 10 000 chars) whose success path is the action's own redirect straight to the new thread, plus a thread view with an inline reply form. Statuses stay trigger-driven on the client side — a client reply flips `answered`/`awaiting_client` back to `open`, and replying to a `closed` ticket reopens it (same automation as above; closed threads show a muted note warning that a reply reopens them). The dashboard (`/portal`) shows the real own open-ticket count and the four most recently active threads; projects/invoices cards remain P4a/P4b placeholders.
+
+Ownership is enforced in three layers, so no single mistake leaks another client's data:
+
+1. **Action guard:** every client action resolves the caller through `requireClient()` — a valid session with `role=client` *and* `profiles.is_active=true`; the client id always comes from the session claim, never from posted input.
+2. **RLS:** the migration-0003 policies still apply — clients can only select/insert rows tied to their own id, even if an action were ever bypassed.
+3. **Ownership-scoped queries:** list/count/dashboard reads filter `.eq('client_id', <session id>)`, and thread/reply lookups compare the row's `client_id` against it, answering foreign ids with `Ticket not found.` (HTTP 404) instead of leaking existence.
+
+Spam control: `createTicket` counts the client's tickets created in the rolling last 24 hours and refuses past 10 — *"You have created 10 tickets in the last 24 hours. Please reply to an existing ticket instead."*
+
 ### Lead conversion (`convertLeadAction` → `convertLead`)
 
 Recent-leads table on `/admin` shows the last 5 leads; Convert is hidden once `converted_client_id` is set or status is `won`. The action:
@@ -111,7 +123,7 @@ curl -s "$URL/rest/v1/ticket_messages?ticket_id=eq.<client-b-ticket-uuid>" \
 
 ## Probe matrix
 
-Executed on `feat/crm-core` against local dev + remote Supabase (all rows pass). Fixture UUIDs truncated; synthetic `example.com` fixtures only.
+Executed on `feat/crm-core` (rows 1–16) and `feat/client-portal` (rows 17–22) against local dev + remote Supabase (all rows pass). Fixture UUIDs truncated; synthetic `example.com` fixtures only.
 
 | # | Area | Probe | Expected | Observed |
 |---|------|-------|----------|----------|
@@ -131,8 +143,14 @@ Executed on `feat/crm-core` against local dev + remote Supabase (all rows pass).
 | 14 | Manual override | select `awaiting_client` | persists across thread + inbox filter | pass |
 | 15 | RLS | client token GET `/rest/v1/tickets` | only own rows (incl. persisted manual statuses) | exactly own 3 rows returned |
 | 16 | RLS | client token GET other client's messages by `ticket_id` | `[]`, no leak | HTTP 200 body `[]` |
+| 17 | Portal create | UI dialog: whitespace-only subject, then valid create + first message | server-side validation; success lands on new thread | `Subject is required.` rendered in dialog, no navigation; valid create → thread page (#TKT-n ref, Open badge, single client "You" bubble); list row href + UTC stamp correct; admin inbox shows subject + client name |
+| 18 | Trigger via portal | admin replies in admin thread; client reloads thread | support message visible, chronological | pass (support-labeled bubble appended in order) |
+| 19 | Reopen-on-reply | admin sets `awaiting_client`, then `closed`; client replies to each | reply flips status back to `open` both times | DB-verified `open` after each reply; badge updates in thread UI |
+| 20 | Portal isolation | other-client ticket URL opened as B; B REST-reads A's messages by `ticket_id` | no access, no existence leak | HTTP 404 custom not-found page; REST body `[]`; B list/dashboard show only own rows |
+| 21 | Rate cap | 10 tickets seeded via service key (+1 pre-existing), 11th create within 24h | refusal past cap, nothing inserted | exact cap string in dialog, no navigation; DB count unchanged by rejected attempt |
+| 22 | Probe cleanup | delete all probe fixtures | cascades hold; zero fixtures remain | `ticket_messages` = 0 on deleted tickets; profiles + per-client tickets = 0 for all temp users |
 
-Notes: trigger flips verified both directions at REST (Task 1) and through the real UI (Task 6); temp admins deleted after each probing session with cascade checks.
+Notes: trigger flips verified both directions at REST (Task 1) and through the real UI (Task 6); temp admins deleted after each probing session with cascade checks. P3c probes ran against the production build (`next start`) with three browser contexts (client A / client B / admin).
 
 ## Owner follow-ups after deploy
 
@@ -145,6 +163,5 @@ Notes: trigger flips verified both directions at REST (Task 1) and through the r
 ## Non-goals (explicitly deferred)
 
 - **Attachments** → P4a/R2
-- **Invoices** → P4b (the Overview "unpaid invoices" card is a placeholder)
+- **Invoices** → P4b (the dashboard "Outstanding invoice" card is a placeholder)
 - **Lifecycle emails / `email_log`** → P5
-- **Client-side ticket creation & replies** → P3c (portal Tickets nav still inert; the SECURITY DEFINER trigger already handles client-author flips)
