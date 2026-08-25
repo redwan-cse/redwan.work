@@ -5,13 +5,23 @@
 // - 'unsafe-inline' for scripts/styles is required by Next.js inline bootstrap
 //   without nonce-based CSP (which would force all pages dynamic).
 // - next/font self-hosts Google Fonts, so font-src stays 'self'.
+const r2Origin = (() => {
+  const endpoint = process.env.R2_ENDPOINT;
+  if (!endpoint) return null;
+  try {
+    return new URL(endpoint).origin;
+  } catch {
+    return null;
+  }
+})();
+
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self'",
-  "connect-src 'self' https://challenges.cloudflare.com https://cqxtmzzlywolulechcob.supabase.co",
+  `connect-src 'self' https://challenges.cloudflare.com https://cqxtmzzlywolulechcob.supabase.co${r2Origin ? ` ${r2Origin}` : ''}`,
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
