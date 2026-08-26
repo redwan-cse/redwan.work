@@ -1,5 +1,18 @@
 import { createHash } from 'crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import {
+  CONTACT_MAX_FILES,
+  CONTACT_MAX_SIZE_BYTES,
+  isValidContactKey,
+} from '@/lib/r2';
+
+export interface LeadAttachment {
+  key: string;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+  retained?: boolean;
+}
 
 export interface NormalizedLead {
   name: string;
@@ -24,15 +37,65 @@ export interface NormalizedLead {
   user_agent: string | null;
   ip_hash: string | null;
   consent_at: string;
+  attachments: LeadAttachment[];
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_SUMMARY = 5000;
 const MAX_BUDGET = 10_000_000;
+const MAX_FILENAME = 255;
+const MAX_MIME = 128;
+export const ATTACHMENT_INVALID_ERROR =
+  'Attachment data is invalid. Please re-attach your files.';
 
 function str(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[] } | { ok: false } {
+  if (!raw) return { ok: true, attachments: [] };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false };
+  }
+  if (!Array.isArray(parsed) || parsed.length > CONTACT_MAX_FILES) {
+    return { ok: false };
+  }
+
+  const attachments: LeadAttachment[] = [];
+  for (const entry of parsed) {
+    if (typeof entry !== 'object' || entry === null) return { ok: false };
+    const candidate = entry as Record<string, unknown>;
+    const { key, filename, mime, size_bytes, retained } = candidate;
+
+    if (typeof key !== 'string' || !isValidContactKey(key)) return { ok: false };
+    if (typeof filename !== 'string' || filename.length < 1 || filename.length > MAX_FILENAME) {
+      return { ok: false };
+    }
+    if (typeof mime !== 'string' || mime.length > MAX_MIME) return { ok: false };
+    if (
+      typeof size_bytes !== 'number' ||
+      !Number.isInteger(size_bytes) ||
+      size_bytes < 1 ||
+      size_bytes > CONTACT_MAX_SIZE_BYTES
+    ) {
+      return { ok: false };
+    }
+    if (retained !== undefined && retained !== true) return { ok: false };
+
+    // Store only the validated shape; extra fields on the wire are dropped
+    attachments.push(
+      retained === true
+        ? { key, filename, mime, size_bytes, retained: true }
+        : { key, filename, mime, size_bytes }
+    );
+  }
+
+  return { ok: true, attachments };
 }
 
 function nullable(str_: string, max = 500): string | null {
@@ -78,6 +141,13 @@ export function parseLeadPayload(
 
   const contactDate = str(formData, 'preferredContactDate');
 
+  // Raw form field "attachments" is a JSON string produced by the upload flow;
+  // absent or empty means no attachments (byte-identical legacy behavior).
+  const attachments = parseAttachments(str(formData, 'attachments'));
+  if (!attachments.ok) {
+    return { ok: false, error: ATTACHMENT_INVALID_ERROR };
+  }
+
   return {
     ok: true,
     lead: {
@@ -106,6 +176,7 @@ export function parseLeadPayload(
       user_agent: meta.userAgent?.slice(0, 400) ?? null,
       ip_hash: meta.ipHash,
       consent_at: new Date().toISOString(),
+      attachments: attachments.attachments,
     },
   };
 }
