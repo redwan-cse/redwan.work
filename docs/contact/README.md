@@ -325,7 +325,7 @@ Key columns:
 - **`source_page`**, **`device_type`**, **`user_agent`** - technical/auto fields
 - **`ip_hash`** - **salted SHA-256 of the client IP; raw IPs are never stored**
 - **`consent_at`** - timestamptz recording when consent was given (not null)
-- **`attachments`** - jsonb array of attachment metadata (`key`, `filename`, `mime`, `size_bytes`, optional `retained`); the files themselves live in private R2 object storage — see [`docs/r2/README.md`](../r2/README.md)
+- **`attachments`** - jsonb array of attachment metadata (`key`, `filename`, `mime`, `size_bytes`, optional admin-set `retained`); the files themselves live in private R2 object storage — see [`docs/r2/README.md`](../r2/README.md)
 - **`status`** - enum `lead_status`: `new` / `contacted` / `won` / `lost`
 - **`email_verified_at`**, **`marketing_opt_in`** - reserved for future phases
 
@@ -371,7 +371,7 @@ The form accepts optional file attachments, uploaded directly from the browser t
 ### Storage & retention
 
 - Files are stored in **private object storage** — never publicly reachable; access requires server-side credentials or a presigned URL
-- Uploaded files are **automatically deleted after 90 days** unless an attachment is flagged `retained: true` on its lead record
+- Uploaded files are **automatically deleted after 90 days** unless an admin flags an attachment `retained: true` via SQL on its lead record (submitters cannot set this flag)
 - The metadata (filename, mime type, size) persists with the lead record even after the file is deleted
 - Daily purge: `GET /api/cron/r2-retention` via Vercel Cron (03:00 UTC), bearer-authenticated with `CRON_SECRET`
 

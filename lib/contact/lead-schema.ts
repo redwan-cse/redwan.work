@@ -70,7 +70,7 @@ function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[
   for (const entry of parsed) {
     if (typeof entry !== 'object' || entry === null) return { ok: false };
     const candidate = entry as Record<string, unknown>;
-    const { key, filename, mime, size_bytes, retained } = candidate;
+    const { key, filename, mime, size_bytes } = candidate;
 
     if (typeof key !== 'string' || !isValidContactKey(key)) return { ok: false };
     if (typeof filename !== 'string' || filename.length < 1 || filename.length > MAX_FILENAME) {
@@ -85,14 +85,11 @@ function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[
     ) {
       return { ok: false };
     }
-    if (retained !== undefined && retained !== true) return { ok: false };
 
-    // Store only the validated shape; extra fields on the wire are dropped
-    attachments.push(
-      retained === true
-        ? { key, filename, mime, size_bytes, retained: true }
-        : { key, filename, mime, size_bytes }
-    );
+    // Store only the validated shape; extra wire fields are dropped — notably
+    // `retained`, which is admin-settable (SQL runbook) and never honored from
+    // a submission
+    attachments.push({ key, filename, mime, size_bytes });
   }
 
   return { ok: true, attachments };

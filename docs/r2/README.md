@@ -53,8 +53,9 @@ single-use Turnstile tokens:
 4. On submit, the form **resets the widget and waits for a fresh solve**
    (token B is never reused from step 1) before posting to `/api/contact`.
 5. `/api/contact` verifies token B through siteverify + its own replay guard;
-   the attachment metadata array (key/filename/mime/size/retained) is validated
-   key-by-key and stored in `leads.attachments` jsonb.
+   the attachment metadata array (key/filename/mime/size) is validated
+   key-by-key and stored in `leads.attachments` jsonb. Any client-supplied
+   `retained` field is stripped — only admins can set it via SQL.
 
 ### Retention cron
 
@@ -96,6 +97,11 @@ Cloudflare dashboard: R2 → *private bucket* → Settings → CORS policy.
 | `R2_PRIVATE_ACCESS_KEY_ID` / `R2_PRIVATE_SECRET_ACCESS_KEY` | both | object-scoped token for private bucket |
 | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | local only today | public bucket base URL (used at P5) |
 | `CRON_SECRET` | both | bearer secret for the retention cron |
+
+- **Pre-merge gate:** `R2_ENDPOINT` and `R2_PRIVATE_BUCKET` must be present in
+  Vercel **Build** environment variables (not just runtime) BEFORE merging —
+  the CSP header is generated at build time; missing build env silently blocks
+  all browser uploads.
 
 A `CRON_SECRET` was generated locally (`openssl rand -hex 32`) and appended to
 `.env.local`. **At merge time, copy this exact same value into the Vercel
