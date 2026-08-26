@@ -523,7 +523,14 @@ export default function EnhancedContactForm() {
         Array.isArray(presignData?.uploads) ? presignData.uploads : [];
       const uploaded: AttachedFile[] = [];
 
-      for (const upload of uploads) {
+      // The presign route maps the files array positionally, so uploads[i]
+      // corresponds to selected[i]. Never match by filename: duplicate names
+      // within one batch would silently cross-wire bytes and metadata.
+      if (uploads.length !== selected.length) {
+        throw new Error('Could not prepare your files for upload. Please try again.');
+      }
+      for (let i = 0; i < uploads.length; i += 1) {
+        const upload = uploads[i];
         if (
           typeof upload.key !== 'string' ||
           typeof upload.uploadUrl !== 'string' ||
@@ -531,8 +538,8 @@ export default function EnhancedContactForm() {
         ) {
           throw new Error('Could not prepare your files for upload. Please try again.');
         }
-        const file = selected.find((f) => f.name === upload.filename);
-        if (!file) {
+        const file = selected[i];
+        if (!file || file.name !== upload.filename) {
           throw new Error('Could not prepare your files for upload. Please try again.');
         }
         const mime = attachmentMime(file.name, file.type);
