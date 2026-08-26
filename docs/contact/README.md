@@ -325,6 +325,7 @@ Key columns:
 - **`source_page`**, **`device_type`**, **`user_agent`** - technical/auto fields
 - **`ip_hash`** - **salted SHA-256 of the client IP; raw IPs are never stored**
 - **`consent_at`** - timestamptz recording when consent was given (not null)
+- **`attachments`** - jsonb array of attachment metadata (`key`, `filename`, `mime`, `size_bytes`, optional admin-set `retained`); the files themselves live in private R2 object storage — see [`docs/r2/README.md`](../r2/README.md)
 - **`status`** - enum `lead_status`: `new` / `contacted` / `won` / `lost`
 - **`email_verified_at`**, **`marketing_opt_in`** - reserved for future phases
 
@@ -346,6 +347,35 @@ Two layers, keyed only by one-way hashes (no plaintext identifiers persisted):
    - `kind='turnstile'` - key is the hashed Turnstile token with a 1-per-5-minute window → **single-use replay guard**
 
 If Supabase is unconfigured, only the memory pre-layer applies. Expired windows reset automatically; rows older than 7 days are pruned by the RPC.
+
+---
+
+## Phase 2: R2 File Attachments
+
+The form accepts optional file attachments, uploaded directly from the browser to a **private** Cloudflare R2 bucket via short-lived presigned PUT URLs (the server never proxies file bytes).
+
+### Rules at a glance
+
+- Up to **5 files** per submission
+- **10 MB maximum per file**
+- Allowed types: `.pdf`, `.docx`, `.doc`, `.xlsx`, `.png`, `.jpg`, `.zip`
+- Attachments are optional — the no-file submission flow is unchanged
+
+### Flow
+
+1. Client pre-validates count/type/size, then requests presigned URLs from `/api/uploads/presign` (Turnstile-gated, same-origin checked, 20 req/hour/IP fail-closed)
+2. Browser PUTs each file straight to R2 (`contact/<folder-uuid>/<file-uuid>.<ext>` in the private bucket)
+3. On submit, `/api/contact` re-validates every attachment entry and stores the metadata array in `leads.attachments`
+4. A fresh Turnstile token is executed for the submit call itself — see [`docs/r2/README.md`](../r2/README.md) for the full flow
+
+### Storage & retention
+
+- Files are stored in **private object storage** — never publicly reachable; access requires server-side credentials or a presigned URL
+- Uploaded files are **automatically deleted after 90 days** unless an admin flags an attachment `retained: true` via SQL on its lead record (submitters cannot set this flag)
+- The metadata (filename, mime type, size) persists with the lead record even after the file is deleted
+- Daily purge: `GET /api/cron/r2-retention` via Vercel Cron (03:00 UTC), bearer-authenticated with `CRON_SECRET`
+
+Operations (retention flagging SQL, manual deletion, CORS prerequisite, cron setup): see [`docs/r2/README.md`](../r2/README.md).
 
 ---
 

@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
+import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react";
 import Link from "next/link";
 import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Country } from "@/lib/countries-data";
 import { format } from "date-fns";
@@ -74,6 +74,49 @@ import { cn } from "@/lib/utils";
  * The secret key is stored server-side in the API route.
  */
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+/**
+ * Attachment limits — client-side mirror of the server-only lib/r2.ts constants
+ * (CONTACT_MAX_FILES, CONTACT_MAX_SIZE_BYTES, CONTACT_ALLOWED_EXT) and the
+ * presign route's EXT_ALLOWED_MIMES cross-check map. lib/r2.ts is marked
+ * 'server-only' so it cannot be imported here; keep these values in sync.
+ */
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_ATTACHMENT_EXTS = ['pdf', 'docx', 'doc', 'xlsx', 'png', 'jpg', 'zip'];
+const ATTACHMENT_ACCEPT_ATTR = '.pdf,.docx,.doc,.xlsx,.png,.jpg,.zip';
+// Canonical mime per extension — the presign endpoint rejects mismatches
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  zip: 'application/zip',
+};
+
+interface AttachedFile {
+  key: string;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+}
+
+function attachmentExtension(filename: string): string {
+  const parts = filename.toLowerCase().split('.');
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
+function attachmentMime(filename: string, browserType?: string): string {
+  return EXT_TO_MIME[attachmentExtension(filename)] ?? browserType ?? 'application/octet-stream';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 /**
  * WhatsApp Number Validation Helper
@@ -286,6 +329,17 @@ export default function EnhancedContactForm() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [isTurnstileVerified, setIsTurnstileVerified] = useState(false);
+
+  // Attachment upload state (metadata stored server-side on submit)
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Mirror of turnstileToken for non-reactive polling in getFreshTurnstileToken();
+  // the generation counter increments on every widget solve, identifying the
+  // freshest execution even if the issued token string were ever reused.
+  const turnstileTokenRef = React.useRef<string | null>(null);
+  const turnstileGenerationRef = React.useRef(0);
   
   // Refs for form fields to enable scrolling and focusing
   const nameRef = React.useRef<HTMLInputElement>(null);
@@ -343,6 +397,8 @@ export default function EnhancedContactForm() {
     // Define global callback functions for Turnstile
     (window as any).onTurnstileSuccess = (token: string) => {
       console.log('✅ Turnstile verification successful');
+      turnstileGenerationRef.current += 1;
+      turnstileTokenRef.current = token;
       setTurnstileToken(token);
       setIsTurnstileVerified(true);
       setTurnstileError(null);
@@ -350,6 +406,7 @@ export default function EnhancedContactForm() {
 
     (window as any).onTurnstileError = () => {
       console.error('❌ Turnstile verification error');
+      turnstileTokenRef.current = null;
       setTurnstileToken(null);
       setIsTurnstileVerified(false);
       setTurnstileError('Security verification failed. Please refresh the page and try again.');
@@ -357,6 +414,7 @@ export default function EnhancedContactForm() {
 
     (window as any).onTurnstileExpired = () => {
       console.warn('⚠️ Turnstile token expired');
+      turnstileTokenRef.current = null;
       setTurnstileToken(null);
       setIsTurnstileVerified(false);
       setTurnstileError('Security verification expired. The widget will automatically refresh.');
@@ -369,6 +427,149 @@ export default function EnhancedContactForm() {
       delete (window as any).onTurnstileExpired;
     };
   }, []);
+
+  /**
+   * Resets the managed Turnstile widget and resolves with a token from the NEW
+   * execution it triggers (polled every 250 ms via the solve-generation
+   * counter). The server replay guard consumes one token per protected call,
+   * so every presign request and every submit needs its own fresh execution.
+   */
+  const getFreshTurnstileToken = (): Promise<string> =>
+    new Promise<string>((resolve, reject) => {
+      const turnstile = (window as any).turnstile;
+      if (!TURNSTILE_SITE_KEY || typeof turnstile === 'undefined') {
+        reject(new Error('Security verification failed. Please refresh the page and try again.'));
+        return;
+      }
+      const startGeneration = turnstileGenerationRef.current;
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      turnstile.reset();
+      const startedAt = Date.now();
+      const pollForToken = () => {
+        if (turnstileGenerationRef.current > startGeneration) {
+          const token = turnstileTokenRef.current;
+          if (token) {
+            resolve(token);
+            return;
+          }
+        }
+        if (Date.now() - startedAt >= 15000) {
+          reject(new Error('Security verification timed out. Please try again.'));
+          return;
+        }
+        setTimeout(pollForToken, 250);
+      };
+      pollForToken();
+    });
+
+  /**
+   * Uploads selected files: client-side pre-validation, presign via
+   * /api/uploads/presign, then direct PUT of each file to its signed URL.
+   * A failure here never blocks submitting the form without attachments.
+   */
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files ? Array.from(e.target.files) : [];
+    // Reset input so re-selecting the same file fires change again
+    e.target.value = '';
+    if (selected.length === 0) return;
+
+    setUploadError(null);
+
+    if (attachedFiles.length + selected.length > MAX_ATTACHMENTS) {
+      setUploadError(`You can attach up to ${MAX_ATTACHMENTS} files in total.`);
+      return;
+    }
+    for (const file of selected) {
+      if (!ACCEPTED_ATTACHMENT_EXTS.includes(attachmentExtension(file.name))) {
+        setUploadError(
+          `"${file.name}" has an unsupported file type. Accepted: ${ACCEPTED_ATTACHMENT_EXTS.map(ext => `.${ext}`).join(', ')}`
+        );
+        return;
+      }
+      if (file.size < 1 || file.size > MAX_ATTACHMENT_BYTES) {
+        setUploadError(
+          `"${file.name}" is too large. Each file can be up to ${formatBytes(MAX_ATTACHMENT_BYTES)}.`
+        );
+        return;
+      }
+    }
+
+    setUploading(true);
+    try {
+      const token = await getFreshTurnstileToken();
+
+      const presignResponse = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: selected.map((file) => ({
+            filename: file.name,
+            mime: attachmentMime(file.name, file.type),
+            size: file.size,
+          })),
+          turnstileToken: token,
+        }),
+      });
+      const presignData = await presignResponse.json().catch(() => null);
+      if (!presignResponse.ok) {
+        throw new Error(
+          presignData?.error || 'Could not prepare your files for upload. Please try again.'
+        );
+      }
+
+      const uploads: Array<{ key?: unknown; uploadUrl?: unknown; filename?: unknown }> =
+        Array.isArray(presignData?.uploads) ? presignData.uploads : [];
+      const uploaded: AttachedFile[] = [];
+
+      // The presign route maps the files array positionally, so uploads[i]
+      // corresponds to selected[i]. Never match by filename: duplicate names
+      // within one batch would silently cross-wire bytes and metadata.
+      if (uploads.length !== selected.length) {
+        throw new Error('Could not prepare your files for upload. Please try again.');
+      }
+      for (let i = 0; i < uploads.length; i += 1) {
+        const upload = uploads[i];
+        if (
+          typeof upload.key !== 'string' ||
+          typeof upload.uploadUrl !== 'string' ||
+          typeof upload.filename !== 'string'
+        ) {
+          throw new Error('Could not prepare your files for upload. Please try again.');
+        }
+        const file = selected[i];
+        if (!file || file.name !== upload.filename) {
+          throw new Error('Could not prepare your files for upload. Please try again.');
+        }
+        const mime = attachmentMime(file.name, file.type);
+        const putResponse = await fetch(upload.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': mime },
+        });
+        if (!putResponse.ok) {
+          throw new Error(`"${upload.filename}" could not be uploaded. Please try again.`);
+        }
+        uploaded.push({ key: upload.key, filename: upload.filename, mime, size_bytes: file.size });
+      }
+
+      setAttachedFiles((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : 'Your files could not be uploaded. You can still submit the form without them.'
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Removes only the local metadata — orphaned storage objects age out via cron
+  const removeAttachedFile = (key: string) => {
+    setAttachedFiles((prev) => prev.filter((file) => file.key !== key));
+  };
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -603,6 +804,10 @@ export default function EnhancedContactForm() {
     setIsSubmitting(true);
 
     try {
+      // Every submission carries an unconsumed Turnstile token: presign calls
+      // consumed earlier widget tokens, and /api/contact enforces single-use.
+      const submitToken = TURNSTILE_SITE_KEY ? await getFreshTurnstileToken() : null;
+
       // Generate Ticket ID
       const ticketId = generateTicketId();
       setSubmittedTicketId(ticketId);
@@ -724,14 +929,15 @@ export default function EnhancedContactForm() {
       formFields.append('userAgent', submissionData.userAgent);
       formFields.append('deviceType', submissionData.deviceType);
 
+      // Attachment metadata for the Supabase sink (uploaded objects live in R2)
+      if (attachedFiles.length > 0) {
+        formFields.append('attachments', JSON.stringify(attachedFiles));
+      }
+
       // Validate Turnstile token (only for API validation, NOT stored in Google Forms)
       // The API route will validate the token with Cloudflare and remove it before forwarding
-      if (TURNSTILE_SITE_KEY) {
-        if (!isTurnstileVerified || !turnstileToken) {
-          throw new Error('Please complete the security verification before submitting.');
-        }
-        // Add token temporarily - API route will validate and delete it
-        formFields.append('cf-turnstile-response', turnstileToken);
+      if (submitToken) {
+        formFields.append('cf-turnstile-response', submitToken);
       }
 
       // Submit to our API route (which validates Turnstile and forwards to Google Forms)
@@ -781,7 +987,12 @@ export default function EnhancedContactForm() {
       setSelectedCountryCode('+880');
       setSelectedWhatsAppCountryCode('');
 
+      // Clear uploaded attachments (they were persisted with this lead)
+      setAttachedFiles([]);
+      setUploadError(null);
+
       // Reset Turnstile widget and state
+      turnstileTokenRef.current = null;
       setTurnstileToken(null);
       setIsTurnstileVerified(false);
       setTurnstileError(null);
@@ -1355,6 +1566,67 @@ export default function EnhancedContactForm() {
             </p>
           </div>
 
+          {/* Attachments (uploaded privately to R2, metadata stored with the lead) */}
+          <div className="space-y-2">
+            <Label htmlFor="contactAttachments">
+              Attach files (optional, up to 5, max 10 MB each)
+            </Label>
+            <Input
+              id="contactAttachments"
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT_ATTR}
+              onChange={handleFilesSelected}
+              disabled={uploading || isSubmitting}
+              aria-invalid={!!uploadError}
+              aria-describedby={uploadError ? "attachments-error" : undefined}
+              className={uploadError ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
+            {uploading && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Uploading files…
+              </p>
+            )}
+            {uploadError && (
+              <p id="attachments-error" className="text-sm text-destructive" role="alert">
+                {uploadError}
+              </p>
+            )}
+            {attachedFiles.length > 0 && (
+              <ul className="space-y-2">
+                {attachedFiles.map((file) => (
+                  <li
+                    key={file.key}
+                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                  >
+                    <span className="truncate text-sm" title={file.filename}>
+                      {file.filename}
+                    </span>
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatBytes(file.size_bytes)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 flex-shrink-0"
+                      onClick={() => removeAttachedFile(file.key)}
+                      aria-label={`Remove ${file.filename}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!uploading && attachedFiles.length === 0 && !uploadError && (
+              <p className="text-xs text-muted-foreground">
+                Accepted: PDF, Word, Excel, PNG, JPG, ZIP. Files are stored privately and deleted after 90 days.
+              </p>
+            )}
+          </div>
+
           <div className="flex items-center space-x-3 p-4 border rounded-lg bg-muted/30">
             <Checkbox
               id="ndaConfidentiality"
@@ -1651,7 +1923,7 @@ export default function EnhancedContactForm() {
           <Button
             type="submit"
             size="lg"
-            disabled={isSubmitting || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
+            disabled={isSubmitting || uploading || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
             className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
             title={
               TURNSTILE_SITE_KEY && !isTurnstileVerified 

@@ -38,7 +38,7 @@ export default function Privacy() {
         {/* Last Updated */}
         <div className="text-center mb-8">
           <p className="text-xs text-muted-foreground">
-            Last updated: August 24, 2026
+            Last updated: August 26, 2026
           </p>
         </div>
 
@@ -154,6 +154,14 @@ export default function Privacy() {
                     HTTPS to my server and stored in my leads store — a{" "}
                     <strong className="text-foreground">Supabase Postgres database</strong> protected by 
                     row-level security, accessible only to me.
+                  </p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    You may also optionally attach files to your message (up to{" "}
+                    <strong className="text-foreground">5 files, maximum 10 MB each</strong>, in common document,
+                    image and archive formats such as PDF, Word, Excel, PNG, JPG and ZIP). Files upload over
+                    HTTPS into <strong className="text-foreground">private object storage</strong> that only I
+                    can access — they are never publicly reachable — and each file&apos;s name, type and size
+                    are stored alongside your enquiry record.
                   </p>
 
                   <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
@@ -410,6 +418,16 @@ export default function Privacy() {
                       <p className="text-sm text-muted-foreground">
                         Relevant contact form data is kept as part of project and accounting records, typically for 
                         up to <strong className="text-foreground">7 years</strong> to meet legal and tax obligations.
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg border bg-card">
+                      <h3 className="font-semibold text-foreground mb-2">Contact Form Attachments</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Files attached through the contact form are kept in private object storage and{" "}
+                        <strong className="text-foreground">automatically deleted after 90 days</strong> unless
+                        I flag them for retention because we are actively working together (for example, under
+                        an ongoing project). The file metadata (name, type and size) remains part of the enquiry
+                        record described above.
                       </p>
                     </div>
                     <div className="p-4 rounded-lg border bg-card">

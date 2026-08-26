@@ -5,13 +5,30 @@
 // - 'unsafe-inline' for scripts/styles is required by Next.js inline bootstrap
 //   without nonce-based CSP (which would force all pages dynamic).
 // - next/font self-hosts Google Fonts, so font-src stays 'self'.
+// - Browser attachment uploads PUT directly to R2 with virtual-hosted-style
+//   URLs (<bucket>.<endpoint-host>), so both hosts belong in connect-src.
+const r2Origins = (() => {
+  const endpoint = process.env.R2_ENDPOINT;
+  const bucket = process.env.R2_PRIVATE_BUCKET;
+  if (!endpoint) return [];
+  try {
+    const url = new URL(endpoint);
+    return [
+      url.origin,
+      bucket ? `${url.protocol}//${bucket}.${url.host}` : null,
+    ].filter(Boolean);
+  } catch {
+    return [];
+  }
+})();
+
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self'",
-  "connect-src 'self' https://challenges.cloudflare.com https://cqxtmzzlywolulechcob.supabase.co",
+  `connect-src 'self' https://challenges.cloudflare.com https://cqxtmzzlywolulechcob.supabase.co${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
