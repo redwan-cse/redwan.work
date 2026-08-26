@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ZipArchive } from 'archiver';
+import * as archiverNS from 'archiver';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import {
@@ -390,8 +390,13 @@ export async function moveMilestone(milestoneId: string, direction: 'up' | 'down
   const curPos = typedCurrent.position;
   const neighPos = neighbor.position;
 
+  const { error: tmpErr } = await admin.from('milestones').update({ position: -1 }).eq('id', neighbor.id);
+  if (tmpErr) return crmError(`Move failed: ${tmpErr.message}`);
   const { error: upd1 } = await admin.from('milestones').update({ position: neighPos }).eq('id', typedCurrent.id);
-  if (upd1) return crmError(`Move failed: ${upd1.message}`);
+  if (upd1) {
+    await admin.from('milestones').update({ position: neighPos }).eq('id', neighbor.id);
+    return crmError(`Move failed: ${upd1.message}`);
+  }
   const { error: upd2 } = await admin.from('milestones').update({ position: curPos }).eq('id', neighbor.id);
   if (upd2) return crmError(`Move failed: ${upd2.message}`);
 
@@ -437,7 +442,22 @@ export async function archiveProject(
   const archiveKey = `archive/project_${projectId}/${new Date().toISOString()}.zip`;
 
   try {
-    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const anyArchiver = archiverNS as unknown as {
+      ZipArchive?: new (opts: unknown) => import('archiver').Archiver;
+      default?: (format: string, opts: unknown) => import('archiver').Archiver;
+    } & ((format: string, opts: unknown) => import('archiver').Archiver);
+    let archive: import('archiver').Archiver;
+    if (anyArchiver.ZipArchive) {
+      archive = new anyArchiver.ZipArchive({ zlib: { level: 9 } });
+    } else if (typeof anyArchiver.default === 'function') {
+      archive = anyArchiver.default('zip', { zlib: { level: 9 } });
+    } else if (typeof anyArchiver === 'function') {
+      archive = (anyArchiver as unknown as (format: string, opts: unknown) => import('archiver').Archiver)('zip', {
+        zlib: { level: 9 },
+      });
+    } else {
+      throw new Error('archiver module incompatible');
+    }
     const chunks: Buffer[] = [];
     const finished = new Promise<Buffer>((resolve, reject) => {
       archive.on('data', (c: Buffer) => chunks.push(c));

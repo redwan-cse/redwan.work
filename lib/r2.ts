@@ -75,6 +75,9 @@ export async function presignContactUpload(
 
 export async function deletePrivateObjects(keys: string[]): Promise<number> {
   if (keys.length === 0) return 0;
+  for (const k of keys) {
+    if (!isPortalKey(k) && !isValidContactKey(k)) throw new Error('Invalid portal key');
+  }
   const client = privateClient();
   const bucket = process.env.R2_PRIVATE_BUCKET;
   let deleted = 0;
@@ -160,7 +163,11 @@ export function makeTicketAttachmentKey(clientUserId: string, ticketId: string, 
 }
 
 export function isPortalKey(key: string): boolean {
-  if (key.startsWith('archive/')) return true;
+  if (key.startsWith('archive/')) {
+    if (key.includes('..') || key.includes('\\') || key.includes('//')) return false;
+    if (!key.endsWith('.zip')) return false;
+    return key.startsWith('archive/project_');
+  }
   return /^private\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//.test(key);
 }
 
