@@ -122,3 +122,66 @@ export function staleObjectKeys(
     .filter((o) => o.lastModified < cutoff && !retainedKeys.has(o.key))
     .map((o) => o.key);
 }
+
+export const ARCHIVE_MAX_BYTES = 100 * 1024 * 1024;
+export const ARCHIVE_PREFIX = 'archive/';
+export const PENDING_PREFIX = 'pending/';
+
+export function makeDeliverableKey(clientUserId: string, projectId: string, ext: string): string {
+  return `private/${clientUserId}/project_${projectId}/${randomUUID()}.${ext}`;
+}
+
+export function makePendingAttachmentKey(clientUserId: string, ext: string): string {
+  return `private/${clientUserId}/pending/${randomUUID()}.${ext}`;
+}
+
+export function makeTicketAttachmentKey(clientUserId: string, ticketId: string, ext: string): string {
+  return `private/${clientUserId}/ticket_${ticketId}/${randomUUID()}.${ext}`;
+}
+
+export function isPortalKey(key: string): boolean {
+  return key.startsWith('private/');
+}
+
+export async function presignPrivatePut(key: string, mime: string, expiresIn = 600): Promise<string> {
+  const client = privateClient();
+  const cmd = new PutObjectCommand({
+    Bucket: process.env.R2_PRIVATE_BUCKET,
+    Key: key,
+    ContentType: mime,
+  });
+  return getSignedUrl(client, cmd, { expiresIn });
+}
+
+export async function presignPrivateGet(key: string, expiresIn = 60): Promise<string> {
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = privateClient();
+  return getSignedUrl(client, new GetObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key }), {
+    expiresIn,
+  });
+}
+
+export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
+  const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+  const client = privateClient();
+  const res = await client.send(
+    new GetObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key })
+  );
+  const bytes = await res.Body?.transformToByteArray();
+  return Buffer.from(bytes ?? []);
+}
+
+export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  const { Upload } = await import('@aws-sdk/lib-storage');
+  const client = privateClient();
+  const upload = new Upload({
+    client,
+    params: {
+      Bucket: process.env.R2_PRIVATE_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    },
+  });
+  await upload.done();
+}
