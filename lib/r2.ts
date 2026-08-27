@@ -97,14 +97,14 @@ export interface R2ObjectSummary {
   size: number;
 }
 
-export async function listPrivateContactObjects(): Promise<R2ObjectSummary[]> {
+export async function listPrivateObjects(prefix: string): Promise<R2ObjectSummary[]> {
   const client = privateClient();
   const bucket = process.env.R2_PRIVATE_BUCKET;
   const out: R2ObjectSummary[] = [];
   let token: string | undefined;
   do {
     const res = await client.send(
-      new ListObjectsV2Command({ Bucket: bucket, Prefix: 'contact/', ContinuationToken: token })
+      new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token })
     );
     for (const obj of res.Contents ?? []) {
       if (obj.Key && obj.LastModified) {
@@ -114,6 +114,10 @@ export async function listPrivateContactObjects(): Promise<R2ObjectSummary[]> {
     token = res.IsTruncated ? res.NextContinuationToken : undefined;
   } while (token);
   return out;
+}
+
+export async function listPrivateContactObjects(): Promise<R2ObjectSummary[]> {
+  return listPrivateObjects('contact/');
 }
 
 export function staleObjectKeys(

@@ -57,6 +57,55 @@ Same shape as conversion's account handling: valid-email check (`Enter a valid e
 
 When the Supabase project's SMTP/Site URL config is broken (typical locally), `inviteUserByEmail` fails with `Error sending invite email` — and verification showed the auth user is then **not created at all**. The error surfaces correctly in the dialog; nothing partial is left behind. Production SMTP works end-to-end (proven in P3a), so this only affects local probes, which should pre-create users via the bootstrap script to exercise the reuse/claim branches instead.
 
+### Projects & files (Phase 4a)
+
+Schema: `supabase/migrations/0006_projects_files.sql` — `projects`, `milestones`,
+`files` (enum `file_kind`: `attachment` | `deliverable` | `asset`; `file_bucket`:
+`public` | `private`). RLS is select-only: clients read rows scoped to their own
+`client_id` / via a parent project or ticket; all writes run through service-role
+server actions gated by `requireAdmin`/`requireClient`. Delete is archive-then-purge.
+
+**Admin flows:**
+- **Projects** (`/admin/projects`, `/admin/projects/[id]`): create/edit a project,
+  add/reorder/delete milestones, upload deliverables (spec §4 key scheme — see
+  `docs/r2/README.md`), delete individual deliverables. Nav entry `Projects`.
+- **Archive → 30-day → purge:** `archiveProject` builds a ZIP backup
+  (`archive/project_<id>/<ISO>.zip`, `project.json` + `milestones.json` + each
+  deliverable's bytes under `files/…`, ≤100 MB cap) via `putPrivateObject`, sets
+  `archived_at` + `archive_key`. The `/admin` banner surfaces archived projects
+  awaiting deletion; the Projects list has an "Archived (N)" section. During the
+  30-day window the admin downloads the backup (authenticated 60-second presigned
+  URL via `archiveDownloadUrlAction` → `presignPrivateGet`) or purges early from
+  the UI (typed-confirm). After `archived_at + 30 days` the daily retention cron
+  purges: deliverable `r2_key`s + `archive_key` objects deleted, project row
+  deleted (cascades milestones/files). **Restore-from-local-backup note:** once
+  purged, there is no app-side restore — the ZIP you downloaded locally (unzip →
+  `project.json`, `milestones.json`, `files/…`) is the only recovery artifact;
+  recreate the project and re-upload deliverables if needed.
+- **Purge endpoint:** `purgeArchivedProject` (module) / `purgeArchivedProjectAction`
+  (UI) — refuses non-archived projects; deletes deliverable + archive objects then
+  the project row.
+
+**Client flows:**
+- **Files browser** (`/portal/files`, nav `Files`): force-dynamic server component;
+  lists the client's non-archived projects (grouped `listOwnDeliverables` by
+  project) with a Download anchor per deliverable → `/api/files/[id]/download`,
+  which `getOwnedFileUrl` guards (session + ownership scope; admin passes, foreign
+  client gets `404 'File not found.'`), then 302-redirects to a 60-second presigned
+  GET. Dashboard shows the real active-project count + a Projects mini-list.
+- **Ticket attachments** (`/api/uploads/ticket-presign`): portal only, no Turnstile;
+  per-session 3/min in-memory rate limit; 1–10 files, `validateContactFile` + mime
+  cross-check. With a `ticketId` it verifies ownership (404-style) and enforces a
+  **10-attachment cap** (`'A ticket can have at most 10 attachments.'`); keys are
+  `private/<uid>/ticket_<ticketId>/…`. With `ticketId: null` keys land under
+  `private/<uid>/pending/…` until the ticket exists (new-ticket dialog). The
+  create-ticket wrapper validates client-supplied keys/metadata (all-or-nothing,
+  generic `'Attachment data is invalid. Please re-upload your files.'`) before
+  binding rows. **Pending-orphan cleanup:** any `pending/` object not bound to a
+  `files` row within 24h, or any orphan attachment row older than 24h, is removed
+  by the retention cron (stage 3). Client delete-within-grace (<24h) is supported by
+  the `deleteOwnedFile` module but not exposed in UI this phase.
+
 ## Runbook
 
 All snippets read secrets from `.env.local` and never echo them.
@@ -123,7 +172,10 @@ curl -s "$URL/rest/v1/ticket_messages?ticket_id=eq.<client-b-ticket-uuid>" \
 
 ## Probe matrix
 
-Executed on `feat/crm-core` (rows 1–16) and `feat/client-portal` (rows 17–22) against local dev + remote Supabase (all rows pass). Fixture UUIDs truncated; synthetic `example.com` fixtures only.
+Executed on `feat/crm-core` (rows 1–16), `feat/client-portal` (rows 17–22) and
+`feat/projects-files` (rows 23–35, see the Task 3–5 reports) against local dev +
+remote Supabase (all rows pass). Fixture UUIDs truncated; synthetic `example.com`
+fixtures only.
 
 | # | Area | Probe | Expected | Observed |
 |---|------|-------|----------|----------|
@@ -149,6 +201,19 @@ Executed on `feat/crm-core` (rows 1–16) and `feat/client-portal` (rows 17–22
 | 20 | Portal isolation | other-client ticket URL opened as B; B REST-reads A's messages by `ticket_id` | no access, no existence leak | HTTP 404 custom not-found page; REST body `[]`; B list/dashboard show only own rows |
 | 21 | Rate cap | 10 tickets seeded via service key (+1 pre-existing), 11th create within 24h | refusal past cap, nothing inserted | exact cap string in dialog, no navigation; DB count unchanged by rejected attempt |
 | 22 | Probe cleanup | delete all probe fixtures | cascades hold; zero fixtures remain | `ticket_messages` = 0 on deleted tickets; profiles + per-client tickets = 0 for all temp users |
+| 23 | Project CRUD (admin) | create project for A, edit name/status/due | fields persist | create id ok; `{name:'... Updated', status:'paused', due_at:'2026-10-15'}` verified via select ✅ |
+| 24 | Milestones | add 3 (pos 0,1,2), set one `done`, reorder up, delete one | positions/status reflected | order `M2@0, M1@1, M3@2` after move; count 2 after delete ✅ |
+| 25 | Deliverables (admin) | upload 2 via presign→PUT→confirm; download; delete one | rows + R2 objects track | `files`=2 & R2 `private/.../project_.../`=2; download bytes match; after delete remaining 1 row + 1 key ✅ |
+| 26 | Archive→purge cycle | archive → banner → archived section → download backup → purge | rows + objects cascade gone | zip 955B with `project.json`/`milestones.json`/`files/deliverable-1.pdf` matching bytes; purge → projects/milestones/files 0 + private/archive prefix 0 ✅ |
+| 27 | RLS projects/files | client A vs B tokens via REST | own-scope only | A sees own 2 + files 2; B `[]`/`[]`; anon `[]`; foreign id 404-style ✅ |
+| 28 | Client files page | `/portal/files` as A (auth cookie) | grouped by project, download anchors, `No files yet.` for empty | 200 contains project headings, `http2-1.pdf`/`http2-2.pdf`, `/api/files/{id}/download`, `No files yet.` ✅ |
+| 29 | Download route | A download `302`; B direct → `404`; unauth → `401` | session + ownership guarded | A 302→R2 presigned bytes match; B `404 {"error":"File not found."}`; unauth `401` ✅ |
+| 30 | Dashboard projects | count + mini-list | real data | card `>2<`, subtitle `2 active`, rows link `/portal/files` ✅ |
+| 31 | Ticket attachments | pending presign→PUT→confirm; thread Attachments section (client+admin); reply +1 | keys + rows + UI | pending `private/<A>/pending/...`, reply `private/<A>/ticket_<id>/...`; Attachments section on both thread pages; downloads match ✅ |
+| 32 | 10-cap | seed 10 attachment rows, 11th presign | refuse, nothing inserted | `400 'A ticket can have at most 10 attachments.'` exact string ✅ |
+| 33 | Pending orphan | presign `ticketId:null`, PUT, never confirm | no DB row; R2 orphan | `files` (kind attachment, ticket_id null) = 0 (DB CHECK); `ListObjectsV2 private/<B>/pending/` contains orphan; `DeleteObjects` removes ✅ |
+| 34 | Rate limit | client C 3× presign then 4th | 3 × 200, 4th 429 | 4th `429 'Too many upload requests.'` ✅ |
+| 35 | R2 key/metadata validation | forged key/owned-prefix mismatch to wrapper | generic refusal, all-or-nothing | `'Attachment data is invalid. Please re-upload your files.'`, no partial inserts ✅ |
 
 Notes: trigger flips verified both directions at REST (Task 1) and through the real UI (Task 6); temp admins deleted after each probing session with cascade checks. P3c probes ran against the production build (`next start`) with three browser contexts (client A / client B / admin).
 
@@ -162,6 +227,5 @@ Notes: trigger flips verified both directions at REST (Task 1) and through the r
 
 ## Non-goals (explicitly deferred)
 
-- **Attachments** → P4a/R2
 - **Invoices** → P4b (the dashboard "Outstanding invoice" card is a placeholder)
 - **Lifecycle emails / `email_log`** → P5
