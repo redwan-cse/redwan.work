@@ -30,21 +30,54 @@ async function requireClient() {
   return session;
 }
 
-export async function createTicketAction(
-  _prev: PortalActionState,
-  formData: FormData
+export async function createTicketWithAttachmentsAction(
+  subject: string,
+  body: string,
+  entries: Array<{ key: string; filename: string; mime: string; size_bytes: number }>
 ): Promise<PortalActionState> {
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };
 
-  const result = await createTicket(
-    session.userId,
-    String(formData.get('subject') ?? ''),
-    String(formData.get('body') ?? '')
-  );
+  const result = await createTicket(session.userId, subject, body);
   if (!result.ok) return { error: result.error };
 
-  redirect(`/portal/tickets/${result.ticketId}`);
+  const ticketId = result.ticketId;
+
+  if (entries && entries.length > 0) {
+    if (entries.length > 10) {
+      return { error: 'A ticket can have at most 10 attachments.' };
+    }
+    const admin = getSupabaseAdmin();
+    const { count, error: countError } = await admin
+      .from('files')
+      .select('id', { count: 'exact', head: true })
+      .eq('ticket_id', ticketId)
+      .eq('kind', 'attachment');
+    if (countError) return { error: `Count failed: ${countError.message}` };
+    if ((count ?? 0) + entries.length > 10) {
+      return { error: 'A ticket can have at most 10 attachments.' };
+    }
+
+    for (const e of entries) {
+      const { error } = await admin.from('files').insert({
+        bucket: 'private',
+        r2_key: e.key,
+        kind: 'attachment',
+        ticket_id: ticketId,
+        project_id: null,
+        uploaded_by: session.userId,
+        filename: e.filename,
+        mime: e.mime,
+        size_bytes: e.size_bytes,
+      });
+      if (error) return { error: `Could not save file: ${error.message}` };
+    }
+  }
+
+  revalidatePath(`/portal/tickets/${ticketId}`);
+  revalidatePath('/portal/tickets');
+  revalidatePath('/portal');
+  redirect(`/portal/tickets/${ticketId}`);
 }
 
 export async function clientReplyAction(
