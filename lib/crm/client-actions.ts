@@ -7,6 +7,8 @@ import { createTicket, clientReply } from '@/lib/crm/tickets';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createFileRow } from '@/lib/crm/files';
 import {
+  CONTACT_ALLOWED_EXT,
+  isPortalKey,
   makePendingAttachmentKey,
   makeTicketAttachmentKey,
   presignPrivatePut,
@@ -38,15 +40,49 @@ export async function createTicketWithAttachmentsAction(
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };
 
+  // Validate attachments before creating ticket — fail whole batch before any insert
+  if (entries && entries.length > 0) {
+    if (entries.length > 10) {
+      return { error: 'A ticket can have at most 10 attachments.' };
+    }
+    const prefix = `private/${session.userId}/`;
+    for (const e of entries) {
+      if (typeof e.key !== 'string' || !isPortalKey(e.key) || !e.key.startsWith(prefix)) {
+        return { error: 'Attachment data is invalid. Please re-upload your files.' };
+      }
+      const keyExt = e.key.split('.').pop()?.toLowerCase() ?? '';
+      if (!CONTACT_ALLOWED_EXT.includes(keyExt as (typeof CONTACT_ALLOWED_EXT)[number])) {
+        return { error: 'Attachment data is invalid. Please re-upload your files.' };
+      }
+      if (
+        typeof e.filename !== 'string' ||
+        e.filename.trim().length < 1 ||
+        e.filename.length > 255 ||
+        typeof e.mime !== 'string' ||
+        e.mime.length < 1 ||
+        e.mime.length > 128 ||
+        !Number.isFinite(e.size_bytes) ||
+        e.size_bytes < 1 ||
+        e.size_bytes > 10 * 1024 * 1024
+      ) {
+        return { error: 'Attachment data is invalid. Please re-upload your files.' };
+      }
+      const check = validateContactFile({ filename: e.filename, mime: e.mime, size: e.size_bytes });
+      if (!check.ok) {
+        return { error: 'Attachment data is invalid. Please re-upload your files.' };
+      }
+      if (check.ext !== keyExt) {
+        return { error: 'Attachment data is invalid. Please re-upload your files.' };
+      }
+    }
+  }
+
   const result = await createTicket(session.userId, subject, body);
   if (!result.ok) return { error: result.error };
 
   const ticketId = result.ticketId;
 
   if (entries && entries.length > 0) {
-    if (entries.length > 10) {
-      return { error: 'A ticket can have at most 10 attachments.' };
-    }
     const admin = getSupabaseAdmin();
     const { count, error: countError } = await admin
       .from('files')
@@ -175,6 +211,9 @@ export async function confirmTicketAttachmentAction(input: {
   if (!session) return { error: 'Unauthorized.' };
 
   if (!input.entries || input.entries.length === 0) return { error: 'No files provided.' };
+  if (input.entries.length > 10) {
+    return { error: 'A ticket can have at most 10 attachments.' };
+  }
 
   if (input.ticketId) {
     const admin = getSupabaseAdmin();
@@ -185,6 +224,47 @@ export async function confirmTicketAttachmentAction(input: {
       .maybeSingle();
     if (!ticket || (ticket as { client_id: string }).client_id !== session.userId) {
       return { error: 'Ticket not found.' };
+    }
+    const { count, error: countError } = await admin
+      .from('files')
+      .select('id', { count: 'exact', head: true })
+      .eq('ticket_id', input.ticketId)
+      .eq('kind', 'attachment');
+    if (countError) return { error: `Count failed: ${countError.message}` };
+    if ((count ?? 0) + input.entries.length > 10) {
+      return { error: 'A ticket can have at most 10 attachments.' };
+    }
+  }
+
+  // Validate all entries before any insert — defense against forged keys/metadata
+  const prefix = `private/${session.userId}/`;
+  for (const e of input.entries) {
+    if (typeof e.key !== 'string' || !isPortalKey(e.key) || !e.key.startsWith(prefix)) {
+      return { error: 'Attachment data is invalid. Please re-upload your files.' };
+    }
+    const keyExt = e.key.split('.').pop()?.toLowerCase() ?? '';
+    if (!CONTACT_ALLOWED_EXT.includes(keyExt as (typeof CONTACT_ALLOWED_EXT)[number])) {
+      return { error: 'Attachment data is invalid. Please re-upload your files.' };
+    }
+    if (
+      typeof e.filename !== 'string' ||
+      e.filename.trim().length < 1 ||
+      e.filename.length > 255 ||
+      typeof e.mime !== 'string' ||
+      e.mime.length < 1 ||
+      e.mime.length > 128 ||
+      !Number.isFinite(e.size_bytes) ||
+      e.size_bytes < 1 ||
+      e.size_bytes > 10 * 1024 * 1024
+    ) {
+      return { error: 'Attachment data is invalid. Please re-upload your files.' };
+    }
+    const check = validateContactFile({ filename: e.filename, mime: e.mime, size: e.size_bytes });
+    if (!check.ok) {
+      return { error: 'Attachment data is invalid. Please re-upload your files.' };
+    }
+    if (check.ext !== keyExt) {
+      return { error: 'Attachment data is invalid. Please re-upload your files.' };
     }
   }
 
