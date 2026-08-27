@@ -334,6 +334,7 @@ Temp admin + temp client A (bootstrap). As admin: create project for A (dialog) 
 ```bash
 git add "app/(admin)/admin/layout.tsx" "app/(admin)/admin/page.tsx" "app/(admin)/admin/projects" components/admin/project-forms.tsx
 git commit -m "feat(files): add admin projects view with milestones, deliverables and archive flow"
+```
 
 ---
 
