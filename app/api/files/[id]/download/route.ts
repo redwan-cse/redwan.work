@@ -19,8 +19,9 @@ export async function GET(
   const result = await getOwnedFileUrl(id, { userId: session.userId, role: session.role });
 
   if (!result.ok) {
-    // No existence leak: every failure is 404-style for the caller
-    return NextResponse.json({ error: result.error }, { status: 404 });
+    // No existence leak: hardcode a generic message so internal error strings
+    // (e.g. an ownership-check detail) are never surfaced to the caller.
+    return NextResponse.json({ error: 'File not found.' }, { status: 404 });
   }
 
   // 60s presigned GET — browser follows 302 to R2. The presigned URL lacks
