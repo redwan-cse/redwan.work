@@ -21,7 +21,7 @@ import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
 import { makeDeliverableKey, presignPrivatePut, validateContactFile } from '@/lib/r2';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
-export type CrmActionState = { error?: string; notice?: string };
+export type CrmActionState = { error?: string; notice?: string; invoiceId?: string };
 
 async function requireAdmin() {
   const session = await getCurrentSession();
@@ -430,7 +430,7 @@ async function revalidateInvoiceForItem(itemId: string) {
   revalidateInvoice(data.invoice_id, detail.ok ? detail.invoice.project_id : undefined);
 }
 
-export async function createDraftInvoiceAction(input: { project_id: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await createDraftInvoice(input); if (!result.ok) return { error: result.error }; revalidateInvoice(result.invoiceId, input.project_id); return {}; }
+export async function createDraftInvoiceAction(input: { project_id: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await createDraftInvoice(input); if (!result.ok) return { error: result.error }; revalidateInvoice(result.invoiceId, input.project_id); return { notice: 'Draft created.', invoiceId: result.invoiceId }; }
 export async function updateDraftInvoiceAction(invoiceId: string, patch: Parameters<typeof updateDraftInvoice>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const before = await invoiceProjectId(invoiceId); const result = await updateDraftInvoice(invoiceId, patch); if (!result.ok) return { error: result.error }; const after = await invoiceProjectId(invoiceId); revalidateInvoice(invoiceId, after ?? before); if (before && after && before !== after) revalidatePath(`/admin/projects/${before}`); return {}; }
 export async function addInvoiceItemAction(invoiceId: string, input: Parameters<typeof addInvoiceItem>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const projectId = await invoiceProjectId(invoiceId); const result = await addInvoiceItem(invoiceId, input); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId, projectId); return {}; }
 export async function updateInvoiceItemAction(itemId: string, patch: Parameters<typeof updateInvoiceItem>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await updateInvoiceItem(itemId, patch); if (!result.ok) return { error: result.error }; await revalidateInvoiceForItem(itemId); return {}; }

@@ -6,6 +6,7 @@ import { countOpenTickets } from '@/lib/crm/tickets';
 import { listRecentLeads } from '@/lib/crm/leads';
 import { listClients } from '@/lib/crm/clients';
 import { listArchivedProjects } from '@/lib/crm/projects';
+import { countUnpaidInvoices } from '@/lib/crm/invoices';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +18,12 @@ const LEAD_BADGE: Record<string, string> = {
 };
 
 export default async function AdminOverviewPage() {
-  const [openTickets, leads, clients, archived] = await Promise.all([
+  const [openTickets, leads, clients, archived, unpaidInvoices] = await Promise.all([
     countOpenTickets(),
     listRecentLeads(5),
     listClients(),
     listArchivedProjects(),
+    countUnpaidInvoices(),
   ]);
 
   return (
@@ -53,8 +55,8 @@ export default async function AdminOverviewPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Unpaid invoices</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold">—</p>
-            <p className="mt-1 text-xs text-muted-foreground">Invoicing arrives in P4b</p>
+            <p className="text-3xl font-semibold">{unpaidInvoices}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Sent with an outstanding balance</p>
           </CardContent>
         </Card>
         <Card>
