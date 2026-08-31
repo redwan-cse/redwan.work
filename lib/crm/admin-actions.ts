@@ -19,6 +19,7 @@ import {
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
 import { makeDeliverableKey, presignPrivatePut, validateContactFile } from '@/lib/r2';
+import { addInvoiceItem, confirmPayment, createDraftInvoice, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
 export type CrmActionState = { error?: string; notice?: string };
 
@@ -411,3 +412,25 @@ export async function archiveDownloadUrlAction(
 
   return getArchiveDownloadUrl(projectId);
 }
+
+function revalidateInvoice(invoiceId: string, projectId?: string) {
+  revalidatePath('/admin'); revalidatePath('/admin/invoices'); revalidatePath(`/admin/invoices/${invoiceId}`); if (projectId) revalidatePath(`/admin/projects/${projectId}`);
+}
+
+async function revalidateInvoiceForItem(itemId: string) {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin.from('invoice_items').select('invoice_id').eq('id', itemId).maybeSingle();
+  if (!data) return;
+  const detail = await getInvoiceDetail(data.invoice_id, { userId: '', role: 'admin' });
+  revalidateInvoice(data.invoice_id, detail.ok ? detail.invoice.project_id : undefined);
+}
+
+export async function createDraftInvoiceAction(input: { project_id: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await createDraftInvoice(input); if (!result.ok) return { error: result.error }; revalidateInvoice(result.invoiceId, input.project_id); return {}; }
+export async function updateDraftInvoiceAction(invoiceId: string, patch: Parameters<typeof updateDraftInvoice>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await updateDraftInvoice(invoiceId, patch); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId); return {}; }
+export async function addInvoiceItemAction(invoiceId: string, input: Parameters<typeof addInvoiceItem>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await addInvoiceItem(invoiceId, input); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId); return {}; }
+export async function updateInvoiceItemAction(itemId: string, patch: Parameters<typeof updateInvoiceItem>[1]): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await updateInvoiceItem(itemId, patch); if (!result.ok) return { error: result.error }; await revalidateInvoiceForItem(itemId); return {}; }
+export async function deleteInvoiceItemAction(itemId: string): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const admin = getSupabaseAdmin(); const { data: item } = await admin.from('invoice_items').select('invoice_id').eq('id', itemId).maybeSingle(); const result = await deleteInvoiceItem(itemId); if (!result.ok) return { error: result.error }; if (item?.invoice_id) { const detail = await getInvoiceDetail(item.invoice_id, { userId: '', role: 'admin' }); revalidateInvoice(item.invoice_id, detail.ok ? detail.invoice.project_id : undefined); } else { revalidatePath('/admin'); revalidatePath('/admin/invoices'); } return {}; }
+export async function sendInvoiceAction(invoiceId: string): Promise<CrmActionState> { const session = await requireAdmin(); if (!session) return { error: 'Unauthorized.' }; const detail = await getInvoiceDetail(invoiceId, { userId: session.userId, role: 'admin' }); const result = await sendInvoice(invoiceId); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId, detail.ok ? detail.invoice.project_id : undefined); return {}; }
+export async function voidInvoiceAction(invoiceId: string): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const result = await voidInvoice(invoiceId); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId); return {}; }
+export async function confirmPaymentAction(paymentId: string): Promise<CrmActionState> { const session = await requireAdmin(); if (!session) return { error: 'Unauthorized.' }; const payment = await getSupabaseAdmin().from('payments').select('invoice_id').eq('id', paymentId).maybeSingle(); const detail = payment.data ? await getInvoiceDetail(payment.data.invoice_id, { userId: session.userId, role: 'admin' }) : null; const result = await confirmPayment(paymentId, session.userId); if (!result.ok) return { error: result.error }; revalidateInvoice(payment.data?.invoice_id ?? paymentId, detail?.ok ? detail.invoice.project_id : undefined); return {}; }
+export async function rejectPaymentAction(paymentId: string): Promise<CrmActionState> { const session = await requireAdmin(); if (!session) return { error: 'Unauthorized.' }; const payment = await getSupabaseAdmin().from('payments').select('invoice_id').eq('id', paymentId).maybeSingle(); const detail = payment.data ? await getInvoiceDetail(payment.data.invoice_id, { userId: session.userId, role: 'admin' }) : null; const result = await rejectPayment(paymentId); if (!result.ok) return { error: result.error }; revalidateInvoice(payment.data?.invoice_id ?? paymentId, detail?.ok ? detail.invoice.project_id : undefined); return {}; }
