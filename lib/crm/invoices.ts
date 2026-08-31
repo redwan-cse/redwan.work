@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
+import { calculateInvoiceTotalCents, isSafeInvoiceLine, MAX_INVOICE_TOTAL_CENTS, roundInvoiceLineCents } from '@/lib/crm/invoice-math';
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void';
 export type PaymentMethod = 'bank' | 'bkash' | 'paypal' | 'other';
@@ -56,27 +57,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const METHODS: readonly PaymentMethod[] = ['bank', 'bkash', 'paypal', 'other'];
 const STATUSES: readonly InvoiceStatus[] = ['draft', 'sent', 'paid', 'void'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_QTY = 1_000_000;
-const MAX_UNIT_PRICE_CENTS = 1_000_000_000;
-const MAX_SAFE_CENTS = Number.MAX_SAFE_INTEGER;
-
 export function calculateAmounts(items: Pick<InvoiceItemRow, 'qty' | 'unit_price_cents'>[], payments: Pick<PaymentRow, 'amount_cents' | 'status'>[]): Amounts {
-  const total_cents = items.reduce((sum, item) => {
-    const qty = Number(item.qty);
-    const price = Number(item.unit_price_cents);
-    if (!Number.isFinite(qty) || qty <= 0 || qty > MAX_QTY || !Number.isInteger(qty * 1000) || !Number.isInteger(price) || price < 0 || price > MAX_UNIT_PRICE_CENTS) throw new Error('Invoice amount exceeds the supported limit.');
-    const line = Math.round(qty * price);
-    if (!Number.isSafeInteger(line) || sum > MAX_SAFE_CENTS - line) throw new Error('Invoice amount exceeds the supported limit.');
-    return sum + line;
-  }, 0);
+  const total_cents = calculateInvoiceTotalCents(items.map((item) => ({ qty: item.qty, unit_price_cents: item.unit_price_cents })));
   const submitted_cents = payments.reduce((sum, payment) => {
     const amount = Number(payment.amount_cents);
-    if (!Number.isSafeInteger(amount) || sum > MAX_SAFE_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
+    if (!Number.isSafeInteger(amount) || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
     return payment.status === 'submitted' || payment.status === 'confirmed' ? sum + amount : sum;
   }, 0);
   const confirmed_cents = payments.reduce((sum, payment) => {
     const amount = Number(payment.amount_cents);
-    if (!Number.isSafeInteger(amount) || sum > MAX_SAFE_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
+    if (!Number.isSafeInteger(amount) || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
     return payment.status === 'confirmed' ? sum + amount : sum;
   }, 0);
   return { total_cents, submitted_cents, confirmed_cents, outstanding_cents: Math.max(total_cents - confirmed_cents, 0) };
@@ -86,7 +76,7 @@ function invalid(message = 'Invalid invoice data.') { return crmError(message); 
 function validUuid(value: string) { return typeof value === 'string' && UUID_RE.test(value); }
 function validStatus(value: unknown): value is InvoiceStatus { return typeof value === 'string' && STATUSES.includes(value as InvoiceStatus); }
 function validMethod(value: unknown): value is PaymentMethod { return typeof value === 'string' && METHODS.includes(value as PaymentMethod); }
-function validAmount(qty: number, price: number) { return Number.isFinite(qty) && qty > 0 && qty <= MAX_QTY && Number.isInteger(qty * 1000) && Number.isInteger(price) && price >= 0 && price <= MAX_UNIT_PRICE_CENTS && Number.isSafeInteger(Math.round(qty * price)); }
+function validAmount(qty: number, price: number) { try { return isSafeInvoiceLine(qty, price); } catch { return false; } }
 function validProject(project: { status?: string; archived_at?: string | null } | null) { return project?.status === 'active' && project.archived_at == null; }
 function validDate(value: string | null | undefined) { if (value == null || value === '') return true; if (!DATE_RE.test(value)) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value; }
 
@@ -109,7 +99,7 @@ async function hydrate(raw: RawInvoice): Promise<InvoiceRow> {
     admin.from('profiles').select('full_name').eq('id', raw.client_id).maybeSingle(),
     admin.auth.admin.getUserById(raw.client_id),
   ]);
-  if (projectError || profileError || userError) throw new Error('Invoice operation failed.');
+  if (projectError || profileError || userError || !project) throw new Error('Invoice operation failed.');
   const amounts = await invoiceAmounts(raw.id);
   return { ...raw, project_name: (project as { name?: string } | null)?.name ?? '', client_id: (project as { client_id?: string } | null)?.client_id ?? raw.client_id, client_name: (profile as { full_name: string | null } | null)?.full_name ?? null, client_email: user?.user?.email ?? '', ...amounts };
 }
@@ -131,14 +121,15 @@ async function getRaw(invoiceId: string) {
 export async function listInvoices(viewer: InvoiceViewer, status?: InvoiceStatus): Promise<InvoiceRow[]> {
   const admin = getSupabaseAdmin();
   let query = admin.from('invoices').select('id, project_id, number, currency, status, issued_at, due_at, payment_note, created_at').order('created_at', { ascending: false });
+  if (viewer.role === 'client') query = query.in('status', ['sent', 'paid', 'void']);
   if (status && validStatus(status)) query = query.eq('status', status);
   const { data, error } = await query;
   if (error) throw new Error('Invoice operation failed.');
   const rows: InvoiceRow[] = [];
   for (const raw of (data ?? []) as RawInvoice[]) {
     const project = await admin.from('projects').select('client_id').eq('id', raw.project_id).maybeSingle();
-    if (project.error) throw new Error('Invoice operation failed.');
-    if (!project.data || (viewer.role === 'client' && project.data.client_id !== viewer.userId)) continue;
+    if (project.error || !project.data) throw new Error('Invoice operation failed.');
+    if (viewer.role === 'client' && project.data.client_id !== viewer.userId) continue;
     try { rows.push(await hydrate({ ...raw, client_id: project.data.client_id })); } catch { throw new Error('Invoice operation failed.'); }
   }
   return rows;
@@ -147,7 +138,7 @@ export async function listInvoices(viewer: InvoiceViewer, status?: InvoiceStatus
 export async function getInvoiceDetail(invoiceId: string, viewer: InvoiceViewer): Promise<{ ok: true; invoice: InvoiceRow; items: InvoiceItemRow[]; payments: PaymentRow[] } | { ok: false; error: string }> {
   try {
     const found = await getRaw(invoiceId);
-    if (!found.ok || (viewer.role === 'client' && found.raw.client_id !== viewer.userId)) return { ok: false, error: 'Invoice not found.' };
+    if (!found.ok || (viewer.role === 'client' && (found.raw.client_id !== viewer.userId || found.raw.status === 'draft'))) return { ok: false, error: 'Invoice not found.' };
     const [items, payments] = await Promise.all([loadItems(invoiceId), loadPayments(invoiceId)]);
     return { ok: true, invoice: await hydrate(found.raw), items: items.items, payments: payments.payments };
   } catch {

@@ -63,3 +63,15 @@
 
 - The service still uses sequential invoice hydration queries; batching can be considered with the invoice UI performance work.
 - Direct client PostgREST denial was verified at the database boundary with an authenticated-role probe. The application client remains intentionally service-role-only for invoice mutations.
+
+## Remaining P4b Review Fixes
+
+- Added `roundInvoiceLineCents`, `calculateInvoiceTotalCents`, and shared safe-bound constants in `lib/crm/invoice-math.ts`. Service and admin/client invoice displays now use the same exact positive three-decimal rounding semantics as PostgreSQL.
+- Client `listInvoices` filters to `sent`, `paid`, and `void`; client detail rejects drafts before child queries. Missing project hydration now returns a generic operation failure instead of silently omitting rows.
+- Added aggregate total validation in the service/UI and a forward database hardening migration `0012_invoice_read_and_total_hardening.sql`. The documented maximum is `Number.MAX_SAFE_INTEGER` cents; database item writes invoke the bounded total function before completion.
+- Live probe passed for direct authenticated insert denial, draft read denial, atomic submission reservation, rejection, fractional rounding, payment immutability, and existing payment transition behavior. Temporary rows were rolled back.
+- `npx supabase db push` applied `0012`; local and remote migration state aligned through `0012`.
+
+## Final Fix Concerns
+
+- Invoice hydration remains sequential and can be batched as a later performance improvement.

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { getInvoiceDetail } from '@/lib/crm/invoices';
+import { roundInvoiceLineCents } from '@/lib/crm/invoice-math';
 import { listProjects } from '@/lib/crm/projects';
 import {
   DeleteItemButton,
@@ -63,7 +64,7 @@ export default async function AdminInvoiceDetailPage({ params }: { params: Promi
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-2">Description</th><th className="px-4 py-2 text-right">Qty</th><th className="px-4 py-2 text-right">Unit price</th><th className="px-4 py-2 text-right">Amount</th><th className="px-4 py-2 print:hidden" /></tr></thead>
-              <tbody>{items.map((item) => <tr key={item.id} className="border-t"><td className="px-4 py-2">{item.description}</td><td className="px-4 py-2 text-right">{item.qty}</td><td className="px-4 py-2 text-right">{money(item.unit_price_cents, invoice.currency)}</td><td className="px-4 py-2 text-right">{money(Math.round(item.qty * item.unit_price_cents), invoice.currency)}</td><td className="px-4 py-2 text-right print:hidden">{draft && <DeleteItemButton itemId={item.id} />}</td></tr>)}</tbody>
+              <tbody>{items.map((item) => <tr key={item.id} className="border-t"><td className="px-4 py-2">{item.description}</td><td className="px-4 py-2 text-right">{item.qty}</td><td className="px-4 py-2 text-right">{money(item.unit_price_cents, invoice.currency)}</td><td className="px-4 py-2 text-right">{money(roundInvoiceLineCents(item.qty, item.unit_price_cents), invoice.currency)}</td><td className="px-4 py-2 text-right print:hidden">{draft && <DeleteItemButton itemId={item.id} />}</td></tr>)}</tbody>
             </table>
           </div>
           {draft && <div className="space-y-3 print:hidden">{items.map((item) => <LineItemForm key={item.id} invoiceId={invoice.id} item={item} position={item.position} />)}<LineItemForm invoiceId={invoice.id} position={items.length} /></div>}
