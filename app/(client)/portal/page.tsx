@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { getCurrentSession } from '@/lib/auth/session';
 import { countOwnOpenTickets, listOwnTickets } from '@/lib/crm/tickets';
 import { countOwnActiveProjects, listOwnProjects } from '@/lib/crm/projects';
+import { countOwnOutstandingInvoices } from '@/lib/crm/invoices';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
@@ -25,11 +26,12 @@ export default async function PortalDashboardPage() {
   const session = await getCurrentSession();
   if (!session) redirect('/login?next=/portal');
 
-  const [openTickets, recent, activeProjects, ownProjects] = await Promise.all([
+  const [openTickets, recent, activeProjects, ownProjects, outstandingInvoices] = await Promise.all([
     countOwnOpenTickets(session.userId),
     listOwnTickets(session.userId, 4),
     countOwnActiveProjects(session.userId),
     listOwnProjects(session.userId),
+    countOwnOutstandingInvoices(session.userId),
   ]);
 
   return (
@@ -62,8 +64,10 @@ export default async function PortalDashboardPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding invoice</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold">—</p>
-            <p className="mt-1 text-xs text-muted-foreground">Invoicing arrives in P4b</p>
+            <p className="text-3xl font-semibold">{outstandingInvoices || '—'}</p>
+            <Link href="/portal/invoices" className="mt-1 block text-xs text-muted-foreground hover:underline">
+              {outstandingInvoices === 0 ? 'No outstanding invoices' : outstandingInvoices === 1 ? 'View invoice' : 'View invoices'}
+            </Link>
           </CardContent>
         </Card>
       </div>

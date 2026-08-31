@@ -13,7 +13,7 @@ const NAV = [
   { label: 'Dashboard', href: '/portal', enabled: true },
   { label: 'Tickets', href: '/portal/tickets', enabled: true },
   { label: 'Files', href: '/portal/files', enabled: true },
-  { label: 'Invoices', href: '/portal/invoices', enabled: false },
+  { label: 'Invoices', href: '/portal/invoices', enabled: true },
 ];
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
