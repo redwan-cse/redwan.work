@@ -76,6 +76,15 @@
 
 - Invoice hydration remains sequential and can be batched as a later performance improvement.
 
+## Send and Void Payment Transition Fixes
+
+- Added forward migration `0013_invoice_send_atomicity.sql` with service-role-only `send_invoice_atomic(uuid)`. It locks the invoice, requires draft status, validates item presence and positive calculated total, and sets `sent` plus `issued_at` atomically.
+- `sendInvoice()` now calls the atomic send RPC; existing admin role checks and invoice/project revalidation remain in place.
+- Replaced confirmation and rejection RPCs so both require the locked parent invoice to remain `sent`; pending payments on draft, paid, or void invoices are rejected.
+- Admin payment decision controls are hidden for non-sent invoice views while RPC checks remain authoritative.
+- Live lifecycle probe passed for empty-send rejection, normal sent partial confirmation with `confirmed_at`, partial status preservation, and confirm/reject denial after void. Temporary fixtures were rolled back.
+- `npx supabase db push` and `npx supabase migration list` confirmed local/remote alignment through `0013`.
+
 ## Draft Row Render Fix
 
 - Added display-only `displayInvoiceLineCents()` and `displayInvoiceTotalCents()` helpers.
