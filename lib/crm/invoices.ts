@@ -139,6 +139,24 @@ export async function createDraftInvoice(input: { project_id: string; currency?:
   return error || !data ? { ok: false, error: 'Invoice operation failed.' } : { ok: true, invoiceId: data.id };
 }
 
+export async function createDraftInvoiceWithItems(input: {
+  project_id: string;
+  currency?: string;
+  due_at?: string | null;
+  payment_note?: string | null;
+  items: Array<{ description: string; qty: number; unit_price_cents: number; position: number }>;
+}): Promise<{ ok: true; invoiceId: string } | { ok: false; error: string }> {
+  if (!validUuid(input.project_id) || !input.items.length) return { ok: false, error: 'Invalid invoice data.' };
+  const { data, error } = await getSupabaseAdmin().rpc('create_draft_invoice_with_items', {
+    p_project_id: input.project_id,
+    p_currency: input.currency ?? 'USD',
+    p_due_at: input.due_at || null,
+    p_payment_note: input.payment_note ?? null,
+    p_items: input.items,
+  });
+  return error || typeof data !== 'string' ? { ok: false, error: 'Invoice operation failed.' } : { ok: true, invoiceId: data };
+}
+
 export async function updateDraftInvoice(invoiceId: string, patch: { project_id?: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<CrmResult> {
   const found = await getRaw(invoiceId); if (!found.ok) return found;
   if (found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.');
