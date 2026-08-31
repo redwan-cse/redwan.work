@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ReplyForm } from '@/components/admin/reply-form';
 import { StatusControl } from '@/components/admin/status-control';
 import { getTicketThread } from '@/lib/crm/tickets';
+import { listTicketAttachmentRows } from '@/lib/crm/files';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,12 @@ function utcStamp(iso: string) {
   return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 export default async function AdminTicketThreadPage({
   params,
 }: {
@@ -37,6 +44,7 @@ export default async function AdminTicketThreadPage({
   // so presence of the thread payload must be narrowed too.
   if (!result.ok || !('ticket' in result)) notFound();
   const { ticket, messages } = result;
+  const attachments = await listTicketAttachmentRows(ticket.id);
 
   return (
     <div className="space-y-6">
@@ -77,6 +85,31 @@ export default async function AdminTicketThreadPage({
           </article>
         ))}
       </section>
+
+      {attachments.length > 0 && (
+        <section aria-label="Attachments" className="space-y-2">
+          <h2 className="text-sm font-semibold">Attachments</h2>
+          <ul className="space-y-2">
+            {attachments.map((file) => (
+              <li
+                key={file.id}
+                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {file.filename}{' '}
+                  <span className="text-muted-foreground">({formatBytes(file.size_bytes)})</span>
+                </span>
+                <a
+                  href={`/api/files/${file.id}/download`}
+                  className="ml-3 inline-flex h-7 items-center justify-center rounded-md border bg-background px-3 text-xs font-medium hover:bg-accent"
+                >
+                  Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <ReplyForm ticketId={ticket.id} />
     </div>

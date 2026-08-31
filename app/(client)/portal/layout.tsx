@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 const NAV = [
   { label: 'Dashboard', href: '/portal', enabled: true },
   { label: 'Tickets', href: '/portal/tickets', enabled: true },
-  { label: 'Files', href: '/portal/files', enabled: false },
+  { label: 'Files', href: '/portal/files', enabled: true },
   { label: 'Invoices', href: '/portal/invoices', enabled: false },
 ];
 

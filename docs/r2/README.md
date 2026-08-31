@@ -1,8 +1,9 @@
-# R2 Object Storage — Contact Attachments
+# R2 Object Storage — Contact Attachments & Portal Files
 
 Architecture and runbook for the Cloudflare R2 storage behind the contact form's
-file attachments (Phase 2). The user-facing copy lives in
-[`docs/contact/README.md`](../contact/README.md) and on `/privacy`.
+file attachments (Phase 2) and the portal's deliverable / ticket-attachment files
+(Phase 4a — see `docs/crm/README.md` for the CRM-side flows). The user-facing
+copy lives in [`docs/contact/README.md`](../contact/README.md) and on `/privacy`.
 
 ## Architecture
 
@@ -10,7 +11,7 @@ Two buckets are used (both on one R2 endpoint, separate scoped API tokens):
 
 | Bucket | Access | Used for |
 |---|---|---|
-| `R2_PRIVATE_BUCKET` | Private — reachable only via presigned URLs and server-side credentials | Contact attachment uploads under the `contact/` prefix |
+| `R2_PRIVATE_BUCKET` | Private — reachable only via presigned URLs and server-side credentials | Contact attachment uploads (`contact/`) and portal files (`private/`, `archive/`) |
 | `R2_PUBLIC_BUCKET` | Public-read via `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | Provisioned for future public assets; nothing written or read yet (deferred to P5) |
 
 All private-bucket access goes through the server-only helpers in `lib/r2.ts`
@@ -18,6 +19,8 @@ All private-bucket access goes through the server-only helpers in `lib/r2.ts`
 ever sees short-lived presigned PUT URLs.
 
 ### Key scheme
+
+Contact attachments use:
 
 ```
 contact/<upload-folder-uuid>/<file-uuid>.<ext>
@@ -27,6 +30,26 @@ Both UUID segments are random v4 generated at presign time (`lib/r2.ts`), so
 keys are unguessable and each upload batch gets its own folder. The full shape
 is enforced by a strict regex (`isValidContactKey`) before any key from the
 browser is accepted at submit time.
+
+Portal files (P4a) add these private-bucket prefixes, enforced by `isPortalKey`:
+
+| Prefix | Shape | Used for |
+|---|---|---|
+| `contact/` | `contact/<folder-uuid>/<file-uuid>.<ext>` | Contact-form attachments (90-day retention, retained flag) |
+| `project_` | `private/<clientUserId>/project_<projectId>/<file-uuid>.<ext>` | Admin deliverable uploads |
+| `ticket_` | `private/<clientUserId>/ticket_<ticketId>/<file-uuid>.<ext>` | Portal ticket attachments bound to a ticket |
+| `pending/` | `private/<clientUserId>/pending/<file-uuid>.<ext>` | Not-yet-bound ticket attachments (orphans) |
+| `archive/` | `archive/project_<projectId>/<ISO-timestamp>.zip` | Project archive ZIP backups (30-day retention) |
+
+`isPortalKey` accepts any `private/<client-uuid>/...` key plus `archive/project_*.zip`.
+`deletePrivateObjects` refuses anything that is neither a valid portal key nor a
+valid contact-form key, so the retention cron can only delete real keys.
+
+The archive prefix is not an object in the public/app data sense — it holds the
+ZIP backup written when a project is archived (`archiveProject` in
+`lib/crm/projects.ts`), with a **30-day retention**. Once a project's
+`archived_at` passes 30 days the cron purges the archive object (and the
+remaining deliverable objects) and deletes the project row.
 
 ### Limits
 
@@ -64,14 +87,24 @@ single-use Turnstile tokens:
 1. Requires `Authorization: Bearer <CRON_SECRET>` — timing-safe compare
    (mirrors `/api/revalidate`). Wrong/missing secret → `401`.
 2. R2 not configured → `503`.
-3. Loads the retained set: leads whose `attachments` contain an entry flagged
-   `"retained": true` (jsonb containment `attachments @> '[{"retained":true}]'`).
-4. Lists all objects under `contact/`, computes stale keys with
-   `staleObjectKeys(objects, cutoff, retained)` where `cutoff = now − 90 days`
-   (strict `<`; retained keys always skipped).
-5. Batch-deletes stale keys (1000/chunk). Any earlier failure aborts before
-   deletion runs (fail-closed).
-6. Responds `200 {"deleted": n, "examined": m}`.
+3. **Stage 0 — contact purge:** loads the retained set: leads whose
+   `attachments` contain an entry flagged `"retained": true` (jsonb containment
+   `attachments @> '[{"retained":true}]'`). Lists all objects under `contact/`,
+   computes stale keys with `staleObjectKeys(objects, cutoff, retained)` where
+   `cutoff = now − 90 days` (strict `<`; retained keys always skipped),
+   batch-deletes (1000/chunk).
+4. **Stage 1 — archive purge:** lists `archive/`, deletes objects older than
+   30 days.
+5. **Stage 2 — project purge:** selects `projects` with
+   `archived_at < now − 30 days`; for each, collects its deliverable `r2_key`s
+   + `archive_key`, `deletePrivateObjects` them, then deletes the project row
+   (cascades milestones/files).
+6. **Stage 3 — pending cleanup:** deletes orphan rows (kind `attachment`,
+   `ticket_id null`, `created_at > 24h` old) plus their objects, and deletes
+   `pending/`-prefix objects older than 24h that have no `files` row.
+7. Each stage is isolated — one failure is recorded and logged but does not
+   skip the rest. Responds `200 {"deleted": n, "examined": m, "archivePurged":
+   n1, "projectsPurged": n2, "pendingCleaned": n3, "errors": [...]}`.
 
 ## Runbook
 
@@ -161,10 +194,24 @@ npx wrangler r2 object delete "<private-bucket>/contact/<folder>/<file>.<ext>" -
 | T4-c | Independent R2 listing vs `examined` | both count 1 ✅ |
 | T4-d | Real `staleObjectKeys` purity test | deletes-stale / skips-retained / strict cutoff boundary / deterministic / non-mutating / empty-set behavior — 6/6 ✅ |
 | T4-e | Synthetic retained lead row via service REST | containment query matched exactly that row; live run skipped it (`deleted:0`, no errors); row deleted after ✅ |
+| T5-a | Portal deliverable upload (admin) ×2 | 2 keys `private/{clientA}/project_{id}/{uuid}.pdf` present in R2 (`ListObjectsV2` count 2) ✅ |
+| T5-b | Deliverable download | presigned GET (60s) returned exact bytes (42/43) ✅ |
+| T5-c | Deliverable delete (admin) | `DeleteObjects` + row deleted; 1 key + 1 row remain ✅ |
+| T5-d | Archive ZIP write | `putPrivateObject(archive/project_{id}/<ISO>.zip)` → 955-byte zip with project/milestones/file entries ✅ |
+| T5-e | Archive backup download | presigned GET(60s) of `archive/project_*.zip` → unzip `-l` contains `project.json`, `milestones.json`, `files/deliverable-1.pdf`; extracted bytes match originals ✅ |
+| T5-f | Purge (typed confirm path) | `DeleteObjects` `[deliverable key, archive key]` + `projects.delete` cascade → `projects`/`milestones`/`files` 0, private + archive prefixes 0 ✅ |
+| T5-g | Deliverable R2 listing vs app | R2 `ListObjectsV2 private/{clientA}/project_{id}/` == 2 == `files` rows count ✅ |
+| T6-a | Portal ticket presign (pending) | keys `private/{clientA}/pending/...pdf` + `.png` verified `includes('/pending/')`, PUT 200 each ✅ |
+| T6-b | Reply presign (ticket-scoped) | key `private/{clientA}/ticket_{id}/*.zip` verified `includes('/ticket_')`, PUT 200 ✅ |
+| T6-c | Attachment download as client + admin | 302 presigned R2 URL `https://private...r2.cloudflarestorage.com/...`; fetched bytes match originals (29B each) ✅ |
+| T6-d | B direct download A's attachment | `404 {"error":"File not found."}` (no access, no leak) ✅ |
+| T6-e | Pending orphan (R2 only) | presign `ticketId:null` + PUT → no `files` row (DB CHECK forbids `ticket_id null` attachment rows); `ListObjectsV2 private/{clientB}/pending/` contains orphan key; `DeleteObjects` removes it ✅ |
 
 Positive-deletion path: deterministic via T4-d (pure function over real inputs);
 first production purge observed after 90 days of live traffic is an owner
-follow-up below.
+follow-up below. P4a archive/project purge deletions verified via T5-f (explicit
+purge) and T6-e (pending orphan); the cron's own automated 30-day/24h sweeps are
+verified in Task 6 probes (see `docs/crm/README.md`).
 
 ## Residual risks
 
@@ -185,4 +232,7 @@ follow-up below.
    official always-pass test sitekey; observe the first real submission end-to-end.
 3. **First production purge**: after ~90 days of live attachments, confirm a cron
    run reports `deleted > 0` and spot-check the bucket.
-4. **P5**: set `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` + custom domain when public reads ship.
+4. **First automated archive/project purge**: once a real archived project exceeds
+   its 30-day window, confirm a cron run reports `projectsPurged > 0` and the R2
+   `archive/` / deliverable objects are gone.
+5. **P5**: set `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` + custom domain when public reads ship.

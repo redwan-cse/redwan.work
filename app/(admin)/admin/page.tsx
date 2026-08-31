@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConvertLeadButton } from '@/components/admin/convert-lead-button';
 import { countOpenTickets } from '@/lib/crm/tickets';
 import { listRecentLeads } from '@/lib/crm/leads';
 import { listClients } from '@/lib/crm/clients';
+import { listArchivedProjects } from '@/lib/crm/projects';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +17,26 @@ const LEAD_BADGE: Record<string, string> = {
 };
 
 export default async function AdminOverviewPage() {
-  const [openTickets, leads, clients] = await Promise.all([
+  const [openTickets, leads, clients, archived] = await Promise.all([
     countOpenTickets(),
     listRecentLeads(5),
     listClients(),
+    listArchivedProjects(),
   ]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Overview</h1>
+
+      {archived.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          {archived.length} archived project(s) awaiting deletion —{' '}
+          <Link href="/admin/projects" className="underline underline-offset-4">
+            download backups from Projects
+          </Link>
+          .
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
