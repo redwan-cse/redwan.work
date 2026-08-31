@@ -227,5 +227,4 @@ Notes: trigger flips verified both directions at REST (Task 1) and through the r
 
 ## Non-goals (explicitly deferred)
 
-- **Invoices** → P4b (the dashboard "Outstanding invoice" card is a placeholder)
 - **Lifecycle emails / `email_log`** → P5
