@@ -20,7 +20,9 @@ export function PrintInvoiceButton() {
   return <Button type="button" size="sm" variant="outline" className="print:hidden" onClick={() => window.print()}><Printer className="mr-1.5 size-3.5" />Print</Button>;
 }
 
-function cents(value: string) { const number = Number(value); return Number.isFinite(number) ? Math.round(number * 100) : -1; }
+const MAX_QTY = 1_000_000;
+const MAX_UNIT_PRICE_CENTS = 1_000_000_000;
+function cents(value: string) { const number = Number(value); return Number.isFinite(number) && number >= 0 && number <= MAX_UNIT_PRICE_CENTS / 100 ? Math.round(number * 100) : -1; }
 
 export function NewInvoiceForm({ projects }: { projects: Array<{ id: string; name: string; client_name: string | null; client_email: string }> }) {
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function NewInvoiceForm({ projects }: { projects: Array<{ id: string; nam
 
   function submit(formData: FormData, shouldSend: boolean) {
     setError(null);
-    if (items.some((item) => !item.description.trim() || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0 || !Number.isFinite(Number(item.unit_price)) || cents(item.unit_price) < 0)) {
+    if (items.some((item) => !item.description.trim() || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0 || Number(item.qty) > MAX_QTY || !Number.isInteger(Number(item.qty) * 1000) || !Number.isFinite(Number(item.unit_price)) || cents(item.unit_price) < 0 || !Number.isSafeInteger(Math.round(Number(item.qty) * cents(item.unit_price))))) {
       setError('Complete every line item with a positive quantity and a valid price.');
       return;
     }

@@ -46,3 +46,20 @@
 - Admin invoice mutation wrappers now resolve project ownership and revalidate the owning project path for draft updates, item additions, and void operations.
 - Live transactional probe passed for over-reservation rejection, confirmation metadata, and sent-invoice item locking. The probe transaction rolled back all temporary rows.
 - `npx supabase migration list` and `npx supabase db push` confirmed migration `0009` is applied remotely.
+
+## Final P4b Integrity Fixes
+
+- Added and applied forward migration `0011_invoice_payment_integrity.sql`.
+- Removed the authenticated direct payment INSERT path and restricted client invoice, item, and payment reads to `sent`, `paid`, and `void` invoices. Admin access remains available through the existing admin policy and service-role application client.
+- Added fail-closed payment integrity triggers: payment identity/accounting fields and confirmation metadata cannot be edited after insert, direct payment inserts are rejected, and status changes are accepted only from controlled transition RPCs.
+- Added an atomic rejection RPC and routed `rejectPayment` through it; confirmation and submission continue through their locked service-role RPCs.
+- Added active, non-archived project validation to both legacy draft creation and draft updates. The existing draft-builder RPC path retains its database-side active-project check and now receives matching service-side validation.
+- Added bounded decimal quantity, unit-price, line-total, payment-sum, and total validation. Quantities are limited to three decimal places, quantities to `1,000,000`, unit prices to `1,000,000,000` cents, and calculated totals to `Number.MAX_SAFE_INTEGER`; UI and PostgreSQL use the same rounded line-total semantics.
+- Invoice list/detail hydration now propagates generic operation failures instead of returning empty or zero financial data.
+- Live integrity probe passed for direct insert denial, draft read denial, atomic submit over-reservation, atomic confirm/reject, payment immutability, draft project restrictions, fractional/half-cent rounding, and paid transition. The probe transaction rolled back all temporary rows.
+- `npx supabase db push` and `npx supabase migration list` confirmed remote migration alignment through `0011`.
+
+## Final Fix Concerns
+
+- The service still uses sequential invoice hydration queries; batching can be considered with the invoice UI performance work.
+- Direct client PostgREST denial was verified at the database boundary with an authenticated-role probe. The application client remains intentionally service-role-only for invoice mutations.
