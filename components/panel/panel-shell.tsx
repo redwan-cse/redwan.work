@@ -24,7 +24,7 @@ export function PanelShell({
 }) {
   return (
     <div className="flex min-h-svh bg-background">
-      <aside className="hidden w-60 shrink-0 flex-col border-r md:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r md:flex print:hidden">
         <div className="border-b px-5 py-4">
           <p className="text-sm font-semibold">{title}</p>
           <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
@@ -65,7 +65,7 @@ export function PanelShell({
 
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b px-5 py-3 md:hidden">
+        <header className="flex items-center justify-between border-b px-5 py-3 md:hidden print:hidden">
           <p className="text-sm font-semibold">{title}</p>
           <form action="/api/auth/logout" method="post">
             <Button type="submit" variant="ghost" size="sm" className="gap-2">

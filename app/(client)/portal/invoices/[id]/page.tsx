@@ -26,7 +26,6 @@ export default async function PortalInvoiceDetailPage({ params }: { params: Prom
 
   return (
     <div className="space-y-6">
-      <style>{'@media print { aside, header { display: none !important; } }'}</style>
       <div className="print:hidden"><Link href="/portal/invoices" className="text-sm text-muted-foreground hover:underline">← All invoices</Link></div>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div><p className="font-mono text-xs text-muted-foreground">INV-{invoice.number}</p><h1 className="text-2xl font-semibold">{invoice.project_name}</h1><p className="mt-1 text-sm text-muted-foreground">{invoice.client_name ?? invoice.client_email}</p></div>
