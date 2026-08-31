@@ -28,3 +28,20 @@ export function calculateInvoiceTotalCents(items: Array<{ qty: number | string; 
     return total + line;
   }, 0);
 }
+
+export function displayInvoiceLineCents(qty: number | string, unitPriceCents: number): number | null {
+  try {
+    if (!isSafeInvoiceLine(Number(qty), unitPriceCents)) return null;
+    return roundInvoiceLineCents(qty, unitPriceCents);
+  } catch {
+    return null;
+  }
+}
+
+export function displayInvoiceTotalCents(items: Array<{ qty: number | string; unit_price_cents: number }>): number | null {
+  try {
+    return calculateInvoiceTotalCents(items);
+  } catch {
+    return null;
+  }
+}

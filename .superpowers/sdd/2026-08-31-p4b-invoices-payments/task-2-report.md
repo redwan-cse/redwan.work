@@ -75,3 +75,11 @@
 ## Final Fix Concerns
 
 - Invoice hydration remains sequential and can be batched as a later performance improvement.
+
+## Draft Row Render Fix
+
+- Added display-only `displayInvoiceLineCents()` and `displayInvoiceTotalCents()` helpers.
+- The new invoice builder renders `—` for incomplete or invalid quantity/unit-price rows, including the initial empty price row, instead of invoking strict calculation functions during render.
+- Submit validation remains strict and continues to reject incomplete, invalid, fractional-out-of-range, and over-bound monetary input.
+- Valid fractional quantities continue through the shared decimal-safe rounding helper.
+- Static verification of the builder path confirmed the empty initial row now uses nullable display helpers; no browser runner was available for an interactive render probe.
