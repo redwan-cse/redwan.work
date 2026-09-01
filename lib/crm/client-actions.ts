@@ -14,6 +14,7 @@ import {
   presignPrivatePut,
   validateContactFile,
 } from '@/lib/r2';
+import { submitPayment } from '@/lib/crm/invoices';
 
 export type PortalActionState = { error?: string; notice?: string };
 
@@ -289,4 +290,13 @@ export async function confirmTicketAttachmentAction(input: {
   }
 
   return {};
+}
+
+export async function submitPaymentAction(invoiceId: string, input: { method: 'bank' | 'bkash' | 'paypal' | 'other'; reference: string; amount_cents: number }): Promise<PortalActionState> {
+  const session = await requireClient();
+  if (!session) return { error: 'Unauthorized.' };
+  const result = await submitPayment(invoiceId, session.userId, input);
+  if (!result.ok) return { error: result.error };
+  revalidatePath(`/portal/invoices/${invoiceId}`); revalidatePath('/portal/invoices'); revalidatePath('/portal');
+  return { notice: 'Payment submitted for review.' };
 }
