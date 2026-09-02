@@ -13,6 +13,7 @@ import {
   makeTicketAttachmentKey,
   presignPrivatePut,
   validateContactFile,
+  verifyStoredObjectSize,
 } from '@/lib/r2';
 import { submitPayment } from '@/lib/crm/invoices';
 
@@ -179,7 +180,7 @@ export async function getTicketAttachmentPresignAction(input: {
     }
 
     try {
-      const uploadUrl = await presignPrivatePut(key, input.mime, 600);
+      const uploadUrl = await presignPrivatePut(key, input.mime, input.size, 600);
       return { ok: true, key, uploadUrl };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -18,7 +18,7 @@ import {
   updateProject,
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
-import { makeDeliverableKey, presignPrivatePut, validateContactFile } from '@/lib/r2';
+import { makeDeliverableKey, presignPrivatePut, validateContactFile, verifyStoredObjectSize } from '@/lib/r2';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, createDraftInvoiceWithItems, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
 export type CrmActionState = { error?: string; notice?: string; invoiceId?: string };
@@ -331,7 +331,7 @@ export async function getDeliverablePresignAction(
   }
 
   try {
-    const uploadUrl = await presignPrivatePut(key, mime, 600);
+    const uploadUrl = await presignPrivatePut(key, mime, size, 600);
     return { ok: true, key, uploadUrl };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -345,6 +345,11 @@ export async function confirmDeliverableAction(
 ): Promise<CrmActionState> {
   const session = await requireAdmin();
   if (!session) return { error: 'Unauthorized.' };
+
+  const sizeOk = await verifyStoredObjectSize(meta.key, meta.size_bytes);
+  if (!sizeOk) {
+    return { error: 'Attachment data is invalid. Please re-upload your files.' };
+  }
 
   const result = await createFileRow({
     bucket: 'private',

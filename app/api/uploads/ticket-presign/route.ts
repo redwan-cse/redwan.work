@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const uploadUrl = await presignPrivatePut(key, file.normalizedMime, 600);
+        const uploadUrl = await presignPrivatePut(key, file.normalizedMime, file.size, 600);
         uploads.push({ key, uploadUrl, filename: file.filename });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
