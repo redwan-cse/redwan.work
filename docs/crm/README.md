@@ -1,5 +1,7 @@
 # CRM Core (Phase 3b)
 
+For a detailed security model, hardening audit, and probe matrix, see [Security README](../security/README.md).
+
 Admin CRM foundation layered on the Phase 3a auth base: tickets with threaded messages and author-driven status automation, lead→client conversion, client management (invite / deactivate / reactivate), and a shared ticket numbering sequence that includes contact-form leads.
 
 ## Overview
