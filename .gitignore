@@ -45,6 +45,17 @@ next-env.d.ts
 
 ### Blogger ###
 /.google-blogger-theme/docs
+/.google-blogger-theme/theme/
+
+### Google Apps Script ###
+/.google-apps-script/scripts/
+/.google-apps-script/docs/
+
+### Superpowers SDD ###
+/.superpowers/
+
+### Temporary probe scripts ###
+tmp_*.mjs
 
 # End of .gitignore
 
