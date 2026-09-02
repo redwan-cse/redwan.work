@@ -356,6 +356,14 @@ export async function confirmDeliverableAction(
 
   const sizeOk = await verifyStoredObjectSize(meta.key, meta.size_bytes);
   if (!sizeOk) {
+    console.error('Size mismatch for deliverable key:', meta.key);
+    return { error: 'Attachment data is invalid. Please re-upload your files.' };
+  }
+
+  // Ensure key's project segment matches target project
+  const projectMatch = meta.key.match(/project_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/);
+  if (!projectMatch || projectMatch[1] !== projectId) {
+    console.error('Project segment mismatch for key:', meta.key, 'expected project:', projectId);
     return { error: 'Attachment data is invalid. Please re-upload your files.' };
   }
 

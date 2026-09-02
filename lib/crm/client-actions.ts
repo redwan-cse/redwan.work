@@ -91,7 +91,7 @@ export async function createTicketWithAttachmentsAction(
       .select('id', { count: 'exact', head: true })
       .eq('ticket_id', ticketId)
       .eq('kind', 'attachment');
-    if (countError) return { error: `Count failed: ${countError.message}` };
+    if (countError) { console.error('Count error:', countError.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
     if ((count ?? 0) + entries.length > 10) {
       return { error: 'A ticket can have at most 10 attachments.' };
     }
@@ -108,7 +108,7 @@ export async function createTicketWithAttachmentsAction(
         mime: e.mime,
         size_bytes: e.size_bytes,
       });
-      if (error) return { error: `Could not save file: ${error.message}` };
+      if (error) { console.error('File insert error:', error.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
     }
   }
 
@@ -155,7 +155,7 @@ export async function getTicketAttachmentPresignAction(input: {
       .eq('id', input.ticketId)
       .maybeSingle();
 
-    if (error) return { ok: false, error: `Ticket lookup failed: ${error.message}` };
+    if (error) { console.error('Ticket lookup error:', error.message); return { ok: false, error: 'Ticket not found.' }; }
     if (!ticket || (ticket as { client_id: string }).client_id !== session.userId) {
       return { ok: false, error: 'Ticket not found.' };
     }
@@ -166,7 +166,7 @@ export async function getTicketAttachmentPresignAction(input: {
       .eq('ticket_id', input.ticketId)
       .eq('kind', 'attachment');
 
-    if (countError) return { ok: false, error: `Count failed: ${countError.message}` };
+    if (countError) { console.error('Count error:', countError.message); return { ok: false, error: 'A ticket can have at most 10 attachments.' }; }
     if ((count ?? 0) >= 10) {
       return { ok: false, error: 'A ticket can have at most 10 attachments.' };
     }
@@ -232,7 +232,7 @@ export async function confirmTicketAttachmentAction(input: {
       .select('id', { count: 'exact', head: true })
       .eq('ticket_id', input.ticketId)
       .eq('kind', 'attachment');
-    if (countError) return { error: `Count failed: ${countError.message}` };
+    if (countError) { console.error('Count error:', countError.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
     if ((count ?? 0) + input.entries.length > 10) {
       return { error: 'A ticket can have at most 10 attachments.' };
     }

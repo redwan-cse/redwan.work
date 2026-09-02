@@ -157,7 +157,7 @@ export async function adminReply(
   const { error } = await admin
     .from('ticket_messages')
     .insert({ ticket_id: ticketId, author_id: authorId, body: trimmed });
-  if (error) return crmError(`Reply failed: ${error.message}`);
+  if (error) { console.error('Reply error:', error.message); return crmError('Reply could not be sent.'); }
 
   return { ok: true };
 }
@@ -310,7 +310,7 @@ export async function clientReply(
   const { error } = await admin
     .from('ticket_messages')
     .insert({ ticket_id: ticketId, author_id: clientId, body: trimmed });
-  if (error) return crmError(`Reply failed: ${error.message}`);
+  if (error) { console.error('Reply error:', error.message); return crmError('Reply could not be sent.'); }
 
   return { ok: true };
 }

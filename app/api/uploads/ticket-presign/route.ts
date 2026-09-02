@@ -8,6 +8,7 @@ import {
   presignPrivatePut,
   validateContactFile,
 } from '@/lib/r2';
+import { sha256Hex } from '@/lib/contact/lead-schema';
 
 const EXT_ALLOWED_MIMES: Record<string, string[]> = {
   pdf: ['application/pdf'],
@@ -19,28 +20,42 @@ const EXT_ALLOWED_MIMES: Record<string, string[]> = {
   zip: ['application/zip', 'application/x-zip-compressed'],
 };
 
-const presignRateMap = new Map<string, number[]>();
-const RATE_WINDOW_MS = 60 * 1000;
-const RATE_MAX = 3;
-const RATE_PRUNE_THRESHOLD = 5000;
+function isSameOrigin(request: NextRequest): boolean {
+  const host = request.headers.get('host');
+  const origin = request.headers.get('origin');
 
-function isRateLimited(sessionUserId: string): boolean {
-  const now = Date.now();
-  const stamps = (presignRateMap.get(sessionUserId) ?? []).filter((t: number) => t > now - RATE_WINDOW_MS);
-  if (stamps.length >= RATE_MAX) {
-    presignRateMap.set(sessionUserId, stamps);
-    return true;
-  }
-  stamps.push(now);
-  presignRateMap.set(sessionUserId, stamps);
-  if (presignRateMap.size > RATE_PRUNE_THRESHOLD) {
-    for (const [k, v] of Array.from(presignRateMap.entries())) {
-      const filtered = (v as number[]).filter((t: number) => t > now - RATE_WINDOW_MS);
-      if (filtered.length === 0) presignRateMap.delete(k);
-      else presignRateMap.set(k, filtered);
+  if (origin) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      return false;
     }
   }
-  return false;
+
+  const fetchSite = request.headers.get('sec-fetch-site');
+  return fetchSite === 'same-origin' || fetchSite === 'none';
+}
+
+async function consumeDbRateLimit(
+  kind: string,
+  keyHash: string,
+  windowSeconds: number,
+  maxCount: number
+): Promise<boolean | null> {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const { data, error } = await getSupabaseAdmin().rpc('consume_rate_limit', {
+      p_kind: kind,
+      p_key_hash: keyHash,
+      p_window_seconds: windowSeconds,
+      p_max_count: maxCount,
+    });
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    console.error('DB rate limit unavailable:', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 function jsonError(error: string, status: number) {
@@ -49,6 +64,11 @@ function jsonError(error: string, status: number) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isSameOrigin(request)) {
+      console.warn('ticket-presign rejected: cross-origin request');
+      return jsonError('Request origin not allowed.', 403);
+    }
+
     const session = await getCurrentSession();
     if (!session || session.role !== 'client') {
       return jsonError('Unauthorized', 401);
@@ -64,7 +84,17 @@ export async function POST(request: NextRequest) {
       return jsonError('Unauthorized', 401);
     }
 
-    if (isRateLimited(session.userId)) {
+    const salt = process.env.LEAD_IP_HASH_SALT;
+    if (!salt) {
+      console.error('LEAD_IP_HASH_SALT missing');
+      return jsonError('Attachments are temporarily unavailable.', 503);
+    }
+    const keyHash = await sha256Hex(salt + session.userId);
+    const allowed = await consumeDbRateLimit('presign-portal', keyHash, 60, 3);
+    if (allowed === null) {
+      return jsonError('Attachments are temporarily unavailable.', 503);
+    }
+    if (allowed === false) {
       return jsonError('Too many upload requests. Please try again later.', 429);
     }
 
@@ -126,7 +156,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Ticket-scoped verification + cap
     if (ticketId !== null) {
       const { data: ticket, error: ticketError } = await admin
         .from('tickets')
@@ -134,7 +163,8 @@ export async function POST(request: NextRequest) {
         .eq('id', ticketId)
         .maybeSingle();
       if (ticketError) {
-        return jsonError(`Ticket lookup failed: ${ticketError.message}`, 500);
+        console.error('Ticket lookup error:', ticketError.message);
+        return jsonError('Ticket not found.', 404);
       }
       if (!ticket || (ticket as { client_id: string }).client_id !== session.userId) {
         return jsonError('Ticket not found.', 404);
@@ -146,7 +176,8 @@ export async function POST(request: NextRequest) {
         .eq('ticket_id', ticketId)
         .eq('kind', 'attachment');
       if (countError) {
-        return jsonError(`Count failed: ${countError.message}`, 500);
+        console.error('Count error:', countError.message);
+        return jsonError('A ticket can have at most 10 attachments.', 400);
       }
       if ((count ?? 0) + validated.length > 10) {
         return jsonError('A ticket can have at most 10 attachments.', 400);
@@ -163,16 +194,16 @@ export async function POST(request: NextRequest) {
           key = makePendingAttachmentKey(session.userId, file.ext);
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return jsonError(msg, 400);
+        console.error('Key generation error:', e instanceof Error ? e.message : e);
+        return jsonError('Attachment request failed.', 400);
       }
 
       try {
         const uploadUrl = await presignPrivatePut(key, file.normalizedMime, file.size, 600);
         uploads.push({ key, uploadUrl, filename: file.filename });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        return jsonError(msg, 500);
+        console.error('Presign error:', e instanceof Error ? e.message : e);
+        return jsonError('Attachment request failed.', 500);
       }
     }
 
