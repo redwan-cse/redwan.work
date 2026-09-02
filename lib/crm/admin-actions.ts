@@ -18,14 +18,22 @@ import {
   updateProject,
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
-import { makeDeliverableKey, presignPrivatePut, validateContactFile } from '@/lib/r2';
+import { makeDeliverableKey, presignPrivatePut, validateContactFile, verifyStoredObjectSize } from '@/lib/r2';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, createDraftInvoiceWithItems, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
 export type CrmActionState = { error?: string; notice?: string; invoiceId?: string };
 
 async function requireAdmin() {
   const session = await getCurrentSession();
-  return session && session.role === 'admin' ? session : null;
+  if (!session || session.role !== 'admin') return null;
+  const admin = getSupabaseAdmin();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role, is_active')
+    .eq('id', session.userId)
+    .maybeSingle();
+  if (!profile || profile.role !== 'admin' || profile.is_active !== true) return null;
+  return session;
 }
 
 // Actions derive origins from request headers only — never from client input.
@@ -331,7 +339,7 @@ export async function getDeliverablePresignAction(
   }
 
   try {
-    const uploadUrl = await presignPrivatePut(key, mime, 600);
+    const uploadUrl = await presignPrivatePut(key, mime, size, 600);
     return { ok: true, key, uploadUrl };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -345,6 +353,19 @@ export async function confirmDeliverableAction(
 ): Promise<CrmActionState> {
   const session = await requireAdmin();
   if (!session) return { error: 'Unauthorized.' };
+
+  const sizeOk = await verifyStoredObjectSize(meta.key, meta.size_bytes);
+  if (!sizeOk) {
+    console.error('Size mismatch for deliverable key:', meta.key);
+    return { error: 'Attachment data is invalid. Please re-upload your files.' };
+  }
+
+  // Ensure key's project segment matches target project
+  const projectMatch = meta.key.match(/project_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/);
+  if (!projectMatch || projectMatch[1] !== projectId) {
+    console.error('Project segment mismatch for key:', meta.key, 'expected project:', projectId);
+    return { error: 'Attachment data is invalid. Please re-upload your files.' };
+  }
 
   const result = await createFileRow({
     bucket: 'private',

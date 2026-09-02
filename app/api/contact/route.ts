@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sha256Hex, parseLeadPayload } from '@/lib/contact/lead-schema';
 import { insertLead } from '@/lib/contact/lead-store';
+import { verifyStoredObjectSize } from '@/lib/r2';
 
 /**
  * Contact Form API Route with Cloudflare Turnstile Protection
@@ -318,6 +319,20 @@ export async function POST(request: NextRequest) {
     });
     if (!parsed.ok) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+
+    // Verify stored object sizes for all attachments before persisting lead
+    if (parsed.lead.attachments && parsed.lead.attachments.length > 0) {
+      for (const att of parsed.lead.attachments) {
+        const ok = await verifyStoredObjectSize(att.key, att.size_bytes);
+        if (!ok) {
+          console.warn('Attachment size mismatch for key:', att.key);
+          return NextResponse.json(
+            { error: 'Attachment data is invalid. Please re-upload your files.' },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     const stored = await insertLead(parsed.lead);

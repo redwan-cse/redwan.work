@@ -30,7 +30,12 @@ export async function createFileRow(input: {
   size_bytes: number;
 }): Promise<CrmResult> {
   if (input.bucket !== 'private') return crmError('Invalid bucket.');
-  if (!isValidContactKey(input.r2_key) && !isPortalKey(input.r2_key)) return crmError('Invalid file key.');
+  // Portal files (attachment/deliverable) must use portal keys; contact keys are rejected.
+  if (input.kind === 'attachment' || input.kind === 'deliverable') {
+    if (!isPortalKey(input.r2_key)) return crmError('Invalid file key.');
+  } else {
+    if (!isValidContactKey(input.r2_key) && !isPortalKey(input.r2_key)) return crmError('Invalid file key.');
+  }
   if (!input.uploaded_by) return crmError('Missing uploader.');
   if (!input.filename || input.filename.trim().length < 1 || input.filename.length > 255) return crmError('Invalid filename.');
   if (!input.mime || input.mime.length < 1 || input.mime.length > 128) return crmError('Invalid mime type.');
@@ -61,7 +66,7 @@ export async function createFileRow(input: {
     size_bytes: input.size_bytes,
   });
 
-  if (error) return crmError(`Could not save file: ${error.message}`);
+  if (error) { console.error('File insert error:', error.message); return crmError('Could not save file.'); }
   return { ok: true };
 }
 
@@ -70,6 +75,14 @@ export async function getOwnedFileUrl(
   viewer: { userId: string; role: 'admin' | 'client' }
 ): Promise<{ ok: true; url: string; filename: string } | { ok: false; error: string }> {
   const admin = getSupabaseAdmin();
+
+  if (viewer.role === 'client') {
+    const { data: profile } = await admin.from('profiles').select('is_active').eq('id', viewer.userId).maybeSingle();
+    if (!profile || profile.is_active !== true) {
+      return { ok: false, error: 'File not found.' };
+    }
+  }
+
   const { data: file, error } = await admin
     .from('files')
     .select('id, r2_key, kind, ticket_id, project_id, filename')
@@ -121,6 +134,14 @@ export async function deleteOwnedFile(
   viewer: { userId: string; role: 'admin' | 'client' }
 ): Promise<CrmResult> {
   const admin = getSupabaseAdmin();
+
+  if (viewer.role === 'client') {
+    const { data: profile } = await admin.from('profiles').select('is_active').eq('id', viewer.userId).maybeSingle();
+    if (!profile || profile.is_active !== true) {
+      return crmError('File not found.');
+    }
+  }
+
   const { data: file, error } = await admin
     .from('files')
     .select('id, r2_key, kind, ticket_id, project_id, created_at, uploaded_by')

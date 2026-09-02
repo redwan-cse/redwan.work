@@ -2,6 +2,7 @@ import 'server-only';
 import { randomUUID } from 'crypto';
 import {
   DeleteObjectsCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -68,6 +69,7 @@ export async function presignContactUpload(
     Bucket: process.env.R2_PRIVATE_BUCKET,
     Key: key,
     ContentType: mime,
+    ContentLength: size,
   });
   const uploadUrl = await getSignedUrl(client, cmd, { expiresIn: 600 });
   return { key, uploadUrl };
@@ -175,15 +177,38 @@ export function isPortalKey(key: string): boolean {
   return /^private\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//.test(key);
 }
 
-export async function presignPrivatePut(key: string, mime: string, expiresIn = 600): Promise<string> {
+export async function presignPrivatePut(key: string, mime: string, size: number, expiresIn = 600): Promise<string> {
   if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  if (!Number.isFinite(size) || size < 1) throw new Error('Invalid file size.');
   const client = privateClient();
   const cmd = new PutObjectCommand({
     Bucket: process.env.R2_PRIVATE_BUCKET,
     Key: key,
     ContentType: mime,
+    ContentLength: size,
   });
   return getSignedUrl(client, cmd, { expiresIn });
+}
+
+export async function getPrivateObjectSize(key: string): Promise<number | null> {
+  if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  const client = privateClient();
+  try {
+    const res = await client.send(
+      new HeadObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key })
+    );
+    return res.ContentLength ?? null;
+  } catch (e) {
+    if (e instanceof Error && e.name === 'NotFound') return null;
+    throw e;
+  }
+}
+
+export async function verifyStoredObjectSize(key: string, declared: number): Promise<boolean> {
+  if (!Number.isFinite(declared) || declared < 1 || declared > CONTACT_MAX_SIZE_BYTES) return false;
+  const stored = await getPrivateObjectSize(key);
+  if (stored === null) return false;
+  return stored === declared;
 }
 
 export async function presignPrivateGet(key: string, expiresIn = 60): Promise<string> {
