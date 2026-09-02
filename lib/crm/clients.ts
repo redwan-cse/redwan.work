@@ -54,6 +54,8 @@ async function setClaimRole(userId: string, role: 'admin' | 'client'): Promise<C
     app_metadata: { ...(data.user.app_metadata ?? {}), role },
   });
   if (updErr) return crmError(`Setting role claim failed: ${updErr.message}`);
+  const { error: signOutErr } = await admin.auth.admin.signOut(userId);
+  if (signOutErr) return crmError('Session revocation failed.');
   return { ok: true };
 }
 
@@ -103,6 +105,12 @@ export async function setClientActive(clientId: string, active: boolean): Promis
     .eq('id', clientId)
     .eq('role', 'client');
   if (error) return crmError(`Update failed: ${error.message}`);
+
+  if (!active) {
+    const { error: signOutErr } = await admin.auth.admin.signOut(clientId);
+    if (signOutErr) return crmError('Session revocation failed.');
+  }
+
   return { ok: true };
 }
 

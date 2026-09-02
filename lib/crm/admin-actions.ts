@@ -25,7 +25,15 @@ export type CrmActionState = { error?: string; notice?: string; invoiceId?: stri
 
 async function requireAdmin() {
   const session = await getCurrentSession();
-  return session && session.role === 'admin' ? session : null;
+  if (!session || session.role !== 'admin') return null;
+  const admin = getSupabaseAdmin();
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role, is_active')
+    .eq('id', session.userId)
+    .maybeSingle();
+  if (!profile || profile.role !== 'admin' || profile.is_active !== true) return null;
+  return session;
 }
 
 // Actions derive origins from request headers only — never from client input.
