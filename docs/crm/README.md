@@ -227,6 +227,14 @@ Notes: trigger flips verified both directions at REST (Task 1) and through the r
 4. **Resend-invite affordance** is a future nicety — today a lost invite email means converting/inviting cannot re-send to a claimed user; a small "resend invite" action would close that gap.
 5. **Probe fixture note:** the `probe.client@example.com` fixture referenced in the committed plan docs was deleted from production on 2026-08-25; its historical password in those plan docs must be considered burned, and future probes should use locally-created fixtures with uncommitted passwords.
 
+## Lifecycle emails (Phase 5b)
+
+Ticket, invoice, project, and invite events now send transactional email through
+Resend and record every attempt in `email_log`, with an admin viewer at
+`/admin/emails`. Sends are fail-soft — a provider outage never breaks the action
+that triggered it. See **[docs/email/README.md](../email/README.md)** for the
+event table, delivery-classification rules, probe matrix, and operator notes.
+
 ## Non-goals (explicitly deferred)
 
-- **Lifecycle emails / `email_log`** → P5
+- **Public asset uploader / `/admin/assets`** → P5c

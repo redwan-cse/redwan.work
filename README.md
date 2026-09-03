@@ -30,6 +30,7 @@ Live at [redwan.work](https://redwan.work).
 - **Tickets** – threaded messages with status automation (open/answered/awaiting/closed).
 - **Invoices & Payments** – draft/send/void/confirm/reject with atomic transitions.
 - **Projects & Files** – deliverables with R2 presigned uploads, archive/purge cycle.
+- **Lifecycle Emails** – 7 transactional events via Resend, audited in `email_log` with an admin viewer.
 - **Security Hardening** – RLS, service‑role RPCs, signed upload sizes, deactivation revocation, generic errors.
 
 Full documentation in [`/docs`](./docs).
@@ -115,6 +116,7 @@ Detailed docs for each feature live in `/docs`:
 - [`docs/crm`](./docs/crm) – admin/client actions, tickets, invoices, projects
 - [`docs/r2`](./docs/r2) – object storage, presigned URLs, retention
 - [`docs/security`](./docs/security) – hardening, probe matrix, residual risks
+- [`docs/email`](./docs/email) – lifecycle emails, delivery classification, email log
 - [`docs/contact`](./docs/contact) – form, Turnstile, leads
 - [`docs/blogs`](./docs/blogs) – Blogger integration
 - [`docs/resume`](./docs/resume) – resume and PDF export
