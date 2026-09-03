@@ -2,7 +2,7 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { findAuthUserByEmail } from '@/lib/crm/auth-admin';
-import { recordExternalSend } from '@/lib/email';
+import { queueEmail, recordExternalSend } from '@/lib/email';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -84,17 +84,26 @@ export async function inviteClient(input: {
     });
     if (error || !data?.user) {
       // Supabase Auth owns this send (Resend SMTP relay); record the failure.
-      await recordExternalSend({
-        to: email,
-        template: 'invite',
-        entityType: 'client',
-        status: 'failed',
-        error: error?.message ?? 'no user returned',
+      // Queued, not awaited: audit plumbing must not block the invite path.
+      const failureReason = error?.message ?? 'no user returned';
+      queueEmail(async () => {
+        await recordExternalSend({
+          to: email,
+          template: 'invite',
+          entityType: 'client',
+          status: 'failed',
+          error: failureReason,
+        });
+        return { ok: false as const, error: failureReason };
       });
-      return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+      return crmError(`Invite failed: ${failureReason}`);
     }
     userId = data.user.id;
-    await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: userId });
+    const invitedId = userId;
+    queueEmail(async () => {
+      await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: invitedId });
+      return { ok: true as const, resendId: null };
+    });
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
   }
@@ -155,17 +164,25 @@ export async function convertLead(leadId: string, redirectToBase: string): Promi
       redirectTo: `${redirectToBase}/invite/accept`,
     });
     if (error || !data?.user) {
-      await recordExternalSend({
-        to: email,
-        template: 'invite',
-        entityType: 'client',
-        status: 'failed',
-        error: error?.message ?? 'no user returned',
+      const failureReason = error?.message ?? 'no user returned';
+      queueEmail(async () => {
+        await recordExternalSend({
+          to: email,
+          template: 'invite',
+          entityType: 'client',
+          status: 'failed',
+          error: failureReason,
+        });
+        return { ok: false as const, error: failureReason };
       });
-      return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+      return crmError(`Invite failed: ${failureReason}`);
     }
     userId = data.user.id;
-    await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: userId });
+    const convertedId = userId;
+    queueEmail(async () => {
+      await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: convertedId });
+      return { ok: true as const, resendId: null };
+    });
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
   }

@@ -6,6 +6,7 @@ import {
   sendNewTicketEmail,
   sendReplyPostedEmail,
   sendStatusChangedEmail,
+  sendToAll,
 } from '@/lib/email';
 import {
   adminRecipients,
@@ -281,24 +282,18 @@ export async function createTicket(
     const ctx = await ticketEmailContext(ticket.id);
     if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
     const recipients = await adminRecipients();
-    if (recipients.length === 0) return { ok: false as const, error: 'No admin recipients' };
     const clientName = await recipientName(clientId);
     const origin = await emailOrigin();
-    let last: Awaited<ReturnType<typeof sendNewTicketEmail>> = {
-      ok: false as const,
-      error: 'No admin recipients',
-    };
-    for (const to of recipients) {
-      last = await sendNewTicketEmail({
+    return sendToAll(recipients, (to) =>
+      sendNewTicketEmail({
         to,
         ticketId: ctx.ticketId,
         ticketNumber: ctx.ticketNumber,
         subject: ctx.subject,
         clientName,
         ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
-      });
-    }
-    return last;
+      })
+    );
   });
 
   return { ok: true, ticketId: ticket.id };
@@ -391,15 +386,10 @@ export async function clientReply(
     const ctx = await ticketEmailContext(ticketId);
     if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
     const recipients = await adminRecipients();
-    if (recipients.length === 0) return { ok: false as const, error: 'No admin recipients' };
     const authorName = await recipientName(clientId);
     const origin = await emailOrigin();
-    let last: Awaited<ReturnType<typeof sendReplyPostedEmail>> = {
-      ok: false as const,
-      error: 'No admin recipients',
-    };
-    for (const to of recipients) {
-      last = await sendReplyPostedEmail({
+    return sendToAll(recipients, (to) =>
+      sendReplyPostedEmail({
         to,
         ticketId: ctx.ticketId,
         ticketNumber: ctx.ticketNumber,
@@ -407,9 +397,8 @@ export async function clientReply(
         authorName,
         bodyPreview: trimmed,
         ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
-      });
-    }
-    return last;
+      })
+    );
   });
 
   return { ok: true };

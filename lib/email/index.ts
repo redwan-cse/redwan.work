@@ -33,6 +33,15 @@ export type EmailEntityType = 'client' | 'ticket' | 'invoice' | 'deliverable';
 const MAX_LOGGED_EMAIL = 320;
 const MAX_LOGGED_ERROR = 500;
 const SEND_TIMEOUT_MS = 10_000;
+const LOG_TIMEOUT_MS = 5_000;
+
+/**
+ * Written into `email_log.error` for rows where an upstream system (Supabase
+ * Auth via the Resend SMTP relay) accepted the request but this app never
+ * observed a provider id. The admin viewer labels these as handed off rather
+ * than confirmed delivered.
+ */
+export const HANDOFF_MARKER = 'handoff: upstream provider accepted; delivery not observed';
 
 export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
@@ -57,7 +66,7 @@ async function recordSend(input: {
   error?: string;
 }): Promise<void> {
   try {
-    const { error } = await getSupabaseAdmin().from('email_log').insert({
+    const insert = getSupabaseAdmin().from('email_log').insert({
       to_email: truncate(input.to, MAX_LOGGED_EMAIL),
       template: input.template,
       entity_type: input.entityType ?? null,
@@ -66,7 +75,18 @@ async function recordSend(input: {
       status: input.status,
       error: input.error ? truncate(input.error, MAX_LOGGED_ERROR) : null,
     });
-    if (error) console.error('email_log insert failed:', error.message);
+
+    // A stalled audit insert must not stall the action being audited.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('email_log insert timeout')), LOG_TIMEOUT_MS);
+    });
+    try {
+      const { error } = await Promise.race([insert, timeout]);
+      if (error) console.error('email_log insert failed:', error.message);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   } catch (err) {
     console.error('email_log insert threw:', normalizeError(err));
   }
@@ -320,6 +340,14 @@ export async function sendPaymentConfirmedEmail(input: {
  * or transmits them. Logging them here keeps the admin viewer's lifecycle view
  * complete; `resend_id` is null because the id belongs to the SMTP transaction,
  * not to an API call we made.
+ *
+ * **What `status: 'sent'` means here:** the upstream provider accepted the
+ * request — not that the message was rendered, relayed, or delivered. That is a
+ * weaker claim than a `sent` row written by `sendEmail`, which has a provider id
+ * to back it. The `handoff` marker is written into `error` so the admin viewer
+ * can label the difference rather than implying delivery we never observed.
+ *
+ * Never throws.
  */
 export async function recordExternalSend(input: {
   to: string;
@@ -329,15 +357,52 @@ export async function recordExternalSend(input: {
   status?: 'sent' | 'failed';
   error?: string;
 }): Promise<void> {
-  const to = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
+  const candidate = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
+  const to = EMAIL_RE.test(candidate) ? candidate : 'unknown';
+  const status = input.status ?? 'sent';
   await recordSend({
-    to: to || 'unknown',
+    to,
     template: input.template,
     entityType: input.entityType,
     entityId: input.entityId,
-    status: input.status ?? 'sent',
-    error: input.error,
+    status,
+    // A handed-off success carries no provider id; mark it so the viewer does
+    // not present it as confirmed delivery.
+    error: input.error ?? (status === 'sent' ? HANDOFF_MARKER : undefined),
   });
+}
+
+/**
+ * Fan one lifecycle email out to several recipients.
+ *
+ * Every recipient is attempted regardless of the others' outcomes (each already
+ * writes its own `email_log` row). The aggregate result is `ok` only when every
+ * recipient succeeded, so a partial failure is not reported as success.
+ */
+export async function sendToAll(
+  recipients: string[],
+  send: (to: string) => Promise<EmailSendResult>
+): Promise<EmailSendResult> {
+  if (recipients.length === 0) return { ok: false, error: 'No recipients' };
+
+  const settled = await Promise.allSettled(recipients.map((to) => send(to)));
+  const failures: string[] = [];
+  let firstId: string | null = null;
+
+  for (const outcome of settled) {
+    if (outcome.status === 'rejected') {
+      failures.push(normalizeError(outcome.reason));
+    } else if (!outcome.value.ok) {
+      failures.push(outcome.value.error);
+    } else if (firstId === null) {
+      firstId = outcome.value.resendId;
+    }
+  }
+
+  if (failures.length > 0) {
+    return { ok: false, error: `${failures.length}/${recipients.length} failed: ${failures[0]}` };
+  }
+  return { ok: true, resendId: firstId };
 }
 
 /**
