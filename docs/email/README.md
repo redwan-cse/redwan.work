@@ -1,6 +1,6 @@
 # Lifecycle Emails (Phase 5b)
 
-Transactional email for the CRM: seven lifecycle events, one audit row per attempt, and an admin viewer over the log.
+Transactional email for the CRM: seven lifecycle events, one audit row per event, and an admin viewer over the log.
 
 ## Overview
 

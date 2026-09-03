@@ -26,7 +26,8 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  */
 export async function emailOrigin(): Promise<string> {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
-  if (configured) return configured;
+  // A value without a scheme would emit scheme-relative links; ignore it.
+  if (configured && /^https?:\/\//.test(configured)) return configured;
 
   try {
     const h = await headers();

@@ -392,7 +392,12 @@ export async function confirmDeliverableAction(
     const row = project as { name?: string; client_id?: string } | null;
     const fileId = (file as { id?: string } | null)?.id;
     if (!row?.client_id || !fileId) {
-      return recordUnsent({ template: 'deliverable-uploaded', reason: 'Deliverable context unavailable' });
+      return recordUnsent({
+        template: 'deliverable-uploaded',
+        reason: 'Deliverable context unavailable',
+        // Keep the pointer when the file resolved but the project did not.
+        ...(fileId ? { entityType: 'deliverable' as const, entityId: fileId } : {}),
+      });
     }
     const to = await recipientEmail(row.client_id);
     if (!to) {

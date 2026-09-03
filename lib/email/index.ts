@@ -16,8 +16,9 @@ import {
 /**
  * Lifecycle email send path (Phase 5b).
  *
- * Every send is recorded in `email_log` — one row per attempt, `status` either
- * `sent` or `failed`. Sends are fail-soft: a provider outage or missing
+ * Every lifecycle event is recorded in `email_log` — one row per event, `status`
+ * either `sent` or `failed`, including events that never reached the provider
+ * (see `recordUnsent`). Sends are fail-soft: a provider outage or missing
  * configuration never breaks the action that triggered the email. Callers get a
  * result they may ignore.
  *

@@ -2,7 +2,7 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { findAuthUserByEmail } from '@/lib/crm/auth-admin';
-import { queueEmail, recordExternalSend } from '@/lib/email';
+import { queueEmail, recordExternalSend, recordUnsent } from '@/lib/email';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -78,6 +78,18 @@ export async function inviteClient(input: {
     userId = existing.id;
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
+    // No invite is sent when an account already exists; record why, so the
+    // viewer distinguishes this from a trigger that never fired.
+    const claimedId = userId;
+    queueEmail(() =>
+      recordUnsent({
+        template: 'invite',
+        reason: 'Existing account claimed; no invite email sent',
+        to: email,
+        entityType: 'client',
+        entityId: claimedId,
+      })
+    );
   } else {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${input.redirectToBase}/invite/accept`,
@@ -159,6 +171,16 @@ export async function convertLead(leadId: string, redirectToBase: string): Promi
     userId = existing.id;
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
+    const claimedId = userId;
+    queueEmail(() =>
+      recordUnsent({
+        template: 'invite',
+        reason: 'Existing account claimed; no invite email sent',
+        to: email,
+        entityType: 'client',
+        entityId: claimedId,
+      })
+    );
   } else {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${redirectToBase}/invite/accept`,
