@@ -1,16 +1,19 @@
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
-  countFailedEmails,
   EMAIL_STATUSES,
   EMAIL_TEMPLATES,
+  emailFilterValue,
+  isStatusFilter,
+  isTemplateFilter,
   listEmailLogs,
+  pageNumber,
   type EmailDelivery,
 } from '@/lib/crm/email-log';
 
 export const dynamic = 'force-dynamic';
 
-const TEMPLATE_LABELS: Record<string, string> = {
+const TEMPLATE_LABELS: Record<(typeof EMAIL_TEMPLATES)[number], string> = {
   invite: 'Invite',
   'new-ticket': 'New ticket',
   'reply-posted': 'Reply posted',
@@ -20,7 +23,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   'payment-confirmed': 'Payment confirmed',
 };
 
-const ENTITY_LABELS: Record<string, string> = {
+const ENTITY_LABELS: Record<'client' | 'ticket' | 'invoice' | 'deliverable', string> = {
   client: 'Client',
   ticket: 'Ticket',
   invoice: 'Invoice',
@@ -31,12 +34,14 @@ const ENTITY_LABELS: Record<string, string> = {
 const DELIVERY_LABELS: Record<EmailDelivery, string> = {
   confirmed: 'Sent',
   handoff: 'Handed off',
+  unconfirmed: 'Unconfirmed',
   failed: 'Failed',
 };
 
 const DELIVERY_BADGE: Record<EmailDelivery, string> = {
   confirmed: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   handoff: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  unconfirmed: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   failed: 'bg-red-500/15 text-red-600 dark:text-red-400',
 };
 
@@ -65,35 +70,32 @@ function entityHref(type: string | null, id: string | null): string | null {
 export default async function AdminEmailsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ template?: string; status?: string; email?: string; page?: string }>;
+  // Params arrive as `string | string[] | undefined`; a duplicated param must be
+  // ignored, not crash the page. The module's guards do the narrowing.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const rawPage = Number.parseInt(params.page ?? '', 10);
-  const page = Number.isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
+  const page = pageNumber(params.page);
 
-  const [{ rows, total, pageCount, counts }, failedTotal] = await Promise.all([
-    listEmailLogs(page, {
-      template: params.template,
-      status: params.status,
-      email: params.email,
-    }),
-    countFailedEmails(),
-  ]);
+  const { rows, total, pageCount, counts, applied } = await listEmailLogs(page, {
+    template: params.template,
+    status: params.status,
+    email: params.email,
+  });
 
-  // Echo back only values the module accepted, so a bogus query param does not
-  // survive into the pagination links.
-  const activeTemplate = EMAIL_TEMPLATES.includes(params.template as never)
-    ? params.template
-    : undefined;
-  const activeStatus = EMAIL_STATUSES.includes(params.status as never) ? params.status : undefined;
-  const activeEmail = params.email?.trim() || undefined;
+  // Echo back only what the module actually applied, so a bogus or duplicated
+  // query param cannot survive into the pagination links.
+  const activeTemplate = applied.template;
+  const activeStatus = applied.status;
+  const activeEmail = applied.email;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Emails</h1>
         <p className="text-sm text-muted-foreground">
-          {counts.sent} sent · {failedTotal} failed
+          {counts.sent} sent · {counts.failed} failed
+          {activeTemplate || activeEmail ? ' (filtered)' : ''}
         </p>
       </div>
 
@@ -106,6 +108,7 @@ export default async function AdminEmailsPage({
       <nav className="flex flex-wrap gap-2" aria-label="Filter by status">
         <Link
           href={logHref({ template: activeTemplate, email: activeEmail })}
+          aria-current={!activeStatus ? 'page' : undefined}
           className={
             !activeStatus
               ? 'rounded-full border bg-accent px-3 py-1 text-sm font-medium'
@@ -118,6 +121,7 @@ export default async function AdminEmailsPage({
           <Link
             key={status}
             href={logHref({ template: activeTemplate, status, email: activeEmail })}
+            aria-current={activeStatus === status ? 'page' : undefined}
             className={
               activeStatus === status
                 ? 'rounded-full border bg-accent px-3 py-1 text-sm font-medium'
@@ -132,6 +136,7 @@ export default async function AdminEmailsPage({
       <nav className="flex flex-wrap gap-2" aria-label="Filter by template">
         <Link
           href={logHref({ status: activeStatus, email: activeEmail })}
+          aria-current={!activeTemplate ? 'page' : undefined}
           className={
             !activeTemplate
               ? 'rounded-full border bg-accent px-3 py-1 text-xs font-medium'
@@ -144,6 +149,7 @@ export default async function AdminEmailsPage({
           <Link
             key={template}
             href={logHref({ template, status: activeStatus, email: activeEmail })}
+            aria-current={activeTemplate === template ? 'page' : undefined}
             className={
               activeTemplate === template
                 ? 'rounded-full border bg-accent px-3 py-1 text-xs font-medium'
@@ -186,18 +192,18 @@ export default async function AdminEmailsPage({
       </form>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No emails match these filters.</p>
+        <p className="text-sm text-muted-foreground">{activeTemplate || activeStatus || activeEmail ? 'No emails match these filters.' : 'No emails sent yet.'}</p>
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 font-medium">Sent at (UTC)</th>
-                <th className="px-4 py-2 font-medium">Recipient</th>
-                <th className="px-4 py-2 font-medium">Template</th>
-                <th className="px-4 py-2 font-medium">Entity</th>
-                <th className="px-4 py-2 font-medium">Delivery</th>
-                <th className="px-4 py-2 font-medium">Detail</th>
+                <th scope="col" className="px-4 py-2 font-medium">Sent at (UTC)</th>
+                <th scope="col" className="px-4 py-2 font-medium">Recipient</th>
+                <th scope="col" className="px-4 py-2 font-medium">Template</th>
+                <th scope="col" className="px-4 py-2 font-medium">Entity</th>
+                <th scope="col" className="px-4 py-2 font-medium">Delivery</th>
+                <th scope="col" className="px-4 py-2 font-medium">Detail</th>
               </tr>
             </thead>
             <tbody>
@@ -229,14 +235,14 @@ export default async function AdminEmailsPage({
                       </Badge>
                     </td>
                     <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {row.delivery === 'failed' ? (
+                      {row.delivery === 'failed' || row.delivery === 'unconfirmed' ? (
                         (row.error ?? '—')
                       ) : row.delivery === 'handoff' ? (
                         'No provider id — sent by Supabase Auth'
                       ) : row.resend_id ? (
                         <span className="font-mono">{row.resend_id}</span>
                       ) : (
-                        '—'
+                        'No provider id returned'
                       )}
                     </td>
                   </tr>
