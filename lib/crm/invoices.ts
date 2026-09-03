@@ -3,6 +3,8 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { calculateInvoiceTotalCents, isSafeInvoiceLine, MAX_INVOICE_TOTAL_CENTS, roundInvoiceLineCents } from '@/lib/crm/invoice-math';
+import { queueEmail, sendInvoiceIssuedEmail, sendPaymentConfirmedEmail } from '@/lib/email';
+import { emailOrigin, formatMoney, recipientEmail } from '@/lib/email/recipients';
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void';
 export type PaymentMethod = 'bank' | 'bkash' | 'paypal' | 'other';
@@ -193,10 +195,69 @@ export async function addInvoiceItem(invoiceId: string, input: { description: st
  export async function updateInvoiceItem(itemId: string, patch: { description?: string; qty?: number; unit_price_cents?: number; position?: number }): Promise<CrmResult> { if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id, qty, unit_price_cents').eq('id', itemId).maybeSingle(); if (!item) return crmError('Item not found.'); const found = await getRaw(item.invoice_id); if (!found.ok || found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); const updates: Record<string, unknown> = {}; if (patch.description !== undefined) { const d = patch.description.trim(); if (d.length < 1 || d.length > 500) return invalid(); updates.description = d; } if (patch.qty !== undefined || patch.unit_price_cents !== undefined) { const qty = patch.qty ?? Number(item.qty); const price = patch.unit_price_cents ?? Number(item.unit_price_cents); if (!validAmount(qty, price)) return invalid(); if (patch.qty !== undefined) updates.qty = patch.qty; if (patch.unit_price_cents !== undefined) updates.unit_price_cents = patch.unit_price_cents; } if (patch.position !== undefined) { if (!Number.isInteger(patch.position) || patch.position < 0) return invalid(); updates.position = patch.position; } if (!Object.keys(updates).length) return invalid('No changes provided.'); const { error } = await getSupabaseAdmin().from('invoice_items').update(updates).eq('id', itemId); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 export async function deleteInvoiceItem(itemId: string): Promise<CrmResult> { if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id').eq('id', itemId).maybeSingle(); if (!item) return crmError('Item not found.'); const found = await getRaw(item.invoice_id); if (!found.ok || found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); const { error } = await getSupabaseAdmin().from('invoice_items').delete().eq('id', itemId); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 
-export async function sendInvoice(invoiceId: string): Promise<CrmResult> { if (!validUuid(invoiceId)) return crmError('Invoice not found.'); const { error } = await getSupabaseAdmin().rpc('send_invoice_atomic', { p_invoice_id: invoiceId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
+export async function sendInvoice(invoiceId: string): Promise<CrmResult> {
+  if (!validUuid(invoiceId)) return crmError('Invoice not found.');
+  const { error } = await getSupabaseAdmin().rpc('send_invoice_atomic', { p_invoice_id: invoiceId });
+  if (error) return crmError('Invoice operation failed.');
+
+  // Notify the client that the invoice is now payable. Fail-soft.
+  queueEmail(async () => {
+    const detail = await getInvoiceDetail(invoiceId, { userId: '', role: 'admin' });
+    if (!detail.ok) return { ok: false as const, error: 'Invoice context unavailable' };
+    const to = await recipientEmail(detail.invoice.client_id);
+    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    const origin = await emailOrigin();
+    return sendInvoiceIssuedEmail({
+      to,
+      invoiceId,
+      invoiceNumber: detail.invoice.number,
+      amountLabel: formatMoney(detail.invoice.outstanding_cents, detail.invoice.currency),
+      dueLabel: detail.invoice.due_at,
+      invoiceLink: `${origin}/portal/invoices/${invoiceId}`,
+    });
+  });
+
+  return { ok: true };
+}
 export async function voidInvoice(invoiceId: string): Promise<CrmResult> { const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'sent') return crmError('Only sent invoices can be voided.'); const { error } = await getSupabaseAdmin().rpc('void_invoice_atomic', { p_invoice_id: invoiceId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 
-export async function confirmPayment(paymentId: string, adminId: string): Promise<CrmResult> { if (!validUuid(paymentId) || !validUuid(adminId)) return invalid(); const { error } = await getSupabaseAdmin().rpc('confirm_invoice_payment_atomic', { p_payment_id: paymentId, p_confirmed_by: adminId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
+export async function confirmPayment(paymentId: string, adminId: string): Promise<CrmResult> {
+  if (!validUuid(paymentId) || !validUuid(adminId)) return invalid();
+
+  // Capture the amount before confirming; the row is easier to read pre-transition.
+  const { data: payment } = await getSupabaseAdmin()
+    .from('payments')
+    .select('invoice_id, amount_cents')
+    .eq('id', paymentId)
+    .maybeSingle();
+
+  const { error } = await getSupabaseAdmin().rpc('confirm_invoice_payment_atomic', { p_payment_id: paymentId, p_confirmed_by: adminId });
+  if (error) return crmError('Invoice operation failed.');
+
+  // Receipt to the client. Fail-soft.
+  const invoiceId = (payment as { invoice_id?: string } | null)?.invoice_id;
+  const amountCents = (payment as { amount_cents?: number } | null)?.amount_cents;
+  if (invoiceId) {
+    queueEmail(async () => {
+      const detail = await getInvoiceDetail(invoiceId, { userId: '', role: 'admin' });
+      if (!detail.ok) return { ok: false as const, error: 'Invoice context unavailable' };
+      const to = await recipientEmail(detail.invoice.client_id);
+      if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+      const origin = await emailOrigin();
+      const outstanding = detail.invoice.outstanding_cents;
+      return sendPaymentConfirmedEmail({
+        to,
+        invoiceId,
+        invoiceNumber: detail.invoice.number,
+        amountLabel: formatMoney(Number(amountCents ?? 0), detail.invoice.currency),
+        outstandingLabel: outstanding > 0 ? formatMoney(outstanding, detail.invoice.currency) : null,
+        invoiceLink: `${origin}/portal/invoices/${invoiceId}`,
+      });
+    });
+  }
+
+  return { ok: true };
+}
 export async function rejectPayment(paymentId: string): Promise<CrmResult> { if (!validUuid(paymentId)) return crmError('Payment is no longer pending.'); const { error } = await getSupabaseAdmin().rpc('reject_invoice_payment_atomic', { p_payment_id: paymentId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 export async function countUnpaidInvoices(): Promise<number> { const rows = await listInvoices({ userId: '00000000-0000-0000-0000-000000000000', role: 'admin' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }
 export async function countOwnOutstandingInvoices(clientId: string): Promise<number> { if (!validUuid(clientId)) return 0; const rows = await listInvoices({ userId: clientId, role: 'client' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }

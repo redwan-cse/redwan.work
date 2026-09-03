@@ -1,6 +1,19 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
+import {
+  queueEmail,
+  sendNewTicketEmail,
+  sendReplyPostedEmail,
+  sendStatusChangedEmail,
+} from '@/lib/email';
+import {
+  adminRecipients,
+  emailOrigin,
+  recipientEmail,
+  recipientName,
+  ticketEmailContext,
+} from '@/lib/email/recipients';
 
 export type TicketStatus = 'open' | 'answered' | 'awaiting_client' | 'closed';
 
@@ -159,6 +172,24 @@ export async function adminReply(
     .insert({ ticket_id: ticketId, author_id: authorId, body: trimmed });
   if (error) { console.error('Reply error:', error.message); return crmError('Reply could not be sent.'); }
 
+  // Notify the client that support replied. Fail-soft: never blocks the reply.
+  queueEmail(async () => {
+    const ctx = await ticketEmailContext(ticketId);
+    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    const to = await recipientEmail(ctx.clientId);
+    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    const origin = await emailOrigin();
+    return sendReplyPostedEmail({
+      to,
+      ticketId: ctx.ticketId,
+      ticketNumber: ctx.ticketNumber,
+      subject: ctx.subject,
+      authorName: 'Support',
+      bodyPreview: trimmed,
+      ticketLink: `${origin}/portal/tickets/${ctx.ticketId}`,
+    });
+  });
+
   return { ok: true };
 }
 
@@ -166,7 +197,25 @@ export async function setTicketStatus(ticketId: string, status: TicketStatus): P
   if (!isTicketStatus(status)) return crmError('Unknown status.');
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('tickets').update({ status }).eq('id', ticketId);
-  if (error) return crmError(`Status update failed: ${error.message}`);
+  if (error) { console.error('Status update error:', error.message); return crmError('Status update failed.'); }
+
+  // Tell the client their ticket moved. Fail-soft.
+  queueEmail(async () => {
+    const ctx = await ticketEmailContext(ticketId);
+    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    const to = await recipientEmail(ctx.clientId);
+    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    const origin = await emailOrigin();
+    return sendStatusChangedEmail({
+      to,
+      ticketId: ctx.ticketId,
+      ticketNumber: ctx.ticketNumber,
+      subject: ctx.subject,
+      status,
+      ticketLink: `${origin}/portal/tickets/${ctx.ticketId}`,
+    });
+  });
+
   return { ok: true };
 }
 
@@ -226,6 +275,31 @@ export async function createTicket(
     .from('ticket_messages')
     .insert({ ticket_id: ticket.id, author_id: clientId, body: trimmedBody });
   if (msgError) return { ok: false, error: `Could not create ticket: ${msgError.message}` };
+
+  // Alert every active admin. Fail-soft: never blocks ticket creation.
+  queueEmail(async () => {
+    const ctx = await ticketEmailContext(ticket.id);
+    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    const recipients = await adminRecipients();
+    if (recipients.length === 0) return { ok: false as const, error: 'No admin recipients' };
+    const clientName = await recipientName(clientId);
+    const origin = await emailOrigin();
+    let last: Awaited<ReturnType<typeof sendNewTicketEmail>> = {
+      ok: false as const,
+      error: 'No admin recipients',
+    };
+    for (const to of recipients) {
+      last = await sendNewTicketEmail({
+        to,
+        ticketId: ctx.ticketId,
+        ticketNumber: ctx.ticketNumber,
+        subject: ctx.subject,
+        clientName,
+        ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
+      });
+    }
+    return last;
+  });
 
   return { ok: true, ticketId: ticket.id };
 }
@@ -311,6 +385,32 @@ export async function clientReply(
     .from('ticket_messages')
     .insert({ ticket_id: ticketId, author_id: clientId, body: trimmed });
   if (error) { console.error('Reply error:', error.message); return crmError('Reply could not be sent.'); }
+
+  // Alert every active admin that the client replied. Fail-soft.
+  queueEmail(async () => {
+    const ctx = await ticketEmailContext(ticketId);
+    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    const recipients = await adminRecipients();
+    if (recipients.length === 0) return { ok: false as const, error: 'No admin recipients' };
+    const authorName = await recipientName(clientId);
+    const origin = await emailOrigin();
+    let last: Awaited<ReturnType<typeof sendReplyPostedEmail>> = {
+      ok: false as const,
+      error: 'No admin recipients',
+    };
+    for (const to of recipients) {
+      last = await sendReplyPostedEmail({
+        to,
+        ticketId: ctx.ticketId,
+        ticketNumber: ctx.ticketNumber,
+        subject: ctx.subject,
+        authorName,
+        bodyPreview: trimmed,
+        ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
+      });
+    }
+    return last;
+  });
 
   return { ok: true };
 }

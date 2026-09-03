@@ -313,6 +313,34 @@ export async function sendPaymentConfirmedEmail(input: {
 }
 
 /**
+ * Record a send performed by another system as an audit row.
+ *
+ * Supabase Auth mails its own credential-bearing messages (invite,
+ * set-password, reset) through the Resend SMTP relay, so this app never renders
+ * or transmits them. Logging them here keeps the admin viewer's lifecycle view
+ * complete; `resend_id` is null because the id belongs to the SMTP transaction,
+ * not to an API call we made.
+ */
+export async function recordExternalSend(input: {
+  to: string;
+  template: EmailTemplate;
+  entityType?: EmailEntityType;
+  entityId?: string;
+  status?: 'sent' | 'failed';
+  error?: string;
+}): Promise<void> {
+  const to = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
+  await recordSend({
+    to: to || 'unknown',
+    template: input.template,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    status: input.status ?? 'sent',
+    error: input.error,
+  });
+}
+
+/**
  * Schedule a lifecycle email without blocking the response.
  *
  * Takes a thunk, not a promise: a render error thrown while building the

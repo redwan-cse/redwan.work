@@ -2,6 +2,7 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { findAuthUserByEmail } from '@/lib/crm/auth-admin';
+import { recordExternalSend } from '@/lib/email';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -81,8 +82,19 @@ export async function inviteClient(input: {
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${input.redirectToBase}/invite/accept`,
     });
-    if (error || !data?.user) return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+    if (error || !data?.user) {
+      // Supabase Auth owns this send (Resend SMTP relay); record the failure.
+      await recordExternalSend({
+        to: email,
+        template: 'invite',
+        entityType: 'client',
+        status: 'failed',
+        error: error?.message ?? 'no user returned',
+      });
+      return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+    }
     userId = data.user.id;
+    await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: userId });
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
   }
@@ -142,8 +154,18 @@ export async function convertLead(leadId: string, redirectToBase: string): Promi
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${redirectToBase}/invite/accept`,
     });
-    if (error || !data?.user) return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+    if (error || !data?.user) {
+      await recordExternalSend({
+        to: email,
+        template: 'invite',
+        entityType: 'client',
+        status: 'failed',
+        error: error?.message ?? 'no user returned',
+      });
+      return crmError(`Invite failed: ${error?.message ?? 'no user returned'}`);
+    }
     userId = data.user.id;
+    await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: userId });
     const claimed = await setClaimRole(userId, 'client');
     if (!claimed.ok) return claimed;
   }
