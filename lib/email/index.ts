@@ -70,9 +70,7 @@ async function recordSend(input: {
   } catch (err) {
     console.error('email_log insert threw:', normalizeError(err));
   }
-}
-
-async function deliver(to: string, rendered: RenderedEmail): Promise<{ id: string | null }> {
+}async function deliver(to: string, rendered: RenderedEmail): Promise<{ id: string | null }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Email is not configured');
@@ -80,20 +78,28 @@ async function deliver(to: string, rendered: RenderedEmail): Promise<{ id: strin
   const { Resend } = await import('resend');
   const resend = new Resend(apiKey);
 
-  const send = resend.emails.send({ from, to, subject: rendered.subject, html: rendered.html });
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Email provider timeout')), SEND_TIMEOUT_MS);
-  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const send = resend.emails.send({ from, to, subject: rendered.subject, html: rendered.html });
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Email provider timeout')), SEND_TIMEOUT_MS);
+    });
 
-  const { data, error } = await Promise.race([send, timeout]);
-  if (error) throw new Error(error.message);
-  return { id: data?.id ?? null };
+    const { data, error } = await Promise.race([send, timeout]);
+    if (error) throw new Error(`${error.name ?? 'provider_error'}: ${error.message}`);
+    return { id: data?.id ?? null };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /**
- * Send one lifecycle email and log the attempt. Never throws.
+ * Send one lifecycle email and log the attempt.
+ *
+ * Never throws and never rejects: every failure path returns `ok: false` and
+ * writes a `failed` row. Callers may ignore the result.
  */
 export async function sendEmail(input: {
   to: string;
@@ -102,26 +108,55 @@ export async function sendEmail(input: {
   entityType?: EmailEntityType;
   entityId?: string;
 }): Promise<EmailSendResult> {
-  const to = input.to.trim().toLowerCase();
+  // Values arrive from DB rows; a non-string here must not throw past the guard.
+  const to = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
 
   if (!EMAIL_RE.test(to)) {
-    await recordSend({ ...input, to: to || 'unknown', status: 'failed', error: 'Invalid recipient address' });
+    await recordSend({
+      to: to || 'unknown',
+      template: input.template,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      status: 'failed',
+      error: 'Invalid recipient address',
+    });
     return { ok: false, error: 'Invalid recipient address' };
   }
 
   if (!isEmailConfigured()) {
-    await recordSend({ ...input, to, status: 'failed', error: 'Email is not configured' });
+    await recordSend({
+      to,
+      template: input.template,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      status: 'failed',
+      error: 'Email is not configured',
+    });
     return { ok: false, error: 'Email is not configured' };
   }
 
   try {
     const { id } = await deliver(to, input.rendered);
-    await recordSend({ ...input, to, resendId: id, status: 'sent' });
+    await recordSend({
+      to,
+      template: input.template,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      resendId: id,
+      status: 'sent',
+    });
     return { ok: true, resendId: id };
   } catch (err) {
     const message = normalizeError(err);
     console.error(`email send failed (${input.template}):`, message);
-    await recordSend({ ...input, to, status: 'failed', error: message });
+    await recordSend({
+      to,
+      template: input.template,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      status: 'failed',
+      error: message,
+    });
     return { ok: false, error: message };
   }
 }
@@ -130,11 +165,11 @@ export async function sendEmail(input: {
 // Per-event helpers. Each renders its template and delegates to sendEmail.
 // ---------------------------------------------------------------------------
 
-export function sendInviteEmail(input: {
+export async function sendInviteEmail(input: {
   to: string;
   name?: string | null;
   inviteLink: string;
-  clientId?: string;
+  clientId: string;
 }): Promise<EmailSendResult> {
   return sendEmail({
     to: input.to,
@@ -145,7 +180,7 @@ export function sendInviteEmail(input: {
   });
 }
 
-export function sendNewTicketEmail(input: {
+export async function sendNewTicketEmail(input: {
   to: string;
   ticketId: string;
   ticketNumber: number;
@@ -167,7 +202,7 @@ export function sendNewTicketEmail(input: {
   });
 }
 
-export function sendReplyPostedEmail(input: {
+export async function sendReplyPostedEmail(input: {
   to: string;
   ticketId: string;
   ticketNumber: number;
@@ -191,7 +226,7 @@ export function sendReplyPostedEmail(input: {
   });
 }
 
-export function sendStatusChangedEmail(input: {
+export async function sendStatusChangedEmail(input: {
   to: string;
   ticketId: string;
   ticketNumber: number;
@@ -213,9 +248,9 @@ export function sendStatusChangedEmail(input: {
   });
 }
 
-export function sendDeliverableUploadedEmail(input: {
+export async function sendDeliverableUploadedEmail(input: {
   to: string;
-  fileId?: string;
+  fileId: string;
   projectName: string;
   filename: string;
   filesLink: string;
@@ -233,7 +268,7 @@ export function sendDeliverableUploadedEmail(input: {
   });
 }
 
-export function sendInvoiceIssuedEmail(input: {
+export async function sendInvoiceIssuedEmail(input: {
   to: string;
   invoiceId: string;
   invoiceNumber: number;
@@ -255,7 +290,7 @@ export function sendInvoiceIssuedEmail(input: {
   });
 }
 
-export function sendPaymentConfirmedEmail(input: {
+export async function sendPaymentConfirmedEmail(input: {
   to: string;
   invoiceId: string;
   invoiceNumber: number;
@@ -278,9 +313,31 @@ export function sendPaymentConfirmedEmail(input: {
 }
 
 /**
- * Fire-and-forget wrapper for call sites that must not await delivery.
- * Errors are already logged inside sendEmail; this only guards the promise.
+ * Schedule a lifecycle email without blocking the response.
+ *
+ * Takes a thunk, not a promise: a render error thrown while building the
+ * arguments is caught here instead of escaping synchronously past the caller.
+ *
+ * On Vercel, a bare floating promise may be dropped when the response
+ * completes — which would lose both the email and its `email_log` row. `after()`
+ * hands the work to the runtime so it is allowed to finish. If `after()` is
+ * unavailable (outside a request scope, e.g. cron or a script), fall back to a
+ * guarded floating promise.
  */
-export function queueEmail(send: Promise<EmailSendResult>): void {
-  void send.catch((err) => console.error('email dispatch threw:', normalizeError(err)));
+export function queueEmail(send: () => Promise<EmailSendResult>): void {
+  const run = async () => {
+    try {
+      await send();
+    } catch (err) {
+      console.error('email dispatch threw:', normalizeError(err));
+    }
+  };
+
+  try {
+    // Imported lazily: `after` throws outside a request/response scope.
+    const { after } = require('next/server') as { after: (task: () => Promise<void>) => void };
+    after(run);
+  } catch {
+    void run();
+  }
 }
