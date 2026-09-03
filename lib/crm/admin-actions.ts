@@ -19,6 +19,8 @@ import {
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
 import { makeDeliverableKey, presignPrivatePut, validateContactFile, verifyStoredObjectSize } from '@/lib/r2';
+import { queueEmail, recordUnsent, sendDeliverableUploadedEmail } from '@/lib/email';
+import { emailOrigin, recipientEmail } from '@/lib/email/recipients';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, createDraftInvoiceWithItems, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
 export type CrmActionState = { error?: string; notice?: string; invoiceId?: string };
@@ -379,6 +381,38 @@ export async function confirmDeliverableAction(
   });
 
   if (!result.ok) return { error: result.error };
+
+  // Tell the client a new file is waiting. Fail-soft: never blocks the upload.
+  queueEmail(async () => {
+    const admin = getSupabaseAdmin();
+    const [{ data: project }, { data: file }] = await Promise.all([
+      admin.from('projects').select('name, client_id').eq('id', projectId).maybeSingle(),
+      admin.from('files').select('id').eq('r2_key', meta.key).maybeSingle(),
+    ]);
+    const row = project as { name?: string; client_id?: string } | null;
+    const fileId = (file as { id?: string } | null)?.id;
+    if (!row?.client_id || !fileId) {
+      return recordUnsent({
+        template: 'deliverable-uploaded',
+        reason: 'Deliverable context unavailable',
+        // Keep the pointer when the file resolved but the project did not.
+        ...(fileId ? { entityType: 'deliverable' as const, entityId: fileId } : {}),
+      });
+    }
+    const to = await recipientEmail(row.client_id);
+    if (!to) {
+      return recordUnsent({ template: 'deliverable-uploaded', reason: 'Recipient unavailable', entityType: 'deliverable', entityId: fileId });
+    }
+    const origin = await emailOrigin();
+    return sendDeliverableUploadedEmail({
+      to,
+      fileId,
+      projectName: row.name ?? 'your project',
+      filename: meta.filename,
+      filesLink: `${origin}/portal/files`,
+    });
+  });
+
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath('/admin/projects');
   return {};

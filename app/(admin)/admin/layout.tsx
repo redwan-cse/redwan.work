@@ -14,6 +14,7 @@ const NAV = [
   { label: 'Tickets', href: '/admin/tickets', enabled: true },
   { label: 'Projects', href: '/admin/projects', enabled: true },
   { label: 'Invoices', href: '/admin/invoices', enabled: true },
+  { label: 'Emails', href: '/admin/emails', enabled: true },
   { label: 'Assets', href: '/admin/assets', enabled: false },
 ];
 
