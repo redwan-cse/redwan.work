@@ -64,11 +64,10 @@ All probes from Tasks 1–4 were run against the remote Supabase project and R2,
 
 All probes are self‑contained and cleaned up after each run; no persistent fixtures remain.
 
-## Residual Risks (Deferred to P5b/P5c)
+## Residual Risks (Deferred to P5c)
 
-The following items were identified but deferred to later phases:
+The following items were identified but deferred to later phases (lifecycle emails and `email_log` shipped in P5b — see [docs/email/README.md](../email/README.md)):
 
-- Lifecycle emails and `email_log` table (P5b)
 - Helper duplication, dead exports, N+1 hydration, CSP hardcoded ref, cookie attribute copying, OTP throttling (P5c)
 - Dependabot vulnerabilities (dedicated PR)
 - Staging browser probes (cross‑client, payment UI, print) – blocked by missing Chromium / malformed MCP; to be run in staging

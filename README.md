@@ -38,7 +38,7 @@ Full documentation in [`/docs`](./docs).
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ (npm)
+- Node.js 20+ (npm)
 - Supabase project (Postgres + auth)
 - Cloudflare R2 bucket pair (public/private)
 - Resend API key (for lifecycle emails)

@@ -90,13 +90,24 @@ async function recordSend(input: {
   } catch (err) {
     console.error('email_log insert threw:', normalizeError(err));
   }
-}async function deliver(to: string, rendered: RenderedEmail): Promise<{ id: string | null }> {
+}
+
+let resendClient: { key: string; client: { emails: { send: (payload: { from: string; to: string; subject: string; html: string }) => Promise<{ data: { id: string } | null; error: { name?: string; message: string } | null }> } } } | null = null;
+
+async function getResend(apiKey: string) {
+  if (resendClient?.key === apiKey) return resendClient.client;
+  const { Resend } = await import('resend');
+  const client = new Resend(apiKey) as unknown as NonNullable<typeof resendClient>['client'];
+  resendClient = { key: apiKey, client };
+  return client;
+}
+
+async function deliver(to: string, rendered: RenderedEmail): Promise<{ id: string | null }> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) throw new Error('Email is not configured');
 
-  const { Resend } = await import('resend');
-  const resend = new Resend(apiKey);
+  const resend = await getResend(apiKey);
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -373,6 +384,35 @@ export async function recordExternalSend(input: {
 }
 
 /**
+ * Record a lifecycle event that never reached the provider.
+ *
+ * Recipient or context resolution can fail before any send is attempted — no
+ * active admin to notify, a deleted auth user, an unreadable ticket. Those
+ * events still belong in the audit trail: an operator debugging "the client
+ * says no email arrived" must be able to tell "resolution failed" from "never
+ * triggered". Writes a `failed` row and returns the matching result so a
+ * `queueEmail` thunk can hand it straight back.
+ */
+export async function recordUnsent(input: {
+  template: EmailTemplate;
+  reason: string;
+  to?: string;
+  entityType?: EmailEntityType;
+  entityId?: string;
+}): Promise<EmailSendResult> {
+  const candidate = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
+  await recordSend({
+    to: EMAIL_RE.test(candidate) ? candidate : 'unknown',
+    template: input.template,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    status: 'failed',
+    error: input.reason,
+  });
+  return { ok: false, error: input.reason };
+}
+
+/**
  * Fan one lifecycle email out to several recipients.
  *
  * Every recipient is attempted regardless of the others' outcomes (each already
@@ -381,9 +421,16 @@ export async function recordExternalSend(input: {
  */
 export async function sendToAll(
   recipients: string[],
-  send: (to: string) => Promise<EmailSendResult>
+  send: (to: string) => Promise<EmailSendResult>,
+  /** Written as a `failed` row when there is no one to send to. */
+  unsent?: { template: EmailTemplate; entityType?: EmailEntityType; entityId?: string }
 ): Promise<EmailSendResult> {
-  if (recipients.length === 0) return { ok: false, error: 'No recipients' };
+  if (recipients.length === 0) {
+    if (unsent) {
+      return recordUnsent({ ...unsent, reason: 'No active admin recipients' });
+    }
+    return { ok: false, error: 'No recipients' };
+  }
 
   const settled = await Promise.allSettled(recipients.map((to) => send(to)));
   const failures: string[] = [];

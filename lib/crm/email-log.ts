@@ -51,8 +51,12 @@ export interface EmailLogPage {
   total: number;
   page: number;
   pageCount: number;
-  /** Counts for the active filter set, so header and pagination agree. */
-  counts: { sent: number; failed: number };
+  /**
+   * Counts for the active filter set, so header and pagination agree.
+   * `null` when the count query itself failed — never silently 0, which would
+   * read as "nothing failed" on an audit surface.
+   */
+  counts: { sent: number | null; failed: number | null };
   /** The filter values actually applied, after validation. */
   applied: { template?: EmailTemplate; status?: EmailLogStatus; email?: string };
 }
@@ -164,19 +168,24 @@ export async function listEmailLogs(
     // A page past the end is not a fault — PostgREST reports it as an
     // unsatisfiable range. Show an empty page instead of a 500.
     if (error.code === 'PGRST103') {
-      const total = failedCount.count !== null && sentCount.count !== null
-        ? (sentCount.count ?? 0) + (failedCount.count ?? 0)
-        : 0;
+      // The count queries omit an active `status` filter (a sent/failed
+      // breakdown scoped by status is always half zero), so only use their sum
+      // as a total when no status filter narrowed the page.
+      const summable = !status && sentCount.count !== null && failedCount.count !== null;
+      const total = summable ? (sentCount.count ?? 0) + (failedCount.count ?? 0) : 0;
       return {
         rows: [],
         total,
         page: safePage,
         pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
-        counts: { sent: sentCount.count ?? 0, failed: failedCount.count ?? 0 },
+        counts: {
+          sent: sentCount.error ? null : (sentCount.count ?? 0),
+          failed: failedCount.error ? null : (failedCount.count ?? 0),
+        },
         applied,
       };
     }
-    // Never echo the operator's search term into the logs.
+    // The message is truncated, not redacted: PostgREST may quote the pattern.
     console.error('email_log query failed:', error.message.slice(0, 200));
     throw new Error('Email log is unavailable.');
   }
@@ -192,25 +201,10 @@ export async function listEmailLogs(
     total,
     page: safePage,
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
-    counts: { sent: sentCount.count ?? 0, failed: failedCount.count ?? 0 },
+    counts: {
+      sent: sentCount.error ? null : (sentCount.count ?? 0),
+      failed: failedCount.error ? null : (failedCount.count ?? 0),
+    },
     applied,
   };
-}
-
-/** Count of failed sends, for the overview badge. Null when the count fails. */
-export async function countFailedEmails(): Promise<number | null> {
-  try {
-    const { count, error } = await getSupabaseAdmin()
-      .from('email_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'failed');
-    if (error) {
-      console.error('email_log failed-count query failed:', error.message.slice(0, 200));
-      return null;
-    }
-    return count ?? 0;
-  } catch (err) {
-    console.error('email_log failed-count threw:', err instanceof Error ? err.message : err);
-    return null;
-  }
 }

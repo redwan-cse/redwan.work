@@ -19,7 +19,7 @@ import {
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
 import { makeDeliverableKey, presignPrivatePut, validateContactFile, verifyStoredObjectSize } from '@/lib/r2';
-import { queueEmail, sendDeliverableUploadedEmail } from '@/lib/email';
+import { queueEmail, recordUnsent, sendDeliverableUploadedEmail } from '@/lib/email';
 import { emailOrigin, recipientEmail } from '@/lib/email/recipients';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, createDraftInvoiceWithItems, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
 
@@ -391,9 +391,13 @@ export async function confirmDeliverableAction(
     ]);
     const row = project as { name?: string; client_id?: string } | null;
     const fileId = (file as { id?: string } | null)?.id;
-    if (!row?.client_id || !fileId) return { ok: false as const, error: 'Deliverable context unavailable' };
+    if (!row?.client_id || !fileId) {
+      return recordUnsent({ template: 'deliverable-uploaded', reason: 'Deliverable context unavailable' });
+    }
     const to = await recipientEmail(row.client_id);
-    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    if (!to) {
+      return recordUnsent({ template: 'deliverable-uploaded', reason: 'Recipient unavailable', entityType: 'deliverable', entityId: fileId });
+    }
     const origin = await emailOrigin();
     return sendDeliverableUploadedEmail({
       to,

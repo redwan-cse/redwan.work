@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import {
   queueEmail,
+  recordUnsent,
   sendNewTicketEmail,
   sendReplyPostedEmail,
   sendStatusChangedEmail,
@@ -176,9 +177,13 @@ export async function adminReply(
   // Notify the client that support replied. Fail-soft: never blocks the reply.
   queueEmail(async () => {
     const ctx = await ticketEmailContext(ticketId);
-    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    if (!ctx) {
+      return recordUnsent({ template: 'reply-posted', reason: 'Ticket context unavailable', entityType: 'ticket', entityId: ticketId });
+    }
     const to = await recipientEmail(ctx.clientId);
-    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    if (!to) {
+      return recordUnsent({ template: 'reply-posted', reason: 'Recipient unavailable', entityType: 'ticket', entityId: ctx.ticketId });
+    }
     const origin = await emailOrigin();
     return sendReplyPostedEmail({
       to,
@@ -197,15 +202,26 @@ export async function adminReply(
 export async function setTicketStatus(ticketId: string, status: TicketStatus): Promise<CrmResult> {
   if (!isTicketStatus(status)) return crmError('Unknown status.');
   const admin = getSupabaseAdmin();
+
+  // A no-op re-select in the admin dropdown must not mail the client.
+  const { data: before } = await admin.from('tickets').select('status').eq('id', ticketId).maybeSingle();
+  const previous = (before as { status?: TicketStatus } | null)?.status;
+
   const { error } = await admin.from('tickets').update({ status }).eq('id', ticketId);
   if (error) { console.error('Status update error:', error.message); return crmError('Status update failed.'); }
+
+  if (previous === status) return { ok: true };
 
   // Tell the client their ticket moved. Fail-soft.
   queueEmail(async () => {
     const ctx = await ticketEmailContext(ticketId);
-    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    if (!ctx) {
+      return recordUnsent({ template: 'status-changed', reason: 'Ticket context unavailable', entityType: 'ticket', entityId: ticketId });
+    }
     const to = await recipientEmail(ctx.clientId);
-    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    if (!to) {
+      return recordUnsent({ template: 'status-changed', reason: 'Recipient unavailable', entityType: 'ticket', entityId: ctx.ticketId });
+    }
     const origin = await emailOrigin();
     return sendStatusChangedEmail({
       to,
@@ -280,11 +296,15 @@ export async function createTicket(
   // Alert every active admin. Fail-soft: never blocks ticket creation.
   queueEmail(async () => {
     const ctx = await ticketEmailContext(ticket.id);
-    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    if (!ctx) {
+      return recordUnsent({ template: 'new-ticket', reason: 'Ticket context unavailable', entityType: 'ticket', entityId: ticket.id });
+    }
     const recipients = await adminRecipients();
     const clientName = await recipientName(clientId);
     const origin = await emailOrigin();
-    return sendToAll(recipients, (to) =>
+    return sendToAll(
+      recipients,
+      (to) =>
       sendNewTicketEmail({
         to,
         ticketId: ctx.ticketId,
@@ -292,7 +312,8 @@ export async function createTicket(
         subject: ctx.subject,
         clientName,
         ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
-      })
+      }),
+      { template: 'new-ticket', entityType: 'ticket', entityId: ctx.ticketId }
     );
   });
 
@@ -384,11 +405,15 @@ export async function clientReply(
   // Alert every active admin that the client replied. Fail-soft.
   queueEmail(async () => {
     const ctx = await ticketEmailContext(ticketId);
-    if (!ctx) return { ok: false as const, error: 'Ticket context unavailable' };
+    if (!ctx) {
+      return recordUnsent({ template: 'reply-posted', reason: 'Ticket context unavailable', entityType: 'ticket', entityId: ticketId });
+    }
     const recipients = await adminRecipients();
     const authorName = await recipientName(clientId);
     const origin = await emailOrigin();
-    return sendToAll(recipients, (to) =>
+    return sendToAll(
+      recipients,
+      (to) =>
       sendReplyPostedEmail({
         to,
         ticketId: ctx.ticketId,
@@ -397,7 +422,8 @@ export async function clientReply(
         authorName,
         bodyPreview: trimmed,
         ticketLink: `${origin}/admin/tickets/${ctx.ticketId}`,
-      })
+      }),
+      { template: 'reply-posted', entityType: 'ticket', entityId: ctx.ticketId }
     );
   });
 

@@ -3,7 +3,7 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { calculateInvoiceTotalCents, isSafeInvoiceLine, MAX_INVOICE_TOTAL_CENTS, roundInvoiceLineCents } from '@/lib/crm/invoice-math';
-import { queueEmail, sendInvoiceIssuedEmail, sendPaymentConfirmedEmail } from '@/lib/email';
+import { queueEmail, recordUnsent, sendInvoiceIssuedEmail, sendPaymentConfirmedEmail } from '@/lib/email';
 import { emailOrigin, formatMoney, recipientEmail } from '@/lib/email/recipients';
 
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void';
@@ -203,9 +203,13 @@ export async function sendInvoice(invoiceId: string): Promise<CrmResult> {
   // Notify the client that the invoice is now payable. Fail-soft.
   queueEmail(async () => {
     const detail = await getInvoiceDetail(invoiceId, { userId: '', role: 'admin' });
-    if (!detail.ok) return { ok: false as const, error: 'Invoice context unavailable' };
+    if (!detail.ok) {
+      return recordUnsent({ template: 'invoice-issued', reason: 'Invoice context unavailable', entityType: 'invoice', entityId: invoiceId });
+    }
     const to = await recipientEmail(detail.invoice.client_id);
-    if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+    if (!to) {
+      return recordUnsent({ template: 'invoice-issued', reason: 'Recipient unavailable', entityType: 'invoice', entityId: invoiceId });
+    }
     const origin = await emailOrigin();
     return sendInvoiceIssuedEmail({
       to,
@@ -225,11 +229,12 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
   if (!validUuid(paymentId) || !validUuid(adminId)) return invalid();
 
   // Capture the amount before confirming; the row is easier to read pre-transition.
-  const { data: payment } = await getSupabaseAdmin()
+  const { data: payment, error: readError } = await getSupabaseAdmin()
     .from('payments')
     .select('invoice_id, amount_cents')
     .eq('id', paymentId)
     .maybeSingle();
+  if (readError) console.error('payment pre-read failed:', readError.message);
 
   const { error } = await getSupabaseAdmin().rpc('confirm_invoice_payment_atomic', { p_payment_id: paymentId, p_confirmed_by: adminId });
   if (error) return crmError('Invoice operation failed.');
@@ -237,12 +242,22 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
   // Receipt to the client. Fail-soft.
   const invoiceId = (payment as { invoice_id?: string } | null)?.invoice_id;
   const amountCents = (payment as { amount_cents?: number } | null)?.amount_cents;
-  if (invoiceId) {
+  if (!invoiceId) {
+    // The pre-read failed or the payment vanished: the receipt cannot be built,
+    // and that absence belongs in the audit trail.
+    queueEmail(() =>
+      recordUnsent({ template: 'payment-confirmed', reason: 'Payment context unavailable' })
+    );
+  } else {
     queueEmail(async () => {
       const detail = await getInvoiceDetail(invoiceId, { userId: '', role: 'admin' });
-      if (!detail.ok) return { ok: false as const, error: 'Invoice context unavailable' };
+      if (!detail.ok) {
+        return recordUnsent({ template: 'payment-confirmed', reason: 'Invoice context unavailable', entityType: 'invoice', entityId: invoiceId });
+      }
       const to = await recipientEmail(detail.invoice.client_id);
-      if (!to) return { ok: false as const, error: 'Recipient unavailable' };
+      if (!to) {
+        return recordUnsent({ template: 'payment-confirmed', reason: 'Recipient unavailable', entityType: 'invoice', entityId: invoiceId });
+      }
       const origin = await emailOrigin();
       const outstanding = detail.invoice.outstanding_cents;
       return sendPaymentConfirmedEmail({

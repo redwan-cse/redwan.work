@@ -6,7 +6,7 @@ Transactional email for the CRM: seven lifecycle events, one audit row per attem
 
 - **Provider:** Resend (`resend` npm package, pinned `6.25.0`), API sends only
 - **Sender:** `RESEND_FROM_EMAIL` (verified domain required)
-- **Audit table:** `public.email_log` — migration `0016_email_log.sql`, admin-SELECT-only RLS, writes via service-role
+- **Audit table:** `public.email_log` — migration `0016_email_log.sql`, admin-SELECT-only RLS, writes via service-role. One row per lifecycle event, including events that never reached the provider.
 - **Modules:** `lib/email/templates.ts` (render), `lib/email/index.ts` (send + log), `lib/email/recipients.ts` (recipient/link resolution), `lib/crm/email-log.ts` (read side)
 - **Viewer:** `/admin/emails`
 
@@ -44,6 +44,10 @@ A send failure must never break the action that triggered it. Three mechanisms e
 - Provider send: 10s (`SEND_TIMEOUT_MS`)
 - Audit insert: 5s (`LOG_TIMEOUT_MS`) — a stalled `email_log` write must not stall the action being audited
 
+### Events that never reach the provider
+
+Recipient or context resolution can fail before a send is attempted: no active admin to notify, a deleted auth user, an unreadable ticket or invoice. Those still write a `failed` row via `recordUnsent()`, with the reason in `error` — so the viewer distinguishes "resolution failed" from "never triggered". The log's guarantee is one row per *event*, not one row per provider call.
+
 ### What reaches the log
 
 `to_email` (truncated 320), `template`, `entity_type`, `entity_id`, `resend_id`, `status`, `error` (truncated 500), `created_at`.
@@ -52,7 +56,7 @@ Never logged: subjects, bodies, filenames, amounts, invoice descriptions, paymen
 
 ### HTML safety
 
-Every interpolated value in every template passes through `escapeHtml`. Subjects, client names, filenames, and reply bodies are user-supplied and reach HTML, so an unescaped path would let a ticket subject inject markup into an admin's mail client. Reply previews are clipped to 300 characters before escaping.
+Every interpolated value that reaches HTML passes through `escapeHtml` (subject lines interpolate raw — a subject is a header, not markup). Subjects, client names, filenames, and reply bodies are user-supplied and reach HTML, so an unescaped path would let a ticket subject inject markup into an admin's mail client. Reply previews are clipped to 300 characters before escaping.
 
 ## Invite is logged, not sent
 
@@ -91,9 +95,12 @@ Unknown filter values are ignored rather than rejected, matching the ticket inbo
 ```env
 RESEND_API_KEY=          # server-only
 RESEND_FROM_EMAIL=       # verified sender, e.g. no-reply@redwan.work
+NEXT_PUBLIC_SITE_URL=    # origin for links in emails
 ```
 
-Both must be set in `.env.local` and in Vercel. Without them, `isEmailConfigured()` is false: no send is attempted and every event writes a `failed` row with `Email is not configured` — visible in the viewer rather than silently skipped.
+`RESEND_API_KEY` and `RESEND_FROM_EMAIL` must be set in `.env.local` and in Vercel.
+
+**`NEXT_PUBLIC_SITE_URL` must be the production origin in Vercel** (`https://redwan.work`). Email links come from it first, so a local value like `http://localhost:3000` deployed to production would send clients unreachable links. Leaving it unset falls back to request headers, then to `https://redwan.work`. Without them, `isEmailConfigured()` is false: no send is attempted and every event writes a `failed` row with `Email is not configured` — visible in the viewer rather than silently skipped.
 
 ## Probe matrix
 
@@ -124,6 +131,9 @@ Run against the live Supabase project and the live Resend account. Live sends we
 | Viewer | `%`, `_`, `*` escaped; literal substring still matches | ✅ |
 | Viewer | page 0 / NaN / unsafe-integer → 1; past-the-end returns empty, not 500 | ✅ |
 | Viewer | filtered counts agree with the filtered page | ✅ |
+| Viewer | a failed count query renders `—`, never `0` | ✅ |
+| Unsent | resolution failure writes a `failed` row with its reason | ✅ |
+| No-op | re-selecting the current ticket status sends nothing | ✅ |
 | Route | unauthenticated `GET /admin/emails` → 307 `/login?next=…` | ✅ |
 
 All fixtures deleted after each run; `email_log` returned to 0 rows.
@@ -138,15 +148,14 @@ All fixtures deleted after each run; `email_log` returned to 0 rows.
 ## Residual risks
 
 - `HANDOFF_MARKER` is matched by exact string equality — editing that sentence reclassifies historical handoff rows as `confirmed`.
-- The header's sent/failed counts coalesce a failed count query to 0 rather than surfacing the failure.
 - `Promise.allSettled` fans out concurrently against Resend's default 10 req/s; needs batching past ~10 active admins.
 - `email_log` grows unbounded — no retention policy yet, unlike R2 objects.
-- Email links are built from `x-forwarded-host` when present (platform-set on Vercel). Links persist in inboxes, so a self-host or preview-proxy misconfiguration bakes a wrong origin into a permanent artifact.
+- Email links come from `NEXT_PUBLIC_SITE_URL` when set, falling back to request headers for local development. If the env var is unset in production, a client-triggered event would derive an admin-bound link from that client's request headers.
 - No bounce or complaint handling: Resend webhooks are not wired, so a hard bounce after a `sent` row leaves the log optimistic.
 
 ## Operator notes
 
-- **Check `/admin/emails` first** when a client reports a missing notification. A `failed` row carries the provider's error name (`rate_limit_exceeded`, `validation_error`, …).
+- **Check `/admin/emails` first** when a client reports a missing notification. A `failed` row carries either the provider's error name (`rate_limit_exceeded`, `validation_error`, …) or a resolution reason (`Recipient unavailable`, `No active admin recipients`). An event with no row at all means the trigger never fired.
 - **"Handed off" is not a failure.** It means Supabase Auth accepted the invite; check the Resend dashboard for the SMTP transaction.
 - **Nothing retries.** A failed send stays failed; re-trigger the action (re-send the invoice, re-invite the client) to send again.
 - **Deactivating a client does not stop email.** Sends resolve the recipient from `profiles`/auth at send time, but no event checks `is_active`.

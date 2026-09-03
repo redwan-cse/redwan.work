@@ -3,9 +3,6 @@ import { Badge } from '@/components/ui/badge';
 import {
   EMAIL_STATUSES,
   EMAIL_TEMPLATES,
-  emailFilterValue,
-  isStatusFilter,
-  isTemplateFilter,
   listEmailLogs,
   pageNumber,
   type EmailDelivery,
@@ -94,15 +91,17 @@ export default async function AdminEmailsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Emails</h1>
         <p className="text-sm text-muted-foreground">
-          {counts.sent} sent · {counts.failed} failed
+          {counts.sent ?? '—'} sent · {counts.failed ?? '—'} failed
           {activeTemplate || activeEmail ? ' (filtered)' : ''}
         </p>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Every lifecycle send is recorded here. <strong>Handed off</strong> means an upstream
-        provider accepted the request without returning a delivery id — Supabase Auth mails
-        invitations itself, so those rows never carry one.
+        Every lifecycle event is recorded here, including ones that never reached the provider.{' '}
+        <strong>Handed off</strong> means an upstream provider accepted the request without
+        returning a delivery id — Supabase Auth mails invitations itself, so those rows never
+        carry one. <strong>Unconfirmed</strong> means the send reported success with an
+        unrecognised diagnostic.
       </p>
 
       <nav className="flex flex-wrap gap-2" aria-label="Filter by status">

@@ -17,11 +17,17 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 /**
  * Absolute origin for links in emails.
  *
- * Prefers request headers (matches the invite-redirect pattern in
- * `lib/crm/admin-actions.ts`), falls back to `NEXT_PUBLIC_SITE_URL`, then to the
- * production host. Safe to call outside a request scope.
+ * `NEXT_PUBLIC_SITE_URL` comes first, deliberately: an email link is a permanent
+ * artifact in someone else's inbox, and a client-triggered request can produce an
+ * admin-bound link (new-ticket, client reply). Deriving that origin from a
+ * request header would let one party's request shape the other party's link.
+ * Request headers remain the fallback for local development, where the env var is
+ * often unset.
  */
 export async function emailOrigin(): Promise<string> {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '');
+  if (configured) return configured;
+
   try {
     const h = await headers();
     const host = h.get('x-forwarded-host') ?? h.get('host');
@@ -30,9 +36,9 @@ export async function emailOrigin(): Promise<string> {
       return `${proto}://${host}`;
     }
   } catch {
-    // No request scope (cron, script) — fall through to env.
+    // No request scope (cron, script) — fall through to the production host.
   }
-  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
+  return 'https://redwan.work';
 }
 
 /** Email address for a profile id, or null when the auth user is gone. */
