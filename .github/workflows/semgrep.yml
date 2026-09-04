@@ -1,9 +1,14 @@
 # Semgrep static analysis (free for open source, no token needed).
 #
-# Second SAST opinion alongside CodeQL, focused on OWASP Top 10, security-audit
-# rules, and secrets. Runs the `auto` ruleset in the official container and
-# uploads SARIF to the same Security tab as CodeQL, so both scanners are
-# triaged in one place.
+# Second SAST opinion alongside CodeQL default setup, focused on OWASP Top 10,
+# security-audit rules, and secrets. Runs the `auto` ruleset in the official
+# container and uploads SARIF to the same Security tab as CodeQL, so both
+# scanners are triaged in one place.
+#
+# All `uses:` refs are pinned to full commit SHAs (Semgrep flags mutable tags
+# as a supply-chain risk). To bump: resolve the tag via
+# `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha` and update the SHA,
+# keeping the `# <tag>` comment accurate.
 #
 # Docs: https://semgrep.dev/docs/deployment/add-to-ci/
 
@@ -33,7 +38,7 @@ jobs:
       actions: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run Semgrep scan
         # `auto` = community rules matched to this repo's languages.
@@ -42,7 +47,7 @@ jobs:
         run: semgrep scan --config auto --sarif --output semgrep.sarif --error || true
 
       - name: Upload SARIF to code scanning
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d # v3
         with:
           sarif_file: semgrep.sarif
           category: "semgrep"
