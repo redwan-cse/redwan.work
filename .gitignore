@@ -38,7 +38,7 @@ yarn-error.log*
 next-env.d.ts
 
 ### Github ###
-/.github/
+# (workflows live in .github/workflows and MUST be committed)
 
 ### App Scripts ###
 /.google-apps-script/docs

@@ -1,0 +1,48 @@
+# Semgrep static analysis (free for open source, no token needed).
+#
+# Second SAST opinion alongside CodeQL, focused on OWASP Top 10, security-audit
+# rules, and secrets. Runs the `auto` ruleset in the official container and
+# uploads SARIF to the same Security tab as CodeQL, so both scanners are
+# triaged in one place.
+#
+# Docs: https://semgrep.dev/docs/deployment/add-to-ci/
+
+name: "Semgrep"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: "0 0 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: semgrep/semgrep:latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep scan
+        # `auto` = community rules matched to this repo's languages.
+        # Exit code is forced to 0 so the SARIF upload always runs;
+        # findings are triaged in the Security tab, not as a red X.
+        run: semgrep scan --config auto --sarif --output semgrep.sarif --error || true
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: "semgrep"
