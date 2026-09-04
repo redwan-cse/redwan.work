@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, X } from 'lucide-react';
 import { createTicketWithAttachmentsAction } from '@/lib/crm/client-actions';
+import { formatBytes } from '@/lib/format';
 
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -45,12 +46,6 @@ function attachmentExtension(filename: string): string {
 
 function attachmentMime(filename: string, browserType?: string): string {
   return EXT_TO_MIME[attachmentExtension(filename)] ?? browserType ?? 'application/octet-stream';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
 }
 
 export function NewTicketButton() {

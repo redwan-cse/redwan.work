@@ -22,13 +22,19 @@ const r2Origins = (() => {
   }
 })();
 
+const supabaseOrigin = (() => {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) return null;
+  try { return new URL(raw).origin; } catch { return null; }
+})();
+
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self'",
-  `connect-src 'self' https://challenges.cloudflare.com https://cqxtmzzlywolulechcob.supabase.co${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
+  `connect-src 'self' https://challenges.cloudflare.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -53,6 +59,11 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  // Server actions carry asset files (up to ASSET_MAX_BYTES) as multipart
+  // bodies; the 1 MB default would reject them before validation runs.
+  serverActions: {
+    bodySizeLimit: '6mb',
+  },
   images: {
     remotePatterns: [
       {

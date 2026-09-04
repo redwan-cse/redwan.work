@@ -1,7 +1,7 @@
 // app/api/revalidate/route.ts
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
+import { requireBearer } from '@/lib/auth/bearer';
 import { clearBlogCache } from '@/lib/blogger';
 
 /**
@@ -20,19 +20,7 @@ import { clearBlogCache } from '@/lib/blogger';
 const ALLOWED_PATHS = new Set(['/blogs']);
 
 function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.REVALIDATION_SECRET;
-  if (!expected) return false;
-
-  const header = request.headers.get('authorization') ?? '';
-  const match = header.match(/^Bearer (.+)$/);
-  if (!match) return false;
-
-  const provided = Buffer.from(match[1], 'utf-8');
-  const secret = Buffer.from(expected, 'utf-8');
-
-  // timingSafeEqual requires equal-length buffers; lengths alone leak
-  // nothing useful here, and unequal length short-circuits safely
-  return provided.length === secret.length && timingSafeEqual(provided, secret);
+  return requireBearer(process.env.REVALIDATION_SECRET, request.headers.get('authorization'));
 }
 
 export async function POST(request: NextRequest) {

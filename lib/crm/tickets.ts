@@ -90,13 +90,16 @@ export async function listTickets(params: { status?: TicketStatus; page?: number
   const { data, error, count } = await query;
   if (error) throw new Error(`inbox query failed: ${error.message}`);
 
-  // Emails live on auth.users, not profiles — resolve per-page via admin lookup.
+  // Emails live on auth.users, not profiles — resolve per-page via concurrent
+  // admin lookups. Promise.all preserves row order. Interim: Supabase Admin
+  // has no bulk get-by-ids, so this is N concurrent calls, not one query.
   const rows = (data ?? []) as unknown as Array<TicketJoin & { profiles: { id: string } | null }>;
-  const items: TicketRow[] = [];
-  for (const row of rows) {
-    const { data: userData } = await admin.auth.admin.getUserById(row.client_id);
-    items.push(mapTicket(row as TicketJoin, userData?.user?.email ?? ''));
-  }
+  const items: TicketRow[] = await Promise.all(
+    rows.map(async (row) => {
+      const { data: userData } = await admin.auth.admin.getUserById(row.client_id);
+      return mapTicket(row as TicketJoin, userData?.user?.email ?? '');
+    })
+  );
 
   const total = count ?? 0;
   return { items, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };

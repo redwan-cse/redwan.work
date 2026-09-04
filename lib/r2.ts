@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'crypto';
 import {
+  DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
@@ -134,7 +135,6 @@ export function staleObjectKeys(
 
 export const ARCHIVE_MAX_BYTES = 100 * 1024 * 1024;
 export const ARCHIVE_PREFIX = 'archive/';
-export const PENDING_PREFIX = 'pending/';
 
 function sanitizeExt(ext: string): string {
   const sanitized = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -245,4 +245,57 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
     },
   });
   await upload.done();
+}
+
+// ── Public assets (DB-free; admin uploader only) ────────────────────────────
+
+export const ASSET_ALLOWED_EXT = ['png','jpg','webp','svg','avif','pdf'] as const;
+export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
+export function makeAssetKey(ext: string): string {
+  const clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  if (!((ASSET_ALLOWED_EXT as readonly string[]).includes(clean))) throw new Error('Invalid asset extension.');
+  const year = new Date().getUTCFullYear();
+  return `assets/${year}/${randomUUID().replace(/-/g, '')}.${clean}`;
+}
+export function assetUrl(key: string): string {
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL?.replace(/\/$/, '');
+  if (!base) throw new Error('Public asset base URL is not configured.');
+  if (!key.startsWith('assets/') || key.includes('..')) throw new Error('Invalid asset key.');
+  return `${base}/${key}`;
+}
+
+function publicClient(): S3Client {
+  const endpoint = process.env.R2_ENDPOINT;
+  const bucket = process.env.R2_PUBLIC_BUCKET;
+  const accessKeyId = process.env.R2_PUBLIC_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
+  if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
+    throw new Error(
+      'R2 public credentials missing: set R2_ENDPOINT, R2_PUBLIC_BUCKET, R2_PUBLIC_ACCESS_KEY_ID, R2_PUBLIC_SECRET_ACCESS_KEY'
+    );
+  }
+  return new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+}
+
+function assertValidAssetKey(key: string): void {
+  if (!key.startsWith('assets/') || key.includes('..')) throw new Error('Invalid asset key.');
+}
+
+export async function putPublicObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  assertValidAssetKey(key);
+  const client = publicClient();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_PUBLIC_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+}
+
+export async function deletePublicObject(key: string): Promise<void> {
+  assertValidAssetKey(key);
+  const client = publicClient();
+  await client.send(new DeleteObjectCommand({ Bucket: process.env.R2_PUBLIC_BUCKET, Key: key }));
 }

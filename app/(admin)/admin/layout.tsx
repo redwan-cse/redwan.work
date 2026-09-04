@@ -15,7 +15,7 @@ const NAV = [
   { label: 'Projects', href: '/admin/projects', enabled: true },
   { label: 'Invoices', href: '/admin/invoices', enabled: true },
   { label: 'Emails', href: '/admin/emails', enabled: true },
-  { label: 'Assets', href: '/admin/assets', enabled: false },
+  { label: 'Assets', href: '/admin/assets', enabled: true },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

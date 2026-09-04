@@ -6,6 +6,7 @@ import {
   validateContactFile,
 } from '@/lib/r2';
 import { sha256Hex } from '@/lib/contact/lead-schema';
+import { isAllowedMime } from '@/lib/mime';
 
 /**
  * Presign API for contact-form attachments
@@ -49,16 +50,7 @@ const TURNSTILE_REUSE_WINDOW_SECONDS = 5 * 60;
 
 // Carried review finding from lib/r2.ts Task 1: validateContactFile does not
 // inspect mime, so this endpoint cross-checks the browser-reported type against
-// the extension before presigning.
-const EXT_ALLOWED_MIMES: Record<string, string[]> = {
-  pdf: ['application/pdf'],
-  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  doc: ['application/msword'],
-  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  png: ['image/png'],
-  jpg: ['image/jpeg', 'image/jpg'],
-  zip: ['application/zip', 'application/x-zip-compressed'],
-};
+// the extension (via the shared lib/mime.ts allowlist) before presigning.
 
 // ==============================================
 // Same-origin protection
@@ -178,11 +170,10 @@ export async function POST(request: NextRequest) {
       }
 
       // ---- 3.5 Mime/extension cross-check ----
-      const normalizedMime = candidate.mime.trim().toLowerCase().split(';')[0].trim();
-      const allowedMimes = EXT_ALLOWED_MIMES[check.ext];
-      if (!allowedMimes || !allowedMimes.includes(normalizedMime)) {
+      if (!isAllowedMime(check.ext, candidate.mime)) {
         return jsonError('File type does not match its extension.', 400);
       }
+      const normalizedMime = candidate.mime.trim().toLowerCase().split(';')[0].trim();
 
       validatedFiles.push({
         filename: candidate.filename,

@@ -44,7 +44,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       },
       setAll(cookiesToSet, headers) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
+          response.cookies.set(name, value, {
+            ...options,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+          });
         });
         Object.entries(headers ?? {}).forEach(([key, value]) => {
           response.headers.set(key, value);

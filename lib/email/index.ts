@@ -3,7 +3,6 @@ import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
   renderDeliverableUploaded,
-  renderInvite,
   renderInvoiceIssued,
   renderNewTicket,
   renderPaymentConfirmed,
@@ -196,21 +195,6 @@ export async function sendEmail(input: {
 // ---------------------------------------------------------------------------
 // Per-event helpers. Each renders its template and delegates to sendEmail.
 // ---------------------------------------------------------------------------
-
-export async function sendInviteEmail(input: {
-  to: string;
-  name?: string | null;
-  inviteLink: string;
-  clientId: string;
-}): Promise<EmailSendResult> {
-  return sendEmail({
-    to: input.to,
-    template: 'invite',
-    rendered: renderInvite({ name: input.name, inviteLink: input.inviteLink }),
-    entityType: 'client',
-    entityId: input.clientId,
-  });
-}
 
 export async function sendNewTicketEmail(input: {
   to: string;

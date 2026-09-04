@@ -235,6 +235,16 @@ Resend and record every attempt in `email_log`, with an admin viewer at
 that triggered it. See **[docs/email/README.md](../email/README.md)** for the
 event table, delivery-classification rules, probe matrix, and operator notes.
 
+## Public assets (Phase 5c)
+
+The admin public-bucket uploader is live at `/admin/assets` (nav `Assets`):
+DB-free uploads (`assets/<year>/<uuid>.<ext>`, png/jpg/webp/svg/avif/pdf,
+≤5 MB) via `putPublicObject`/`deletePublicObject` in `lib/r2.ts`, served
+immediately from the CDN base URL (`NEXT_PUBLIC_R2_PUBLIC_BASE_URL` via
+`assetUrl`) for use in portfolio entries or blog posts. Nothing is written to
+the database. See **[docs/r2/README.md](../r2/README.md)** for the key scheme
+and environment setup.
+
 ## Non-goals (explicitly deferred)
 
-- **Public asset uploader / `/admin/assets`** → P5c
+- None remaining from the P5c scope — the public asset uploader shipped above.

@@ -3,6 +3,8 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { sha256Hex } from '@/lib/contact/lead-schema';
 
 export type ActionState = { error?: string; notice?: string };
 
@@ -29,6 +31,37 @@ async function panelHomeForCurrentUser(): Promise<string> {
 
 const MIN_PASSWORD = 12;
 const INVALID_LINK = 'This link is invalid or has expired. Ask for a new one.';
+const OTP_RATE_MESSAGE = 'Too many requests. Please try again later.';
+
+// DB-backed OTP throttle (kind `otp-ip`, 300s window, max 5). Fail-closed:
+// missing salt or any RPC failure denies with a generic message. No PII logged.
+async function checkOtpRateLimit(): Promise<boolean> {
+  const salt = process.env.LEAD_IP_HASH_SALT;
+  if (!salt) {
+    console.error('LEAD_IP_HASH_SALT missing: denying OTP request (fail-closed).');
+    return false;
+  }
+  const h = await headers();
+  const ip =
+    h.get('cf-connecting-ip') ||
+    h.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    h.get('x-real-ip') ||
+    'unknown';
+  const keyHash = await sha256Hex(salt + ip);
+  try {
+    const { data, error } = await getSupabaseAdmin().rpc('consume_rate_limit', {
+      p_kind: 'otp-ip',
+      p_key_hash: keyHash,
+      p_window_seconds: 300,
+      p_max_count: 5,
+    });
+    if (error) throw error;
+    return data === true;
+  } catch (err) {
+    console.error('OTP rate limit unavailable:', err instanceof Error ? err.message : err);
+    return false;
+  }
+}
 
 function validatePasswordPair(formData: FormData): { error: string } | { password: string } {
   const password = String(formData.get('password') ?? '');
@@ -64,6 +97,8 @@ export async function requestMagicLinkAction(
 ): Promise<ActionState> {
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   if (!email) return { error: 'Email is required.' };
+
+  if (!(await checkOtpRateLimit())) return { error: OTP_RATE_MESSAGE };
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -156,6 +191,7 @@ export async function acceptInviteAction(
 export async function consumeMagicLinkTokenAction(
   tokenHash: string
 ): Promise<{ ok: true; home: string } | { ok: false; error: string }> {
+  if (!(await checkOtpRateLimit())) return { ok: false, error: OTP_RATE_MESSAGE };
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.verifyOtp({
     type: 'magiclink',

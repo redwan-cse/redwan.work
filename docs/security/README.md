@@ -64,11 +64,39 @@ All probes from Tasks 1–4 were run against the remote Supabase project and R2,
 
 All probes are self‑contained and cleaned up after each run; no persistent fixtures remain.
 
-## Residual Risks (Deferred to P5c)
+## P5c Hardening Close-out (Shipped)
+
+The following residual items shipped in Phase 5c (`feat/p5c-consolidation-assets`,
+Task 5 — code in the task commit, `'otp-ip'` kind in follow-up migration
+`0017_otp_rate_kind.sql`, already applied in production):
+
+- **Env-derived CSP Supabase origin** – `next.config.js` no longer hardcodes the
+  project ref. `connect-src` interpolates the origin parsed from
+  `NEXT_PUBLIC_SUPABASE_URL` (`new URL(...).origin`, try/catch fallback to no
+  origin); the R2 derivation is unchanged. Verified: no project-ref string
+  remains in the file.
+- **Hardened SSR cookies** – every server-side cookie write in `lib/supabase/`
+  sets `httpOnly: true`, `secure` in production only, and `sameSite: 'lax'`
+  (merged over the Supabase SSR defaults).
+- **OTP throttling** – `requestMagicLinkAction` and
+  `consumeMagicLinkTokenAction` call `consume_rate_limit('otp-ip',
+  <salted-IP-hash>, 300, 5)` using the existing `LEAD_IP_HASH_SALT` salt
+  pattern, fail-closed with generic `Too many requests. Please try again
+  later.` on missing salt or RPC error. No PII is logged.
+
+Note: the `'otp-ip'` rate-limit kind is allowed by the
+`rate_limits_kind_check` constraint via migration `0017_otp_rate_kind.sql`
+(kinds: `ip`, `turnstile`, `presign-ip`, `presign-portal`, `otp-ip`), already
+applied in production — OTP throttling is live, and the limiter only fails
+closed on genuine RPC/salt errors. Verified end-to-end: 5 rapid
+`consume_rate_limit('otp-ip', …)` calls allowed, 6th denied — see the Task 5
+report.
+
+## Residual Risks (Deferred beyond P5c)
 
 The following items were identified but deferred to later phases (lifecycle emails and `email_log` shipped in P5b — see [docs/email/README.md](../email/README.md)):
 
-- Helper duplication, dead exports, N+1 hydration, CSP hardcoded ref, cookie attribute copying, OTP throttling (P5c)
+- Helper duplication, dead exports, N+1 hydration (P5c)
 - Dependabot vulnerabilities (dedicated PR)
 - Staging browser probes (cross‑client, payment UI, print) – blocked by missing Chromium / malformed MCP; to be run in staging
 
@@ -77,7 +105,7 @@ The following items were identified but deferred to later phases (lifecycle emai
 - **Deactivation now revokes sessions**: when `setClientActive(clientId, false)` is called, the auth admin sign‑out API is invoked. The caller receives an error if revocation fails, preventing a scenario where a deactivated user might hold a live session.
 - **Service‑role RPCs are the only write path** for tickets, invoices, items, payments, and file status. Any direct REST mutation will be rejected by RLS or guard triggers.
 - **Client‑facing errors are generic** – if you need to debug, inspect the server logs (console.error) which contain the original error details.
-- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the new rate‑limit kind for ticket‑presign. Both are forward‑only and already applied in production.
+- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the new rate‑limit kind for ticket‑presign; `0017_otp_rate_kind.sql` adds `'otp-ip'` for OTP throttling. All are forward‑only and already applied in production.
 - **Probe environment**: all probes run against the live Supabase project and R2; they create and delete temporary resources. No real customer data is touched.
 
 ## Related Documentation
