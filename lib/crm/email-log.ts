@@ -81,16 +81,16 @@ const MAX_EMAIL_FILTER = 320;
  * Query params arrive as `string | string[] | undefined`. A duplicated param
  * (`?email=a&email=b`) must be ignored, not crash the page.
  */
-export function isTemplateFilter(value: unknown): value is EmailTemplate {
+function isTemplateFilter(value: unknown): value is EmailTemplate {
   return typeof value === 'string' && (EMAIL_TEMPLATES as readonly string[]).includes(value);
 }
 
-export function isStatusFilter(value: unknown): value is EmailLogStatus {
+function isStatusFilter(value: unknown): value is EmailLogStatus {
   return value === 'sent' || value === 'failed';
 }
 
 /** Narrow a raw query param to a usable single string, or undefined. */
-export function emailFilterValue(value: unknown): string | undefined {
+function emailFilterValue(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim().slice(0, MAX_EMAIL_FILTER);
   return trimmed.length > 0 ? trimmed : undefined;

@@ -63,22 +63,6 @@ export interface RenderedEmail {
   html: string;
 }
 
-export function renderInvite(input: { name?: string | null; inviteLink: string }): RenderedEmail {
-  const greeting = input.name?.trim() ? `Hi ${input.name.trim()},` : 'Hi,';
-  return {
-    subject: `Your ${BRAND} client portal invitation`,
-    html: shell(
-      'You have been invited to the client portal',
-      [
-        para(greeting),
-        para('Use the link below to set your password and access your projects, tickets, and invoices.'),
-        para('The link expires for security reasons — request a new invitation if it no longer works.'),
-      ].join(''),
-      { label: 'Accept invitation', url: input.inviteLink }
-    ),
-  };
-}
-
 export function renderNewTicket(input: {
   ticketNumber: number;
   subject: string;

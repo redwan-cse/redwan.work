@@ -134,7 +134,6 @@ export function staleObjectKeys(
 
 export const ARCHIVE_MAX_BYTES = 100 * 1024 * 1024;
 export const ARCHIVE_PREFIX = 'archive/';
-export const PENDING_PREFIX = 'pending/';
 
 function sanitizeExt(ext: string): string {
   const sanitized = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
