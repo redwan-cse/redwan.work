@@ -181,18 +181,28 @@ export function extractFirstImage(content: string): string {
  * Extract plain text excerpt from HTML content
  */
 export function extractExcerpt(content: string, maxLength: number = 200): string {
-  // Remove HTML tags
-  let text = content.replace(/<[^>]*>/g, "");
-  
-  // Decode common HTML entities
-  text = text
+  // Decode entities FIRST, then strip tags — decoding after stripping lets
+  // `&lt;script&gt;` smuggle markup past the filter (CodeQL
+  // js/incomplete-multi-character-sanitization). `&amp;` decodes LAST so one
+  // replacement's output can never feed a later one: `&amp;lt;` becomes the
+  // literal text `&lt;`, never markup (CodeQL js/double-escaping). The tag
+  // strip runs after all decoding, so nothing decoded survives as markup.
+  let text = content
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&hellip;/g, "...");
+    .replace(/&hellip;/g, "...")
+    .replace(/&amp;/g, "&");
+
+  // Strip HTML tags after decoding.
+  // codeql[js/incomplete-multi-character-sanitization]: false positive in
+  // context. This function returns PLAIN TEXT whose sole consumer renders it
+  // as a JSX text child (`BlogPreviewModal`, auto-escaped by React) — never
+  // as HTML. Do NOT pass its output to dangerouslySetInnerHTML without a
+  // real sanitizer (e.g. DOMPurify).
+  text = text.replace(/<[^>]*>/g, "");
   
   // Trim whitespace and remove extra spaces
   text = text.trim().replace(/\s+/g, " ");

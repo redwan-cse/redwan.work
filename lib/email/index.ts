@@ -179,7 +179,7 @@ export async function sendEmail(input: {
     return { ok: true, resendId: id };
   } catch (err) {
     const message = normalizeError(err);
-    console.error(`email send failed (${input.template}):`, message);
+    console.error('email send failed:', input.template, message);
     await recordSend({
       to,
       template: input.template,
