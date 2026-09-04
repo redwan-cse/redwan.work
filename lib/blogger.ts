@@ -196,7 +196,12 @@ export function extractExcerpt(content: string, maxLength: number = 200): string
     .replace(/&hellip;/g, "...")
     .replace(/&amp;/g, "&");
 
-  // Strip HTML tags after decoding
+  // Strip HTML tags after decoding.
+  // codeql[js/incomplete-multi-character-sanitization]: false positive in
+  // context. This function returns PLAIN TEXT whose sole consumer renders it
+  // as a JSX text child (`BlogPreviewModal`, auto-escaped by React) — never
+  // as HTML. Do NOT pass its output to dangerouslySetInnerHTML without a
+  // real sanitizer (e.g. DOMPurify).
   text = text.replace(/<[^>]*>/g, "");
   
   // Trim whitespace and remove extra spaces
