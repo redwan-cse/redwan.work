@@ -12,7 +12,7 @@ Two buckets are used (both on one R2 endpoint, separate scoped API tokens):
 | Bucket | Access | Used for |
 |---|---|---|
 | `R2_PRIVATE_BUCKET` | Private — reachable only via presigned URLs and server-side credentials | Contact attachment uploads (`contact/`) and portal files (`private/`, `archive/`) |
-| `R2_PUBLIC_BUCKET` | Public-read via `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | Provisioned for future public assets; nothing written or read yet (deferred to P5) |
+| `R2_PUBLIC_BUCKET` | Public-read via `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | Public portfolio/blog assets (`assets/<year>/<uuid>.<ext>`), written by `/admin/assets`, read via CDN base URL (live in P5c) |
 
 All private-bucket access goes through the server-only helpers in `lib/r2.ts`
 (`import 'server-only'`); credentials never reach the browser. The browser only
@@ -128,7 +128,7 @@ Cloudflare dashboard: R2 → *private bucket* → Settings → CORS policy.
 | `R2_ENDPOINT` | Vercel + local `.env.local` | R2 S3-compatible endpoint |
 | `R2_PRIVATE_BUCKET` | both | private attachment bucket name |
 | `R2_PRIVATE_ACCESS_KEY_ID` / `R2_PRIVATE_SECRET_ACCESS_KEY` | both | object-scoped token for private bucket |
-| `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | local only today | public bucket base URL (used at P5) |
+| `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | Vercel + local `.env.local` | public bucket CDN base URL for asset reads (`assetUrl`) and CSP-adjacent public serving (live in P5c) |
 | `CRON_SECRET` | both | bearer secret for the retention cron |
 
 - **Pre-merge gate:** `R2_ENDPOINT` and `R2_PRIVATE_BUCKET` must be present in
@@ -235,4 +235,6 @@ verified in Task 6 probes (see `docs/crm/README.md`).
 4. **First automated archive/project purge**: once a real archived project exceeds
    its 30-day window, confirm a cron run reports `projectsPurged > 0` and the R2
    `archive/` / deliverable objects are gone.
-5. **P5**: set `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` + custom domain when public reads ship.
+5. **Public reads (shipped P5c):** `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` is set in
+   both Vercel and `.env.local`; `/admin/assets` uploads serve immediately
+   from the CDN. Remaining nicety: front a custom domain if desired.

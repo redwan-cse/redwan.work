@@ -64,11 +64,35 @@ All probes from Tasks 1–4 were run against the remote Supabase project and R2,
 
 All probes are self‑contained and cleaned up after each run; no persistent fixtures remain.
 
+## P5c Hardening Close-out (Shipped)
+
+The following residual items shipped in Phase 5c (`feat/p5c-consolidation-assets`,
+Task 5 — no migrations):
+
+- **Env-derived CSP Supabase origin** – `next.config.js` no longer hardcodes the
+  project ref. `connect-src` interpolates the origin parsed from
+  `NEXT_PUBLIC_SUPABASE_URL` (`new URL(...).origin`, try/catch fallback to no
+  origin); the R2 derivation is unchanged. Verified: no project-ref string
+  remains in the file.
+- **Hardened SSR cookies** – every server-side cookie write in `lib/supabase/`
+  sets `httpOnly: true`, `secure` in production only, and `sameSite: 'lax'`
+  (merged over the Supabase SSR defaults).
+- **OTP throttling** – `requestMagicLinkAction` and
+  `consumeMagicLinkTokenAction` call `consume_rate_limit('otp-ip',
+  <salted-IP-hash>, 300, 5)` using the existing `LEAD_IP_HASH_SALT` salt
+  pattern, fail-closed with generic `Too many requests. Please try again
+  later.` on missing salt or RPC error. No PII is logged.
+
+Note: the `'otp-ip'` rate-limit kind requires a follow-up migration adding it
+to the `rate_limits_kind_check` constraint (currently `ip`, `turnstile`,
+`presign-ip`, `presign-portal`); until then the limiter fails closed and OTP
+requests are denied — see the Task 5 report.
+
 ## Residual Risks (Deferred to P5c)
 
 The following items were identified but deferred to later phases (lifecycle emails and `email_log` shipped in P5b — see [docs/email/README.md](../email/README.md)):
 
-- Helper duplication, dead exports, N+1 hydration, CSP hardcoded ref, cookie attribute copying, OTP throttling (P5c)
+- Helper duplication, dead exports, N+1 hydration (P5c)
 - Dependabot vulnerabilities (dedicated PR)
 - Staging browser probes (cross‑client, payment UI, print) – blocked by missing Chromium / malformed MCP; to be run in staging
 
