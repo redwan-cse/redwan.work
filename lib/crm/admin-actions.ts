@@ -30,7 +30,7 @@ import {
   validateContactFile,
   verifyStoredObjectSize,
 } from '@/lib/r2';
-import { extFromFilename, isAllowedMime } from '@/lib/mime';
+import { extFromFilename, isAllowedAssetMime } from '@/lib/mime';
 import { formatBytes } from '@/lib/format';
 import { queueEmail, recordUnsent, sendDeliverableUploadedEmail } from '@/lib/email';
 import { emailOrigin, recipientEmail } from '@/lib/email/recipients';
@@ -530,7 +530,7 @@ export async function uploadAssetAction(_prev: AssetActionState, formData: FormD
     return { error: `File is too large. Maximum size is ${formatBytes(ASSET_MAX_BYTES)}.` };
   }
   const mime = (file.type || '').trim().toLowerCase().split(';')[0].trim() || 'application/octet-stream';
-  if (!isAllowedMime(ext, mime)) {
+  if (!isAllowedAssetMime(ext, mime)) {
     console.error('Rejected asset upload: mime mismatch.');
     return { error: 'File type does not match its extension.' };
   }
@@ -543,9 +543,20 @@ export async function uploadAssetAction(_prev: AssetActionState, formData: FormD
     return { error: 'File type is not allowed.' };
   }
 
+  // Resolve/validate config BEFORE writing: assetUrl throws when the public
+  // base URL is unset, so a misconfigured instance fails without leaving a
+  // public object orphan (no putPublicObject has run at this point).
+  let url: string;
+  try {
+    url = assetUrl(key);
+  } catch {
+    console.error('Asset upload failed: public base URL not configured.');
+    return { error: 'Upload failed. Please try again.' };
+  }
+
   try {
     await putPublicObject(key, Buffer.from(await file.arrayBuffer()), mime);
-    return { notice: 'Asset uploaded.', url: assetUrl(key), key };
+    return { notice: 'Asset uploaded.', url, key };
   } catch (e) {
     console.error('Asset upload failed:', e instanceof Error ? e.message : e);
     return { error: 'Upload failed. Please try again.' };

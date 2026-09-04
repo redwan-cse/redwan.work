@@ -266,9 +266,10 @@ export function assetUrl(key: string): string {
 
 function publicClient(): S3Client {
   const endpoint = process.env.R2_ENDPOINT;
+  const bucket = process.env.R2_PUBLIC_BUCKET;
   const accessKeyId = process.env.R2_PUBLIC_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
-  if (!endpoint || !accessKeyId || !secretAccessKey) {
+  if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
     throw new Error(
       'R2 public credentials missing: set R2_ENDPOINT, R2_PUBLIC_BUCKET, R2_PUBLIC_ACCESS_KEY_ID, R2_PUBLIC_SECRET_ACCESS_KEY'
     );

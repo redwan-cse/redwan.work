@@ -16,6 +16,7 @@ export function AssetUploader({ accept, maxBytes }: { accept: string; maxBytes: 
   const [notice, setNotice] = useState<string | null>(null);
   const [items, setItems] = useState<UploadedAsset[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -58,16 +59,24 @@ export function AssetUploader({ accept, maxBytes }: { accept: string; maxBytes: 
   }
 
   function onDelete(key: string) {
+    if (deletingKey) return;
     setError(null);
     setNotice(null);
+    setDeletingKey(key);
     startTransition(async () => {
-      const state = await deleteAssetAction(key);
-      if (state.error) {
-        setError(state.error);
-        return;
+      try {
+        const state = await deleteAssetAction(key);
+        if (state.error) {
+          setError(state.error);
+          return;
+        }
+        setItems((prev) => prev.filter((it) => it.key !== key));
+        setNotice('Asset deleted.');
+      } catch {
+        setError('Delete failed. Please try again.');
+      } finally {
+        setDeletingKey(null);
       }
-      setItems((prev) => prev.filter((it) => it.key !== key));
-      setNotice('Asset deleted.');
     });
   }
 
@@ -118,8 +127,8 @@ export function AssetUploader({ accept, maxBytes }: { accept: string; maxBytes: 
               <Button size="sm" variant="outline" onClick={() => onCopy(it.url)}>
                 {copied === it.url ? 'Copied' : 'Copy'}
               </Button>
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => onDelete(it.key)}>
-                Delete
+              <Button size="sm" variant="ghost" disabled={busy || deletingKey === it.key} onClick={() => onDelete(it.key)}>
+                {deletingKey === it.key ? 'Deleting…' : 'Delete'}
               </Button>
             </li>
           ))}
