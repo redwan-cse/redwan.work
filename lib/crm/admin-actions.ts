@@ -18,7 +18,20 @@ import {
   updateProject,
 } from '@/lib/crm/projects';
 import { createFileRow, deleteOwnedFile } from '@/lib/crm/files';
-import { makeDeliverableKey, presignPrivatePut, validateContactFile, verifyStoredObjectSize } from '@/lib/r2';
+import {
+  ASSET_ALLOWED_EXT,
+  ASSET_MAX_BYTES,
+  assetUrl,
+  deletePublicObject,
+  makeAssetKey,
+  makeDeliverableKey,
+  presignPrivatePut,
+  putPublicObject,
+  validateContactFile,
+  verifyStoredObjectSize,
+} from '@/lib/r2';
+import { extFromFilename, isAllowedMime } from '@/lib/mime';
+import { formatBytes } from '@/lib/format';
 import { queueEmail, recordUnsent, sendDeliverableUploadedEmail } from '@/lib/email';
 import { emailOrigin, recipientEmail } from '@/lib/email/recipients';
 import { addInvoiceItem, confirmPayment, createDraftInvoice, createDraftInvoiceWithItems, deleteInvoiceItem, getInvoiceDetail, rejectPayment, sendInvoice, updateDraftInvoice, updateInvoiceItem, voidInvoice } from '@/lib/crm/invoices';
@@ -495,3 +508,62 @@ export async function sendInvoiceAction(invoiceId: string): Promise<CrmActionSta
 export async function voidInvoiceAction(invoiceId: string): Promise<CrmActionState> { if (!await requireAdmin()) return { error: 'Unauthorized.' }; const projectId = await invoiceProjectId(invoiceId); const result = await voidInvoice(invoiceId); if (!result.ok) return { error: result.error }; revalidateInvoice(invoiceId, projectId); return {}; }
 export async function confirmPaymentAction(paymentId: string): Promise<CrmActionState> { const session = await requireAdmin(); if (!session) return { error: 'Unauthorized.' }; const payment = await getSupabaseAdmin().from('payments').select('invoice_id').eq('id', paymentId).maybeSingle(); const detail = payment.data ? await getInvoiceDetail(payment.data.invoice_id, { userId: session.userId, role: 'admin' }) : null; const result = await confirmPayment(paymentId, session.userId); if (!result.ok) return { error: result.error }; revalidateInvoice(payment.data?.invoice_id ?? paymentId, detail?.ok ? detail.invoice.project_id : undefined); return {}; }
 export async function rejectPaymentAction(paymentId: string): Promise<CrmActionState> { const session = await requireAdmin(); if (!session) return { error: 'Unauthorized.' }; const payment = await getSupabaseAdmin().from('payments').select('invoice_id').eq('id', paymentId).maybeSingle(); const detail = payment.data ? await getInvoiceDetail(payment.data.invoice_id, { userId: session.userId, role: 'admin' }) : null; const result = await rejectPayment(paymentId); if (!result.ok) return { error: result.error }; revalidateInvoice(payment.data?.invoice_id ?? paymentId, detail?.ok ? detail.invoice.project_id : undefined); return {}; }
+
+// ── Public assets (DB-free: no files row is written) ────────────────────────
+
+export type AssetActionState = { error?: string; notice?: string; url?: string; key?: string };
+
+export async function uploadAssetAction(_prev: AssetActionState, formData: FormData): Promise<AssetActionState> {
+  const session = await requireAdmin();
+  if (!session) return { error: 'Unauthorized.' };
+
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size < 1) return { error: 'Choose a file to upload.' };
+
+  const ext = extFromFilename(file.name || '');
+  if (!((ASSET_ALLOWED_EXT as readonly string[]).includes(ext))) {
+    console.error('Rejected asset upload: unsupported extension.');
+    return { error: 'File type is not allowed.' };
+  }
+  if (file.size > ASSET_MAX_BYTES) {
+    console.error('Rejected asset upload: oversize.');
+    return { error: `File is too large. Maximum size is ${formatBytes(ASSET_MAX_BYTES)}.` };
+  }
+  const mime = (file.type || '').trim().toLowerCase().split(';')[0].trim() || 'application/octet-stream';
+  if (!isAllowedMime(ext, mime)) {
+    console.error('Rejected asset upload: mime mismatch.');
+    return { error: 'File type does not match its extension.' };
+  }
+
+  let key: string;
+  try {
+    key = makeAssetKey(ext);
+  } catch {
+    console.error('Rejected asset upload: key mint failed.');
+    return { error: 'File type is not allowed.' };
+  }
+
+  try {
+    await putPublicObject(key, Buffer.from(await file.arrayBuffer()), mime);
+    return { notice: 'Asset uploaded.', url: assetUrl(key), key };
+  } catch (e) {
+    console.error('Asset upload failed:', e instanceof Error ? e.message : e);
+    return { error: 'Upload failed. Please try again.' };
+  }
+}
+
+export async function deleteAssetAction(key: string): Promise<CrmActionState> {
+  const session = await requireAdmin();
+  if (!session) return { error: 'Unauthorized.' };
+  if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..')) {
+    console.error('Rejected asset delete: invalid key.');
+    return { error: 'Invalid asset.' };
+  }
+  try {
+    await deletePublicObject(key);
+    return {};
+  } catch (e) {
+    console.error('Asset delete failed:', e instanceof Error ? e.message : e);
+    return { error: 'Delete failed. Please try again.' };
+  }
+}

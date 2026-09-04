@@ -1,3 +1,8 @@
+// Single shared ext → mime allowlist for contact AND public-asset flows.
+// Contact uploads additionally gate ext via CONTACT_ALLOWED_EXT (lib/r2.ts);
+// asset uploads gate ext via ASSET_ALLOWED_EXT (lib/r2.ts). The webp/svg/avif
+// rows only serve assets: contact callers run validateContactFile first, which
+// rejects those extensions before isAllowedMime is ever consulted.
 export const CONTACT_ALLOWED: Record<string, readonly string[]> = {
   pdf: ['application/pdf'],
   docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
@@ -6,6 +11,9 @@ export const CONTACT_ALLOWED: Record<string, readonly string[]> = {
   png: ['image/png'],
   jpg: ['image/jpeg', 'image/jpg'],
   zip: ['application/zip', 'application/x-zip-compressed'],
+  webp: ['image/webp'],
+  svg: ['image/svg+xml'],
+  avif: ['image/avif'],
 };
 export function extFromFilename(filename: string): string {
   const base = filename.split('/').pop() ?? filename;

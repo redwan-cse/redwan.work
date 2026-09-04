@@ -53,6 +53,11 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
+  // Server actions carry asset files (up to ASSET_MAX_BYTES) as multipart
+  // bodies; the 1 MB default would reject them before validation runs.
+  serverActions: {
+    bodySizeLimit: '6mb',
+  },
   images: {
     remotePatterns: [
       {
