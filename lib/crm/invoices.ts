@@ -127,14 +127,18 @@ export async function listInvoices(viewer: InvoiceViewer, status?: InvoiceStatus
   if (status && validStatus(status)) query = query.eq('status', status);
   const { data, error } = await query;
   if (error) throw new Error('Invoice operation failed.');
-  const rows: InvoiceRow[] = [];
-  for (const raw of (data ?? []) as RawInvoice[]) {
-    const project = await admin.from('projects').select('client_id').eq('id', raw.project_id).maybeSingle();
-    if (project.error || !project.data) throw new Error('Invoice operation failed.');
-    if (viewer.role === 'client' && project.data.client_id !== viewer.userId) continue;
-    try { rows.push(await hydrate({ ...raw, client_id: project.data.client_id })); } catch { throw new Error('Invoice operation failed.'); }
-  }
-  return rows;
+  // Hydrate concurrently: Promise.all preserves input order, then apply the
+  // existing client-side scoping filter after all resolve (same rows/order).
+  const raws = (data ?? []) as RawInvoice[];
+  const resolved = await Promise.all(
+    raws.map(async (raw) => {
+      const project = await admin.from('projects').select('client_id').eq('id', raw.project_id).maybeSingle();
+      if (project.error || !project.data) throw new Error('Invoice operation failed.');
+      if (viewer.role === 'client' && project.data.client_id !== viewer.userId) return null;
+      try { return await hydrate({ ...raw, client_id: project.data.client_id }); } catch { throw new Error('Invoice operation failed.'); }
+    })
+  );
+  return resolved.filter((row): row is InvoiceRow => row !== null);
 }
 
 export async function getInvoiceDetail(invoiceId: string, viewer: InvoiceViewer): Promise<{ ok: true; invoice: InvoiceRow; items: InvoiceItemRow[]; payments: PaymentRow[] } | { ok: false; error: string }> {

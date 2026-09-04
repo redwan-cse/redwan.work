@@ -32,18 +32,30 @@ export async function listClients(): Promise<ClientRow[]> {
     created_at: string;
   }>;
 
-  const items: ClientRow[] = [];
-  for (const row of rows) {
-    const { data: userData } = await admin.auth.admin.getUserById(row.id);
-    items.push({
-      id: row.id,
-      email: userData?.user?.email ?? '',
-      full_name: row.full_name,
-      company: row.company,
-      is_active: row.is_active,
-      created_at: row.created_at,
-    });
+  // Emails live on auth.users, not profiles — resolve via admin lookup.
+  // Interim: Supabase Admin has no bulk get-by-ids, so issue N concurrent
+  // getUserById calls in chunks of 10 (concurrency limit). Promise.all per
+  // chunk preserves row order.
+  const CHUNK_SIZE = 10;
+  const emails: string[] = [];
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    const chunkEmails = await Promise.all(
+      chunk.map(async (row) => {
+        const { data: userData } = await admin.auth.admin.getUserById(row.id);
+        return userData?.user?.email ?? '';
+      })
+    );
+    emails.push(...chunkEmails);
   }
+  const items: ClientRow[] = rows.map((row, index) => ({
+    id: row.id,
+    email: emails[index] ?? '',
+    full_name: row.full_name,
+    company: row.company,
+    is_active: row.is_active,
+    created_at: row.created_at,
+  }));
   return items.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
