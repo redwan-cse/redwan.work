@@ -8,17 +8,8 @@ import {
   presignPrivatePut,
   validateContactFile,
 } from '@/lib/r2';
+import { isAllowedMime } from '@/lib/mime';
 import { sha256Hex } from '@/lib/contact/lead-schema';
-
-const EXT_ALLOWED_MIMES: Record<string, string[]> = {
-  pdf: ['application/pdf'],
-  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  doc: ['application/msword'],
-  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  png: ['image/png'],
-  jpg: ['image/jpeg', 'image/jpg'],
-  zip: ['application/zip', 'application/x-zip-compressed'],
-};
 
 function isSameOrigin(request: NextRequest): boolean {
   const host = request.headers.get('host');
@@ -142,11 +133,10 @@ export async function POST(request: NextRequest) {
       if (!check.ok) {
         return jsonError(check.error, 400);
       }
-      const normalizedMime = candidate.mime.trim().toLowerCase().split(';')[0].trim();
-      const allowedMimes = EXT_ALLOWED_MIMES[check.ext];
-      if (!allowedMimes || !allowedMimes.includes(normalizedMime)) {
+      if (!isAllowedMime(check.ext, candidate.mime)) {
         return jsonError('File type does not match its extension.', 400);
       }
+      const normalizedMime = candidate.mime.trim().toLowerCase().split(';')[0].trim();
       validated.push({
         filename: candidate.filename,
         mime: normalizedMime,

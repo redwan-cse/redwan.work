@@ -29,6 +29,7 @@ import {
   setMilestoneStatusAction,
   updateProjectAction,
 } from '@/lib/crm/admin-actions';
+import { formatBytes } from '@/lib/format';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -38,12 +39,6 @@ function formatCents(cents: number, currency: string): string {
   } catch {
     return `${(cents / 100).toFixed(2)} ${currency}`;
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
 }
 
 // ── New project dialog ───────────────────────────────────────────────────

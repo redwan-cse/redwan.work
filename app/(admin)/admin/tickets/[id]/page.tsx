@@ -5,6 +5,7 @@ import { ReplyForm } from '@/components/admin/reply-form';
 import { StatusControl } from '@/components/admin/status-control';
 import { getTicketThread } from '@/lib/crm/tickets';
 import { listTicketAttachmentRows } from '@/lib/crm/files';
+import { formatBytes } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +26,6 @@ const TICKET_BADGE: Record<keyof typeof TICKET_STATUS_LABELS, string> = {
 
 function utcStamp(iso: string) {
   return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
 }
 
 export default async function AdminTicketThreadPage({

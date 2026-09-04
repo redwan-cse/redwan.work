@@ -42,6 +42,7 @@ import Link from "next/link";
 import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Country } from "@/lib/countries-data";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { formatBytes } from '@/lib/format';
 
 /**
  * Enhanced Contact Form Component with Cloudflare Turnstile Protection
@@ -78,7 +79,7 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 /**
  * Attachment limits — client-side mirror of the server-only lib/r2.ts constants
  * (CONTACT_MAX_FILES, CONTACT_MAX_SIZE_BYTES, CONTACT_ALLOWED_EXT) and the
- * presign route's EXT_ALLOWED_MIMES cross-check map. lib/r2.ts is marked
+ * shared lib/mime.ts CONTACT_ALLOWED cross-check map. lib/r2.ts is marked
  * 'server-only' so it cannot be imported here; keep these values in sync.
  */
 const MAX_ATTACHMENTS = 5;
@@ -110,12 +111,6 @@ function attachmentExtension(filename: string): string {
 
 function attachmentMime(filename: string, browserType?: string): string {
   return EXT_TO_MIME[attachmentExtension(filename)] ?? browserType ?? 'application/octet-stream';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
 }
 
 /**

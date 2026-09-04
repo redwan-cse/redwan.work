@@ -1,6 +1,6 @@
 // app/api/cron/r2-retention/route.ts
-import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { requireBearer } from '@/lib/auth/bearer';
 import {
   CONTACT_RETENTION_DAYS,
   ARCHIVE_PREFIX,
@@ -37,19 +37,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  */
 
 function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return false;
-
-  const header = request.headers.get('authorization') ?? '';
-  const match = header.match(/^Bearer (.+)$/);
-  if (!match) return false;
-
-  const provided = Buffer.from(match[1], 'utf-8');
-  const secret = Buffer.from(expected, 'utf-8');
-
-  // timingSafeEqual requires equal-length buffers; lengths alone leak
-  // nothing useful here, and unequal length short-circuits safely
-  return provided.length === secret.length && timingSafeEqual(provided, secret);
+  return requireBearer(process.env.CRON_SECRET, request.headers.get('authorization'));
 }
 
 export async function GET(request: NextRequest) {
