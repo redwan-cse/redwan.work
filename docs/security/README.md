@@ -67,7 +67,8 @@ All probes are self‑contained and cleaned up after each run; no persistent fix
 ## P5c Hardening Close-out (Shipped)
 
 The following residual items shipped in Phase 5c (`feat/p5c-consolidation-assets`,
-Task 5 — no migrations):
+Task 5 — code in the task commit, `'otp-ip'` kind in follow-up migration
+`0017_otp_rate_kind.sql`, already applied in production):
 
 - **Env-derived CSP Supabase origin** – `next.config.js` no longer hardcodes the
   project ref. `connect-src` interpolates the origin parsed from
@@ -83,10 +84,13 @@ Task 5 — no migrations):
   pattern, fail-closed with generic `Too many requests. Please try again
   later.` on missing salt or RPC error. No PII is logged.
 
-Note: the `'otp-ip'` rate-limit kind requires a follow-up migration adding it
-to the `rate_limits_kind_check` constraint (currently `ip`, `turnstile`,
-`presign-ip`, `presign-portal`); until then the limiter fails closed and OTP
-requests are denied — see the Task 5 report.
+Note: the `'otp-ip'` rate-limit kind is allowed by the
+`rate_limits_kind_check` constraint via migration `0017_otp_rate_kind.sql`
+(kinds: `ip`, `turnstile`, `presign-ip`, `presign-portal`, `otp-ip`), already
+applied in production — OTP throttling is live, and the limiter only fails
+closed on genuine RPC/salt errors. Verified end-to-end: 5 rapid
+`consume_rate_limit('otp-ip', …)` calls allowed, 6th denied — see the Task 5
+report.
 
 ## Residual Risks (Deferred to P5c)
 
@@ -101,7 +105,7 @@ The following items were identified but deferred to later phases (lifecycle emai
 - **Deactivation now revokes sessions**: when `setClientActive(clientId, false)` is called, the auth admin sign‑out API is invoked. The caller receives an error if revocation fails, preventing a scenario where a deactivated user might hold a live session.
 - **Service‑role RPCs are the only write path** for tickets, invoices, items, payments, and file status. Any direct REST mutation will be rejected by RLS or guard triggers.
 - **Client‑facing errors are generic** – if you need to debug, inspect the server logs (console.error) which contain the original error details.
-- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the new rate‑limit kind for ticket‑presign. Both are forward‑only and already applied in production.
+- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the new rate‑limit kind for ticket‑presign; `0017_otp_rate_kind.sql` adds `'otp-ip'` for OTP throttling. All are forward‑only and already applied in production.
 - **Probe environment**: all probes run against the live Supabase project and R2; they create and delete temporary resources. No real customer data is touched.
 
 ## Related Documentation
