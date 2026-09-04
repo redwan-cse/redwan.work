@@ -181,11 +181,12 @@ export function extractFirstImage(content: string): string {
  * Extract plain text excerpt from HTML content
  */
 export function extractExcerpt(content: string, maxLength: number = 200): string {
-  // Remove HTML tags
-  let text = content.replace(/<[^>]*>/g, "");
-  
-  // Decode common HTML entities
-  text = text
+  // Decode entities FIRST, then strip tags. Decoding after stripping lets
+  // `&lt;script&gt;` smuggle markup past the filter, and `&amp;lt;` double-
+  // decode into a live tag (CodeQL js/incomplete-multi-character-sanitization,
+  // js/double-escaping). A single decode pass followed by the strip means
+  // anything decoded can never survive as markup.
+  let text = content
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -193,6 +194,9 @@ export function extractExcerpt(content: string, maxLength: number = 200): string
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&hellip;/g, "...");
+
+  // Strip HTML tags after decoding
+  text = text.replace(/<[^>]*>/g, "");
   
   // Trim whitespace and remove extra spaces
   text = text.trim().replace(/\s+/g, " ");
