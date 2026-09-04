@@ -92,7 +92,7 @@ closed on genuine RPC/salt errors. Verified end-to-end: 5 rapid
 `consume_rate_limit('otp-ip', …)` calls allowed, 6th denied — see the Task 5
 report.
 
-## Residual Risks (Deferred to P5c)
+## Residual Risks (Deferred beyond P5c)
 
 The following items were identified but deferred to later phases (lifecycle emails and `email_log` shipped in P5b — see [docs/email/README.md](../email/README.md)):
 
