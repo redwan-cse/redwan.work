@@ -56,6 +56,9 @@ jobs:
       - name: Production build (credential-free CI)
         if: matrix.check == 'build'
         run: npm run build
+      - name: Running production server smoke tests (loopback only)
+        if: matrix.check == 'build'
+        run: node --test tests/server/*.test.mjs
       - name: Dependency audit
         if: matrix.check == 'dependencies'
         run: npm audit --audit-level=low
