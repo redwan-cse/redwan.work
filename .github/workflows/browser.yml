@@ -1,0 +1,56 @@
+name: Browser acceptance
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium:
+    name: Browser / Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install application dependencies
+        run: npm ci
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser-tools" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Build actual application without integration credentials
+        run: npm run build
+      - name: Run desktop and mobile browser acceptance
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/browser-tools
+        run: |
+          set -euo pipefail
+          node --test tests/browser/*.test.mjs | tee "$RUNNER_TEMP/browser-results.txt"
+      - name: Publish test output in run summary
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/browser-results.txt" ]; then
+            printf '### Chromium acceptance\n\n```text\n' >> "$GITHUB_STEP_SUMMARY"
+            tail -c 40000 "$RUNNER_TEMP/browser-results.txt" >> "$GITHUB_STEP_SUMMARY"
+            printf '\n```\n' >> "$GITHUB_STEP_SUMMARY"
+          fi

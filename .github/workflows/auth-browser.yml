@@ -1,0 +1,94 @@
+name: Disposable Auth acceptance
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-browser-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth:
+    name: Browser / Disposable Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install dependencies and pinned test tools
+        run: |
+          set -euo pipefail
+          stage=dependencies
+          trap 'echo "::error::Disposable Auth setup failed at stage $stage"' ERR
+          npm ci
+          stage=playwright
+          npm install --prefix "$RUNNER_TEMP/auth-browser-tools" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/auth-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+          stage=cli-download
+          curl --fail --silent --show-error --location https://github.com/supabase/cli/releases/download/v2.116.0/supabase_2.116.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/supabase.tar.gz"
+          stage=cli-digest
+          echo "5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158  $RUNNER_TEMP/supabase.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/auth-cli"
+          tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/auth-cli" supabase
+      - name: Initialize a new local-only Supabase project
+        run: |
+          set -euo pipefail
+          stage=init
+          trap 'echo "::error::Disposable Auth setup failed at stage $stage"' ERR
+          umask 077
+          mkdir -p "$RUNNER_TEMP/redwan-auth-ci"
+          "$RUNNER_TEMP/auth-cli/supabase" init --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-init.log" 2>&1
+          stage=migration-copy
+          mkdir -p "$RUNNER_TEMP/redwan-auth-ci/supabase/migrations"
+          cp supabase/migrations/*.sql "$RUNNER_TEMP/redwan-auth-ci/supabase/migrations/"
+          stage=config
+          python3 - <<'PY'
+          import os, pathlib, re
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'redwan-auth-ci/supabase/config.toml'
+          s = p.read_text()
+          s, n = re.subn(r'^project_id = .*$', 'project_id = "redwan-auth-ci"', s, flags=re.M)
+          assert n == 1
+          s, n = re.subn(r'^site_url = .*$', 'site_url = "http://localhost:3399"', s, flags=re.M)
+          assert n == 1
+          p.write_text(s)
+          PY
+          stage=start
+          "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1
+          stage=status
+          "$RUNNER_TEMP/auth-cli/supabase" status --workdir "$RUNNER_TEMP/redwan-auth-ci" --output json > "$RUNNER_TEMP/auth-status.json" 2> "$RUNNER_TEMP/auth-status.log"
+      - name: Build and test using local keys only
+        env:
+          AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
+        run: |
+          if ! node tests/auth/run-local.mjs; then
+            echo '::error::Disposable Auth build or assertions failed; inspect this step for the safe assertion message.'
+            exit 1
+          fi
+      - name: Destroy this job's disposable services
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -x "$RUNNER_TEMP/auth-cli/supabase" ] && [ -f "$RUNNER_TEMP/redwan-auth-ci/supabase/config.toml" ]; then
+            if ! "$RUNNER_TEMP/auth-cli/supabase" stop --workdir "$RUNNER_TEMP/redwan-auth-ci" --no-backup > "$RUNNER_TEMP/auth-stop.log" 2>&1; then
+              echo '::error::Disposable Supabase teardown failed.'
+              exit 1
+            fi
+          fi
+          echo 'Disposable service teardown completed; no remote project was linked.'

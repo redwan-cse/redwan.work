@@ -1,0 +1,9 @@
+# Disposable Supabase authenticated acceptance
+
+The dedicated Actions job creates a new Supabase CLI project under runner temporary storage, copies the repository migrations unchanged, starts local Docker services, and runs the built app plus real Chromium against those services. It never links to a hosted project and never runs remote db push/reset. Only local CLI-generated publishable and secret API keys are accepted; no legacy key fallback. The CLI binary is pinned to v2.116.0 and verified with its release SHA-256 digest.
+
+`tests/auth/run-local.mjs` reads CLI status from a private temporary JSON file, validates loopback API/port and new key formats, then passes only approved local environment values to build/tests. CLI output and application build/server logs are withheld because they can contain credentials. No status JSON, passwords, tokens or private signing keys are published. Playwright 1.58.2 lives in temporary test tooling, not the app lockfile.
+
+Coverage when the job passes: real Auth password login and SDK refresh/logout; ES256 signature verification using the Auth JWKS endpoint; browser admin/client login, wrong-role redirects, production cookie attributes and logout; invalidation of existing panel access after authoritative profile activity/role changes. Temporary users use random ...@example.test addresses and random passwords. Cleanup deletes only their ids, checks zero matching profile rows, then the workflow always stops its own local project without backup.
+
+This does not fix or claim closure of direct-REST RLS gaps, CRM administrative session-revocation APIs, valid email invitation/recovery click-through, mailbox delivery, browser automatic expiry refresh or R2 integration. Account-state transitions in these tests are deliberately applied through the local admin fixture API to isolate session/proxy enforcement. Production remains untouched; PR #48 must not auto-merge from this job.

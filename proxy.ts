@@ -25,24 +25,29 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const { pathname, search } = request.nextUrl;
+  const isAuthPage = AUTH_PAGES.has(pathname) || pathname.startsWith('/invite/');
+  const loginUrl = new URL('/login', request.url);
 
-  // Fail closed for protected paths when Supabase env is absent.
   if (!url || !publishableKey) {
-    const isAuthPage =
-      AUTH_PAGES.has(pathname) || pathname.startsWith('/invite/');
     if (isAuthPage) return NextResponse.next();
-    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('next', `${pathname}${search}`);
     return NextResponse.redirect(loginUrl);
   }
 
   let response = NextResponse.next({ request: { headers: request.headers } });
-
   const supabase = createServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return parseCookieHeader(request.cookies.toString());
       },
       setAll(cookiesToSet, headers) {
+        cookiesToSet.forEach(({ name, value }) => {
+          // Make refreshed cookies visible to downstream server components too.
+          request.cookies.set(name, value);
+        });
+        const previous = response;
+        response = NextResponse.next({ request: { headers: request.headers } });
+        carrySessionResponse(previous, response);
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, {
             ...options,
@@ -58,68 +63,67 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  // Must happen before any response is committed so refreshed cookies survive.
-  const { data } = await supabase.auth.getClaims();
-  const role = readClaimRole(data?.claims);
-  const authenticated = Boolean(readClaimSub(data?.claims));
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    const role = readClaimRole(data?.claims);
+    const userId = readClaimSub(data?.claims);
 
-  const isAuthPage = AUTH_PAGES.has(pathname) || pathname.startsWith('/invite/');
-  const loginUrl = new URL('/login', request.url);
-
-  if (!authenticated) {
-    if (isAuthPage) return response;
-    loginUrl.searchParams.set('next', `${pathname}${search}`);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (pathname === '/login') {
-    const home = panelHome(role);
-    if (home) return NextResponse.redirect(new URL(home, request.url));
-    return response; // reset-password/invite pages stay reachable while signed in
-  }
-
-  if (pathname.startsWith('/admin')) {
-    if (role === 'admin') return response;
-    const home = panelHome(role);
-    if (home) return NextResponse.redirect(new URL(home, request.url));
-    await supabase.auth.signOut();
-    return redirectWithCookies(loginUrl, response);
-  }
-
-  if (pathname.startsWith('/portal')) {
-    if (role === 'admin') {
-      return NextResponse.redirect(new URL('/admin', request.url));
+    if (error || !userId) {
+      if (isAuthPage) return response;
+      loginUrl.searchParams.set('next', `${pathname}${search}`);
+      return redirectWithCookies(loginUrl, response);
     }
-    if (role === 'client') {
-      const userId = readClaimSub(data?.claims)!;
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('is_active')
-        .eq('id', userId)
-        .maybeSingle();
-      if (error) {
-        console.error('profiles is_active check failed:', error.message);
-      }
-      if (profile?.is_active === true) return response;
-    }
-    // The logout route performs the actual sign-out with proper cookie context;
-    // the proxy only bounces there.
-    const bye = new URL(LOGOUT_ROUTE, request.url);
-    bye.searchParams.set('reason', 'deactivated');
-    return NextResponse.redirect(bye);
-  }
 
-  return response;
+    // Recovery and invitation screens must remain reachable to complete auth.
+    if (pathname === '/reset-password' || pathname.startsWith('/invite/')) return response;
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role, is_active')
+      .eq('id', userId)
+      .maybeSingle();
+    if (profileError) return unavailableResponse(response);
+
+    const home = panelHome(role);
+    if (!home || !profile || profile.is_active !== true || profile.role !== role) {
+      // Do not bounce a stale claim between /login and its former panel.
+      if (pathname === '/login') return response;
+      const bye = new URL(LOGOUT_ROUTE, request.url);
+      if (profile?.is_active === false) bye.searchParams.set('reason', 'deactivated');
+      return redirectWithCookies(bye, response);
+    }
+
+    if (pathname === '/login') return redirectWithCookies(new URL(home, request.url), response);
+    if (pathname.startsWith('/admin') && role !== 'admin') {
+      return redirectWithCookies(new URL(home, request.url), response);
+    }
+    if (pathname.startsWith('/portal') && role !== 'client') {
+      return redirectWithCookies(new URL(home, request.url), response);
+    }
+    return response;
+  } catch {
+    console.error('Route authority check unavailable.');
+    return unavailableResponse(response);
+  }
+}
+
+function carrySessionResponse(base: NextResponse, target: NextResponse): NextResponse {
+  base.cookies.getAll().forEach((cookie) => target.cookies.set(cookie.name, cookie.value, cookie));
+  for (const name of ['cache-control', 'expires', 'pragma', 'vary']) {
+    const value = base.headers.get(name);
+    if (value) target.headers.set(name, value);
+  }
+  return target;
 }
 
 function redirectWithCookies(target: URL, base: NextResponse): NextResponse {
-  const redirect = NextResponse.redirect(target);
-  // signOut() wrote cleared cookie values into `base`; carry them over so the
-  // browser actually drops the session cookies on this same response.
-  base.cookies.getAll().forEach((cookie) => {
-    redirect.cookies.set(cookie.name, cookie.value);
-  });
-  return redirect;
+  return carrySessionResponse(base, NextResponse.redirect(target));
+}
+
+function unavailableResponse(base: NextResponse): NextResponse {
+  const response = carrySessionResponse(base, new NextResponse('Authentication is temporarily unavailable.', { status: 503 }));
+  response.headers.set('Cache-Control', 'no-store');
+  return response;
 }
 
 export const config = {
