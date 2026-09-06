@@ -34,20 +34,30 @@ jobs:
       - name: Install dependencies and pinned test tools
         run: |
           set -euo pipefail
+          stage=dependencies
+          trap 'echo "::error::Disposable Auth setup failed at stage $stage"' ERR
           npm ci
+          stage=playwright
           npm install --prefix "$RUNNER_TEMP/auth-browser-tools" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
           node "$RUNNER_TEMP/auth-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+          stage=cli-download
           curl --fail --silent --show-error --location https://github.com/supabase/cli/releases/download/v2.116.0/supabase_2.116.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/supabase.tar.gz"
+          stage=cli-digest
           echo "5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158  $RUNNER_TEMP/supabase.tar.gz" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/auth-cli"
           tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/auth-cli" supabase
       - name: Initialize a new local-only Supabase project
         run: |
           set -euo pipefail
+          stage=init
+          trap 'echo "::error::Disposable Auth setup failed at stage $stage"' ERR
           umask 077
           mkdir -p "$RUNNER_TEMP/redwan-auth-ci"
           "$RUNNER_TEMP/auth-cli/supabase" init --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-init.log" 2>&1
+          stage=migration-copy
+          mkdir -p "$RUNNER_TEMP/redwan-auth-ci/supabase/migrations"
           cp supabase/migrations/*.sql "$RUNNER_TEMP/redwan-auth-ci/supabase/migrations/"
+          stage=config
           python3 - <<'PY'
           import os, pathlib, re
           p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'redwan-auth-ci/supabase/config.toml'
@@ -58,23 +68,26 @@ jobs:
           assert n == 1
           p.write_text(s)
           PY
-          if ! "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1; then
-            echo 'Disposable Supabase startup failed; raw logs withheld because CLI output may contain local keys.'
-            exit 1
-          fi
+          stage=start
+          "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1
+          stage=status
           "$RUNNER_TEMP/auth-cli/supabase" status --workdir "$RUNNER_TEMP/redwan-auth-ci" --output json > "$RUNNER_TEMP/auth-status.json" 2> "$RUNNER_TEMP/auth-status.log"
       - name: Build and test using local keys only
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
-        run: node tests/auth/run-local.mjs
+        run: |
+          if ! node tests/auth/run-local.mjs; then
+            echo '::error::Disposable Auth build or assertions failed; inspect this step for the safe assertion message.'
+            exit 1
+          fi
       - name: Destroy this job's disposable services
         if: always()
         run: |
           set -euo pipefail
           if [ -x "$RUNNER_TEMP/auth-cli/supabase" ] && [ -f "$RUNNER_TEMP/redwan-auth-ci/supabase/config.toml" ]; then
             if ! "$RUNNER_TEMP/auth-cli/supabase" stop --workdir "$RUNNER_TEMP/redwan-auth-ci" --no-backup > "$RUNNER_TEMP/auth-stop.log" 2>&1; then
-              echo 'Disposable Supabase teardown failed.'
+              echo '::error::Disposable Supabase teardown failed.'
               exit 1
             fi
           fi
