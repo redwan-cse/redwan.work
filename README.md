@@ -47,10 +47,16 @@ Full documentation in [`/docs`](./docs).
 
 ### Environment Variables
 
-Create `.env.local` from `.env.example` and fill in:
+Create `.env.local` from `.env.example` and fill in. `.env.local` is
+gitignored — never commit it. Variables prefixed `NEXT_PUBLIC_` are inlined
+at **build** time, so Vercel must hold the production values.
 
 ```env
-# Supabase
+# Site (NEXT_PUBLIC_SITE_URL MUST be https://redwan.work in production —
+# lifecycle-email links are built from it)
+NEXT_PUBLIC_SITE_URL=
+
+# Supabase (new-format keys only: sb_publishable_… / sb_secret_…)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
@@ -65,21 +71,22 @@ R2_PRIVATE_ACCESS_KEY_ID=
 R2_PRIVATE_SECRET_ACCESS_KEY=
 NEXT_PUBLIC_R2_PUBLIC_BASE_URL=
 
-# Resend
+# Resend (lifecycle emails)
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 
-# Turnstile
+# Turnstile (bot protection)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 
-# Blogger
+# Blogger (graceful empty state without it)
 BLOGGER_BLOG_ID=
 GOOGLE_CREDENTIALS_B64= # base64 service account JSON
 
 # Misc
-LEAD_IP_HASH_SALT=
-CRON_SECRET=
+LEAD_IP_HASH_SALT=      # openssl rand -hex 32; never store raw IPs
+CRON_SECRET=            # bearer for /api/cron/r2-retention
+REVALIDATION_SECRET=    # bearer for POST /api/revalidate
 ```
 
 ### Install & Run
