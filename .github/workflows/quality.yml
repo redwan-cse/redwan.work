@@ -1,0 +1,58 @@
+name: Quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, fix/audit-quality-gates]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Quality / ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, types, unit, build, dependencies]
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      # No repository secrets or production integration credentials are used.
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint
+        if: matrix.check == 'lint'
+        run: npm run lint
+      - name: Generate route types and typecheck
+        if: matrix.check == 'types'
+        run: |
+          npx --no-install next typegen
+          npx --no-install tsc --noEmit
+      - name: Unit regression tests
+        if: matrix.check == 'unit'
+        run: node --experimental-strip-types --test tests/*.test.mjs
+      - name: Production build (credential-free CI)
+        if: matrix.check == 'build'
+        run: npm run build
+      - name: Dependency audit
+        if: matrix.check == 'dependencies'
+        run: npm audit --audit-level=low
