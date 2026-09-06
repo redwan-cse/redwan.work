@@ -1,6 +1,9 @@
-# Security Hardening (Phase 5a)
+# Security Hardening & Repository Security
 
-This document summarizes the security hardening applied in Phase 5a (`feat/p5a-security-hardening`) to close four high-severity audit findings and several supporting gaps.
+This document covers the application-layer hardening (Phases 5a/5c), the
+lifecycle-email audit trail (Phase 5b), and the repository-level security
+controls (scanners, secrets, dependencies, branch protection) that guard every
+change going forward.
 
 ## Audit Findings and Fixes
 
@@ -92,20 +95,61 @@ closed on genuine RPC/salt errors. Verified end-to-end: 5 rapid
 `consume_rate_limit('otp-ip', …)` calls allowed, 6th denied — see the Task 5
 report.
 
-## Residual Risks (Deferred beyond P5c)
+## Residual Risks (Tracked, Not Deferred Phases)
 
-The following items were identified but deferred to later phases (lifecycle emails and `email_log` shipped in P5b — see [docs/email/README.md](../email/README.md)):
+All planned phases (P1 → P5c) are shipped. What remains is continuous and
+operational rather than phased work:
 
-- Helper duplication, dead exports, N+1 hydration (P5c)
-- Dependabot vulnerabilities (dedicated PR)
-- Staging browser probes (cross‑client, payment UI, print) – blocked by missing Chromium / malformed MCP; to be run in staging
+- **Staging browser probes** (cross‑client, payment UI, print, `/admin/assets`
+  upload/delete click-through, `/admin/emails` as admin vs client) — blocked
+  historically by missing Chromium; run in staging with a real browser.
+- **`email_log` grows unbounded** — no retention policy yet (unlike R2 objects).
+  Decide a window (e.g. 365 days) and add a cron purge.
+- **No bounce or complaint handling** — Resend webhooks are not wired, so a hard
+  bounce after a `sent` row leaves the log optimistic.
+- **Deactivation does not stop email** — a deactivated client with a pending
+  invoice still receives lifecycle mail.
+- **`HANDOFF_MARKER` string coupling** — editing that sentence reclassifies
+  historical handoff rows; a `delivery_confidence` column would be cleaner.
+- **Preview deployments inherit production `NEXT_PUBLIC_SITE_URL`** — preview
+  emails carry production links. Scope the variable per Vercel environment.
+- **`emailOrigin` has no scheme check beyond `https?`** and `adminRecipients()`
+  fans out serially against Resend's 10 req/s default — fine at current scale.
+- **Dependabot is continuous** — 0 open alerts as of the last sweep; new CVEs
+  arrive weekly via the scheduled scans. Triage new highs within 7 days.
+
+## Repository Security Controls
+
+Every push and pull request to `main` runs both scanners; results land in the
+[Security tab](https://github.com/redwan-cse/redwan.work/security):
+
+| Control | Configuration |
+|---|---|
+| CodeQL SAST | Default setup, `javascript-typescript` + `actions`; runs on push/PR + weekly |
+| Semgrep SAST | `.github/workflows/semgrep.yml` (`auto` ruleset: OWASP, security-audit, secrets); SARIF uploaded to the same tab |
+| Action pinning | All `uses:` refs pinned to full commit SHAs (Semgrep flags mutable tags) |
+| Secret scanning | Enabled, with push protection (secret-bearing pushes are blocked) |
+| Dependabot | Alerts + security updates enabled; swept to 0 open alerts (next 16.3.4, sharp 0.35.4) |
+| Branch protection | `main` requires CodeQL + Semgrep checks (strict), no force-push/deletion, no reviewer requirement (solo project) |
+| Vulnerability reporting | Private reporting enabled; public policy in [`SECURITY.md`](../../SECURITY.md) |
+
+### SAST findings to date (all closed)
+
+| # | Rule | File | Resolution |
+|---|---|---|---|
+| 1 | `js/double-escaping` | `lib/blogger.ts` (`extractExcerpt`) | Fixed — `&amp;` now decodes last, giving true single-pass semantics |
+| 2 | `js/incomplete-multi-character-sanitization` | `lib/blogger.ts` | False positive in context (sole consumer renders JSX text, React-escaped; verified no `dangerouslySetInnerHTML` on the path) — documented in code, dismissed with justification |
+| 3–7 | Unpinned GitHub Actions | `.github/workflows/*.yml` | Fixed — all refs pinned to SHAs |
+| 8 | `unsafe-formatstring` (note) | `lib/email/index.ts` | Fixed — constant format string |
+
+Alerts auto-resolve when the fix lands on `main`; false-positive dismissals are re-evaluated per analysis and re-dismissed with the same recorded justification if a finding reappears on moved lines.
 
 ## Operator Notes
 
 - **Deactivation now revokes sessions**: when `setClientActive(clientId, false)` is called, the auth admin sign‑out API is invoked. The caller receives an error if revocation fails, preventing a scenario where a deactivated user might hold a live session.
 - **Service‑role RPCs are the only write path** for tickets, invoices, items, payments, and file status. Any direct REST mutation will be rejected by RLS or guard triggers.
 - **Client‑facing errors are generic** – if you need to debug, inspect the server logs (console.error) which contain the original error details.
-- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the new rate‑limit kind for ticket‑presign; `0017_otp_rate_kind.sql` adds `'otp-ip'` for OTP throttling. All are forward‑only and already applied in production.
+- **Migration ordering**: `0014_security_hardening.sql` applies the core hardening; `0015_presign_portal_rate_kind.sql` adds the rate‑limit kind for ticket‑presign; `0016_email_log.sql` adds the email audit table; `0017_otp_rate_kind.sql` adds `'otp-ip'` for OTP throttling. All are forward‑only and already applied in production.
 - **Probe environment**: all probes run against the live Supabase project and R2; they create and delete temporary resources. No real customer data is touched.
 
 ## Related Documentation
