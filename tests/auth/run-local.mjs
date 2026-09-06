@@ -21,9 +21,11 @@ Object.assign(env, {
   LEAD_IP_HASH_SALT: randomBytes(32).toString('hex'),
   DISPOSABLE_AUTH_CI: 'true',
 });
-// Capture build output rather than emitting potentially credential-bearing diagnostics.
 const build = spawnSync(process.execPath, ['node_modules/next/dist/bin/next', 'build'], { env, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
 assert.equal(build.status, 0, 'Build with disposable Auth configuration failed (raw output withheld)');
 console.log('Disposable Auth build passed; local publishable/secret key presence validated.');
-const result = spawnSync(process.execPath, ['--test', 'tests/auth/authenticated.test.mjs'], { env, stdio: 'inherit' });
-process.exit(result.status ?? 1);
+// Sequential processes avoid sharing the app port or browser/SDK globals.
+for (const file of ['tests/auth/authenticated.test.mjs', 'tests/auth/recovery-previews.test.mjs']) {
+  const result = spawnSync(process.execPath, ['--test', file], { env, stdio: 'inherit' });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
