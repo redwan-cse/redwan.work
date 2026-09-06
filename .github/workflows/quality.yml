@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix/audit-quality-gates]
+    branches: [main]
 
 permissions:
   contents: read
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [lint, types, unit, build, dependencies]
+        check: [lint, types, unit, framework, build, dependencies]
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -50,6 +50,9 @@ jobs:
       - name: Unit regression tests
         if: matrix.check == 'unit'
         run: node --experimental-strip-types --test tests/*.test.mjs
+      - name: Real Next.js framework contracts
+        if: matrix.check == 'framework'
+        run: node --experimental-strip-types --test tests/framework/*.test.mjs
       - name: Production build (credential-free CI)
         if: matrix.check == 'build'
         run: npm run build
