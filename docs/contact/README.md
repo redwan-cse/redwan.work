@@ -98,67 +98,18 @@ If validation fails on submit:
 > • Time Zone
 > • GDPR Consent
 
-## Google Forms Integration
+## Google Forms Integration (RETIRED 2026-08-24)
 
-### How It Works
+The Google Forms + Sheets backend was retired by the P1 Supabase-only cutover
+(see [Phase 1: Supabase Leads Sink](#phase-1-supabase-leads-sink) below).
+`/api/contact` stores every lead in Supabase Postgres only; no `LEADS_SINK`
+flag exists and no Google endpoint is called. The client sends raw-named
+fields only — the old `entry.*` mirrors were removed with the cutover.
 
-1. User fills out form and clicks "Send Message"
-2. Client-side validation runs
-3. If valid, data is formatted and POST to Google Forms
-4. Uses `no-cors` mode (response not readable, but submission works)
-5. Success assumed if no error thrown
-6. Success message shown with Ticket ID
-
-### Field Mapping
-
-Each form field maps to a Google Forms entry ID (e.g., `entry.123456789`).
-
-**Setup Steps:**
-
-1. Create a Google Form with 19 fields matching the form
-2. Get the form action URL:
-   - Open form in edit mode
-   - Replace `/viewform` with `/formResponse` in URL
-3. Inspect form to find entry IDs:
-   - Right-click field → Inspect
-   - Look for `entry.XXXXXXXXX` in HTML
-4. Update mappings in `/components/enhanced-contact-form.tsx`
-5. Set environment variable:
-   ```env
-   NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL=https://docs.google.com/forms/d/e/FORM_ID/formResponse
-   ```
-
-### Google Sheets Integration
-
-Google Forms automatically saves to linked Google Sheets with columns:
-1. Timestamp (auto)
-2. Ticket ID
-3. Full Name
-4. Email
-5. Country
-6. WhatsApp Number
-7. Preferred Contact Method
-8. Time Zone
-9. Preferred Contact Date
-10. Best Time to Contact
-11. Service Type
-12. Company
-13. Budget Range
-14. Project Summary
-15. How Did You Find Me
-16. Urgency
-17. NDA Required
-18. GDPR Consent
-19. Source Page
-20. User Agent
-21. Device Type
-22. Priority
-23. Status
-
-**Optional:** Use Google Apps Script to:
-- Send email notifications on new submission
-- Auto-assign priority/status
-- Trigger webhooks to CRM
+This section is kept as a historical record of the pre-P1 setup (19-field
+form, `entry.*` IDs, linked Sheet, Apps Script notifications). Do not
+reintroduce it: the client-generated ticket ID it relied on was spoofable
+(known S6 issue, now closed by server-issued ticket refs).
 
 ## Extending the Form
 
@@ -275,9 +226,8 @@ Contains:
 ## Troubleshooting
 
 **Form submission doesn't work:**
-- Check `NEXT_PUBLIC_GOOGLE_FORM_ACTION_URL` is set
-- Verify Google Form is set to "Anyone can respond"
-- Check entry IDs match between form and Google Form
+- Check Supabase credentials (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`) and `LEAD_IP_HASH_SALT` are set
+- Check Turnstile keys are valid and the token isn't being reused
 - Open browser console for errors
 
 **Validation not working:**

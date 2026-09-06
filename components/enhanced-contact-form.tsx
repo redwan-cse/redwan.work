@@ -48,24 +48,16 @@ import { formatBytes } from '@/lib/format';
  * Enhanced Contact Form Component with Cloudflare Turnstile Protection
  * 
  * This component collects rich lead data for cybersecurity services.
- * It submits to an API route (/api/contact) which validates the Turnstile token
- * and then forwards the data to Google Forms.
- * 
- * SETUP INSTRUCTIONS:
- * 1. Create a Google Form with all required fields (19 fields total)
- * 2. Get the form's "formResponse" URL (replace /viewform with /formResponse)
- * 3. Inspect each field to get entry IDs (entry.XXXXXXXXX)
- * 4. Set environment variables:
- *    - NEXT_PUBLIC_TURNSTILE_SITE_KEY: Cloudflare Turnstile site key
- *    - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (server-only)
- *    - GOOGLE_FORM_ACTION_URL: Google Forms submission URL
- * 5. Apps Script in Google Sheets will handle email notifications and data processing
- * 
- * FIELD MAPPING:
- * Each form field maps to a Google Form entry ID.
- * Hidden/derived fields (sourcePage, userAgent, deviceType, priority, status)
- * are automatically collected and sent along with user inputs.
- * Google Forms automatically adds a timestamp as the first column in the linked Sheet.
+ * It submits to an API route (/api/contact) which validates the Turnstile
+ * token and stores the lead in Supabase Postgres (P1 Supabase-only pipeline).
+ *
+ * Required env (client side): NEXT_PUBLIC_TURNSTILE_SITE_KEY.
+ * The server route needs TURNSTILE_SECRET_KEY, Supabase credentials,
+ * and LEAD_IP_HASH_SALT — see .env.example.
+ *
+ * Submitted fields use raw names (name, email, …); the server parser reads
+ * only those. (The retired Google Forms backend used entry.* IDs; they were
+ * removed with the P1 cutover and must not be reintroduced.)
  */
 
 /**
@@ -875,32 +867,8 @@ export default function EnhancedContactForm() {
        * NOTE: timestamp is NOT included - Google Forms adds its own timestamp automatically
        */
       const formFields = new FormData();
-      
-      // Add all form fields
-      formFields.append('entry.1040615996', submissionData.name);
-      formFields.append('entry.527020986', submissionData.email);
-      formFields.append('entry.275586996', submissionData.country);
-      formFields.append('entry.691109542', submissionData.whatsAppNumber);
-      formFields.append('entry.2004275388', submissionData.preferredContactMethod);
-      formFields.append('entry.876535023', submissionData.timeZone);
-      formFields.append('entry.825634052', submissionData.preferredContactDate);
-      formFields.append('entry.2142614790', submissionData.bestTimeToContact);
-      formFields.append('entry.762760499', submissionData.serviceType);
-      formFields.append('entry.554909735', submissionData.company);
-      formFields.append('entry.688437948', submissionData.projectUrlOrFiles);
-      formFields.append('entry.428546032', submissionData.projectSummary);
-      formFields.append('entry.739578366', submissionData.ndaConfidentiality);
-      formFields.append('entry.663205754', submissionData.urgency);
-      formFields.append('entry.1932264358', submissionData.budgetRange);
-      formFields.append('entry.1784832711', submissionData.howDidYouFindMe);
-      formFields.append('entry.233094040', submissionData.ticketId);
-      formFields.append('entry.209109331', submissionData.sourcePage);
-      formFields.append('entry.1734132568', submissionData.userAgent);
-      formFields.append('entry.1030161553', submissionData.deviceType);
-      formFields.append('entry.279561249', submissionData.priority);
 
-      // Raw-named mirrors for the Supabase sink (Google ignores unknown params,
-      // and our forward paths strip non-entry.* keys anyway)
+      // Raw-named fields for the Supabase sink (the only sink since P1).
       formFields.append('name', submissionData.name);
       formFields.append('email', submissionData.email);
       formFields.append('country', submissionData.country);
@@ -935,7 +903,7 @@ export default function EnhancedContactForm() {
         formFields.append('cf-turnstile-response', submitToken);
       }
 
-      // Submit to our API route (which validates Turnstile and forwards to Google Forms)
+      // Submit to our API route (validates Turnstile, rate-limits, stores the lead)
       const response = await fetch('/api/contact', {
         method: 'POST',
         body: formFields,
