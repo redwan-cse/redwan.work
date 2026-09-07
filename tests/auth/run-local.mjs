@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { createClient } from '@supabase/supabase-js';
 
 for (const file of ['.env', '.env.local', '.env.production', '.env.production.local']) {
   assert.equal(existsSync(file), false, `Refusing authenticated test with ${file} present`);
@@ -30,13 +31,35 @@ const phases = ['fixture setup', 'start application', 'request real recovery ema
 for (const file of ['tests/auth/authenticated.test.mjs', 'tests/auth/recovery-previews.test.mjs', 'tests/auth/mailbox-recovery.test.mjs']) {
   const result = spawnSync(process.execPath, ['--test', file], { env, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-  // Emit only fixed suite names and numeric TAP totals, never raw child diagnostics.
   console.log(`Suite: ${file}`);
   for (const line of output.split('\n')) if (/^# (tests|pass|fail|cancelled|skipped) \d+$/.test(line)) console.log(line);
   if (result.status !== 0) {
     const phase = phases.find((value) => output.includes(`Mailbox recovery test failed at ${value};`));
     console.log(`::error::Disposable suite failed: ${file}${phase ? `; phase=${phase}` : ''}`);
     if (output.includes('fixture cleanup failed (details withheld)')) console.log('::error::Mailbox fixture cleanup failed.');
+    if (phase === 'receive actual SMTP message') {
+      // Diagnose local provider availability without revealing real error messages.
+      const admin = createClient(api.origin, status.SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      const email = `mail-diagnostic-${randomBytes(10).toString('hex')}@example.test`;
+      let id;
+      try {
+        const created = await admin.auth.admin.createUser({ email, password: randomBytes(24).toString('base64url'), email_confirm: true });
+        if (created.error || !created.data.user) throw new Error('fixture');
+        id = created.data.user.id;
+        const client = createClient(api.origin, status.PUBLISHABLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+        const response = await client.auth.resetPasswordForEmail(email, { redirectTo: 'http://localhost:3399/reset-password' });
+        const code = typeof response.error?.code === 'string' && /^[a-z_]{1,80}$/.test(response.error.code) ? response.error.code : 'none';
+        const httpStatus = Number.isInteger(response.error?.status) ? response.error.status : 200;
+        console.log(`::error::Local SMTP diagnostic: recovery status=${httpStatus}; code=${code}`);
+      } catch { console.log('::error::Local SMTP diagnostic could not complete.'); }
+      finally {
+        if (id) {
+          const deleted = await admin.auth.admin.deleteUser(id);
+          if (deleted.error) console.log('::error::Local SMTP diagnostic fixture deletion failed.');
+        }
+        // Mailbox belongs to the disposable project and is destroyed by always-run teardown.
+      }
+    }
     process.exit(result.status ?? 1);
   }
 }
