@@ -59,13 +59,18 @@ jobs:
           cp supabase/migrations/*.sql "$RUNNER_TEMP/redwan-auth-ci/supabase/migrations/"
           stage=config
           python3 - <<'PY'
-          import os, pathlib, re
+          import os, pathlib, re, tomllib
           p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'redwan-auth-ci/supabase/config.toml'
           s = p.read_text()
           s, n = re.subn(r'^project_id = .*$', 'project_id = "redwan-auth-ci"', s, flags=re.M)
           assert n == 1
           s, n = re.subn(r'^site_url = .*$', 'site_url = "http://localhost:3399"', s, flags=re.M)
           assert n == 1
+          assert 'recovery' not in tomllib.loads(s).get('auth', {}).get('email', {}).get('template', {})
+          template = p.parent / 'recovery-ci.html'
+          template.write_text('<h2>Reset your password</h2><p><a href="{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&amp;type=recovery">Reset password</a></p>')
+          s += '\n[auth.email.template.recovery]\nsubject = "Disposable recovery acceptance"\ncontent_path = "./supabase/recovery-ci.html"\n'
+          tomllib.loads(s)
           p.write_text(s)
           PY
           stage=start
