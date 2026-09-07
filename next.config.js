@@ -82,6 +82,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: '**.blogspot.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.jsdelivr.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'raw.githubusercontent.com',
+      },
     ],
   },
   async headers() {

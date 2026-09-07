@@ -59,6 +59,7 @@ export function BlogPreviewModal({ post, imageUrl, excerpt, children }: BlogPrev
               src={imageUrl}
               alt={post.title}
               fill
+              unoptimized={imageUrl.includes('cdn.jsdelivr.net') || imageUrl.includes('githubusercontent.com')}
               className="object-cover"
               priority
             />

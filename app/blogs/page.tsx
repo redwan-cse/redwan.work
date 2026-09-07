@@ -75,6 +75,7 @@ export default async function BlogsPage({ searchParams }: BlogsPageProps) {
                           src={imageUrl}
                           alt={post.title}
                           fill
+                          unoptimized={imageUrl.includes('cdn.jsdelivr.net') || imageUrl.includes('githubusercontent.com')}
                           className="object-cover transition-all duration-700 group-hover:scale-110 group-hover:brightness-110"
                           loading={index < 3 ? "eager" : "lazy"}
                         />
