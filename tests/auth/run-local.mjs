@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
 
 for (const file of ['.env', '.env.local', '.env.production', '.env.production.local']) {
   assert.equal(existsSync(file), false, `Refusing authenticated test with ${file} present`);
@@ -27,7 +26,7 @@ Object.assign(env, {
 const build = spawnSync(process.execPath, ['node_modules/next/dist/bin/next', 'build'], { env, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
 if (build.status !== 0) { console.log('::error::Disposable Auth configured build failed; raw output withheld.'); process.exit(1); }
 console.log('Disposable Auth build passed; local publishable/secret key and mailbox presence validated.');
-const phases = ['fixture setup', 'start application', 'request real recovery email through browser', 'receive actual SMTP message', 'extract actual href without reconstructing token', 'HEAD and GET email link previews', 'JavaScript email preview', 'human reset using extracted email link', 'password verification', 'replay email link in a fresh browser'];
+const phases = ['fixture setup', 'start application', 'request real recovery email through browser', 'receive actual SMTP message', 'validate mailbox message count', 'fetch received message', 'validate received recipient', 'validate template subject', 'validate email HTML', 'extract actual href without reconstructing token', 'HEAD and GET email link previews', 'JavaScript email preview', 'human reset using extracted email link', 'password verification', 'replay email link in a fresh browser'];
 for (const file of ['tests/auth/authenticated.test.mjs', 'tests/auth/recovery-previews.test.mjs', 'tests/auth/mailbox-recovery.test.mjs']) {
   const result = spawnSync(process.execPath, ['--test', file], { env, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
@@ -37,29 +36,6 @@ for (const file of ['tests/auth/authenticated.test.mjs', 'tests/auth/recovery-pr
     const phase = phases.find((value) => output.includes(`Mailbox recovery test failed at ${value};`));
     console.log(`::error::Disposable suite failed: ${file}${phase ? `; phase=${phase}` : ''}`);
     if (output.includes('fixture cleanup failed (details withheld)')) console.log('::error::Mailbox fixture cleanup failed.');
-    if (phase === 'receive actual SMTP message') {
-      // Diagnose local provider availability without revealing real error messages.
-      const admin = createClient(api.origin, status.SECRET_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-      const email = `mail-diagnostic-${randomBytes(10).toString('hex')}@example.test`;
-      let id;
-      try {
-        const created = await admin.auth.admin.createUser({ email, password: randomBytes(24).toString('base64url'), email_confirm: true });
-        if (created.error || !created.data.user) throw new Error('fixture');
-        id = created.data.user.id;
-        const client = createClient(api.origin, status.PUBLISHABLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-        const response = await client.auth.resetPasswordForEmail(email, { redirectTo: 'http://localhost:3399/reset-password' });
-        const code = typeof response.error?.code === 'string' && /^[a-z_]{1,80}$/.test(response.error.code) ? response.error.code : 'none';
-        const httpStatus = Number.isInteger(response.error?.status) ? response.error.status : 200;
-        console.log(`::error::Local SMTP diagnostic: recovery status=${httpStatus}; code=${code}`);
-      } catch { console.log('::error::Local SMTP diagnostic could not complete.'); }
-      finally {
-        if (id) {
-          const deleted = await admin.auth.admin.deleteUser(id);
-          if (deleted.error) console.log('::error::Local SMTP diagnostic fixture deletion failed.');
-        }
-        // Mailbox belongs to the disposable project and is destroyed by always-run teardown.
-      }
-    }
     process.exit(result.status ?? 1);
   }
 }

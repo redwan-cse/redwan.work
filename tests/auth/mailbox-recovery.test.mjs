@@ -27,7 +27,6 @@ async function mail(path, options = {}) {
   return response;
 }
 async function matching(email) {
-  // Search only the exact randomized fixture recipient, then verify its address.
   const response = await mail(`/api/v1/search?query=${encodeURIComponent(`to:${email}`)}&limit=100`);
   const body = await response.json();
   if (!Array.isArray(body.messages) || body.total > 100) throw new Error('Unexpected mailbox inventory');
@@ -76,11 +75,17 @@ test('recovery email from disposable SMTP mailbox survives preview and resets on
     phase = 'receive actual SMTP message';
     const mailDeadline = Date.now() + 30000; let messages = [];
     while (Date.now() < mailDeadline) { messages = await matching(email); if (messages.length) break; await delay(250); }
+    if (messages.length === 0) throw new Error('No matching message received');
+    phase = 'validate mailbox message count';
     assert.equal(messages.length, 1, 'Expected one recovery email for the fixture');
     for (const message of messages) captured.add(message.ID);
+    phase = 'fetch received message';
     const message = await (await mail(`/api/v1/message/${encodeURIComponent(messages[0].ID)}`)).json();
+    phase = 'validate received recipient';
     assert.ok(message.To?.some((recipient) => recipient.Address === email), 'Mailbox recipient mismatch');
+    phase = 'validate template subject';
     assert.equal(message.Subject, 'Disposable recovery acceptance');
+    phase = 'validate email HTML';
     assert.equal(typeof message.HTML, 'string', 'Email HTML missing');
     phase = 'extract actual href without reconstructing token';
     const parser = await page();
@@ -90,7 +95,6 @@ test('recovery email from disposable SMTP mailbox survives preview and resets on
     assert.ok(target.origin === origin && target.pathname === '/reset-password' && !target.username && !target.password && !target.hash, 'Email contains an unexpected destination');
     assert.equal(target.searchParams.get('type'), 'recovery');
     assert.ok(target.searchParams.get('token_hash'), 'Rendered email omitted token');
-    // Use this exact DOM-decoded href for every navigation; never generateLink.
     phase = 'HEAD and GET email link previews';
     for (const method of ['HEAD', 'GET']) {
       const response = await fetch(href, { method, redirect: 'manual', signal: AbortSignal.timeout(10000) });
@@ -134,7 +138,6 @@ test('recovery email from disposable SMTP mailbox survives preview and resets on
       if (server.exitCode === null && server.signalCode === null) { server.kill('SIGKILL'); await exited; }
     }
     try {
-      // Collect only this fixture's messages, including messages arriving during failure cleanup.
       for (const message of await matching(email)) captured.add(message.ID);
       const ids = [...captured];
       if (ids.length) await (await mail('/api/v1/messages', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ IDs: ids }) })).text();
@@ -148,5 +151,6 @@ test('recovery email from disposable SMTP mailbox survives preview and resets on
     } catch { cleanupFailed = true; }
     if (cleanupFailed) failure = `${failure ?? 'Mailbox assertions completed'}; fixture cleanup failed (details withheld)`;
   }
-  if (failure) throw new Error(failure);
+  // Only fixed phase strings are exposed as annotations, never caught diagnostics.
+  if (failure) { console.log(`::error::Mailbox recovery phase=${phase}`); throw new Error(failure); }
 });
