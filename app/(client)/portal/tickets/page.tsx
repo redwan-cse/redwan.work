@@ -1,79 +1,14 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
-import { NewTicketButton } from '@/components/portal/new-ticket-button';
-import { getCurrentSession } from '@/lib/auth/session';
-import { listOwnTickets } from '@/lib/crm/tickets';
-
-export const dynamic = 'force-dynamic';
-
-// Inline badge/label maps (RSC-safe; identical copy in the thread page).
-const TICKET_STATUS_LABELS = {
-  open: 'Open',
-  answered: 'Answered',
-  awaiting_client: 'Awaiting client',
-  closed: 'Closed',
-} as const;
-
-const TICKET_BADGE: Record<keyof typeof TICKET_STATUS_LABELS, string> = {
-  open: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  answered: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  awaiting_client: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  closed: 'bg-muted text-muted-foreground',
-};
-
-function utcStamp(iso: string) {
-  return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
-}
-
-export default async function PortalTicketsPage() {
-  const session = await getCurrentSession();
-  // The portal layout guarantees a client session; redirect defensively anyway.
-  if (!session) redirect('/login');
-
-  const items = await listOwnTickets(session.userId);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Tickets</h1>
-        <NewTicketButton />
-      </div>
-
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tickets yet — create your first one.</p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 font-medium">Ref</th>
-                <th className="px-4 py-2 font-medium">Subject</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Last activity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((ticket) => (
-                <tr key={ticket.id} className="border-t">
-                  <td className="px-4 py-2 font-mono text-xs">#TKT-{ticket.number}</td>
-                  <td className="px-4 py-2">
-                    <Link href={`/portal/tickets/${ticket.id}`} className="hover:underline">
-                      {ticket.subject}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline" className={TICKET_BADGE[ticket.status]}>
-                      {TICKET_STATUS_LABELS[ticket.status]}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground">{utcStamp(ticket.last_message_at)} UTC</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+import {redirect} from 'next/navigation';
+import {Badge} from '@/components/ui/badge';
+import {NewTicketButton} from '@/components/portal/new-ticket-button';
+import {workflowSession,workflowPage} from '@/lib/crm/workflow-access';
+import {getSupabaseAdmin} from '@/lib/supabase/admin';
+export const dynamic='force-dynamic';
+export default async function PortalTicketsPage({searchParams}:{searchParams:Promise<{page?:string}>}) {
+ const session=await workflowSession('client');if(!session)redirect('/login?next=/portal/tickets');
+ const page=workflowPage((await searchParams).page);
+ const {data,error,count}=await getSupabaseAdmin().from('tickets').select('id,number,subject,status,last_message_at',{count:'exact'}).eq('client_id',session.userId).order('last_message_at',{ascending:false}).order('id').range((page-1)*25,page*25-1);
+ if(error)throw new Error('Could not load tickets.');
+ return <section className="space-y-6"><header className="flex flex-wrap items-center justify-between gap-4"><h1 className="text-2xl font-semibold">Tickets</h1><NewTicketButton/></header>{!data?.length?<p>No tickets on this page.</p>:<div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[560px] text-sm"><thead className="bg-muted/50 text-left"><tr><th className="p-3">Ref</th><th className="p-3">Subject</th><th className="p-3">Status</th><th className="p-3">Last activity</th></tr></thead><tbody>{data.map(ticket=><tr key={ticket.id} className="border-t"><td className="p-3">TKT-{ticket.number}</td><td className="p-3"><Link className="underline" href={`/portal/tickets/${ticket.id}`}>{ticket.subject}</Link></td><td className="p-3"><Badge variant="outline">{String(ticket.status).replaceAll('_',' ')}</Badge></td><td className="whitespace-nowrap p-3">{new Date(ticket.last_message_at).toISOString().slice(0,16).replace('T',' ')} UTC</td></tr>)}</tbody></table></div>}<nav aria-label="Ticket pages" className="flex gap-4">{page>1&&<Link href={`?page=${page-1}`}>Previous</Link>}{(count??0)>page*25&&<Link href={`?page=${page+1}`}>Next</Link>}</nav></section>;
 }
