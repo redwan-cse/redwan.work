@@ -1,0 +1,7 @@
+# Disposable storage and recovery acceptance
+
+A dedicated fixture runner starts one digest-pinned MinIO container bound only to 127.0.0.1:9000, with generated job-local credentials that are never logged. The digest was resolved from Docker Hub: sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e. This is a disposable S3 implementation for testing, not a new production vendor or a Cloudflare-specific guarantee.
+
+The test uses the actual AWS SDK, signer, R2 helpers, archiver and recovery service against real local Supabase/Postgres. It performs signed contact PUT and HEAD mismatch refusal, a full 5 MB signed public upload and byte comparison, invoice-linked purge refusal, verified fresh recovery ZIP, transactional project removal, physical object deletion and idempotent queue drain. It reads the stored ZIP, tests its integrity and safe entry paths, restores project/milestone/file rows and bytes using new object keys, and compares the restored data. A hostile display filename remains manifest data, never a ZIP traversal path.
+
+Every synthetic row and object is removed, empty bucket/profile counts are verified, and the exact named container is always destroyed. Only fixed phases and numeric test totals leave captured child output. No production secrets or database/storage connections are accepted. Hosted R2 CORS/CDN behavior and production backup restoration remain environment-specific release checks even if this disposable suite passes.
