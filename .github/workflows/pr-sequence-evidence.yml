@@ -1,23 +1,11 @@
-name: PR sequence evidence
+name: PR sequence evidence retired
 on:
-  push:
-    branches: [fix/direct-public-asset-uploads]
-    paths:
-      - .github/workflows/pr-sequence-evidence.yml
-      - scripts/pr-sequence-evidence.mjs
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
-  statuses: write
 jobs:
-  evidence:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Inspect exact public branch objects and settings availability
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/pr-sequence-evidence.mjs
+      - run: echo 'Read-only sequence inspection completed; temporary status publishing retired.'
