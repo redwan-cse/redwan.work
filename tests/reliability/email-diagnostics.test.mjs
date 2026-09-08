@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {registerHooks} from 'node:module';
+import test from 'node:test';
+const rows=[];globalThis.__emailDiagnosticRows=rows;
+const templates=['renderDeliverableUploaded','renderInvoiceIssued','renderNewTicket','renderPaymentConfirmed','renderReplyPosted','renderStatusChanged'];
+const modules={'server-only':'export {};','@/lib/supabase/admin':'export function getSupabaseAdmin(){return {from(){return {async insert(value){globalThis.__emailDiagnosticRows.push(value);return {error:null};}};}};}','@/lib/email/templates':templates.map(name=>`export function ${name}(){return {subject:"Synthetic",html:"Synthetic"};}`).join(' ')};
+const hooks=registerHooks({resolve(s,c,n){return Object.hasOwn(modules,s)?{url:`data:text/javascript,${encodeURIComponent(modules[s])}`,shortCircuit:true}:n(s,c);}});
+const {recordExternalSend,recordUnsent,HANDOFF_MARKER}=await import('../../lib/email/index.ts');hooks.deregister();
+test('arbitrary upstream strings are not retained as email diagnostics',async()=>{rows.length=0;await recordExternalSend({to:'synthetic@example.test',template:'invite',status:'failed',error:'synthetic-private-token-and-address'});assert.equal(rows[0].error,'Email operation failed');assert.equal(JSON.stringify(rows).includes('synthetic-private-token-and-address'),false);});
+test('handoff semantics and known operational categories remain distinguishable',async()=>{rows.length=0;await recordExternalSend({to:'synthetic@example.test',template:'invite'});assert.equal(rows[0].error,HANDOFF_MARKER);await recordUnsent({template:'new-ticket',reason:'Recipient unavailable'});assert.equal(rows[1].error,'Recipient unavailable');});
