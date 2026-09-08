@@ -5,6 +5,6 @@ export function parseMilestoneMoney(cents: string, amount: string): { ok: true; 
   if (!cents && !amount) return { ok: true };
   if (cents ? !/^[0-9]{1,10}$/.test(cents) : !/^[0-9]{1,8}(?:\.[0-9]{1,2})?$/.test(amount)) return { ok: false };
   const parts = amount.split('.');
-  const value = cents ? BigInt(cents) : BigInt(parts[0]) * 100n + BigInt((parts[1] ?? '').padEnd(2, '0'));
-  return value <= 2147483647n ? { ok: true, amount_cents: Number(value) } : { ok: false };
+  const value = cents ? BigInt(cents) : BigInt(parts[0]) * BigInt(100) + BigInt((parts[1] ?? '').padEnd(2, '0'));
+  return value <= BigInt(2147483647) ? { ok: true, amount_cents: Number(value) } : { ok: false };
 }
