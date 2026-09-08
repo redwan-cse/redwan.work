@@ -1,45 +1,20 @@
 'use client';
-
-import { useRef, useState, useTransition } from 'react';
+import { useRef,useState,useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { replyToTicketAction } from '@/lib/crm/admin-actions';
-
-export function ReplyForm({ ticketId }: { ticketId: string }) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function onSubmit(formData: FormData) {
-    setError(null);
-    startTransition(async () => {
-      const state = await replyToTicketAction(ticketId, {}, formData);
-      if (state.error) {
-        setError(state.error);
-        return;
-      }
-      formRef.current?.reset();
-    });
-  }
-
-  return (
-    <form ref={formRef} action={onSubmit} className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor="reply-body">Reply</Label>
-        <Textarea
-          id="reply-body"
-          name="body"
-          rows={5}
-          maxLength={10000}
-          required
-          placeholder="Write a reply…"
-        />
-      </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" size="sm" disabled={pending}>
-        {pending ? 'Sending…' : 'Send reply'}
-      </Button>
-    </form>
-  );
+import { TicketAttachments,type TicketAttachment } from '@/components/ticket-attachments';
+export function ReplyForm({ticketId}:{ticketId:string}) {
+  const formRef=useRef<HTMLFormElement>(null);
+  const [error,setError]=useState<string|null>(null);
+  const [pending,startTransition]=useTransition();
+  const [uploading,setUploading]=useState(false);
+  const [files,setFiles]=useState<TicketAttachment[]>([]);
+  return <form ref={formRef} className="space-y-3" onSubmit={e=>{e.preventDefault();if(pending||uploading)return;const data=new FormData(e.currentTarget);setError(null);startTransition(async()=>{const state=await replyToTicketAction(ticketId,{},data);if(state.error){setError(state.error);return;}formRef.current?.reset();});}}>
+    <div className="space-y-1.5"><Label htmlFor="reply-body">Reply</Label><Textarea id="reply-body" name="body" rows={5} maxLength={10000} required disabled={pending} placeholder="Write a reply..."/></div>
+    <TicketAttachments ticketId={ticketId} entries={files} onChange={setFiles} disabled={pending} onBusy={setUploading}/>
+    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
+    <Button type="submit" size="sm" disabled={pending||uploading}>{pending?'Sending...':'Send reply'}</Button>
+  </form>;
 }
