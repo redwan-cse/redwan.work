@@ -73,7 +73,7 @@ jobs:
           stage=start
           "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1
           "$RUNNER_TEMP/auth-cli/supabase" status --workdir "$RUNNER_TEMP/redwan-auth-ci" --output json > "$RUNNER_TEMP/auth-status.json" 2> "$RUNNER_TEMP/auth-status.log"
-      - name: Verify synthetic template and run real authenticated browser tests
+      - name: Verify synthetic template and real Auth mailbox acceptance
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
@@ -81,6 +81,11 @@ jobs:
           set -euo pipefail
           python3 tests/auth/check-template.py
           node tests/auth/run-local.mjs
+      - name: Verify new product browser journeys
+        env:
+          AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
+        run: node tests/reliability/run-product-browser.mjs
       - name: Destroy only this job's disposable services
         if: always()
         run: |
