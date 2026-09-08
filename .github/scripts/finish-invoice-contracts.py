@@ -1,0 +1,27 @@
+"""Exact inspected invoice-service edit, one development branch only."""
+import base64,hashlib,http.client,json,os
+ROOT='/repos/redwan-cse/redwan.work';BRANCH='fix/direct-public-asset-uploads';BLOB='3b81b606d4e24cc096425c97bdfac952eae41ad8';PATH='lib/crm/invoices.ts'
+if os.environ.get('GITHUB_REPOSITORY')!='redwan-cse/redwan.work' or os.environ.get('GITHUB_REF')!='refs/heads/'+BRANCH:raise SystemExit('Unexpected development context')
+def api(method,path,body=None):
+ c=http.client.HTTPSConnection('api.github.com',timeout=30);c.request(method,ROOT+path,body=None if body is None else json.dumps(body),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'bounded-invoice-contract-edit','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'});r=c.getresponse();raw=r.read();c.close()
+ if r.status not in(200,201):raise RuntimeError('Repository operation refused')
+ return json.loads(raw)
+def replace(s,old,new,count=1):
+ assert s.count(old)==count,'Inspected source mismatch';return s.replace(old,new)
+head=api('GET','/git/ref/heads/'+BRANCH)['object']['sha'];assert head==os.environ['GITHUB_SHA'];base=api('GET','/git/commits/'+head);assert api('GET','/contents/'+PATH+'?ref='+head)['sha']==BLOB
+raw=base64.b64decode(api('GET','/git/blobs/'+BLOB)['content']);assert hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()==BLOB;s=raw.decode()
+s=replace(s,"import { getSupabaseAdmin }","import { readInvoiceContents } from '@/lib/crm/invoice-contents';\nimport { invoiceRecord, validInvoiceHeader, validInvoiceItemShape } from '@/lib/crm/invoice-inputs';\nimport { getSupabaseAdmin }")
+s=replace(s,'!Number.isSafeInteger(amount) || sum > MAX_INVOICE_TOTAL_CENTS - amount','!Number.isSafeInteger(amount) || amount < 0 || sum > MAX_INVOICE_TOTAL_CENTS - amount',2)
+a=s.index('async function loadPayments(');b=s.index('async function hydrate(',a);s=s[:a]+s[b:]
+s=replace(s,'async function hydrate(raw: RawInvoice): Promise<InvoiceRow>','async function hydrate(raw: RawInvoice, snapshotAmounts?: Amounts): Promise<InvoiceRow>')
+s=replace(s,'const amounts = await invoiceAmounts(raw.id);','const amounts = snapshotAmounts ?? await invoiceAmounts(raw.id);')
+s=replace(s,"  const [items, payments] = await Promise.all([loadItems(invoiceId), loadPayments(invoiceId)]);\n  return calculateAmounts(items.items, payments.payments);","  const contents = await readInvoiceContents(invoiceId);\n  return calculateAmounts(contents.items, contents.payments);")
+s=replace(s,"    const [items, payments] = await Promise.all([loadItems(invoiceId), loadPayments(invoiceId)]);\n    return { ok: true, invoice: await hydrate(found.raw), items: items.items, payments: payments.payments };","    const contents = await readInvoiceContents(invoiceId);\n    return { ok: true, invoice: await hydrate(found.raw, calculateAmounts(contents.items, contents.payments)), items: contents.items, payments: contents.payments };")
+s=replace(s,"  const currency = (input.currency ?? 'USD').trim().toUpperCase();","  if (!validInvoiceHeader(input)) return { ok: false, error: 'Invalid invoice data.' };\n  const currency = (input.currency ?? 'USD').trim().toUpperCase();")
+s=replace(s,"  if (!validUuid(input.project_id) || !input.items.length", "  if (!validInvoiceHeader(input) || !Array.isArray(input?.items) || input.items.length > 10000 || input.items.some(item => !validInvoiceItemShape(item)) || !validDate(input.due_at)) return { ok: false, error: 'Invalid invoice data.' };\n  if (!validUuid(input.project_id) || !input.items.length")
+s=replace(s,"  const found = await getRaw(invoiceId); if (!found.ok) return found;\n  if (found.raw.status !== 'draft')", "  if (!validInvoiceHeader(patch)) return invalid();\n  const found = await getRaw(invoiceId); if (!found.ok) return found;\n  if (found.raw.status !== 'draft')")
+s=replace(s,"Promise<CrmResult> { const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'draft')", "Promise<CrmResult> { if (!validInvoiceItemShape(input)) return invalid(); const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'draft')")
+s=replace(s,"Promise<CrmResult> { if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id, qty, unit_price_cents')", "Promise<CrmResult> { if (!validInvoiceItemShape(patch, true)) return invalid(); if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id, qty, unit_price_cents')")
+s=replace(s,"console.error('payment pre-read failed:', readError.message);","console.error('Payment pre-read failed.');")
+s=replace(s,"if (!validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method)","if (!invoiceRecord(input) || !validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method)")
+blob=api('POST','/git/blobs',{'content':s,'encoding':'utf-8'});tree=api('POST','/git/trees',{'base_tree':base['tree']['sha'],'tree':[{'path':PATH,'mode':'100644','type':'blob','sha':blob['sha']}]});new=api('POST','/git/commits',{'message':'fix: integrate complete invoice snapshots and guarded runtime inputs','tree':tree['sha'],'parents':[head]});assert api('GET','/git/ref/heads/'+BRANCH)['object']['sha']==head;api('PATCH','/git/refs/heads/'+BRANCH,{'sha':new['sha'],'force':False});print('Updated exactly one inspected development invoice service.')
