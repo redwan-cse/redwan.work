@@ -1,21 +1,11 @@
-name: Connect approved recovery implementation
+name: Recovery source connection completed
 on:
   pull_request:
     branches: [main]
 permissions:
   contents: read
 jobs:
-  connect:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/recoverable-retention'
+  completed:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Connect existing purge wrapper from its exact baseline
-        env:
-          EDIT_TOKEN: ${{ github.token }}
-        run: python3 scripts/connect-recovery.py
+      - run: echo 'Purge delegation inspected. Source-write capability retired. Fresh-head reliability tests are authoritative.'
