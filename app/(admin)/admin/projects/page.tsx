@@ -1,138 +1,15 @@
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { listArchivedProjects, listProjects } from '@/lib/crm/projects';
-import { listClients } from '@/lib/crm/clients';
-import { ArchivedProjectActions, NewProjectDialog } from '@/components/admin/project-forms';
-
-export const dynamic = 'force-dynamic';
-
-const PROJECT_BADGE: Record<string, string> = {
-  active: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  paused: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  done: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-};
-
-function formatDue(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-function formatArchived(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-function deletesDate(archivedAt: string): string {
-  const d = new Date(new Date(archivedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-export default async function AdminProjectsPage() {
-  const [activeProjects, archived, clients] = await Promise.all([
-    listProjects({ archived: false }),
-    listArchivedProjects(),
-    listClients(),
-  ]);
-  const activeClients = clients.filter((c) => c.is_active);
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
-        <NewProjectDialog clients={activeClients} />
-      </div>
-
-      {activeProjects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No projects yet.</p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Client</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Due</th>
-                <th className="px-4 py-2 font-medium">Milestones</th>
-                <th className="px-4 py-2 font-medium">Files</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeProjects.map((project) => (
-                <tr key={project.id} className="border-t">
-                  <td className="px-4 py-2 font-medium">
-                    <Link href={`/admin/projects/${project.id}`} className="hover:underline">
-                      {project.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2">
-                    <span>{project.client_name ?? '—'}</span>
-                    {project.client_email && (
-                      <span className="block text-xs text-muted-foreground">{project.client_email}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline" className={PROJECT_BADGE[project.status] ?? ''}>
-                      {project.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground">{formatDue(project.due_at)}</td>
-                  <td className="px-4 py-2">
-                    {project.milestone_done}/{project.milestone_total}
-                  </td>
-                  <td className="px-4 py-2">{project.file_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {archived.length > 0 && (
-        <details className="rounded-lg border">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">Archived ({archived.length})</summary>
-          <div className="overflow-hidden border-t">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-4 py-2 font-medium">Client</th>
-                  <th className="px-4 py-2 font-medium">Archived</th>
-                  <th className="px-4 py-2 font-medium">Deletes</th>
-                  <th className="px-4 py-2 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {archived.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="px-4 py-2 font-medium">{row.name}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{row.client_name ?? '—'}</td>
-                    <td className="px-4 py-2 text-muted-foreground">{formatArchived(row.archived_at ?? '')}</td>
-                    <td className="px-4 py-2 text-muted-foreground">deletes {deletesDate(row.archived_at ?? '')}</td>
-                    <td className="px-4 py-2 text-right">
-                      <ArchivedProjectActions projectId={row.id} projectName={row.name} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
-    </div>
-  );
+import {notFound} from 'next/navigation';
+import {Badge} from '@/components/ui/badge';
+import {ArchivedProjectActions,NewProjectDialog} from '@/components/admin/project-forms';
+import {workflowSession,workflowPage} from '@/lib/crm/workflow-access';
+import {getSupabaseAdmin} from '@/lib/supabase/admin';
+import type {ClientRow} from '@/lib/crm/clients';
+export const dynamic='force-dynamic';
+type Project={id:string;name:string;status:string;due_at:string|null;archived_at:string|null;client_name:string|null;client_email:string;milestone_total:number;milestone_done:number;file_count:number};
+export default async function AdminProjectsPage({searchParams}:{searchParams:Promise<{page?:string;archived?:string;clientPage?:string;q?:string}>}){
+ const session=await workflowSession('admin');if(!session)notFound();const params=await searchParams,page=workflowPage(params.page),clientPage=workflowPage(params.clientPage),archived=params.archived==='true',search=(params.q??'').slice(0,200);
+ const {data,error}=await getSupabaseAdmin().rpc('admin_projects_page',{p_actor:session.userId,p_page:page,p_archived:archived,p_client_page:clientPage,p_search:search});if(error||!data)throw new Error('Could not load projects.');const projects=data.projects as Project[],clients=data.clients as ClientRow[];
+ const href=(p:number,c:number)=>`?page=${p}&clientPage=${c}&archived=${archived}&q=${encodeURIComponent(search)}`;
+ return <section className="space-y-6"><header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-semibold">Projects</h1><NewProjectDialog clients={clients}/></header><details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm">Choose a client for a new project</summary><form className="mt-3 flex flex-wrap gap-2"><input type="hidden" name="archived" value={String(archived)}/><label htmlFor="client-search" className="sr-only">Client name or email</label><input id="client-search" name="q" defaultValue={search} maxLength={200} placeholder="Client name or email" className="rounded-md border bg-background px-3 py-2"/><button className="rounded-md border px-3 py-2">Search clients</button></form><p className="mt-2 text-xs text-muted-foreground">New project selector shows up to 25 matching active clients on this page.</p><nav className="mt-2 flex gap-4 text-sm" aria-label="Client choices">{clientPage>1&&<Link href={href(page,clientPage-1)}>Previous clients</Link>}{Number(data.clientTotal)>clientPage*25&&<Link href={href(page,clientPage+1)}>Next clients</Link>}</nav></details><nav className="flex gap-4 text-sm" aria-label="Project filters"><Link href="/admin/projects" className="underline">Current</Link><Link href="/admin/projects?archived=true" className="underline">Archived</Link></nav>{!projects.length?<p>No projects on this page.</p>:<div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[700px] text-sm"><thead className="bg-muted/50 text-left"><tr>{['Name','Client','Status','Due','Milestones','Files',...(archived?['Actions']:[])].map(label=><th key={label} className="p-3">{label}</th>)}</tr></thead><tbody>{projects.map(project=><tr key={project.id} className="border-t"><td className="p-3"><Link href={`/admin/projects/${project.id}`} className="underline">{project.name}</Link></td><td className="p-3">{project.client_name??project.client_email}</td><td className="p-3"><Badge variant="outline">{project.status}</Badge></td><td className="p-3">{project.due_at??'Not set'}</td><td className="p-3">{project.milestone_done}/{project.milestone_total}</td><td className="p-3">{project.file_count}</td>{archived&&<td className="p-3"><ArchivedProjectActions projectId={project.id} projectName={project.name}/></td>}</tr>)}</tbody></table></div>}{archived&&<p className="text-sm text-muted-foreground">Cleanup eligibility begins after 30 days. Financial references and recovery verification can hold removal; no deletion date is guaranteed.</p>}<nav aria-label="Project pages" className="flex gap-4">{page>1&&<Link href={href(page-1,clientPage)}>Previous</Link>}{Number(data.total)>page*25&&<Link href={href(page+1,clientPage)}>Next</Link>}</nav></section>;
 }
