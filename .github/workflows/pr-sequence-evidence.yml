@@ -1,0 +1,23 @@
+name: PR sequence evidence
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths:
+      - .github/workflows/pr-sequence-evidence.yml
+      - scripts/pr-sequence-evidence.mjs
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Inspect exact public branch objects and settings availability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/pr-sequence-evidence.mjs
