@@ -41,10 +41,11 @@ jobs:
           cp supabase/migrations/*.sql "$RUNNER_TEMP/rel-db/supabase/migrations/"
           stage=migrations
           "$RUNNER_TEMP/rel-cli/supabase" start --workdir "$RUNNER_TEMP/rel-db" > "$RUNNER_TEMP/rel-start.log" 2>&1
-      - name: Test transactions and concurrent quotas
+      - name: Test transactions, workflows and account isolation
         run: |
+          set -euo pipefail
           python3 tests/reliability/database.py
-          python3 tests/reliability/workflows-db.py
+          for script in tests/reliability/*-db.py; do python3 "$script"; done
       - name: Destroy this job's local stack
         if: always()
         run: |
