@@ -19,13 +19,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Load the reviewed Auth acceptance harness
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: 4e9ca493fd6cdd11a82be742670455b752ca4c95
           path: _acceptance-harness
           persist-credentials: false
-      - name: Isolate harness from application sources
+      - name: Isolate reviewed harness
         run: |
           mkdir -p tests/auth
           cp _acceptance-harness/tests/auth/*.mjs tests/auth/
@@ -35,7 +34,7 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
-      - name: Install dependencies and pinned test tools
+      - name: Install pinned tools
         run: |
           set -euo pipefail
           npm ci
@@ -45,7 +44,7 @@ jobs:
           echo "5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158  $RUNNER_TEMP/supabase.tar.gz" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/auth-cli"
           tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/auth-cli" supabase
-      - name: Initialize a new local-only Supabase project
+      - name: Initialize disposable local project
         run: |
           set -euo pipefail
           stage=init
@@ -70,10 +69,11 @@ jobs:
           s+='\n[auth.email.template.recovery]\nsubject = "Disposable recovery acceptance"\ncontent_path = "./supabase/recovery-ci.html"\n'
           tomllib.loads(s);p.write_text(s)
           PY
+          python3 tests/reliability/configure-auth-fixtures.py
           stage=start
           "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1
           "$RUNNER_TEMP/auth-cli/supabase" status --workdir "$RUNNER_TEMP/redwan-auth-ci" --output json > "$RUNNER_TEMP/auth-status.json" 2> "$RUNNER_TEMP/auth-status.log"
-      - name: Verify synthetic template and real Auth mailbox acceptance
+      - name: Verify Auth and recovery mailbox
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
@@ -81,12 +81,12 @@ jobs:
           set -euo pipefail
           python3 tests/auth/check-template.py
           node tests/auth/run-local.mjs
-      - name: Verify new product browser journeys
+      - name: Verify product and full account lifecycle
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
         run: node tests/reliability/run-product-browser.mjs
-      - name: Destroy only this job's disposable services
+      - name: Destroy disposable services
         if: always()
         run: |
           set -euo pipefail
