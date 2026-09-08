@@ -1,5 +1,6 @@
 'use server';
 
+import { parseMilestoneMoney } from '@/lib/crm/milestone-money';
 import { validateDeliverable } from '@/lib/crm/deliverable-validation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentSession } from '@/lib/auth/session';
@@ -195,19 +196,9 @@ export async function addMilestoneAction(
   const title = String(formData.get('title') ?? '');
   const currency = String(formData.get('currency') ?? '').trim() || undefined;
 
-  let amount_cents: number | undefined;
-  const rawCents = String(formData.get('amount_cents') ?? '').trim();
-  const rawAmount = String(formData.get('amount') ?? '').trim();
-  if (rawCents) {
-    const n = Number(rawCents);
-    if (!Number.isFinite(n)) return { error: 'Invalid amount.' };
-    amount_cents = Math.round(n);
-  } else if (rawAmount) {
-    const n = Number(rawAmount);
-    if (!Number.isFinite(n)) return { error: 'Invalid amount.' };
-    // amount could be dollars with decimals
-    amount_cents = Math.round(n * 100);
-  }
+  const parsed = parseMilestoneMoney(String(formData.get('amount_cents') ?? ''), String(formData.get('amount') ?? ''));
+  if (!parsed.ok) return { error: 'Invalid amount. Use whole cents or at most two decimal places.' };
+  const amount_cents = parsed.amount_cents;
 
   const result = await addMilestone(projectId, { title, amount_cents, currency });
   if (!result.ok) return { error: result.error };
@@ -235,12 +226,10 @@ export async function updateMilestoneAction(
   } else {
     if (formData.has('title')) patch.title = String(formData.get('title') ?? '');
     if (formData.has('status')) patch.status = String(formData.get('status') ?? '') as 'pending' | 'in_progress' | 'done';
-    if (formData.has('amount_cents')) {
-      const v = String(formData.get('amount_cents') ?? '').trim();
-      if (v) patch.amount_cents = Number(v);
-    } else if (formData.has('amount')) {
-      const v = String(formData.get('amount') ?? '').trim();
-      if (v) patch.amount_cents = Math.round(Number(v) * 100);
+    if (formData.has('amount_cents') || formData.has('amount')) {
+      const parsed = parseMilestoneMoney(String(formData.get('amount_cents') ?? ''), String(formData.get('amount') ?? ''));
+      if (!parsed.ok) return { error: 'Invalid amount. Use whole cents or at most two decimal places.' };
+      if (parsed.amount_cents !== undefined) patch.amount_cents = parsed.amount_cents;
     }
   }
 
@@ -328,7 +317,7 @@ export async function getDeliverablePresignAction(
   if (!check.ok) return { ok: false, error: check.error };
 
   const admin = getSupabaseAdmin();
-  const { data: project, error } = await admin.from('projects').select('client_id').eq('id', projectId).maybeSingle();
+  const { data: project, error } = await admin.from('projects').select('client_id').eq('id', projectId).is('archived_at', null).maybeSingle();
   if (error) return { ok: false, error: 'Project lookup failed.' };
   if (!project) return { ok: false, error: 'Project not found.' };
 
@@ -438,7 +427,7 @@ export async function archiveProjectAction(projectId: string): Promise<CrmAction
   if (!result.ok) return { error: result.error };
   revalidatePath('/admin/projects');
   revalidatePath('/admin');
-  return { notice: 'Project archived. Download the backup from the Projects list within 30 days.' };
+  return { notice: 'Project archived with a verified backup. Download it from the Projects list; recovery copies are retained.' };
 }
 
 export async function purgeArchivedProjectAction(projectId: string): Promise<CrmActionState> {
