@@ -23,7 +23,9 @@ export async function createTicketWithAttachmentsAction(subject: string, body: s
   if (requestId !== undefined && !validUuid(requestId)) return { error: 'Invalid submission. Please reopen the form.' };
   const validated = await validateAttachments(entries, session.userId, null);
   if (!validated) return { error: ATTACHMENT_ERROR };
-  const result = await createTicket(session.userId, subject, body, validated, requestId ?? randomUUID());
+  // The supplied identity passed the full UUID regex above; crypto's return type is a template literal.
+  const identity = requestId === undefined ? randomUUID() : requestId as ReturnType<typeof randomUUID>;
+  const result = await createTicket(session.userId, subject, body, validated, identity);
   if (!result.ok) return { error: result.error };
   refreshTicket(result.ticketId);
   redirect(`/portal/tickets/${result.ticketId}`);
@@ -37,7 +39,6 @@ export async function clientReplyAction(ticketId: string, _prev: PortalActionSta
   refreshTicket(ticketId);
   return {};
 }
-// Compatibility wrapper: uses the exact same validation, rate budget and size as the route.
 export async function getTicketAttachmentPresignAction(input: { ticketId: string | null; filename: string; mime: string; size: number }): Promise<{ ok: true; key: string; uploadUrl: string } | { ok: false; error: string }> {
   const session = await requireClient();
   if (!session) return { ok: false, error: 'Unauthorized.' };

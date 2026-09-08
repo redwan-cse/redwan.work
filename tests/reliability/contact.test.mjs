@@ -3,7 +3,7 @@ import { registerHooks } from 'node:module';
 import test from 'node:test';
 const f={results:[],writes:0,checks:0}; globalThis.__contactTest=f;
 const modules={
- 'next/server':'export class NextResponse { static json(body,init={}) { return new Response(JSON.stringify(body),{...init,headers:{"Content-Type":"application/json",...init.headers}}); } }',
+ 'next/server':'export class NextRequest extends Request {} export class NextResponse { static json(body,init={}) { return new Response(JSON.stringify(body),{...init,headers:{"Content-Type":"application/json",...init.headers}}); } }',
  '@/lib/contact/lead-schema':'export async function sha256Hex(v) { return v; } export function parseLeadPayload() { return {ok:true,lead:{attachments:[]}}; }',
  '@/lib/contact/lead-store':'export async function insertLead() { globalThis.__contactTest.writes++; return {ok:true,ticketRef:"TKT-1000"}; }',
  '@/lib/r2':'export async function verifyStoredObjectSize() { return true; }',
