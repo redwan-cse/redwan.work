@@ -18,8 +18,16 @@ export async function createFileRow(input:{bucket:'private';r2_key:string;kind:'
  if(!validateContactFile({filename:input.filename,mime:input.mime,size:input.size_bytes}).ok)return crmError('Invalid file metadata.');
  if(input.kind==='attachment'){if(input.project_id)return crmError('Attachment must not have project_id.');const pending=input.r2_key.includes('/pending/');if(!input.ticket_id&&!pending)return crmError('Attachment requires ticket_id.');if(input.ticket_id&&pending)return crmError('Pending attachment must not have ticket_id.');}
  else if(input.kind==='deliverable'){if(!input.project_id||input.ticket_id)return crmError('Invalid deliverable scope.');}else return crmError('Invalid file kind.');
- const {error}=await getSupabaseAdmin().from('files').insert({bucket:input.bucket,r2_key:input.r2_key,kind:input.kind,ticket_id:input.ticket_id??null,project_id:input.project_id??null,uploaded_by:input.uploaded_by,filename:input.filename,mime:input.mime,size_bytes:input.size_bytes});
- if(error){console.error('File insert failed.');return crmError('Could not save file.');}return {ok:true};
+ try{
+  const admin=getSupabaseAdmin();
+  if(input.kind==='deliverable'){
+   const {data,error}=await admin.rpc('confirm_project_deliverable',{p_actor:input.uploaded_by,p_project:input.project_id,p_file:{r2_key:input.r2_key,filename:input.filename,mime:input.mime,size_bytes:input.size_bytes}});
+   if(error||typeof data!=='string')return crmError('Could not confirm file. Refresh and check the project state before retrying.');
+   return {ok:true};
+  }
+  const {error}=await admin.from('files').insert({bucket:input.bucket,r2_key:input.r2_key,kind:input.kind,ticket_id:input.ticket_id??null,project_id:null,uploaded_by:input.uploaded_by,filename:input.filename,mime:input.mime,size_bytes:input.size_bytes});
+  if(error)return crmError('Could not save file.');return {ok:true};
+ }catch{return crmError('Could not save file. Please retry.');}
 }
 export async function getOwnedFileUrl(fileId:string,viewer:Viewer):Promise<{ok:true;url:string;filename:string}|{ok:false;error:string}>{
  try{if(!await currentViewer(viewer))return {ok:false,error:'File not found.'};const {data,error}=await getSupabaseAdmin().from('files').select(COLUMNS).eq('id',fileId).maybeSingle();if(error||!data||!await owned(data as FileRow,viewer))return {ok:false,error:'File not found.'};const file=data as FileRow;return {ok:true,url:await presignPrivateGet(file.r2_key,60),filename:file.filename};}
@@ -37,8 +45,7 @@ export async function listTicketAttachmentRows(ticketId:string):Promise<FileRow[
  const {data,error}=await getSupabaseAdmin().from('files').select(COLUMNS).eq('ticket_id',ticketId).eq('kind','attachment').order('created_at',{ascending:true}).limit(11);
  if(error)throw new Error('Could not load ticket attachments.');if((data?.length??0)>10)throw new Error('Ticket attachment count requires administrator review.');return (data??[]) as FileRow[];
 }
-// Compatibility helper for non-paginated consumers; the live Files page uses
-// portal_files_page. Read every ordered batch rather than trusting a REST cap.
+// Compatibility helper; live Files pages use bounded SQL pagination.
 export async function listOwnDeliverables(clientId:string):Promise<Array<FileRow&{project_name:string}>>{
  const admin=getSupabaseAdmin();const out:Array<FileRow&{project_name:string}>=[];let after='';
  while(true){let query=admin.from('files').select(`${COLUMNS}, projects!inner(name,client_id,archived_at)`).eq('kind','deliverable').eq('projects.client_id',clientId).is('projects.archived_at',null).order('id').limit(100);if(after)query=query.gt('id',after);const {data,error}=await query;if(error)throw new Error('Could not load deliverables.');const rows=(data??[]) as unknown as Array<FileRow&{projects:{name:string}}>;
