@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { addInvoiceItemAction, confirmPaymentAction, createDraftInvoiceWithItemsAction, deleteInvoiceItemAction, rejectPaymentAction, sendInvoiceAction, updateDraftInvoiceAction, updateInvoiceItemAction, voidInvoiceAction } from '@/lib/crm/admin-actions';
-import { calculateInvoiceTotalCents, displayInvoiceLineCents, displayInvoiceTotalCents, roundInvoiceLineCents, MAX_INVOICE_QTY, MAX_INVOICE_UNIT_PRICE_CENTS } from '@/lib/crm/invoice-math';
+import { calculateInvoiceTotalCents, displayInvoiceLineCents, displayInvoiceTotalCents, isSafeInvoiceLine, MAX_INVOICE_UNIT_PRICE_CENTS } from '@/lib/crm/invoice-math';
 import type { InvoiceItemRow, PaymentRow } from '@/lib/crm/invoices';
 
 export function money(cents: number, currency: string) {
@@ -34,7 +34,7 @@ export function NewInvoiceForm({ projects }: { projects: Array<{ id: string; nam
 
   function submit(formData: FormData, shouldSend: boolean) {
     setError(null);
-    if (items.some((item) => !item.description.trim() || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0 || Number(item.qty) > MAX_INVOICE_QTY || !Number.isInteger(Number(item.qty) * 1000) || !Number.isFinite(Number(item.unit_price)) || cents(item.unit_price) < 0 || (() => { try { return !Number.isSafeInteger(roundInvoiceLineCents(item.qty, cents(item.unit_price))); } catch { return true; } })()) || (() => { try { calculateInvoiceTotalCents(items.map((item) => ({ qty: item.qty, unit_price_cents: cents(item.unit_price) }))); return false; } catch { return true; } })()) {
+    if (items.some((item) => !item.description.trim() || !item.unit_price.trim() || !isSafeInvoiceLine(item.qty, cents(item.unit_price))) || (() => { try { calculateInvoiceTotalCents(items.map((item) => ({ qty: item.qty, unit_price_cents: cents(item.unit_price) }))); return false; } catch { return true; } })()) {
       setError('Complete every line item with a positive quantity and a valid price.');
       return;
     }
