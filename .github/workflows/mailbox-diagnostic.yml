@@ -1,0 +1,23 @@
+name: Mailbox failure diagnostic
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/audit-quality-gates'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Publish only a fixed known failure phase
+        env:
+          DIAGNOSTIC_TOKEN: ${{ github.token }}
+          DIAGNOSTIC_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tests/auth/read-diagnostic.py
