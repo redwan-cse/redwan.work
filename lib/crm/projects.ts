@@ -125,7 +125,7 @@ export async function listProjects(opts: { archived?: boolean } = {}): Promise<P
   else if (opts.archived === false) query = query.is('archived_at', null);
 
   const { data, error } = await query;
-  if (error) throw new Error(`projects query failed: ${error.message}`);
+  if (error) throw new Error('projects query failed.');
 
   const rows = (data ?? []) as Array<{
     id: string;
@@ -156,7 +156,7 @@ export async function getProjectDetail(
     .eq('id', projectId)
     .maybeSingle();
 
-  if (error) return { ok: false, error: `Project load failed: ${error.message}` };
+  if (error) return { ok: false, error: 'Project load failed.' };
   if (!raw) return { ok: false, error: 'Project not found.' };
 
   const project = await hydrateProjectRow(
@@ -179,7 +179,7 @@ export async function getProjectDetail(
     .eq('project_id', projectId)
     .order('position', { ascending: true });
 
-  if (msError) return { ok: false, error: `Milestones load failed: ${msError.message}` };
+  if (msError) return { ok: false, error: 'Milestones load failed.' };
 
   const { data: fileData, error: fileError } = await admin
     .from('files')
@@ -188,7 +188,7 @@ export async function getProjectDetail(
     .eq('kind', 'deliverable')
     .order('created_at', { ascending: true });
 
-  if (fileError) return { ok: false, error: `Files load failed: ${fileError.message}` };
+  if (fileError) return { ok: false, error: 'Files load failed.' };
 
   return {
     ok: true,
@@ -221,7 +221,7 @@ export async function createProject(input: {
     .eq('id', input.client_id)
     .maybeSingle();
 
-  if (profileError) return { ok: false, error: `Client lookup failed: ${profileError.message}` };
+  if (profileError) return { ok: false, error: 'Client lookup failed.' };
   if (!profile || profile.role !== 'client' || profile.is_active !== true) {
     return { ok: false, error: 'Client not found or inactive.' };
   }
@@ -239,7 +239,7 @@ export async function createProject(input: {
     .select('id')
     .single();
 
-  if (error || !data) return { ok: false, error: `Could not create project: ${error?.message ?? 'no row'}` };
+  if (error || !data) return { ok: false, error: 'Could not create project.' };
   return { ok: true, projectId: data.id };
 }
 
@@ -281,7 +281,7 @@ export async function updateProject(
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('projects').update(updates).eq('id', projectId);
-  if (error) return crmError(`Update failed: ${error.message}`);
+  if (error) return crmError('Update failed.');
   return { ok: true };
 }
 
@@ -318,7 +318,7 @@ export async function addMilestone(
     currency,
     position,
   });
-  if (error) return crmError(`Could not add milestone: ${error.message}`);
+  if (error) return crmError('Could not add milestone.');
   return { ok: true };
 }
 
@@ -348,14 +348,14 @@ export async function updateMilestone(
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('milestones').update(updates).eq('id', milestoneId);
-  if (error) return crmError(`Update failed: ${error.message}`);
+  if (error) return crmError('Update failed.');
   return { ok: true };
 }
 
 export async function deleteMilestone(milestoneId: string): Promise<CrmResult> {
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('milestones').delete().eq('id', milestoneId);
-  if (error) return crmError(`Delete failed: ${error.message}`);
+  if (error) return crmError('Delete failed.');
   return { ok: true };
 }
 
@@ -367,7 +367,7 @@ export async function moveMilestone(milestoneId: string, direction: 'up' | 'down
     .eq('id', milestoneId)
     .maybeSingle();
 
-  if (curError) return crmError(`Lookup failed: ${curError.message}`);
+  if (curError) return crmError('Lookup failed.');
   if (!current) return crmError('Milestone not found.');
 
   const typedCurrent = current as { id: string; project_id: string; position: number };
@@ -378,7 +378,7 @@ export async function moveMilestone(milestoneId: string, direction: 'up' | 'down
     .eq('project_id', typedCurrent.project_id)
     .order('position', { ascending: true });
 
-  if (sibError) return crmError(`Lookup failed: ${sibError.message}`);
+  if (sibError) return crmError('Lookup failed.');
   const list = (siblings ?? []) as Array<{ id: string; position: number }>;
   const idx = list.findIndex((m) => m.id === milestoneId);
   if (idx === -1) return crmError('Milestone not found.');
@@ -390,14 +390,14 @@ export async function moveMilestone(milestoneId: string, direction: 'up' | 'down
   const neighPos = neighbor.position;
 
   const { error: tmpErr } = await admin.from('milestones').update({ position: -1 }).eq('id', neighbor.id);
-  if (tmpErr) return crmError(`Move failed: ${tmpErr.message}`);
+  if (tmpErr) return crmError('Move failed.');
   const { error: upd1 } = await admin.from('milestones').update({ position: neighPos }).eq('id', typedCurrent.id);
   if (upd1) {
     await admin.from('milestones').update({ position: neighPos }).eq('id', neighbor.id);
-    return crmError(`Move failed: ${upd1.message}`);
+    return crmError('Move failed.');
   }
   const { error: upd2 } = await admin.from('milestones').update({ position: curPos }).eq('id', neighbor.id);
-  if (upd2) return crmError(`Move failed: ${upd2.message}`);
+  if (upd2) return crmError('Move failed.');
 
   return { ok: true };
 }
@@ -412,7 +412,7 @@ export async function archiveProject(
     .eq('id', projectId)
     .maybeSingle();
 
-  if (projError) return { ok: false, error: `Project lookup failed: ${projError.message}` };
+  if (projError) return { ok: false, error: 'Project lookup failed.' };
   if (!project) return { ok: false, error: 'Project not found.' };
   if ((project as { archived_at: string | null }).archived_at) return { ok: false, error: 'Project already archived.' };
 
@@ -422,7 +422,7 @@ export async function archiveProject(
     .eq('project_id', projectId)
     .eq('kind', 'deliverable');
 
-  if (filesError) return { ok: false, error: `Files lookup failed: ${filesError.message}` };
+  if (filesError) return { ok: false, error: 'Files lookup failed.' };
 
   const fileRows = (files ?? []) as Array<{ r2_key: string; filename: string; size_bytes: number }>;
   const totalBytes = fileRows.reduce((sum, f) => sum + Number(f.size_bytes ?? 0), 0);
@@ -436,7 +436,7 @@ export async function archiveProject(
     .eq('project_id', projectId)
     .order('position', { ascending: true });
 
-  if (msError) return { ok: false, error: `Milestones lookup failed: ${msError.message}` };
+  if (msError) return { ok: false, error: 'Milestones lookup failed.' };
 
   const archiveKey = `archive/project_${projectId}/${new Date().toISOString()}.zip`;
 
@@ -488,7 +488,7 @@ export async function archiveProject(
     await putPrivateObject(archiveKey, buffer, 'application/zip');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: `Archive failed: ${msg}` };
+    return { ok: false, error: 'Archive failed.' };
   }
 
   const { error: updError } = await admin
@@ -496,7 +496,7 @@ export async function archiveProject(
     .update({ archived_at: new Date().toISOString(), archive_key: archiveKey })
     .eq('id', projectId);
 
-  if (updError) return { ok: false, error: `Archive update failed: ${updError.message}` };
+  if (updError) return { ok: false, error: 'Archive update failed.' };
 
   return { ok: true, archiveKey };
 }
@@ -516,7 +516,7 @@ export async function listArchivedProjects(): Promise<
     .not('archived_at', 'is', null)
     .order('archived_at', { ascending: false });
 
-  if (error) throw new Error(`archived projects query failed: ${error.message}`);
+  if (error) throw new Error('archived projects query failed.');
 
   const out: Array<Pick<ProjectRow, 'id' | 'name' | 'client_name' | 'archived_at'>> = [];
   for (const row of (data ?? []) as Array<{ id: string; name: string; archived_at: string; client_id: string }>) {
@@ -537,7 +537,7 @@ export async function getArchiveDownloadUrl(
     .eq('id', projectId)
     .maybeSingle();
 
-  if (error) return { ok: false, error: `Lookup failed: ${error.message}` };
+  if (error) return { ok: false, error: 'Lookup failed.' };
   if (!project) return { ok: false, error: 'Project not found.' };
   const typed = project as { archived_at: string | null; archive_key: string | null };
   if (!typed.archived_at || !typed.archive_key) return { ok: false, error: 'Project is not archived.' };
@@ -547,7 +547,7 @@ export async function getArchiveDownloadUrl(
     return { ok: true, url };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
+    return { ok: false, error: 'Archive download unavailable.' };
   }
 }
 
@@ -560,7 +560,7 @@ export async function listOwnProjects(clientId: string): Promise<PortalProjectRo
     .is('archived_at', null)
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error(`own projects query failed: ${error.message}`);
+  if (error) throw new Error('own projects query failed.');
 
   const rows = (data ?? []) as Array<{ id: string; name: string; status: ProjectStatus; due_at: string | null }>;
   const out: PortalProjectRow[] = [];
@@ -595,6 +595,6 @@ export async function countOwnActiveProjects(clientId: string): Promise<number> 
     .eq('status', 'active')
     .is('archived_at', null);
 
-  if (error) throw new Error(`count active projects failed: ${error.message}`);
+  if (error) throw new Error('count active projects failed.');
   return count ?? 0;
 }
