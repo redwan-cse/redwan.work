@@ -1,0 +1,22 @@
+name: Connect reviewed invoice contracts
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths:
+      - .github/scripts/finish-invoice-contracts.py
+      - .github/workflows/finish-invoice-contracts.yml
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Integrate exact inspected invoice service
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/finish-invoice-contracts.py
