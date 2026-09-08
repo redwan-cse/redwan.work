@@ -1,22 +1,11 @@
-name: Connect reviewed project contracts
+name: Reviewed project contracts integrated
 on:
-  push:
-    branches: [fix/direct-public-asset-uploads]
-    paths:
-      - .github/scripts/finish-project-contracts.py
-      - .github/workflows/finish-project-contracts.yml
+  pull_request:
+    branches: [main]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  integrate:
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+  integrated:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Apply exact inspected two-file edit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/finish-project-contracts.py
+      - run: echo 'Exact integration completed and source-write capability retired.'

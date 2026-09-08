@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';import test from 'node:test';import {registerHooks} from 'node:module';
-const f={session:{userId:'synthetic',role:'admin'},profile:{role:'admin',is_active:true},origins:[],validated:null,writes:0,originFails:false};globalThis.__adminBoundary=f;
+const f={session:{userId:'synthetic',role:'admin'},profile:{role:'admin',is_active:true},origins:[],validated:null,writes:0,originFails:false,milestones:[]};globalThis.__adminBoundary=f;
 const stub=(names)=>names.map(name=>`export async function ${name}(){return {ok:true};}`).join('\n');
 const modules={
  'next/cache':'export function revalidatePath(){}',
  '@/lib/auth/session':'export async function getCurrentSession(){return globalThis.__adminBoundary.session;}',
- '@/lib/supabase/admin':'export function getSupabaseAdmin(){return {from(){const q={select(){return q;},eq(){return q;},async maybeSingle(){return {data:globalThis.__adminBoundary.profile,error:null};}};return q;}};}',
+ '@/lib/supabase/admin':'export function getSupabaseAdmin(){return {from(){const q={select(){return q;},eq(){return q;},is(){return q;},async maybeSingle(){return {data:globalThis.__adminBoundary.profile,error:null};}};return q;}};}',
  '@/lib/crm/clients':'export async function convertLead(id,origin){globalThis.__adminBoundary.origins.push(origin);return {ok:true};}export async function inviteClient(input){globalThis.__adminBoundary.origins.push(input.redirectToBase);return {ok:true};}export async function setClientActive(){return {ok:true};}',
  '@/lib/crm/tickets':stub(['adminReply','setTicketStatus']),
- '@/lib/crm/projects':stub(['addMilestone','archiveProject','createProject','deleteMilestone','getArchiveDownloadUrl','moveMilestone','purgeArchivedProject','updateMilestone','updateProject']),
+ '@/lib/crm/projects':'export async function addMilestone(id,input){globalThis.__adminBoundary.milestones.push(input);return {ok:true};}export async function updateMilestone(id,input){globalThis.__adminBoundary.milestones.push(input);return {ok:true};}'+stub(['archiveProject','createProject','deleteMilestone','getArchiveDownloadUrl','moveMilestone','purgeArchivedProject','updateProject']),
  '@/lib/crm/files':'export async function createFileRow(){globalThis.__adminBoundary.writes++;return {ok:true};}export async function deleteOwnedFile(){return {ok:true};}',
  '@/lib/r2':'export const ASSET_ALLOWED_EXT=[],ASSET_MAX_BYTES=5242880;'+stub(['assetUrl','deletePublicObject','makeAssetKey','makeDeliverableKey','presignPrivatePut','putPublicObject','validateContactFile']),
  '@/lib/mime':stub(['extFromFilename','isAllowedAssetMime']),
@@ -17,8 +17,9 @@ const modules={
  '@/lib/crm/invoices':stub(['addInvoiceItem','confirmPayment','createDraftInvoice','createDraftInvoiceWithItems','deleteInvoiceItem','getInvoiceDetail','rejectPayment','sendInvoice','updateDraftInvoice','updateInvoiceItem','voidInvoice']),
  '@/lib/crm/deliverable-validation':'export async function validateDeliverable(){return globalThis.__adminBoundary.validated;}'
 };
-const hooks=registerHooks({resolve(s,c,n){return Object.hasOwn(modules,s)?{url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true}:n(s,c);}});
-const {convertLeadAction,inviteClientAction,confirmDeliverableAction}=await import('../../lib/crm/admin-actions.ts');hooks.deregister();
+const hooks=registerHooks({resolve(s,c,n){if(s==='@/lib/crm/milestone-money')return {url:new URL('../../lib/crm/milestone-money.ts',import.meta.url).href,shortCircuit:true};return Object.hasOwn(modules,s)?{url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true}:n(s,c);}});
+const {convertLeadAction,inviteClientAction,confirmDeliverableAction,addMilestoneAction,updateMilestoneAction}=await import('../../lib/crm/admin-actions.ts');hooks.deregister();
 test('onboarding actions use explicit configured origin and truthful notices',async()=>{const form=new FormData();form.set('email','synthetic@example.test');const converted=await convertLeadAction('synthetic');const invited=await inviteClientAction({},form);assert.deepEqual(f.origins,['https://example.test','https://example.test']);assert.match(converted.notice,/existing accounts/);assert.match(invited.notice,/existing accounts/);});
 test('missing origin refuses without onboarding side effects',async()=>{f.originFails=true;const before=f.origins.length;assert.deepEqual(await convertLeadAction('synthetic'),{error:'Account email configuration unavailable.'});assert.equal(f.origins.length,before);f.originFails=false;});
 test('unauthorized and invalid confirmations perform no file writes',async()=>{f.profile={role:'client',is_active:true};assert.deepEqual(await confirmDeliverableAction('synthetic',{}),{error:'Unauthorized.'});f.profile={role:'admin',is_active:true};assert.ok((await confirmDeliverableAction('synthetic',{})).error);assert.equal(f.writes,0);f.validated={key:'synthetic',filename:'fixture.pdf',mime:'application/pdf',size_bytes:17};assert.deepEqual(await confirmDeliverableAction('synthetic',f.validated),{});assert.equal(f.writes,1);});
+test('milestone actions reject fractional cents instead of rounding and accept exact decimals',async()=>{for(const action of [addMilestoneAction,updateMilestoneAction]){for(const [key,value] of [['amount','1.005'],['amount_cents','1.5'],['amount','1e2']]){const form=new FormData();form.set('title','Synthetic');form.set(key,value);const before=f.milestones.length;assert.ok((await action('synthetic',{},form)).error);assert.equal(f.milestones.length,before);}const form=new FormData();form.set('title','Synthetic');form.set('amount','1.01');assert.deepEqual(await action('synthetic',{},form),{});assert.equal(f.milestones.at(-1).amount_cents,101);}});
