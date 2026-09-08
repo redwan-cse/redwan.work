@@ -77,6 +77,8 @@ jobs:
           "$RUNNER_TEMP/auth-cli/supabase" start --workdir "$RUNNER_TEMP/redwan-auth-ci" > "$RUNNER_TEMP/auth-start.log" 2>&1
           stage=status
           "$RUNNER_TEMP/auth-cli/supabase" status --workdir "$RUNNER_TEMP/redwan-auth-ci" --output json > "$RUNNER_TEMP/auth-status.json" 2> "$RUNNER_TEMP/auth-status.log"
+      - name: Verify disposable recovery template before fixture creation
+        run: python3 tests/auth/check-template.py
       - name: Build and test using local keys only
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
