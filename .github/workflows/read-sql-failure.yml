@@ -1,24 +1,11 @@
-name: Read sanitized prior SQL failure
+name: Prior SQL diagnostic retired
 on:
-  push:
-    branches: [fix/direct-public-asset-uploads]
-    paths:
-      - .github/scripts/read-sql-failure.mjs
-      - .github/workflows/read-sql-failure.yml
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
-  checks: read
-  statuses: write
 jobs:
-  evidence:
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - name: Classify only allowlisted failure phase
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node .github/scripts/read-sql-failure.mjs
+      - run: echo 'Prior SQL failure isolated; diagnostic API and status-write access retired.'

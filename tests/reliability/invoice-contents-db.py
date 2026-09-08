@@ -9,11 +9,11 @@ try:
  phase='complete item snapshot'
  v=json.loads(sql(f"select public.invoice_contents_snapshot('{i}');"));assert len(v['items'])==1007 and v['payments']==[];assert sum(x['unit_price_cents'] for x in v['items'])==100700
  phase='complete payment snapshot'
- sql(f"select public.send_invoice_atomic('{i}');insert into public.payments(invoice_id,method,reference,amount_cents) select '{i}','bank','Synthetic reference '||g,1 from generate_series(1,1007) g;")
+ sql(f"select public.send_invoice_atomic('{i}');select public.submit_invoice_payment_atomic('{i}','{u}','bank','Synthetic reference '||g,1) from generate_series(1,1007) g;")
  v=json.loads(sql(f"select public.invoice_contents_snapshot('{i}');"));assert len(v['items'])==1007 and len(v['payments'])==1007;assert sum(x['amount_cents'] for x in v['payments'])==1007
  phase='snapshot privileges'
  for role in ['anon','authenticated']:assert sql(f"select has_function_privilege('{role}','public.invoice_contents_snapshot(uuid)','execute');")=='f'
- print('Passed: complete 1007-item and 1007-payment snapshot, exact amounts and service-only privileges.')
+ print('Passed: complete 1007-item and 1007-payment snapshot, protected payment submissions, exact amounts and service-only privileges.')
 except Exception:print('::error::Invoice contents acceptance failed at '+phase+'.');raise SystemExit(1)
 finally:
  sql(f"delete from public.email_outbox where recipient_id='{u}';delete from public.email_log where entity_id='{i}';delete from public.invoices where id='{i}';delete from public.projects where id='{p}';delete from auth.users where id='{u}';")
