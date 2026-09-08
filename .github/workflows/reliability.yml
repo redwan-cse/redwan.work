@@ -14,6 +14,9 @@ jobs:
     name: Reliability / verification
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      statuses: write
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -25,8 +28,11 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
-      - run: npm ci
-      - run: node --experimental-strip-types --test tests/reliability/*.test.mjs tests/invoice-quantity.test.mjs
-      - run: npm run lint
-      - run: npx next typegen && npx tsc --noEmit
-      - run: npm run build
+      - name: Verify dependencies, tests, lint, types and build
+        run: python3 tests/reliability/verify.py
+      - name: Publish safe diagnostic summary
+        if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tests/reliability/report.py
