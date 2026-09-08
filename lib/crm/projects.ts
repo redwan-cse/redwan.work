@@ -5,7 +5,6 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import {
   ARCHIVE_MAX_BYTES,
-  deletePrivateObjects,
   getPrivateObjectBytes,
   presignPrivateGet,
   putPrivateObject,
@@ -503,46 +502,8 @@ export async function archiveProject(
 }
 
 export async function purgeArchivedProject(projectId: string): Promise<CrmResult> {
-  const admin = getSupabaseAdmin();
-  const { data: project, error: projError } = await admin
-    .from('projects')
-    .select('id, archived_at, archive_key')
-    .eq('id', projectId)
-    .maybeSingle();
-
-  if (projError) return crmError(`Lookup failed: ${projError.message}`);
-  if (!project) return crmError('Project not found.');
-  if (!(project as { archived_at: string | null }).archived_at) return crmError('Project is not archived.');
-
-  const typed = project as { id: string; archived_at: string | null; archive_key: string | null };
-
-  const { data: files, error: filesError } = await admin
-    .from('files')
-    .select('r2_key')
-    .eq('project_id', projectId)
-    .eq('kind', 'deliverable');
-
-  if (filesError) return crmError(`Files lookup failed: ${filesError.message}`);
-
-  const keys: string[] = [];
-  for (const f of (files ?? []) as Array<{ r2_key: string }>) {
-    if (f.r2_key) keys.push(f.r2_key);
-  }
-  if (typed.archive_key) keys.push(typed.archive_key);
-
-  if (keys.length > 0) {
-    try {
-      await deletePrivateObjects(keys);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return crmError(`Storage delete failed: ${msg}`);
-    }
-  }
-
-  const { error: delError } = await admin.from('projects').delete().eq('id', projectId);
-  if (delError) return crmError(`Delete failed: ${delError.message}`);
-
-  return { ok: true };
+  const { purgeArchivedProject: prepareRecovery } = await import('@/lib/crm/retention');
+  return prepareRecovery(projectId);
 }
 
 export async function listArchivedProjects(): Promise<
