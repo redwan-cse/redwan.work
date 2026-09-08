@@ -901,6 +901,7 @@ export default function EnhancedContactForm() {
 
       // Raw-named mirrors for the Supabase sink (Google ignores unknown params,
       // and our forward paths strip non-entry.* keys anyway)
+      formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
       formFields.append('name', submissionData.name);
       formFields.append('email', submissionData.email);
       formFields.append('country', submissionData.country);

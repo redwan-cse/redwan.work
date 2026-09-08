@@ -31,7 +31,6 @@ export type EmailSendResult = { ok: true; resendId: string | null } | { ok: fals
 export type EmailEntityType = 'client' | 'ticket' | 'invoice' | 'deliverable';
 
 const MAX_LOGGED_EMAIL = 320;
-const MAX_LOGGED_ERROR = 500;
 const SEND_TIMEOUT_MS = 10_000;
 const LOG_TIMEOUT_MS = 5_000;
 
@@ -52,8 +51,15 @@ function truncate(value: string, max: number): string {
 }
 
 function normalizeError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown email error';
-  return truncate(raw, MAX_LOGGED_ERROR);
+  const raw = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const safe = new Set([
+    'Invalid recipient address', 'Email is not configured', 'Email provider timeout',
+    'Ticket context unavailable', 'Recipient unavailable', 'No active admin recipients',
+    'Invoice context unavailable', 'Payment context unavailable', 'Deliverable context unavailable',
+    'Existing account claimed; no invite email sent', 'Invitation provider request failed',
+    HANDOFF_MARKER,
+  ]);
+  return safe.has(raw) ? raw : 'Email operation failed';
 }
 
 async function recordSend(input: {
@@ -73,7 +79,7 @@ async function recordSend(input: {
       entity_id: input.entityId ?? null,
       resend_id: input.resendId ?? null,
       status: input.status,
-      error: input.error ? truncate(input.error, MAX_LOGGED_ERROR) : null,
+      error: input.error ? normalizeError(input.error) : null,
     });
 
     // A stalled audit insert must not stall the action being audited.
@@ -83,7 +89,7 @@ async function recordSend(input: {
     });
     try {
       const { error } = await Promise.race([insert, timeout]);
-      if (error) console.error('email_log insert failed:', error.message);
+      if (error) console.error('email_log insert failed.');
     } finally {
       if (timer) clearTimeout(timer);
     }

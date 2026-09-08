@@ -108,6 +108,9 @@ export function parseLeadPayload(
   formData: FormData,
   meta: { ipHash: string | null; userAgent: string | null }
 ): { ok: true; lead: NormalizedLead } | { ok: false; error: string } {
+  if (formData.getAll('gdprConsent').length !== 1 || formData.get('gdprConsent') !== 'true') {
+    return { ok: false, error: 'Please agree to the Data & Privacy policy before submitting.' };
+  }
   const name = nullable(str(formData, 'name'), 200);
   const emailRaw = str(formData, 'email').toLowerCase();
   const summary = str(formData, 'projectSummary');
