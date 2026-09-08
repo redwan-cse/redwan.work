@@ -1,0 +1,5 @@
+# Recovery request controls
+
+Code review found that password-reset requests did not use the app's existing fail-closed OTP rate budget and derived credential-email redirects from forwarded headers. Recovery now shares the five-per-five-minute database budget, rejects missing/error/nonboolean outcomes, and requires an explicit configured site origin. HTTPS is required except loopback disposable development; URL credentials, path, query and fragment are rejected. Provider errors and rate-control diagnostics remain fixed text, never raw database/provider messages.
+
+This adds no account enumeration: the success notice remains uniform. The current combined mailbox test uses the explicit localhost site origin, and unit tests inject hostile forwarded headers to prove they cannot shape recovery destinations. Production NEXT_PUBLIC_SITE_URL must be configured before deploying this branch. The password recovery/invitation consume-and-update path retains its existing single-use contract and remains covered by real mailbox/browser acceptance.
