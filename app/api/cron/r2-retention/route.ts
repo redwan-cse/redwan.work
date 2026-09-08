@@ -1,38 +1,41 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {requireBearer} from '@/lib/auth/bearer';
-import {isR2Configured,listPrivateContactObjects,listPrivateObjects} from '@/lib/r2';
+import {isR2Configured} from '@/lib/r2';
+import {privateInventoryPage} from '@/lib/r2-inventory';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {drainStorageDeletions,purgeArchivedProject} from '@/lib/crm/retention';
 export async function GET(request:NextRequest) {
-  if(!requireBearer(process.env.CRON_SECRET,request.headers.get('authorization')))return NextResponse.json({message:'Invalid or missing credentials'},{status:401});
-  if(!isR2Configured())return NextResponse.json({message:'Attachment storage is not configured.'},{status:503});
-  const result={deleted:0,examined:0,projectsPurged:0,pendingCleaned:0,archivePurged:0,errors:[] as string[]};
-  try {
-    const admin=getSupabaseAdmin();
-    // Each claim executes a complete SQL EXISTS query, never a truncated REST inventory.
-    // The claim and reference triggers serialize by key, preventing late rebinding.
-    const objects=[...await listPrivateContactObjects(),...await listPrivateObjects('private/')];
-    result.examined=objects.length;
-    const now=Date.now();
-    const candidates=objects.filter(o=>o.key.startsWith('contact/')?o.lastModified.getTime()<now-90*86400000:o.key.includes('/pending/')&&o.lastModified.getTime()<now-86400000).sort((a,b)=>a.lastModified.getTime()-b.lastModified.getTime()).slice(0,100);
-    for(const object of candidates) {
-      const {error}=await admin.rpc('claim_expired_storage',{p_key:object.key,p_modified:object.lastModified.toISOString()});
-      if(error)result.errors.push('Storage claim failed.');
-    }
-    // Small bounded batch; protected projects cannot cause object deletion.
-    const projects=await admin.from('projects').select('id').lt('archived_at',new Date(now-30*86400000).toISOString()).order('archived_at').order('id').limit(10);
-    if(projects.error)result.errors.push('Archived project lookup failed.');
-    else for(const project of projects.data??[]) {
-      const prepared=await purgeArchivedProject(project.id);
-      if(prepared.ok)result.projectsPurged++;else result.errors.push('Project cleanup held for recovery or retention review.');
-    }
-    const drained=await drainStorageDeletions();result.deleted=drained.completed;
-    if(drained.failed)result.errors.push('Some storage deletions require retry.');
-    // Recovery archives are not independently swept. Their disposal requires an
-    // approved recovery-retention policy, not age-based deletion of the only backup.
-    return NextResponse.json(result,{status:result.errors.length?503:200,headers:{'Cache-Control':'no-store'}});
-  } catch {
-    console.error('Retention sweep failed.');
-    return NextResponse.json({message:'Retention sweep failed. Tracking records are preserved.'},{status:503,headers:{'Cache-Control':'no-store'}});
+ if(!requireBearer(process.env.CRON_SECRET,request.headers.get('authorization')))return NextResponse.json({message:'Invalid or missing credentials'},{status:401});
+ if(!isR2Configured())return NextResponse.json({message:'Attachment storage is not configured.'},{status:503});
+ const result={deleted:0,examined:0,projectsPurged:0,archivePurged:0,errors:[] as string[]};
+ try {
+  const admin=getSupabaseAdmin();
+  const cursors=await admin.from('maintenance_cursors').select('name,last_key');
+  if(cursors.error||cursors.data?.length!==3)throw new Error('Maintenance progress unavailable');
+  const positions=new Map<string,string>(cursors.data.map(row=>[row.name,row.last_key]));
+  for(const name of ['contact','private'] as const) {
+   const page=await privateInventoryPage(name==='contact'?'contact/':'private/',positions.get(name)??'');
+   result.examined+=page.items.length;
+   for(const item of page.items) {
+    const claim=await admin.rpc('claim_expired_storage',{p_key:item.key,p_modified:item.modified});
+    if(claim.error)throw new Error('Storage reference claim failed');
+   }
+   const saved=await admin.from('maintenance_cursors').update({last_key:page.next,updated_at:new Date().toISOString()}).eq('name',name).eq('last_key',positions.get(name)??'');
+   if(saved.error)throw new Error('Maintenance progress save failed');
   }
+  let query=admin.from('projects').select('id').lt('archived_at',new Date(Date.now()-30*86400000).toISOString()).order('id').limit(10);
+  const after=positions.get('projects')??'';if(after)query=query.gt('id',after);
+  const projects=await query;
+  if(projects.error)throw new Error('Project inventory unavailable');
+  for(const project of projects.data??[]) {
+   const prepared=await purgeArchivedProject(project.id);
+   if(prepared.ok)result.projectsPurged++;else result.errors.push('Project cleanup held for recovery or financial retention review.');
+  }
+  const rows=projects.data??[];
+  const progress=await admin.from('maintenance_cursors').update({last_key:rows.length===10?rows[rows.length-1].id:'',updated_at:new Date().toISOString()}).eq('name','projects').eq('last_key',after);
+  if(progress.error)throw new Error('Project progress save failed');
+  const drained=await drainStorageDeletions();result.deleted=drained.completed;
+  if(drained.failed)result.errors.push('Storage deletions require retry.');
+  return NextResponse.json(result,{status:result.errors.length?503:200,headers:{'Cache-Control':'no-store'}});
+ }catch{console.error('Retention sweep failed.');return NextResponse.json({message:'Retention sweep failed. Tracking records are preserved.'},{status:503,headers:{'Cache-Control':'no-store'}});}
 }
