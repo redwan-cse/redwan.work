@@ -1,13 +1,10 @@
 import 'server-only';
 
-import * as archiverNS from 'archiver';
+import { archiveProject as verifiedArchive } from '@/lib/crm/verified-archive';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import {
-  ARCHIVE_MAX_BYTES,
-  getPrivateObjectBytes,
   presignPrivateGet,
-  putPrivateObject,
 } from '@/lib/r2';
 import type { FileRow } from '@/lib/crm/files';
 
@@ -402,103 +399,8 @@ export async function moveMilestone(milestoneId: string, direction: 'up' | 'down
   return { ok: true };
 }
 
-export async function archiveProject(
-  projectId: string
-): Promise<{ ok: true; archiveKey: string } | { ok: false; error: string }> {
-  const admin = getSupabaseAdmin();
-  const { data: project, error: projError } = await admin
-    .from('projects')
-    .select('id, client_id, name, description, status, started_at, due_at, archived_at, archive_key, created_at')
-    .eq('id', projectId)
-    .maybeSingle();
-
-  if (projError) return { ok: false, error: 'Project lookup failed.' };
-  if (!project) return { ok: false, error: 'Project not found.' };
-  if ((project as { archived_at: string | null }).archived_at) return { ok: false, error: 'Project already archived.' };
-
-  const { data: files, error: filesError } = await admin
-    .from('files')
-    .select('r2_key, filename, size_bytes')
-    .eq('project_id', projectId)
-    .eq('kind', 'deliverable');
-
-  if (filesError) return { ok: false, error: 'Files lookup failed.' };
-
-  const fileRows = (files ?? []) as Array<{ r2_key: string; filename: string; size_bytes: number }>;
-  const totalBytes = fileRows.reduce((sum, f) => sum + Number(f.size_bytes ?? 0), 0);
-  if (totalBytes > ARCHIVE_MAX_BYTES) {
-    return { ok: false, error: 'Project files exceed the 100 MB archive limit. Download large files manually first.' };
-  }
-
-  const { data: milestones, error: msError } = await admin
-    .from('milestones')
-    .select('id, project_id, title, amount_cents, currency, position, status, created_at')
-    .eq('project_id', projectId)
-    .order('position', { ascending: true });
-
-  if (msError) return { ok: false, error: 'Milestones lookup failed.' };
-
-  const archiveKey = `archive/project_${projectId}/${new Date().toISOString()}.zip`;
-
-  try {
-    const anyArchiver = archiverNS as unknown as {
-      ZipArchive?: new (opts: unknown) => import('archiver').Archiver;
-      default?: (format: string, opts: unknown) => import('archiver').Archiver;
-    } & ((format: string, opts: unknown) => import('archiver').Archiver);
-    let archive: import('archiver').Archiver;
-    if (anyArchiver.ZipArchive) {
-      archive = new anyArchiver.ZipArchive({ zlib: { level: 9 } });
-    } else if (typeof anyArchiver.default === 'function') {
-      archive = anyArchiver.default('zip', { zlib: { level: 9 } });
-    } else if (typeof anyArchiver === 'function') {
-      archive = (anyArchiver as unknown as (format: string, opts: unknown) => import('archiver').Archiver)('zip', {
-        zlib: { level: 9 },
-      });
-    } else {
-      throw new Error('archiver module incompatible');
-    }
-    const chunks: Buffer[] = [];
-    const finished = new Promise<Buffer>((resolve, reject) => {
-      archive.on('data', (c: Buffer) => chunks.push(c));
-      archive.on('error', reject);
-      archive.on('end', () => resolve(Buffer.concat(chunks)));
-    });
-
-    archive.append(JSON.stringify(project, null, 2), { name: 'project.json' });
-    archive.append(JSON.stringify(milestones ?? [], null, 2), { name: 'milestones.json' });
-
-    const usedNames = new Set<string>();
-    for (const f of fileRows) {
-      const bytes = await getPrivateObjectBytes(f.r2_key);
-      let name = `files/${f.filename}`;
-      let counter = 2;
-      while (usedNames.has(name)) {
-        const dot = f.filename.lastIndexOf('.');
-        const bare = dot > 0 ? f.filename.slice(0, dot) : f.filename;
-        const ext = dot > 0 ? f.filename.slice(dot) : '';
-        name = `files/${bare}-${counter}${ext}`;
-        counter++;
-      }
-      usedNames.add(name);
-      archive.append(bytes, { name });
-    }
-
-    archive.finalize();
-    const buffer = await finished;
-    await putPrivateObject(archiveKey, buffer, 'application/zip');
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: 'Archive failed.' };
-  }
-
-  const { error: updError } = await admin
-    .from('projects')
-    .update({ archived_at: new Date().toISOString(), archive_key: archiveKey })
-    .eq('id', projectId);
-
-  if (updError) return { ok: false, error: 'Archive update failed.' };
-
-  return { ok: true, archiveKey };
+export async function archiveProject(projectId: string): Promise<{ ok: true; archiveKey: string } | { ok: false; error: string }> {
+  return verifiedArchive(projectId);
 }
 
 export async function purgeArchivedProject(projectId: string): Promise<CrmResult> {
