@@ -13,14 +13,12 @@ async function recordSend(input:{to:string;template:EmailTemplate;entityType?:Em
   const candidate=typeof input.to==='string'?input.to.trim().toLowerCase():'';
   const insert=getSupabaseAdmin().from('email_log').insert({to_email:EMAIL.test(candidate)?candidate.slice(0,320):'unknown',template:input.template,entity_type:input.entityType??null,entity_id:input.entityId??null,resend_id:null,status:input.status,error:input.error?safeError(input.error):null});
   let timer:ReturnType<typeof setTimeout>|undefined;
-  try {
-   const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Audit unavailable')),5000);});
-   const result=await Promise.race([insert,timeout]);if(result.error)console.error('email_log insert failed.');
-  }finally{if(timer)clearTimeout(timer);}
+  try {const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Audit unavailable')),5000);});const result=await Promise.race([insert,timeout]);if(result.error)console.error('email_log insert failed.');}
+  finally{if(timer)clearTimeout(timer);}
  }catch{console.error('External email audit unavailable.');}
 }
-// CRM events are already persisted by database triggers. Legacy request callbacks
-// must never send a second copy or claim provider delivery. The only transport is outbox.ts.
+// CRM events are persisted by database triggers. These compatibility helpers
+// never send a second copy; outbox.ts is the sole CRM transport.
 const managed=async():Promise<EmailSendResult>=>({ok:false,error:'Lifecycle delivery is managed by the durable outbox.'});
 export async function sendEmail(_input:{to:string;template:EmailTemplate;rendered:RenderedEmail;entityType?:EmailEntityType;entityId?:string}):Promise<EmailSendResult>{return managed();}
 export async function sendNewTicketEmail(_input:Parameters<typeof renderNewTicket>[0]&{to:string;ticketId:string}):Promise<EmailSendResult>{return managed();}
@@ -33,17 +31,18 @@ export async function recordExternalSend(input:{to:string;template:EmailTemplate
  const status=input.status??'sent';await recordSend({...input,status,error:input.error??(status==='sent'?HANDOFF_MARKER:undefined)});
 }
 export async function recordUnsent(input:{template:EmailTemplate;reason:string;to?:string;entityType?:EmailEntityType;entityId?:string}):Promise<EmailSendResult> {
- await recordSend({to:input.to??'unknown',template:input.template,entityType:input.entityType,entityId:input.entityId,status:'failed',error:input.reason});
- return {ok:false,error:safeError(input.reason)};
+ await recordSend({to:input.to??'unknown',template:input.template,entityType:input.entityType,entityId:input.entityId,status:'failed',error:input.reason});return {ok:false,error:safeError(input.reason)};
 }
 export async function sendToAll(recipients:string[],send:(to:string)=>Promise<EmailSendResult>,unsent?:{template:EmailTemplate;entityType?:EmailEntityType;entityId?:string}):Promise<EmailSendResult> {
  if(!recipients.length)return unsent?recordUnsent({...unsent,reason:'No active admin recipients'}):{ok:false,error:'No recipients'};
- const results=await Promise.allSettled(recipients.map(send));
- return results.every(r=>r.status==='fulfilled'&&r.value.ok)?{ok:true,resendId:null}:{ok:false,error:'Lifecycle delivery is managed by the durable outbox.'};
+ const results=await Promise.allSettled(recipients.map(send));return results.every(r=>r.status==='fulfilled'&&r.value.ok)?{ok:true,resendId:null}:{ok:false,error:'Lifecycle delivery is managed by the durable outbox.'};
 }
-// Compatibility for Auth-owned invitation audit callbacks only. CRM durability
-// does not rely on this best-effort scheduling, and its send helpers are inert.
 export function queueEmail(send:()=>Promise<EmailSendResult>):void {
- const run=async()=>{try{await send();}catch{console.error('External email audit callback failed.');}};
+ const run=async()=>{
+  try{await send();}catch{console.error('External email audit callback failed.');}
+  // This is a latency optimization only: every CRM event already exists in DB.
+  // A terminated runtime or unavailable provider leaves events for the scheduler.
+  if(isEmailConfigured())try{const {drainEmailOutbox}=await import('@/lib/email/outbox');await drainEmailOutbox();}catch{console.error('Durable email dispatch deferred.');}
+ };
  try{const {after}=require('next/server') as {after:(run:()=>Promise<void>)=>void};after(run);}catch{void run();}
 }
