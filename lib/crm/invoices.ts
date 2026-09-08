@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { readInvoiceContents } from '@/lib/crm/invoice-contents';
+import { invoiceRecord, validInvoiceHeader, validInvoiceItemShape } from '@/lib/crm/invoice-inputs';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { crmError, type CrmResult } from '@/lib/crm/result';
 import { calculateInvoiceTotalCents, isSafeInvoiceLine, MAX_INVOICE_TOTAL_CENTS, roundInvoiceLineCents } from '@/lib/crm/invoice-math';
@@ -63,12 +65,12 @@ export function calculateAmounts(items: Pick<InvoiceItemRow, 'qty' | 'unit_price
   const total_cents = calculateInvoiceTotalCents(items.map((item) => ({ qty: item.qty, unit_price_cents: item.unit_price_cents })));
   const submitted_cents = payments.reduce((sum, payment) => {
     const amount = Number(payment.amount_cents);
-    if (!Number.isSafeInteger(amount) || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
+    if (!Number.isSafeInteger(amount) || amount < 0 || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
     return payment.status === 'submitted' || payment.status === 'confirmed' ? sum + amount : sum;
   }, 0);
   const confirmed_cents = payments.reduce((sum, payment) => {
     const amount = Number(payment.amount_cents);
-    if (!Number.isSafeInteger(amount) || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
+    if (!Number.isSafeInteger(amount) || amount < 0 || sum > MAX_INVOICE_TOTAL_CENTS - amount) throw new Error('Invoice amount exceeds the supported limit.');
     return payment.status === 'confirmed' ? sum + amount : sum;
   }, 0);
   return { total_cents, submitted_cents, confirmed_cents, outstanding_cents: Math.max(total_cents - confirmed_cents, 0) };
@@ -82,19 +84,7 @@ function validAmount(qty: number, price: number) { try { return isSafeInvoiceLin
 function validProject(project: { status?: string; archived_at?: string | null } | null) { return project?.status === 'active' && project.archived_at == null; }
 function validDate(value: string | null | undefined) { if (value == null || value === '') return true; if (!DATE_RE.test(value)) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value; }
 
-async function loadPayments(invoiceId: string) {
-  const { data, error } = await getSupabaseAdmin().from('payments').select('id, invoice_id, method, reference, amount_cents, status, confirmed_by, confirmed_at, created_at').eq('invoice_id', invoiceId).order('created_at', { ascending: true });
-  if (error) throw new Error('Invoice operation failed.');
-  return { ok: true as const, payments: (data ?? []) as PaymentRow[] };
-}
-
-async function loadItems(invoiceId: string) {
-  const { data, error } = await getSupabaseAdmin().from('invoice_items').select('id, invoice_id, description, qty, unit_price_cents, position').eq('invoice_id', invoiceId).order('position', { ascending: true });
-  if (error) throw new Error('Invoice operation failed.');
-  return { ok: true as const, items: (data ?? []) as InvoiceItemRow[] };
-}
-
-async function hydrate(raw: RawInvoice): Promise<InvoiceRow> {
+async function hydrate(raw: RawInvoice, snapshotAmounts?: Amounts): Promise<InvoiceRow> {
   const admin = getSupabaseAdmin();
   const [{ data: project, error: projectError }, { data: profile, error: profileError }, { data: user, error: userError }] = await Promise.all([
     admin.from('projects').select('name, client_id').eq('id', raw.project_id).maybeSingle(),
@@ -102,13 +92,13 @@ async function hydrate(raw: RawInvoice): Promise<InvoiceRow> {
     admin.auth.admin.getUserById(raw.client_id),
   ]);
   if (projectError || profileError || userError || !project) throw new Error('Invoice operation failed.');
-  const amounts = await invoiceAmounts(raw.id);
+  const amounts = snapshotAmounts ?? await invoiceAmounts(raw.id);
   return { ...raw, project_name: (project as { name?: string } | null)?.name ?? '', client_id: (project as { client_id?: string } | null)?.client_id ?? raw.client_id, client_name: (profile as { full_name: string | null } | null)?.full_name ?? null, client_email: user?.user?.email ?? '', ...amounts };
 }
 
 async function invoiceAmounts(invoiceId: string): Promise<Amounts> {
-  const [items, payments] = await Promise.all([loadItems(invoiceId), loadPayments(invoiceId)]);
-  return calculateAmounts(items.items, payments.payments);
+  const contents = await readInvoiceContents(invoiceId);
+  return calculateAmounts(contents.items, contents.payments);
 }
 
 async function getRaw(invoiceId: string) {
@@ -145,14 +135,15 @@ export async function getInvoiceDetail(invoiceId: string, viewer: InvoiceViewer)
   try {
     const found = await getRaw(invoiceId);
     if (!found.ok || (viewer.role === 'client' && (found.raw.client_id !== viewer.userId || found.raw.status === 'draft'))) return { ok: false, error: 'Invoice not found.' };
-    const [items, payments] = await Promise.all([loadItems(invoiceId), loadPayments(invoiceId)]);
-    return { ok: true, invoice: await hydrate(found.raw), items: items.items, payments: payments.payments };
+    const contents = await readInvoiceContents(invoiceId);
+    return { ok: true, invoice: await hydrate(found.raw, calculateAmounts(contents.items, contents.payments)), items: contents.items, payments: contents.payments };
   } catch {
     return { ok: false, error: 'Invoice operation failed.' };
   }
 }
 
 export async function createDraftInvoice(input: { project_id: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<{ ok: true; invoiceId: string } | { ok: false; error: string }> {
+  if (!validInvoiceHeader(input)) return { ok: false, error: 'Invalid invoice data.' };
   const currency = (input.currency ?? 'USD').trim().toUpperCase();
   if (!validUuid(input.project_id) || !/^[A-Z]{3}$/.test(currency) || !validDate(input.due_at)) return { ok: false, error: 'Invalid invoice data.' };
   const project = await getSupabaseAdmin().from('projects').select('id, status, archived_at').eq('id', input.project_id).maybeSingle();
@@ -168,6 +159,7 @@ export async function createDraftInvoiceWithItems(input: {
   payment_note?: string | null;
   items: Array<{ description: string; qty: number; unit_price_cents: number; position: number }>;
 }): Promise<{ ok: true; invoiceId: string } | { ok: false; error: string }> {
+  if (!validInvoiceHeader(input) || !Array.isArray(input?.items) || input.items.length > 10000 || input.items.some(item => !validInvoiceItemShape(item)) || !validDate(input.due_at)) return { ok: false, error: 'Invalid invoice data.' };
   if (!validUuid(input.project_id) || !input.items.length || input.items.some((item) => item.description.trim().length < 1 || item.description.trim().length > 500 || !Number.isInteger(item.position) || item.position < 0 || !validAmount(item.qty, item.unit_price_cents))) return { ok: false, error: 'Invalid invoice data.' };
   try { calculateAmounts(input.items, []); } catch { return { ok: false, error: 'Invoice amount exceeds the supported limit.' }; }
   const project = await getSupabaseAdmin().from('projects').select('status, archived_at').eq('id', input.project_id).maybeSingle();
@@ -183,6 +175,7 @@ export async function createDraftInvoiceWithItems(input: {
 }
 
 export async function updateDraftInvoice(invoiceId: string, patch: { project_id?: string; currency?: string; due_at?: string | null; payment_note?: string | null }): Promise<CrmResult> {
+  if (!validInvoiceHeader(patch)) return invalid();
   const found = await getRaw(invoiceId); if (!found.ok) return found;
   if (found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.');
   const updates: Record<string, unknown> = {};
@@ -195,8 +188,8 @@ export async function updateDraftInvoice(invoiceId: string, patch: { project_id?
   return error ? crmError('Invoice operation failed.') : { ok: true };
 }
 
-export async function addInvoiceItem(invoiceId: string, input: { description: string; qty: number; unit_price_cents: number; position?: number }): Promise<CrmResult> { const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); if (input.description.trim().length < 1 || input.description.trim().length > 500 || !validAmount(input.qty, input.unit_price_cents) || (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0))) return invalid(); const { error } = await getSupabaseAdmin().from('invoice_items').insert({ invoice_id: invoiceId, description: input.description.trim(), qty: input.qty, unit_price_cents: input.unit_price_cents, position: input.position ?? 0 }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
- export async function updateInvoiceItem(itemId: string, patch: { description?: string; qty?: number; unit_price_cents?: number; position?: number }): Promise<CrmResult> { if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id, qty, unit_price_cents').eq('id', itemId).maybeSingle(); if (!item) return crmError('Item not found.'); const found = await getRaw(item.invoice_id); if (!found.ok || found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); const updates: Record<string, unknown> = {}; if (patch.description !== undefined) { const d = patch.description.trim(); if (d.length < 1 || d.length > 500) return invalid(); updates.description = d; } if (patch.qty !== undefined || patch.unit_price_cents !== undefined) { const qty = patch.qty ?? Number(item.qty); const price = patch.unit_price_cents ?? Number(item.unit_price_cents); if (!validAmount(qty, price)) return invalid(); if (patch.qty !== undefined) updates.qty = patch.qty; if (patch.unit_price_cents !== undefined) updates.unit_price_cents = patch.unit_price_cents; } if (patch.position !== undefined) { if (!Number.isInteger(patch.position) || patch.position < 0) return invalid(); updates.position = patch.position; } if (!Object.keys(updates).length) return invalid('No changes provided.'); const { error } = await getSupabaseAdmin().from('invoice_items').update(updates).eq('id', itemId); return error ? crmError('Invoice operation failed.') : { ok: true }; }
+export async function addInvoiceItem(invoiceId: string, input: { description: string; qty: number; unit_price_cents: number; position?: number }): Promise<CrmResult> { if (!validInvoiceItemShape(input)) return invalid(); const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); if (input.description.trim().length < 1 || input.description.trim().length > 500 || !validAmount(input.qty, input.unit_price_cents) || (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0))) return invalid(); const { error } = await getSupabaseAdmin().from('invoice_items').insert({ invoice_id: invoiceId, description: input.description.trim(), qty: input.qty, unit_price_cents: input.unit_price_cents, position: input.position ?? 0 }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
+ export async function updateInvoiceItem(itemId: string, patch: { description?: string; qty?: number; unit_price_cents?: number; position?: number }): Promise<CrmResult> { if (!validInvoiceItemShape(patch, true)) return invalid(); if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id, qty, unit_price_cents').eq('id', itemId).maybeSingle(); if (!item) return crmError('Item not found.'); const found = await getRaw(item.invoice_id); if (!found.ok || found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); const updates: Record<string, unknown> = {}; if (patch.description !== undefined) { const d = patch.description.trim(); if (d.length < 1 || d.length > 500) return invalid(); updates.description = d; } if (patch.qty !== undefined || patch.unit_price_cents !== undefined) { const qty = patch.qty ?? Number(item.qty); const price = patch.unit_price_cents ?? Number(item.unit_price_cents); if (!validAmount(qty, price)) return invalid(); if (patch.qty !== undefined) updates.qty = patch.qty; if (patch.unit_price_cents !== undefined) updates.unit_price_cents = patch.unit_price_cents; } if (patch.position !== undefined) { if (!Number.isInteger(patch.position) || patch.position < 0) return invalid(); updates.position = patch.position; } if (!Object.keys(updates).length) return invalid('No changes provided.'); const { error } = await getSupabaseAdmin().from('invoice_items').update(updates).eq('id', itemId); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 export async function deleteInvoiceItem(itemId: string): Promise<CrmResult> { if (!validUuid(itemId)) return crmError('Item not found.'); const { data: item } = await getSupabaseAdmin().from('invoice_items').select('invoice_id').eq('id', itemId).maybeSingle(); if (!item) return crmError('Item not found.'); const found = await getRaw(item.invoice_id); if (!found.ok || found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); const { error } = await getSupabaseAdmin().from('invoice_items').delete().eq('id', itemId); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 
 export async function sendInvoice(invoiceId: string): Promise<CrmResult> {
@@ -238,7 +231,7 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
     .select('invoice_id, amount_cents')
     .eq('id', paymentId)
     .maybeSingle();
-  if (readError) console.error('payment pre-read failed:', readError.message);
+  if (readError) console.error('Payment pre-read failed.');
 
   const { error } = await getSupabaseAdmin().rpc('confirm_invoice_payment_atomic', { p_payment_id: paymentId, p_confirmed_by: adminId });
   if (error) return crmError('Invoice operation failed.');
@@ -280,4 +273,4 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
 export async function rejectPayment(paymentId: string): Promise<CrmResult> { if (!validUuid(paymentId)) return crmError('Payment is no longer pending.'); const { error } = await getSupabaseAdmin().rpc('reject_invoice_payment_atomic', { p_payment_id: paymentId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
 export async function countUnpaidInvoices(): Promise<number> { const rows = await listInvoices({ userId: '00000000-0000-0000-0000-000000000000', role: 'admin' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }
 export async function countOwnOutstandingInvoices(clientId: string): Promise<number> { if (!validUuid(clientId)) return 0; const rows = await listInvoices({ userId: clientId, role: 'client' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }
-export async function submitPayment(invoiceId: string, clientId: string, input: { method: PaymentMethod; reference: string; amount_cents: number }): Promise<CrmResult> { if (!validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method) || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 || typeof input.reference !== 'string' || input.reference.trim().length < 1 || input.reference.trim().length > 200) return crmError('Payment submission could not be processed.'); const { error } = await getSupabaseAdmin().rpc('submit_invoice_payment_atomic', { p_invoice_id: invoiceId, p_client_id: clientId, p_method: input.method, p_reference: input.reference.trim(), p_amount_cents: input.amount_cents }); return error ? crmError('Payment submission could not be processed.') : { ok: true }; }
+export async function submitPayment(invoiceId: string, clientId: string, input: { method: PaymentMethod; reference: string; amount_cents: number }): Promise<CrmResult> { if (!invoiceRecord(input) || !validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method) || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 || typeof input.reference !== 'string' || input.reference.trim().length < 1 || input.reference.trim().length > 200) return crmError('Payment submission could not be processed.'); const { error } = await getSupabaseAdmin().rpc('submit_invoice_payment_atomic', { p_invoice_id: invoiceId, p_client_id: clientId, p_method: input.method, p_reference: input.reference.trim(), p_amount_cents: input.amount_cents }); return error ? crmError('Payment submission could not be processed.') : { ok: true }; }
