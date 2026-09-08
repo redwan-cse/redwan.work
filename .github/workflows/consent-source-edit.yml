@@ -1,0 +1,21 @@
+name: Apply approved consent source edits
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  edit:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/consent-diagnostic-contracts'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Apply only the approved exact-blob transformations
+        env:
+          EDIT_TOKEN: ${{ github.token }}
+        run: python3 scripts/apply-consent-contract.py
