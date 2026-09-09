@@ -51,7 +51,7 @@ jobs:
       - name: Verify exact included heads and frozen main dependency evidence
         run: |
           python3 - <<'PY'
-          import json,subprocess
+          import json,re,subprocess
           from pathlib import Path
           heads={49:'b2919343d146adfdff92ed4471436aabe495fdd9',50:'7f1de0f3cfeaa31658f9fdcd574a40050f3c232a',51:'b06e8637741e5067a8908138feea96ebc1d9253a',52:'b86ce1ab93f5ea3501389f3d1c34d85332d4d826',54:'71193183dd974040769f4f32ccb9a2c7fdec9adb',55:'d4fcd550fed53bfe56119a91488822ea51e59b4d'}
           for pr,head in heads.items():
@@ -70,8 +70,10 @@ jobs:
           assert "formFields.append('entry." not in form and 'generateTicketId' not in form
           assert "formFields.append('gdprConsent'" in form
           assert '4e9ca493fd6cdd11a82be742670455b752ca4c95' in Path('.github/workflows/integrated-foundation-smoke.yml').read_text()
-          print('PR27 cleanup and PR48 foundation reconciliation present; detailed behavior verified by acceptance jobs')
+          print('PR27 cleanup and PR48 foundation reconciliation present; behavior verified by acceptance jobs')
           workflow=Path('.github/workflows/contact-cleanup.yml').read_text()
-          assert 'contents: write' not in workflow and 'secrets.' not in workflow and 'environment:' not in workflow
+          assert not re.search(r'^\s*(?:contents|statuses):\s*write\s*$',workflow,re.M)
+          assert not re.search(r'^\s*environment:',workflow,re.M)
+          assert not re.search(r'\$\{\{\s*secrets\.',workflow)
           print('One-shot development write capability retired')
           PY
