@@ -21,7 +21,14 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Challenge acceptance claims with networking disabled
-        run: sudo unshare --net -- "$(command -v node)" --experimental-strip-types tests/audit-claim-challenges.mjs "$RUNNER_TEMP/audit-claims.json"
+        run: |
+          set +e
+          sudo unshare --net -- "$(command -v node)" --experimental-strip-types tests/audit-claim-challenges.mjs "$RUNNER_TEMP/audit-claims.json"
+          result=$?
+          if sudo test -f "$RUNNER_TEMP/audit-claims.json"; then
+            sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/audit-claims.json"
+          fi
+          exit "$result"
       - name: Publish finite claim outcomes without changing the failed test result
         if: always()
         env:
