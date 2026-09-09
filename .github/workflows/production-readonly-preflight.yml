@@ -1,0 +1,71 @@
+name: Production read-only preflight
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/production-readonly-preflight.yml]
+permissions:
+  contents: read
+concurrency:
+  group: production-readonly-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+    name: Production / read-only metadata
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout reviewed preflight source only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: dca7fa5459dc11f6cd2344b39c06a11778ed87c5
+          persist-credentials: false
+      - name: Synthetic safety tests with no production credentials
+        run: python3 -I tests/production-preflight-safety.py
+      - name: Read provider metadata only with isolated standard-library Python
+        env:
+          PREFLIGHT_READ_ONLY: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ vars.RESEND_FROM_EMAIL }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_PRIVATE_ACCESS_KEY_ID: ${{ secrets.R2_PRIVATE_ACCESS_KEY_ID }}
+          R2_PRIVATE_SECRET_ACCESS_KEY: ${{ secrets.R2_PRIVATE_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_ACCESS_KEY_ID: ${{ secrets.R2_PUBLIC_ACCESS_KEY_ID }}
+          R2_PUBLIC_SECRET_ACCESS_KEY: ${{ secrets.R2_PUBLIC_SECRET_ACCESS_KEY }}
+          R2_PRIVATE_BUCKET: ${{ vars.R2_PRIVATE_BUCKET }}
+          R2_PUBLIC_BUCKET: ${{ vars.R2_PUBLIC_BUCKET }}
+          NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_R2_PUBLIC_BASE_URL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -I scripts/production-preflight.py
+      - name: Publish fixed result categories only, without provider credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,appendFileSync,unlinkSync} from 'node:fs';
+          const path=process.env.RUNNER_TEMP+'/production-preflight-safe.json';
+          const result=JSON.parse(readFileSync(path,'utf8'));
+          const labels=new Set(['supabase-url','supabase-key-format','supabase-jwks','supabase-data-access','outbox-table','auth-config-access','auth-site','auth-smtp','auth-recovery-template','resend-domain','r2-private-access','r2-private-cors','r2-public-access','r2-public-cors','public-cdn-config','production-backup','migration-ledger','vercel-environment','cron-active','preflight']);
+          const codes=new Set(['PASS','FAIL','MISSING','INVALID','DENIED','UNAVAILABLE','UNKNOWN','NOT_CHECKED','RESTRICTED']);
+          assert.match(process.env.GITHUB_SHA,/^[0-9a-f]{40}$/);
+          for(const [label,code] of Object.entries(result)){assert.ok(labels.has(label)&&codes.has(code));}
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,'# Read-only metadata evidence (not release approval)\n\n');
+          for(const [label,code] of Object.entries(result)){
+            const description=label+': '+code;
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,description+'\n\n');
+            const response=await fetch('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+process.env.GITHUB_SHA,{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({state:code==='PASS'?'success':'failure',context:'production-preflight/'+label,description})});
+            assert.ok(response.ok,'Safe status publication failed');
+          }
+          unlinkSync(path);
+          JS
