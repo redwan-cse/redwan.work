@@ -33,14 +33,7 @@ export async function getOwnedFileUrl(fileId:string,viewer:Viewer):Promise<{ok:t
  try{if(!await currentViewer(viewer))return {ok:false,error:'File not found.'};const {data,error}=await getSupabaseAdmin().from('files').select(COLUMNS).eq('id',fileId).maybeSingle();if(error||!data||!await owned(data as FileRow,viewer))return {ok:false,error:'File not found.'};const file=data as FileRow;return {ok:true,url:await presignPrivateGet(file.r2_key,60),filename:file.filename};}
  catch{return {ok:false,error:'File not found.'};}
 }
-export async function deleteOwnedFile(fileId:string,viewer:Viewer):Promise<CrmResult>{
- try{
-  if(!await currentViewer(viewer))return crmError('File not found.');const admin=getSupabaseAdmin();const {data,error}=await admin.from('files').select(COLUMNS).eq('id',fileId).maybeSingle();if(error)return crmError('File lookup failed.');if(!data||!await owned(data as FileRow,viewer))return crmError('File not found.');const file=data as FileRow;
-  if(viewer.role==='client'){if(file.kind!=='attachment')return crmError('Only attachments can be deleted.');if(file.uploaded_by!==viewer.userId)return crmError('File not found.');const age=Date.now()-new Date(file.created_at).getTime();if(!Number.isFinite(age)||age<0||age>86400000)return crmError('Delete window expired.');}
-  try{await deletePrivateObjects([file.r2_key]);}catch{return crmError('Storage deletion incomplete. Tracking is retained; please retry.');}
-  const removed=await admin.from('files').delete().eq('id',fileId).eq('r2_key',file.r2_key);if(removed.error)return crmError('Storage deletion completed, but tracking could not be updated. Please retry.');return {ok:true};
- }catch{return crmError('File operation failed. Please try again.');}
-}
+export {deleteOwnedFile} from '@/lib/crm/file-deletion';
 export async function listTicketAttachmentRows(ticketId:string):Promise<FileRow[]>{
  const {data,error}=await getSupabaseAdmin().from('files').select(COLUMNS).eq('ticket_id',ticketId).eq('kind','attachment').order('created_at',{ascending:true}).limit(11);
  if(error)throw new Error('Could not load ticket attachments.');if((data?.length??0)>10)throw new Error('Ticket attachment count requires administrator review.');return (data??[]) as FileRow[];
@@ -49,10 +42,10 @@ export async function listTicketAttachmentRows(ticketId:string):Promise<FileRow[
 export async function listOwnDeliverables(clientId:string):Promise<Array<FileRow&{project_name:string}>>{
  const admin=getSupabaseAdmin();const out:Array<FileRow&{project_name:string}>=[];let after='';
  while(true){let query=admin.from('files').select(`${COLUMNS}, projects!inner(name,client_id,archived_at)`).eq('kind','deliverable').eq('projects.client_id',clientId).is('projects.archived_at',null).order('id').limit(100);if(after)query=query.gt('id',after);const {data,error}=await query;if(error)throw new Error('Could not load deliverables.');const rows=(data??[]) as unknown as Array<FileRow&{projects:{name:string}}>;
-  for(const row of rows){out.push({...row,project_name:row.projects.name});}if(rows.length<100)break;after=rows[rows.length-1].id;
+  if(rows.length&&rows[rows.length-1].id<=after)throw new Error('Deliverable pagination stalled.');if(out.length+rows.length>10000)throw new Error('Use paginated deliverables.');for(const row of rows){out.push({...row,project_name:row.projects.name});}if(rows.length<100)break;after=rows[rows.length-1].id;
  }return out.sort((a,b)=>a.project_name.localeCompare(b.project_name)||a.created_at.localeCompare(b.created_at));
 }
 export async function countPendingAttachmentOrphans():Promise<{rows:number;keys:string[]}>{
  const admin=getSupabaseAdmin(),keys:string[]=[];const cutoff=new Date(Date.now()-86400000).toISOString();let after='';
- while(true){let query=admin.from('files').select('id,r2_key').eq('kind','attachment').is('ticket_id',null).lt('created_at',cutoff).order('id').limit(100);if(after)query=query.gt('id',after);const {data,error}=await query;if(error)throw new Error('Could not inspect pending attachments.');for(const row of data??[])keys.push(row.r2_key);if((data?.length??0)<100)break;after=data![data!.length-1].id;}return {rows:keys.length,keys};
+ while(true){let query=admin.from('files').select('id,r2_key').eq('kind','attachment').is('ticket_id',null).lt('created_at',cutoff).order('id').limit(100);if(after)query=query.gt('id',after);const {data,error}=await query;if(error)throw new Error('Could not inspect pending attachments.');if(data?.length&&data[data.length-1].id<=after)throw new Error('Orphan pagination stalled.');if(keys.length+(data?.length??0)>10000)throw new Error('Use bounded orphan maintenance.');for(const row of data??[])keys.push(row.r2_key);if((data?.length??0)<100)break;after=data![data!.length-1].id;}return {rows:keys.length,keys};
 }

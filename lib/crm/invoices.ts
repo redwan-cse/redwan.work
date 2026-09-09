@@ -110,26 +110,7 @@ async function getRaw(invoiceId: string) {
   return { ok: true as const, raw: { ...data, client_id: project.data.client_id } as RawInvoice };
 }
 
-export async function listInvoices(viewer: InvoiceViewer, status?: InvoiceStatus): Promise<InvoiceRow[]> {
-  const admin = getSupabaseAdmin();
-  let query = admin.from('invoices').select('id, project_id, number, currency, status, issued_at, due_at, payment_note, created_at').order('created_at', { ascending: false });
-  if (viewer.role === 'client') query = query.in('status', ['sent', 'paid', 'void']);
-  if (status && validStatus(status)) query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw new Error('Invoice operation failed.');
-  // Hydrate concurrently: Promise.all preserves input order, then apply the
-  // existing client-side scoping filter after all resolve (same rows/order).
-  const raws = (data ?? []) as RawInvoice[];
-  const resolved = await Promise.all(
-    raws.map(async (raw) => {
-      const project = await admin.from('projects').select('client_id').eq('id', raw.project_id).maybeSingle();
-      if (project.error || !project.data) throw new Error('Invoice operation failed.');
-      if (viewer.role === 'client' && project.data.client_id !== viewer.userId) return null;
-      try { return await hydrate({ ...raw, client_id: project.data.client_id }); } catch { throw new Error('Invoice operation failed.'); }
-    })
-  );
-  return resolved.filter((row): row is InvoiceRow => row !== null);
-}
+export {listInvoices,countUnpaidInvoices,countOwnOutstandingInvoices} from '@/lib/crm/compatibility-readers';
 
 export async function getInvoiceDetail(invoiceId: string, viewer: InvoiceViewer): Promise<{ ok: true; invoice: InvoiceRow; items: InvoiceItemRow[]; payments: PaymentRow[] } | { ok: false; error: string }> {
   try {
@@ -271,6 +252,4 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
   return { ok: true };
 }
 export async function rejectPayment(paymentId: string): Promise<CrmResult> { if (!validUuid(paymentId)) return crmError('Payment is no longer pending.'); const { error } = await getSupabaseAdmin().rpc('reject_invoice_payment_atomic', { p_payment_id: paymentId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
-export async function countUnpaidInvoices(): Promise<number> { const rows = await listInvoices({ userId: '00000000-0000-0000-0000-000000000000', role: 'admin' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }
-export async function countOwnOutstandingInvoices(clientId: string): Promise<number> { if (!validUuid(clientId)) return 0; const rows = await listInvoices({ userId: clientId, role: 'client' }, 'sent'); return rows.filter((row) => row.outstanding_cents > 0).length; }
 export async function submitPayment(invoiceId: string, clientId: string, input: { method: PaymentMethod; reference: string; amount_cents: number }): Promise<CrmResult> { if (!invoiceRecord(input) || !validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method) || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 || typeof input.reference !== 'string' || input.reference.trim().length < 1 || input.reference.trim().length > 200) return crmError('Payment submission could not be processed.'); const { error } = await getSupabaseAdmin().rpc('submit_invoice_payment_atomic', { p_invoice_id: invoiceId, p_client_id: clientId, p_method: input.method, p_reference: input.reference.trim(), p_amount_cents: input.amount_cents }); return error ? crmError('Payment submission could not be processed.') : { ok: true }; }

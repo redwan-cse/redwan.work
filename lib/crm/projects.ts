@@ -30,31 +30,7 @@ function isValidDueDate(v: string): boolean {
   const d = new Date(v);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
 }
-async function hydrateProjectRow(raw: RawProject): Promise<ProjectRow> {
-  const admin = getSupabaseAdmin();
-  const [profile, user, total, done, files] = await Promise.all([
-    admin.from('profiles').select('full_name').eq('id', raw.client_id).maybeSingle(),
-    admin.auth.admin.getUserById(raw.client_id),
-    admin.from('milestones').select('id', { count: 'exact', head: true }).eq('project_id', raw.id),
-    admin.from('milestones').select('id', { count: 'exact', head: true }).eq('project_id', raw.id).eq('status', 'done'),
-    admin.from('files').select('id', { count: 'exact', head: true }).eq('project_id', raw.id).eq('kind', 'deliverable'),
-  ]);
-  if (profile.error || user.error || total.error || done.error || files.error || total.count === null || done.count === null || files.count === null) throw new Error('Project summary unavailable.');
-  return { ...raw, client_name: profile.data?.full_name ?? null, client_email: user.data?.user?.email ?? '', milestone_total: total.count, milestone_done: done.count, file_count: files.count };
-}
-
-// Legacy export retained for compatibility. Main list/detail routes use SQL pages.
-export async function listProjects(opts: { archived?: boolean } = {}): Promise<ProjectRow[]> {
-  const admin = getSupabaseAdmin();
-  let query = admin.from('projects').select('id, client_id, name, description, status, started_at, due_at, archived_at, archive_key').order('created_at', { ascending: false });
-  if (opts.archived === true) query = query.not('archived_at', 'is', null);
-  else if (opts.archived === false) query = query.is('archived_at', null);
-  const { data, error } = await query;
-  if (error) throw new Error('projects query failed.');
-  const out: ProjectRow[] = [];
-  for (const row of (data ?? []) as RawProject[]) out.push(await hydrateProjectRow(row));
-  return out;
-}
+export {listProjects,listArchivedProjects,listOwnProjects} from '@/lib/crm/compatibility-readers';
 export async function createProject(input: { client_id: string; name: string; description?: string; due_at?: string }): Promise<{ ok: true; projectId: string } | { ok: false; error: string }> {
   if (!input || typeof input.name !== 'string' || typeof input.client_id !== 'string' || (input.description !== undefined && typeof input.description !== 'string') || (input.due_at !== undefined && typeof input.due_at !== 'string')) return { ok: false, error: 'Invalid project fields.' };
   const trimmed = input.name.trim();
@@ -102,18 +78,6 @@ export async function purgeArchivedProject(projectId: string): Promise<CrmResult
   const { purgeArchivedProject: prepareRecovery } = await import('@/lib/crm/retention');
   return prepareRecovery(projectId);
 }
-export async function listArchivedProjects(): Promise<Array<Pick<ProjectRow, 'id' | 'name' | 'client_name' | 'archived_at'>>> {
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin.from('projects').select('id, name, archived_at, client_id').not('archived_at', 'is', null).order('archived_at', { ascending: false });
-  if (error) throw new Error('archived projects query failed.');
-  const out: Array<Pick<ProjectRow, 'id' | 'name' | 'client_name' | 'archived_at'>> = [];
-  for (const row of (data ?? []) as Array<{ id: string; name: string; archived_at: string; client_id: string }>) {
-    const { data: profile, error: profileError } = await admin.from('profiles').select('full_name').eq('id', row.client_id).maybeSingle();
-    if (profileError) throw new Error('Project client unavailable.');
-    out.push({ id: row.id, name: row.name, client_name: profile?.full_name ?? null, archived_at: row.archived_at });
-  }
-  return out;
-}
 export async function getArchiveDownloadUrl(projectId: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const { data: project, error } = await getSupabaseAdmin().from('projects').select('id, archived_at, archive_key').eq('id', projectId).maybeSingle();
   if (error) return { ok: false, error: 'Lookup failed.' };
@@ -121,19 +85,6 @@ export async function getArchiveDownloadUrl(projectId: string): Promise<{ ok: tr
   if (!project.archived_at || !project.archive_key) return { ok: false, error: 'Project is not archived.' };
   try { return { ok: true, url: await presignPrivateGet(project.archive_key, 60) }; }
   catch { return { ok: false, error: 'Archive download unavailable.' }; }
-}
-export async function listOwnProjects(clientId: string): Promise<PortalProjectRow[]> {
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin.from('projects').select('id, name, status, due_at').eq('client_id', clientId).is('archived_at', null).order('created_at', { ascending: false });
-  if (error) throw new Error('own projects query failed.');
-  const out: PortalProjectRow[] = [];
-  for (const row of (data ?? []) as Array<{ id: string; name: string; status: ProjectStatus; due_at: string | null }>) {
-    const total = await admin.from('milestones').select('id', { count: 'exact', head: true }).eq('project_id', row.id);
-    const done = await admin.from('milestones').select('id', { count: 'exact', head: true }).eq('project_id', row.id).eq('status', 'done');
-    if (total.error || done.error || total.count === null || done.count === null) throw new Error('Project progress unavailable.');
-    out.push({ ...row, milestone_total: total.count, milestone_done: done.count });
-  }
-  return out;
 }
 export async function countOwnActiveProjects(clientId: string): Promise<number> {
   const { count, error } = await getSupabaseAdmin().from('projects').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active').is('archived_at', null);
