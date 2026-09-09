@@ -1,0 +1,45 @@
+name: PR reconciliation evidence
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/pr-reconciliation.yml]
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read only exact ancestry and dependency versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import {execFileSync,spawnSync} from 'node:child_process';
+          import {readFileSync} from 'node:fs';
+          import https from 'node:https';
+          const heads={49:'b2919343d146adfdff92ed4471436aabe495fdd9',50:'7f1de0f3cfeaa31658f9fdcd574a40050f3c232a',51:'b06e8637741e5067a8908138feea96ebc1d9253a',52:'b86ce1ab93f5ea3501389f3d1c34d85332d4d826',54:'71193183dd974040769f4f32ccb9a2c7fdec9adb',55:'d4fcd550fed53bfe56119a91488822ea51e59b4d'};
+          const results=[];
+          for(const [pr,sha] of Object.entries(heads))results.push(['ancestry-'+pr,spawnSync('git',['merge-base','--is-ancestor',sha,'HEAD']).status===0?'INCLUDED':'NOT_INCLUDED']);
+          for(const [label,raw] of [['main',execFileSync('git',['show','27ab3e3f1895b0d81231ddf1b83174fc24ad1f8a:package-lock.json'])],['candidate',readFileSync('package-lock.json')]]) {
+            const packages=JSON.parse(raw).packages;
+            for(const name of ['lodash','next','ajv','minimatch']) {
+              const versions=[...new Set(Object.entries(packages).filter(([k])=>k.endsWith('node_modules/'+name)).map(([,v])=>v.version))].sort();
+              if(!versions.every(v=>/^\d+\.\d+\.\d+$/.test(v)))throw Error('Unexpected version format');
+              results.push([label+'-'+name,versions.join(',')||'ABSENT']);
+            }
+          }
+          for(const [label,description] of results) {
+            console.log(label+': '+description);
+            await new Promise((resolve,reject)=>{
+              const req=https.request({hostname:'api.github.com',path:'/repos/redwan-cse/redwan.work/statuses/'+process.env.GITHUB_SHA,method:'POST',rejectUnauthorized:true,headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'User-Agent':'redwan-pr-reconciliation','Content-Type':'application/json'}},res=>{res.resume();res.on('end',()=>res.statusCode===201?resolve():reject(Error('Report failed')));});
+              req.setTimeout(15000,()=>req.destroy(Error('Timeout')));req.on('error',reject);
+              req.end(JSON.stringify({state:'success',context:'reconcile/'+label,description}));
+            });
+          }
+          JS
