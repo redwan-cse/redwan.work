@@ -1,4 +1,4 @@
-name: Auth origin correction (retired)
+name: Auth diagnostic reporting (synthetic only)
 on:
   push:
     branches: [fix/direct-public-asset-uploads]
@@ -6,9 +6,9 @@ on:
 permissions:
   contents: read
 jobs:
-  retired:
+  synthetic-reporting:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -16,4 +16,14 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.23.1
-      - run: node --test scripts/auth-origin-fix.test.mjs
+      - name: Confirm production transport remains absent
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/auth-origin-fix.mjs').read_text()
+          for forbidden in ['node:https','node:http','node:net','node:fs','process.env','fetch(', 'Authorization', 'writeFileSync']:
+              assert forbidden not in s, 'Production capability must remain retired'
+          print('Pure fixture-only source boundary: PASS')
+          PY
+      - name: Run sixteen synthetic cases with networking isolated
+        run: sudo unshare --net -- "$(command -v node)" --test scripts/auth-origin-fix.test.mjs
