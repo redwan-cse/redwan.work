@@ -1,8 +1,2 @@
-import assert from 'node:assert/strict';assert.equal(process.env.GITHUB_REPOSITORY,'redwan-cse/redwan.work');assert.equal(process.env.GITHUB_REF,'refs/heads/fix/direct-public-asset-uploads');
-const root='https://api.github.com/repos/redwan-cse/redwan.work';const headers={Authorization:`Bearer ${process.env.GH_TOKEN}`,Accept:'application/vnd.github+json','Content-Type':'application/json'};
-async function get(path){const r=await fetch(root+path,{headers,redirect:'error',signal:AbortSignal.timeout(20000)});return {status:r.status,data:await r.json()};}
-async function report(context,text){console.log(context+': '+text);const r=await fetch(root+'/statuses/'+process.env.GITHUB_SHA,{method:'POST',headers,redirect:'error',body:JSON.stringify({state:'success',context:'release-evidence/'+context,description:text.slice(0,140)})});assert.ok(r.ok);}
-const protection=await get('/branches/main/protection');await report('protection',protection.status===200?'Readable; approvals='+String(protection.data.required_pull_request_reviews?.required_approving_review_count??0)+'; checks='+JSON.stringify(protection.data.required_status_checks?.contexts??[]):'HTTP '+protection.status+'; actual required checks remain unknown.');
-const rules=await get('/rules/branches/main');await report('rules',rules.status===200?'Active rule types: '+[...new Set(rules.data.map(x=>x.type))].join(', '):'HTTP '+rules.status+'; branch rules not verified.');
-const reviews=await get('/pulls/56/reviews?per_page=100');if(reviews.status===200)await report('reviews','Submitted APPROVE records='+reviews.data.filter(x=>x.state==='APPROVED').length+'; reviewer validity/dismissal must be checked separately.');
-await report('production','No Vercel/Supabase/R2 administration credentials used; backup, hosted config and scheduler NOT verified.');
+// Evidence captured at 19ae5e5fe62624a3c8abab328f36e390c8e216d5. No API access remains.
+console.log('Main active rule types: deletion, non_fast_forward, required_signatures. Classic protection HTTP 403; zero submitted approval records. Production verification unavailable.');

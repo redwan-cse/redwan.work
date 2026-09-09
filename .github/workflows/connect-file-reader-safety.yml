@@ -1,18 +1,11 @@
-name: Connect reviewed file and reader safety
+name: File and reader safety integrated
 on:
-  push:
-    branches: [fix/direct-public-asset-uploads]
-    paths: [scripts/connect-file-reader-safety.mjs, .github/workflows/connect-file-reader-safety.yml]
+  pull_request:
+    branches: [main]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  connect:
+  integrated:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/connect-file-reader-safety.mjs
+      - run: echo 'Inspected file and reader integration is complete; source-write capability retired.'

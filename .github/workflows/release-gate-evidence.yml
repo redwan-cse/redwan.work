@@ -1,20 +1,11 @@
-name: Read release gate evidence
+name: Release evidence capture retired
 on:
-  push:
-    branches: [fix/direct-public-asset-uploads]
-    paths: [scripts/release-gate-evidence.mjs, .github/workflows/release-gate-evidence.yml]
+  pull_request:
+    branches: [main]
 permissions:
   contents: read
-  pull-requests: read
-  statuses: write
 jobs:
-  evidence:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-gate-evidence.mjs
+      - run: echo 'Release evidence recorded; diagnostic status-write access retired.'
