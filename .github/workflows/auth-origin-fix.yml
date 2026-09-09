@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   correct:
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads' && github.run_attempt == 1 && github.event.head_commit.message == 'ci(auth): apply approved two-field production correction once'
+    if: >-
+      github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads' && github.run_attempt == 1 && github.event.head_commit.message == 'ci(auth): apply approved two-field production correction once'
     environment: Production
     runs-on: ubuntu-latest
     timeout-minutes: 5
