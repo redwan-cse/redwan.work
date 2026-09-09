@@ -1,7 +1,6 @@
-import https from 'node:https';
+// Retired: pure read-only classifier tests, no provider transport or environment access.
+// Historical inspected GET-only executable: 9f8b672c97ac545af989b4469f56f66b64992699.
 import {isDeepStrictEqual} from 'node:util';
-import {writeFileSync,readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 export function pathFor(value) {
   if(typeof value!=='string'||/\s/.test(value))throw new Error('INVALID');
@@ -41,20 +40,6 @@ export async function diagnose(get,wait=()=>new Promise(r=>setTimeout(r,3000))) 
     return classify(a.data,b.data);
   }catch{return result;}
 }
-// No production method parameter: the only production transport is a fixed GET.
-function getAuth(path,token) {
-  if(!authRequestAllowed('api.supabase.com',path,'GET'))return Promise.reject(new Error('Refused'));
-  return new Promise((resolve,reject)=>{
-    const req=https.request({hostname:'api.supabase.com',port:443,path,method:'GET',rejectUnauthorized:true,headers:{Authorization:'Bearer '+token,'User-Agent':'redwan-readonly-auth-diagnosis','Accept':'application/json'}},res=>{
-      let n=0;const chunks=[];
-      res.on('data',chunk=>{n+=chunk.length;if(n>524288)res.destroy(new Error('Bounded'));else chunks.push(chunk);});
-      res.on('error',()=>reject(new Error('Unavailable')));
-      res.on('end',()=>{let data=null;try{data=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{}resolve({status:res.statusCode,data});});
-    });
-    req.setTimeout(15000,()=>req.destroy(new Error('Timeout')));
-    req.on('error',()=>reject(new Error('Unavailable')));req.end();
-  });
-}
 async function selftest() {
   const path=pathFor('https://'+'a'.repeat(20)+'.supabase.co');
   assert.equal(authRequestAllowed('api.supabase.com',path,'GET'),true);
@@ -74,29 +59,4 @@ async function selftest() {
   assert.equal((await diagnose(async()=>{throw new Error('PRIVATE_MARKER');}))['auth-read'],'UNAVAILABLE');
   console.log('Synthetic read-only, no-secret and stability assertions: PASS');
 }
-async function main() {
-  if(process.argv[2]==='test')return selftest();
-  const e=process.env;
-  if(e.GITHUB_REPOSITORY!=='redwan-cse/redwan.work'||e.GITHUB_REF!=='refs/heads/fix/direct-public-asset-uploads'||e.GITHUB_RUN_ATTEMPT!=='1')throw new Error('Refused');
-  if(process.argv[2]==='read') {
-    const path=pathFor(e.NEXT_PUBLIC_SUPABASE_URL);
-    if(!e.SUPABASE_ACCESS_TOKEN)throw new Error('Refused');
-    const result=await diagnose(()=>getAuth(path,e.SUPABASE_ACCESS_TOKEN));
-    if(!safeResult(result))throw new Error('Refused');
-    writeFileSync(e.RUNNER_TEMP+'/auth-readonly-result.json',JSON.stringify(result),{mode:0o600,flag:'wx'});
-    for(const [k,v]of Object.entries(result))console.log(k+': '+v);
-  }else if(process.argv[2]==='report') {
-    const result=JSON.parse(readFileSync(e.RUNNER_TEMP+'/auth-readonly-result.json','utf8'));
-    if(!safeResult(result)||!/^[a-f0-9]{40}$/.test(e.GITHUB_SHA||''))throw new Error('Refused');
-    for(const [k,v]of Object.entries(result)) {
-      // GitHub-only finite evidence statuses, never a production API write.
-      await new Promise((resolve,reject)=>{
-        const req=https.request({hostname:'api.github.com',port:443,path:'/repos/redwan-cse/redwan.work/statuses/'+e.GITHUB_SHA,method:'POST',rejectUnauthorized:true,headers:{Authorization:'Bearer '+e.GITHUB_TOKEN,'User-Agent':'redwan-readonly-auth-diagnosis','Content-Type':'application/json'}},res=>{res.resume();res.on('end',()=>res.statusCode===201?resolve():reject(new Error('Unavailable')));res.on('error',()=>reject(new Error('Unavailable')));});
-        req.setTimeout(15000,()=>req.destroy(new Error('Unavailable')));
-        req.on('error',()=>reject(new Error('Unavailable')));
-        req.end(JSON.stringify({context:'auth-readonly/'+k,state:'success',description:v}));
-      });
-    }
-  }else throw new Error('Refused');
-}
-if(import.meta.url.startsWith('file:')&&process.argv[1]===fileURLToPath(import.meta.url))main().catch(()=>{console.error('auth-diagnosis: UNAVAILABLE');process.exitCode=1;});
+await selftest();
