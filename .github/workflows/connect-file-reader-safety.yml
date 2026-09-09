@@ -1,0 +1,18 @@
+name: Connect reviewed file and reader safety
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [scripts/connect-file-reader-safety.mjs, .github/workflows/connect-file-reader-safety.yml]
+permissions:
+  contents: write
+jobs:
+  connect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/connect-file-reader-safety.mjs
