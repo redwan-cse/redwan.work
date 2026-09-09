@@ -1,0 +1,20 @@
+name: Read release gate evidence
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [scripts/release-gate-evidence.mjs, .github/workflows/release-gate-evidence.yml]
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-gate-evidence.mjs
