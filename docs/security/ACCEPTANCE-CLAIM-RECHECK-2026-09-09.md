@@ -1,0 +1,9 @@
+# Fresh acceptance claim challenge
+
+Owner requested actual acceptance execution and next-step advice September9 at15:58 Asia/Dhaka. Baseline application3a31f664c6f1615488de156613b5ade995245829. Test-only additions, no app/schema changes, main push, merge, production credentials or provider reads/writes. This branch commit triggers fresh regression/build, SQL, foundation, contact/browser, Auth/mailbox/storage/restore and security checks. Prior green jobs are historical, not today's fresh result.
+
+New credential-free, network-isolated challenge imports the actual ticket/client/parser modules with explicit service fixtures. It tests ticket count/read/write errors, both admin role stores and admin deactivation refusal, explicit consent/time and the separate issue45 policy-version criterion. It reports each claim as PASS/FAIL and the job fails if any claim fails; no continue-on-error or false green wrapper. It cannot prove real service behavior from mocks or a global final-admin invariant under arbitrary direct SQL/concurrency.
+
+Known evidence boundaries must remain NOT VERIFIED rather than pass: actual hosted contact upload/route/persistence chain; multi-instance public rate controls; full ticket attachment upload/local removal/cancel/reload/visibility journey; all legacy action manifest consumers; measured database/API p50/p95 and query budgets; complete semantic documentation audit; policy-version/historical consent interpretation; live provider/deployment/backup/restore/configuration/review gates. Existing suites exercise related paths, not necessarily each full acceptance criterion. No production retry is authorized.
+
+Results will be read after execution. Any newly failing acceptance claim should be tracked before release, not silently fixed by weakening the test or marking its audit issue done. Thirteen PR closures were consolidation only; the20 audit issues remain open and56 remains unmerged.

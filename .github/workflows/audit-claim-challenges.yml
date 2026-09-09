@@ -1,0 +1,44 @@
+name: Audit claim challenges
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  challenges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - name: Challenge acceptance claims with networking disabled
+        run: sudo unshare --net -- "$(command -v node)" --experimental-strip-types tests/audit-claim-challenges.mjs "$RUNNER_TEMP/audit-claims.json"
+      - name: Publish finite claim outcomes without changing the failed test result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          const values=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/audit-claims.json','utf8'));
+          const keys=['F06-ticket-count-read-write-errors','F16-admin-role-store-protection','F20-explicit-consent-and-time','F20-policy-version-recorded'];
+          if(JSON.stringify(Object.keys(values).sort())!==JSON.stringify(keys.sort()))throw Error('Unexpected report');
+          if(!/^[a-f0-9]{40}$/.test(process.env.TARGET_SHA))throw Error('Invalid target');
+          for(const [key,value]of Object.entries(values)){
+            if(!['PASS','FAIL'].includes(value))throw Error('Unexpected result');
+            const r=await fetch('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+process.env.TARGET_SHA,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+process.env.GH_TOKEN,'Content-Type':'application/json','User-Agent':'redwan-claim-acceptance'},body:JSON.stringify({context:'claim/'+key,state:value==='PASS'?'success':'failure',description:value})});
+            if(r.status!==201)throw Error('Reporting failed');
+          }
+          JS
+      - if: always()
+        run: sudo rm -f -- "$RUNNER_TEMP/audit-claims.json"
