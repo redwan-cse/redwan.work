@@ -1,0 +1,32 @@
+name: File deletion red-green proof
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - name: Reproduce exact storage-first defect, then verify current service
+        run: |
+          set -euo pipefail
+          cp lib/crm/files.ts "$RUNNER_TEMP/current-files.ts"
+          trap 'cp "$RUNNER_TEMP/current-files.ts" lib/crm/files.ts' EXIT
+          git show afe82188a0e4ae7d5936ce9a448be7ea492f6551:lib/crm/files.ts > lib/crm/files.ts
+          if node --experimental-strip-types --test tests/reliability/file-deletion-order.test.mjs > "$RUNNER_TEMP/red.txt" 2>&1; then
+            echo '::error::Old implementation unexpectedly passed regression.'
+            exit 1
+          fi
+          grep -q 'Object bytes were deleted before database preparation committed' "$RUNNER_TEMP/red.txt"
+          echo 'Verified RED: original service physically deleted before durable preparation.'
+          cp "$RUNNER_TEMP/current-files.ts" lib/crm/files.ts
+          node --experimental-strip-types --test tests/reliability/file-deletion-order.test.mjs
