@@ -1,0 +1,109 @@
+name: Contact cleanup acceptance
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/contact-cleanup.yml, tests/contact-cleanup.mjs]
+permissions:
+  contents: read
+concurrency:
+  group: contact-cleanup-integration
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - name: Verify exact inspected component and intended failing baseline
+        run: |
+          test "$(git hash-object components/enhanced-contact-form.tsx)" = 0e3cdbe506ada301ca24dcb17e026c6fa08799da
+          test "$(git hash-object docs/contact/README.md)" = 39d1e112bd1ae6ef654dc7be24e49a64d55281f2
+          node tests/contact-cleanup.mjs red
+          if node tests/contact-cleanup.mjs source > "$RUNNER_TEMP/contact-red.log" 2>&1; then
+            echo 'Expected legacy-payload regression did not fail'; exit 1
+          fi
+          grep -q 'AssertionError' "$RUNNER_TEMP/contact-red.log"
+          rm "$RUNNER_TEMP/contact-red.log"
+      - name: Apply inspected cleanup while preserving integrated guards
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          p=Path('components/enhanced-contact-form.tsx');s=p.read_text()
+          def cut(start,end,replacement):
+              global s
+              assert s.count(start)==1 and s.count(end)==1
+              a=s.index(start);b=s.index(end,a)
+              s=s[:a]+replacement+s[b:]
+          cut('/**\n * Enhanced Contact Form Component', '/**\n * Turnstile Configuration', '/**\n * Contact intake: /api/contact validates consent, Turnstile and rate limits,\n * then persists to Supabase. The server supplies the ticket reference.\n * See docs/contact/README.md for required configuration.\n */\n\n')
+          cut('  // Generate 9-character ticket ID', '  // Auto-detect timezone', '')
+          cut('  const getPriority = ', '  /**\n   * Scrolls to', '')
+          cut('      // Generate Ticket ID\n', '      // Collect hidden/derived fields', '      setSubmittedTicketId(null);\n\n')
+          cut('      // Format budget range as single string', '      const submissionData = {', '      // Normalize fields consumed by the Supabase lead parser.\n')
+          cut('      /**\n       * GOOGLE FORMS ENTRY ID MAPPING', '      const formFields = new FormData();', '      // Send only the live API contract, including explicit consent.\n')
+          cut('      // Add all form fields\n', "      formFields.append('gdprConsent'", '      ')
+          for line in ["  ticketId: string;\n", "    ticketId: '',\n", "        ticketId: '',\n", "  userAgent: string;\n", "  priority: 'High' | 'Medium' | 'Low';\n", "  timestamp: string;\n", "        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',\n", "        priority: getPriority(formData.urgency),\n", "        timestamp: new Date().toISOString()\n", "        budgetRange: budgetRangeFormatted,\n", "        // Ticket ID for tracking\n", "        ticketId: ticketId,\n", "        userAgent: hiddenFields.userAgent,\n", "        priority: hiddenFields.priority,\n", '        // Note: Status is managed by Apps Script (default = "New"), not from form\n', '        // Note: automatedMailSent will be set by Apps Script after sending confirmation\n']:
+              s=s.replace(line,'')
+          for key in ['budgetRange','ticketId','userAgent']:
+              s,n=re.subn(r"^\s*formFields\.append\('"+key+r"', [^\n]+\);\n",'',s,flags=re.M)
+              assert n==1
+          s=s.replace('// Hidden/derived fields (timestamp excluded - Google Forms adds its own)', '// Request context consumed by the lead parser')
+          s=s.replace('Required checkbox (frontend only)', 'Required checkbox, validated again by the server')
+          s=s.replace('googleFormsDate','formattedContactDate')
+          s=s.replace('// Validate Turnstile token (only for API validation, NOT stored in Google Forms)\n      // The API route will validate the token with Cloudflare and remove it before forwarding', '// Send the fresh token for server verification and single-use replay protection.')
+          s=s.replace('// Submit to our API route (which validates Turnstile and forwards to Google Forms)', '// Submit to the sole Supabase-backed intake endpoint.')
+          cut('      // Prefer the server-generated ticket reference', '      // Show success message', "      if (!response.ok) {\n        throw new Error('Contact submission rejected.');\n      }\n      if (typeof result.ticketRef !== 'string' || !result.ticketRef.trim()) {\n        throw new Error('Contact reference unavailable.');\n      }\n      setSubmittedTicketId(result.ticketRef);\n\n")
+          assert 'Google Forms' not in s and 'Apps Script' not in s and 'entry.' not in s
+          assert "formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');" in s
+          p.write_text(s)
+          p=Path('docs/contact/README.md');d=p.read_text()
+          old='Google Forms and Apps Script instructions from the static-site phase are obsolete; legacy entry.* wire fields still present in the old component are ignored by the server and are separately reviewed in PR #27.'
+          assert d.count(old)==1
+          d=d.replace(old,'Google Forms and Apps Script are retired. PR #27 cleanup is integrated here: no entry.* mirrors, budgetRange, posted ticketId or posted userAgent are sent. Numeric budgetMin/budgetMax, request source/device context, explicit consent, attachment metadata and fresh Turnstile tokens remain. The server obtains user-agent from HTTP headers and issues the ticket reference only after persistence; the browser never fabricates a fallback reference.')
+          d+='\n## PR27 review resolution\n\nThe unused-payload and obsolete-comment findings are resolved against the current parser, not by replaying an old snapshot. LEAD_IP_HASH_SALT remains required on this integrated branch: the current route fails closed when it is missing. The older review suggestion that salt was optional described the pre-remediation route and must not weaken this contract. Browser tests mock only the local contact response and block third-party requests; actual hosted/provider acceptance remains separate.\n'
+          p.write_text(d)
+          PY
+      - run: node tests/contact-cleanup.mjs source
+      - run: npm ci
+      - name: Lint, strict types and build without provider credentials
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run build
+      - name: Install isolated browser tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contact-browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/contact-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify real browser payload, retry, consent and server reference
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
+        run: node tests/contact-cleanup.mjs browser
+      - name: Commit only the two reviewed files on the unchanged development ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = fix/direct-public-asset-uploads
+          git diff --check
+          git diff --name-only | sort > "$RUNNER_TEMP/contact-changes"
+          printf '%s\n' components/enhanced-contact-form.tsx docs/contact/README.md | sort | cmp - "$RUNNER_TEMP/contact-changes"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add components/enhanced-contact-form.tsx docs/contact/README.md
+          git commit -m 'fix(contact): complete PR27 cleanup on the verified integrated stack'
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$AUTH"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/fix/direct-public-asset-uploads
+          unset AUTH
