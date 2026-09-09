@@ -45,27 +45,9 @@ import { cn } from "@/lib/utils";
 import { formatBytes } from '@/lib/format';
 
 /**
- * Enhanced Contact Form Component with Cloudflare Turnstile Protection
- * 
- * This component collects rich lead data for cybersecurity services.
- * It submits to an API route (/api/contact) which validates the Turnstile token
- * and then forwards the data to Google Forms.
- * 
- * SETUP INSTRUCTIONS:
- * 1. Create a Google Form with all required fields (19 fields total)
- * 2. Get the form's "formResponse" URL (replace /viewform with /formResponse)
- * 3. Inspect each field to get entry IDs (entry.XXXXXXXXX)
- * 4. Set environment variables:
- *    - NEXT_PUBLIC_TURNSTILE_SITE_KEY: Cloudflare Turnstile site key
- *    - TURNSTILE_SECRET_KEY: Cloudflare Turnstile secret key (server-only)
- *    - GOOGLE_FORM_ACTION_URL: Google Forms submission URL
- * 5. Apps Script in Google Sheets will handle email notifications and data processing
- * 
- * FIELD MAPPING:
- * Each form field maps to a Google Form entry ID.
- * Hidden/derived fields (sourcePage, userAgent, deviceType, priority, status)
- * are automatically collected and sent along with user inputs.
- * Google Forms automatically adds a timestamp as the first column in the linked Sheet.
+ * Contact intake: /api/contact validates consent, Turnstile and rate limits,
+ * then persists to Supabase. The server supplies the ticket reference.
+ * See docs/contact/README.md for required configuration.
  */
 
 /**
@@ -264,8 +246,7 @@ interface FormData {
   howDidYouFindMe: string;
   howDidYouFindMeOther: string;    // Additional input when "Other" is selected
   howDidYouFindMeReferral: string; // Additional input when "Referral" is selected
-  ticketId: string;
-  gdprConsent: boolean;         // Required checkbox (frontend only)
+  gdprConsent: boolean;         // Required checkbox, validated again by the server
 }
 
 interface FormErrors {
@@ -274,10 +255,7 @@ interface FormErrors {
 
 interface HiddenFields {
   sourcePage: string;
-  userAgent: string;
   deviceType: 'Mobile' | 'Desktop' | 'Tablet';
-  priority: 'High' | 'Medium' | 'Low';
-  timestamp: string;
 }
 
 export default function EnhancedContactForm() {
@@ -303,7 +281,6 @@ export default function EnhancedContactForm() {
     howDidYouFindMe: '',
     howDidYouFindMeOther: '',
     howDidYouFindMeReferral: '',
-    ticketId: '',
     gdprConsent: false,
   });
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
@@ -346,14 +323,6 @@ export default function EnhancedContactForm() {
   const projectSummaryRef = React.useRef<HTMLTextAreaElement>(null);
   const urgencyRef = React.useRef<HTMLButtonElement>(null);
   const gdprConsentRef = React.useRef<HTMLButtonElement>(null);
-
-  // Generate 9-character ticket ID with # prefix + 8-character hex
-  const generateTicketId = (): string => {
-    const array = new Uint8Array(4);
-    crypto.getRandomValues(array);
-    const hexId = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
-    return '#' + hexId;
-  };
 
   // Auto-detect timezone, country, and WhatsApp dial code on mount
   useEffect(() => {
@@ -744,11 +713,6 @@ export default function EnhancedContactForm() {
     return 'Desktop';
   };
 
-  const getPriority = (urgency: string): 'High' | 'Medium' | 'Low' => {
-    const urgencyOption = urgencyOptions.find(opt => opt.value === urgency);
-    return (urgencyOption?.priority as 'High' | 'Medium' | 'Low') || 'Low';
-  };
-
   /**
    * Scrolls to and focuses the first invalid field
    */
@@ -803,28 +767,15 @@ export default function EnhancedContactForm() {
       // consumed earlier widget tokens, and /api/contact enforces single-use.
       const submitToken = TURNSTILE_SITE_KEY ? await getFreshTurnstileToken() : null;
 
-      // Generate Ticket ID
-      const ticketId = generateTicketId();
-      setSubmittedTicketId(ticketId);
+      setSubmittedTicketId(null);
 
       // Collect hidden/derived fields
       const hiddenFields: HiddenFields = {
         sourcePage: typeof window !== 'undefined' ? window.location.pathname : '/contact',
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
         deviceType: typeof navigator !== 'undefined' ? getDeviceType(navigator.userAgent) : 'Desktop',
-        priority: getPriority(formData.urgency),
-        timestamp: new Date().toISOString()
       };
 
-      // Format budget range as single string (e.g., "$500 - $5000")
-      let budgetRangeFormatted = '';
-      if (formData.budgetMin || formData.budgetMax) {
-        const min = formData.budgetMin || 'Not specified';
-        const max = formData.budgetMax || 'Not specified';
-        budgetRangeFormatted = `$${min} - $${max}`;
-      }
-
-      // Combine all fields into a flat object ready for Google Forms
+      // Normalize fields consumed by the Supabase lead parser.
       const submissionData = {
         // Visible fields
         name: formData.name.trim(),
@@ -845,63 +796,23 @@ export default function EnhancedContactForm() {
         projectSummary: formData.projectSummary.trim(),
         ndaConfidentiality: formData.ndaConfidentiality || '',
         urgency: formData.urgency,
-        budgetRange: budgetRangeFormatted,
         howDidYouFindMe: formData.howDidYouFindMe === 'Referral' && formData.howDidYouFindMeReferral
           ? `Referred by ${formData.howDidYouFindMeReferral.trim()}`
           : formData.howDidYouFindMe === 'Other' && formData.howDidYouFindMeOther
           ? `Other: ${formData.howDidYouFindMeOther.trim()}`
           : formData.howDidYouFindMe,
         
-        // Ticket ID for tracking
-        ticketId: ticketId,
         
-        // Hidden/derived fields (timestamp excluded - Google Forms adds its own)
+        // Request context consumed by the lead parser
         sourcePage: hiddenFields.sourcePage,
-        userAgent: hiddenFields.userAgent,
         deviceType: hiddenFields.deviceType,
-        priority: hiddenFields.priority,
         
-        // Note: Status is managed by Apps Script (default = "New"), not from form
-        // Note: automatedMailSent will be set by Apps Script after sending confirmation
       };
 
-      /**
-       * GOOGLE FORMS ENTRY ID MAPPING
-       * 
-       * These entry IDs map to the actual Google Form questions.
-       * Entry IDs are obtained by inspecting the Google Form fields.
-       * 
-       * NOTE: budgetMin/budgetMax are merged into budgetRange (e.g., "$500 - $5000")
-       * NOTE: timestamp is NOT included - Google Forms adds its own timestamp automatically
-       */
+      // Send only the live API contract, including explicit consent.
       const formFields = new FormData();
       
-      // Add all form fields
-      formFields.append('entry.1040615996', submissionData.name);
-      formFields.append('entry.527020986', submissionData.email);
-      formFields.append('entry.275586996', submissionData.country);
-      formFields.append('entry.691109542', submissionData.whatsAppNumber);
-      formFields.append('entry.2004275388', submissionData.preferredContactMethod);
-      formFields.append('entry.876535023', submissionData.timeZone);
-      formFields.append('entry.825634052', submissionData.preferredContactDate);
-      formFields.append('entry.2142614790', submissionData.bestTimeToContact);
-      formFields.append('entry.762760499', submissionData.serviceType);
-      formFields.append('entry.554909735', submissionData.company);
-      formFields.append('entry.688437948', submissionData.projectUrlOrFiles);
-      formFields.append('entry.428546032', submissionData.projectSummary);
-      formFields.append('entry.739578366', submissionData.ndaConfidentiality);
-      formFields.append('entry.663205754', submissionData.urgency);
-      formFields.append('entry.1932264358', submissionData.budgetRange);
-      formFields.append('entry.1784832711', submissionData.howDidYouFindMe);
-      formFields.append('entry.233094040', submissionData.ticketId);
-      formFields.append('entry.209109331', submissionData.sourcePage);
-      formFields.append('entry.1734132568', submissionData.userAgent);
-      formFields.append('entry.1030161553', submissionData.deviceType);
-      formFields.append('entry.279561249', submissionData.priority);
-
-      // Raw-named mirrors for the Supabase sink (Google ignores unknown params,
-      // and our forward paths strip non-entry.* keys anyway)
-      formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
+            formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
       formFields.append('name', submissionData.name);
       formFields.append('email', submissionData.email);
       formFields.append('country', submissionData.country);
@@ -916,13 +827,10 @@ export default function EnhancedContactForm() {
       formFields.append('projectSummary', submissionData.projectSummary);
       formFields.append('ndaConfidentiality', submissionData.ndaConfidentiality);
       formFields.append('urgency', submissionData.urgency);
-      formFields.append('budgetRange', submissionData.budgetRange);
       formFields.append('budgetMin', formData.budgetMin || '');
       formFields.append('budgetMax', formData.budgetMax || '');
       formFields.append('howDidYouFindMe', submissionData.howDidYouFindMe);
-      formFields.append('ticketId', submissionData.ticketId);
       formFields.append('sourcePage', submissionData.sourcePage);
-      formFields.append('userAgent', submissionData.userAgent);
       formFields.append('deviceType', submissionData.deviceType);
 
       // Attachment metadata for the Supabase sink (uploaded objects live in R2)
@@ -930,13 +838,12 @@ export default function EnhancedContactForm() {
         formFields.append('attachments', JSON.stringify(attachedFiles));
       }
 
-      // Validate Turnstile token (only for API validation, NOT stored in Google Forms)
-      // The API route will validate the token with Cloudflare and remove it before forwarding
+      // Send the fresh token for server verification and single-use replay protection.
       if (submitToken) {
         formFields.append('cf-turnstile-response', submitToken);
       }
 
-      // Submit to our API route (which validates Turnstile and forwards to Google Forms)
+      // Submit to the sole Supabase-backed intake endpoint.
       const response = await fetch('/api/contact', {
         method: 'POST',
         body: formFields,
@@ -944,14 +851,13 @@ export default function EnhancedContactForm() {
 
       const result = await response.json();
 
-      // Prefer the server-generated ticket reference over the local placeholder
-      if (typeof result.ticketRef === 'string' && result.ticketRef.length > 0) {
-        setSubmittedTicketId(result.ticketRef);
-      }
-
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to submit form');
+        throw new Error('Contact submission rejected.');
       }
+      if (typeof result.ticketRef !== 'string' || !result.ticketRef.trim()) {
+        throw new Error('Contact reference unavailable.');
+      }
+      setSubmittedTicketId(result.ticketRef);
 
       // Show success message
       setSubmitSuccess(true);
@@ -977,8 +883,7 @@ export default function EnhancedContactForm() {
         howDidYouFindMe: '',
         howDidYouFindMeOther: '',
         howDidYouFindMeReferral: '',
-        ticketId: '',
-        gdprConsent: false,
+            gdprConsent: false,
       });
       setSelectedCountryCode('+880');
       setSelectedWhatsAppCountryCode('');
@@ -1434,8 +1339,8 @@ export default function EnhancedContactForm() {
                     }
                     onSelect={(date) => {
                       if (date) {
-                        const googleFormsDate = format(date, "MM/dd/yyyy");
-                        handleInputChange("preferredContactDate", googleFormsDate);
+                        const formattedContactDate = format(date, "MM/dd/yyyy");
+                        handleInputChange("preferredContactDate", formattedContactDate);
                         setIsPreferredDateOpen(false);
                       } else {
                         handleInputChange("preferredContactDate", "");
