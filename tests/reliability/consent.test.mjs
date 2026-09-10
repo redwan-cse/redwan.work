@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-const hooks=registerHooks({resolve(s,c,n){if(s==='@/lib/r2')return {url:'data:text/javascript,'+encodeURIComponent('export const CONTACT_MAX_FILES=5,CONTACT_MAX_SIZE_BYTES=10485760;export function isValidContactKey(){return true;}'),shortCircuit:true};return n(s,c);}});
+const hooks=registerHooks({resolve(s,c,n){if(s==='@/lib/contact/intake-contract')return {url:new URL('../../lib/contact/intake-contract.ts',import.meta.url).href,shortCircuit:true};if(s==='@/lib/r2')return {url:'data:text/javascript,'+encodeURIComponent('export const CONTACT_MAX_FILES=5,CONTACT_MAX_SIZE_BYTES=10485760;export function isValidContactKey(){return true;}'),shortCircuit:true};return n(s,c);}});
 const {parseLeadPayload}=await import('../../lib/contact/lead-schema.ts');hooks.deregister();
 function form(consent){const f=new FormData();f.set('name','Synthetic User');f.set('email','synthetic@example.test');f.set('projectSummary','Synthetic project request');if(consent!==undefined)f.set('gdprConsent',consent);return f;}
 const meta={ipHash:'synthetic-hash',userAgent:null};

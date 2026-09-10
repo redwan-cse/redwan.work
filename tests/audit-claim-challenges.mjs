@@ -28,7 +28,7 @@ const modules={
   '@/lib/email/recipients':['adminRecipients','emailOrigin','recipientEmail','recipientName','ticketEmailContext'].map(n=>`export async function ${n}(){throw Error("Unexpected recipient invocation");}`).join(''),
   '@/lib/r2':'export const CONTACT_MAX_FILES=5,CONTACT_MAX_SIZE_BYTES=10485760;export function isValidContactKey(){return true;}'
 };
-const hooks=registerHooks({resolve(s,c,n){if(s==='@/lib/crm/result')return {url:new URL('../lib/crm/result.ts',import.meta.url).href,shortCircuit:true};if(Object.hasOwn(modules,s))return {url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true};return n(s,c);}});
+const hooks=registerHooks({resolve(s,c,n){if(s==='@/lib/contact/intake-contract')return {url:new URL('../lib/contact/intake-contract.ts',import.meta.url).href,shortCircuit:true};if(s==='@/lib/crm/result')return {url:new URL('../lib/crm/result.ts',import.meta.url).href,shortCircuit:true};if(Object.hasOwn(modules,s))return {url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true};return n(s,c);}});
 const tickets=await import('../lib/crm/tickets.ts');
 const clients=await import('../lib/crm/clients.ts');
 const {parseLeadPayload}=await import('../lib/contact/lead-schema.ts');
