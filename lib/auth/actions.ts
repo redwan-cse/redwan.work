@@ -7,7 +7,14 @@ import {sha256Hex} from '@/lib/contact/lead-schema';
 export type ActionState={error?:string;notice?:string};
 function safeRelativePath(raw:FormDataEntryValue|null):string|null {
  if(typeof raw!=='string'||!raw.startsWith('/')||raw.startsWith('//')||raw.includes('\\')||/[-\u001f\u007f]/.test(raw))return null;
- return raw;
+ try {
+  // Fixed validation-only origin: never trust a posted Host/Origin as authority.
+  const base='https://return-path.invalid';
+  const url=new URL(raw,base);
+  const pathname=decodeURIComponent(url.pathname);
+  if(url.origin!==base||url.pathname.startsWith('//')||pathname.startsWith('//')||pathname.includes('\\')||/[-\u001f\u007f]/.test(pathname))return null;
+  return url.pathname+url.search+url.hash;
+ }catch{return null;}
 }
 async function panelHomeForCurrentUser():Promise<string> {
  const supabase=await createSupabaseServerClient();const {data}=await supabase.auth.getClaims();return data?.claims?.app_metadata?.role==='admin'?'/admin':'/portal';
