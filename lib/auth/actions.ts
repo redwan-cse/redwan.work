@@ -43,7 +43,15 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  const email=String(formData.get('email')??'').trim().toLowerCase(),password=String(formData.get('password')??''),next=safeRelativePath(formData.get('next'));
  if(!email||!password)return {error:'Email and password are required.'};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return {error:'Invalid email or password.'};
- if(next)redirect(next);redirect(await panelHomeForCurrentUser());
+ const home=await panelHomeForCurrentUser();
+ if(next){
+  // Navigation policy only. Proxy/layout/action current-account checks still authorize access.
+  // Avoid an intermediate wrong-panel Server Action navigation; mirror proxy panel prefixes.
+  const pathname=decodeURIComponent(new URL(next,'https://return-path.invalid').pathname);
+  if((pathname.startsWith('/admin')&&home!=='/admin')||(pathname.startsWith('/portal')&&home!=='/portal'))redirect(home);
+  redirect(next);
+ }
+ redirect(home);
 }
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
