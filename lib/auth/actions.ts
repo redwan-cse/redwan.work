@@ -6,13 +6,14 @@ import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
 export type ActionState={error?:string;notice?:string};
 function safeRelativePath(raw:FormDataEntryValue|null):string|null {
- if(typeof raw!=='string'||!raw.startsWith('/')||raw.startsWith('//')||raw.includes('\\')||/[-\u001f\u007f]/.test(raw))return null;
+ const hasControl=(value:string)=>Array.from(value).some(character=>{const code=character.charCodeAt(0);return code<32||code===127;});
+ if(typeof raw!=='string'||!raw.startsWith('/')||raw.startsWith('//')||raw.includes('\\')||hasControl(raw))return null;
  try {
   // Fixed validation-only origin: never trust a posted Host/Origin as authority.
   const base='https://return-path.invalid';
   const url=new URL(raw,base);
   const pathname=decodeURIComponent(url.pathname);
-  if(url.origin!==base||url.pathname.startsWith('//')||pathname.startsWith('//')||pathname.includes('\\')||/[-\u001f\u007f]/.test(pathname))return null;
+  if(url.origin!==base||url.pathname.startsWith('//')||pathname.startsWith('//')||pathname.includes('\\')||hasControl(pathname))return null;
   return url.pathname+url.search+url.hash;
  }catch{return null;}
 }
