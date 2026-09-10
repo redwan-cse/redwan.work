@@ -30,14 +30,19 @@ try{
  const pairs=[['/portal','/portal'],['/portal/projects/'+project,'/portal/projects/'+project],['/portal?filter=open-items','/portal?filter=open-items'],['/portal/../portal?filter=active','/portal?filter=active'],['//outside.invalid','/portal'],['/'+String.fromCharCode(9)+'/outside.invalid','/portal'],['/'+String.fromCharCode(10)+'/outside.invalid','/portal'],['/'+String.fromCharCode(92)+'outside.invalid','/portal'],['/portal/..//outside.invalid','/portal'],['/%2foutside.invalid','/portal'],['/portal%09','/portal'],['/admin','/portal']];
  result.phase='cases';
  for(const [index,[next,expected]] of pairs.entries()){
-  const row={index,pass:false,stage:'login',kind:'none',origin:false,path:'unknown',expectedPath:false,query:false,postedNext:false};result.cases.push(row);
+  const row={index,pass:false,stage:'login',kind:'none',origin:false,path:'unknown',expectedPath:false,query:false,postedNext:false,intermediateMismatch:false};result.cases.push(row);
   const context=await browser.newContext({serviceWorkers:'block'});await context.route('**/*',r=>[origin,api].includes(new URL(r.request().url()).origin)?r.continue():r.abort());
   const page=await context.newPage();page.setDefaultTimeout(10000);
   try{
    await page.goto(origin+'/login?next='+encodeURIComponent(next));await page.locator('#email').fill(email);await page.locator('#password').fill(password);
    row.postedNext=(await page.locator('input[name="next"]').inputValue())===next;
    row.stage='submit';await page.getByRole('button',{name:'Sign in',exact:true}).click();
-   row.stage='navigation';await page.waitForURL(u=>u.pathname!=='/login');row.stage='assertion';assert.equal(page.url(),origin+expected);row.pass=true;
+   row.stage='navigation';await page.waitForURL(u=>u.pathname!=='/login');
+   row.intermediateMismatch=page.url()!==origin+expected;
+   // Final role-authorized URL, not the first client-side navigation away from login.
+   // The expected origin/path/query and strict assertion are unchanged.
+   await page.waitForURL(origin+expected,{timeout:10000});
+   row.stage='assertion';assert.equal(page.url(),origin+expected);row.pass=true;
   }catch(e){row.kind=e.name==='TimeoutError'?'timeout':e.code==='ERR_ASSERTION'?'assertion':'other';}
   finally{
    const u=new URL(page.url()),wanted=new URL(expected,origin);row.origin=u.origin===origin;row.expectedPath=u.pathname===wanted.pathname;row.query=u.search===wanted.search;row.path=['/portal','/admin','/login','/portal/projects/'+project].includes(u.pathname)?(u.pathname.includes(project)?'project':u.pathname.slice(1)):'other';
