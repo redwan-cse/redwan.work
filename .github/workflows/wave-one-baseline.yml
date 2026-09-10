@@ -33,17 +33,13 @@ jobs:
           env={k:os.environ[k] for k in ['PATH','HOME','TMPDIR','CI'] if k in os.environ}
           env.update(NEXT_TELEMETRY_DISABLED='1',NEXT_PUBLIC_SITE_URL='http://localhost:3399',NEXT_PUBLIC_SUPABASE_URL='http://127.0.0.1:54321',NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='sb_publishable_synthetic',SUPABASE_SECRET_KEY='sb_secret_synthetic',LEAD_IP_HASH_SALT='synthetic-only',TURNSTILE_SECRET_KEY='synthetic',NEXT_PUBLIC_TURNSTILE_SITE_KEY='synthetic',DISPOSABLE_AUTH_CI='true')
           r=subprocess.run(['node',str(work/'node_modules/next/dist/bin/next'),'build'],cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
-          patterns=['Turbopack','root directory','Next.js package','resolve','Cannot find','Error:','Type error:','Failed to compile','outside','ENOENT','lockfile']
-          lines=[]
-          for line in r.stdout.splitlines():
-            if any(p in line for p in patterns):
-              clean=re.sub(r'\x1b\[[0-9;]*m','',line)
-              clean=clean.replace(str(work),'WORK').replace(str(scratch),'SCRATCH')
-              clean=re.sub(r'sb_(?:publishable|secret)_[A-Za-z0-9_-]+','[synthetic-key]',clean)
-              clean=re.sub(r'[^A-Za-z0-9 _.,:/()\[\]<>@=+-]','',clean)
-              lines.append(clean[:140])
-          pathlib.Path(os.environ['RUNNER_TEMP'],'baseline-build.json').write_text(json.dumps({'exit':r.returncode,'lines':lines[:5]}))
-          print('Baseline build exit:',r.returncode)
+          lines=['exit='+str(r.returncode)+' output_bytes='+str(len(r.stdout))]
+          for line in [s for s in r.stdout.splitlines() if s.strip()][-4:]:
+            clean=re.sub(r'\x1b\[[0-9;]*m','',line).replace(str(work),'WORK').replace(str(scratch),'SCRATCH')
+            clean=re.sub(r'sb_(?:publishable|secret)_[A-Za-z0-9_-]+','[synthetic-key]',clean)
+            clean=re.sub(r'[^A-Za-z0-9 _.,:/()\[\]<>@=+-]','',clean)
+            lines.append(clean[:140])
+          pathlib.Path(os.environ['RUNNER_TEMP'],'baseline-build.json').write_text(json.dumps({'exit':r.returncode,'lines':lines}))
           raise SystemExit(r.returncode)
           PY
       - name: Publish compiler-only diagnostic categories
@@ -55,7 +51,7 @@ jobs:
           import json,os,pathlib,re,urllib.request
           p=pathlib.Path(os.environ['RUNNER_TEMP'],'baseline-build.json');r=json.loads(p.read_text()) if p.exists() else {'exit':1,'lines':['Setup unavailable']}
           sha=os.environ['GITHUB_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
-          for i,line in enumerate(r['lines'] or ['Build completed']):
+          for i,line in enumerate(r['lines']):
             payload={'state':'success' if r['exit']==0 else 'failure','context':'wave-one/baseline-build-'+str(i),'description':line[:140],'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
             req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Content-Type':'application/json'},method='POST')
             try:
