@@ -43,6 +43,7 @@ import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Count
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatBytes } from '@/lib/format';
+import { parseBudgetRange } from '@/lib/contact/intake-contract';
 
 /**
  * Contact intake: /api/contact validates consent, Turnstile and rate limits,
@@ -239,7 +240,7 @@ interface FormData {
   company: string;
   projectUrlOrFiles: string;
   projectSummary: string;
-  ndaConfidentiality: string;   // Non-empty if checked
+  ndaConfidentiality: boolean;  // Explicit intent; serialized as true/false
   urgency: string;
   budgetMin: string;
   budgetMax: string;
@@ -274,7 +275,7 @@ export default function EnhancedContactForm() {
     company: '',
     projectUrlOrFiles: '',
     projectSummary: '',
-    ndaConfidentiality: '',
+    ndaConfidentiality: false,
     urgency: '',
     budgetMin: '',
     budgetMax: '',
@@ -669,35 +670,12 @@ export default function EnhancedContactForm() {
       missingFields.push('Data & Privacy consent');
     }
 
-    // Budget validation
-    const hasMinBudget = formData.budgetMin.trim() !== '';
-    const hasMaxBudget = formData.budgetMax.trim() !== '';
-
-    if (hasMinBudget || hasMaxBudget) {
-      if (!hasMinBudget) {
-        newErrors.budgetMin = 'Please enter minimum budget';
-        missingFields.push('Minimum Budget');
-      } else if (isNaN(Number(formData.budgetMin)) || Number(formData.budgetMin) < 0) {
-        newErrors.budgetMin = 'Please enter a valid positive number';
-        missingFields.push('Valid Minimum Budget');
-      }
-
-      if (!hasMaxBudget) {
-        newErrors.budgetMax = 'Please enter maximum budget';
-        missingFields.push('Maximum Budget');
-      } else if (isNaN(Number(formData.budgetMax)) || Number(formData.budgetMax) < 0) {
-        newErrors.budgetMax = 'Please enter a valid positive number';
-        missingFields.push('Valid Maximum Budget');
-      }
-
-      if (hasMinBudget && hasMaxBudget) {
-        const min = Number(formData.budgetMin);
-        const max = Number(formData.budgetMax);
-        if (min > max) {
-          newErrors.budgetMax = 'Maximum budget must be greater than or equal to minimum';
-          missingFields.push('Valid Budget Range (max ≥ min)');
-        }
-      }
+    // Same whole-dollar contract as the server; never coerce user input.
+    const budget = parseBudgetRange(formData.budgetMin, formData.budgetMax);
+    if (!budget.ok) {
+      newErrors.budgetMin = budget.error;
+      newErrors.budgetMax = budget.error;
+      missingFields.push(budget.error);
     }
 
     setErrors(newErrors);
@@ -794,7 +772,7 @@ export default function EnhancedContactForm() {
         company: formData.company.trim(),
         projectUrlOrFiles: formData.projectUrlOrFiles.trim(),
         projectSummary: formData.projectSummary.trim(),
-        ndaConfidentiality: formData.ndaConfidentiality || '',
+        ndaConfidentiality: formData.ndaConfidentiality ? 'true' : 'false',
         urgency: formData.urgency,
         howDidYouFindMe: formData.howDidYouFindMe === 'Referral' && formData.howDidYouFindMeReferral
           ? `Referred by ${formData.howDidYouFindMeReferral.trim()}`
@@ -876,7 +854,7 @@ export default function EnhancedContactForm() {
         company: '',
         projectUrlOrFiles: '',
         projectSummary: '',
-        ndaConfidentiality: '',
+        ndaConfidentiality: false,
         urgency: '',
         budgetMin: '',
         budgetMax: '',
@@ -1533,7 +1511,7 @@ export default function EnhancedContactForm() {
               id="ndaConfidentiality"
               checked={!!formData.ndaConfidentiality}
               onCheckedChange={(checked) => 
-                handleInputChange('ndaConfidentiality', checked ? 'Yes - NDA or strict confidentiality required' : '')
+                handleInputChange('ndaConfidentiality', checked === true)
               }
               className="mt-0.5"
             />
@@ -1583,9 +1561,8 @@ export default function EnhancedContactForm() {
               </Label>
               <Input
                 id="budgetMin"
-                type="number"
-                min="0"
-                step="100"
+                type="text"
+                inputMode="numeric"
                 value={formData.budgetMin}
                 onChange={(e) => handleInputChange('budgetMin', e.target.value)}
                 placeholder="1000"
@@ -1607,9 +1584,8 @@ export default function EnhancedContactForm() {
               </Label>
               <Input
                 id="budgetMax"
-                type="number"
-                min="0"
-                step="100"
+                type="text"
+                inputMode="numeric"
                 value={formData.budgetMax}
                 onChange={(e) => handleInputChange('budgetMax', e.target.value)}
                 placeholder="5000"
