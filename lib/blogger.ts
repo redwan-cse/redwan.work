@@ -126,8 +126,8 @@ async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPo
       posts,
       totalItems: allItems.length,
     };
-  } catch (error) {
-    console.error("❌ Error fetching blog posts:", error);
+  } catch {
+    console.error('Blogger fetch unavailable.');
     return { posts: [], totalItems: 0 };
   }
 }
