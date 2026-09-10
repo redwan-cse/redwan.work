@@ -86,11 +86,12 @@ try{
  report.phase='fixtures';user=safe(await admin.auth.admin.createUser({email,password,email_confirm:true,app_metadata:{role:'client'}})).user.id;
  safe(await admin.from('profiles').update({role:'client',is_active:true}).eq('id',user));
  project=safe(await admin.from('projects').insert({client_id:user,name:'Synthetic wave project'}).select('id').single()).id;
- report.phase='build';const build=spawnSync(process.execPath,[resolve('node_modules/next/dist/bin/next'),'build'],{cwd:root,env:process.env,encoding:'utf8',maxBuffer:20*1024*1024});if(build.status!==0)throw Error('Build failed');
- report.phase='server';server=spawn(process.execPath,['--import',preload,resolve('node_modules/next/dist/bin/next'),'start','-H','127.0.0.1','-p','3399'],{cwd:root,env:{...process.env,NODE_ENV:'production'},stdio:'ignore'});
+ // Each source tree must launch its own Next package, or AsyncLocalStorage stores diverge.
+ report.phase='build';const build=spawnSync(process.execPath,[join(root,'node_modules/next/dist/bin/next'),'build'],{cwd:root,env:process.env,encoding:'utf8',maxBuffer:20*1024*1024});if(build.status!==0)throw Error('Build failed');
+ report.phase='server';server=spawn(process.execPath,['--import',preload,join(root,'node_modules/next/dist/bin/next'),'start','-H','127.0.0.1','-p','3399'],{cwd:root,env:{...process.env,NODE_ENV:'production'},stdio:'ignore'});
  let ready=false;for(let i=0;i<150;i++){if(server.exitCode!==null)break;try{const r=await fetch(origin+'/login');await r.text();if(r.ok){ready=true;break;}}catch{}await delay(200);}assert.ok(ready);browser=await chromium.launch({headless:true});
  report.phase='A01';
- const destinations=[['/portal','/portal'],['/portal/projects/'+project,'/portal/projects/'+project],['/portal?filter=open-items','/portal?filter=open-items'],['/portal/../portal?filter=active','/portal?filter=active'],['//outside.invalid','/portal'],['/\t/outside.invalid','/portal'],['/\n/outside.invalid','/portal'],['/\\outside.invalid','/portal'],['/portal/..//outside.invalid','/portal'],['/%2foutside.invalid','/portal'],['/portal%09','/portal'],['/admin','/portal']];
+ const destinations=[['/portal','/portal'],['/portal/projects/'+project,'/portal/projects/'+project],['/portal?filter=open-items','/portal?filter=open-items'],['/portal/../portal?filter=active','/portal?filter=active'],['//outside.invalid','/portal'],['/'+String.fromCharCode(9)+'/outside.invalid','/portal'],['/'+String.fromCharCode(10)+'/outside.invalid','/portal'],['/'+String.fromCharCode(92)+'outside.invalid','/portal'],['/portal/..//outside.invalid','/portal'],['/%2foutside.invalid','/portal'],['/portal%09','/portal'],['/admin','/portal']];
  for(const [next,expected] of destinations)await check('A01',async()=>{
   const c=await context();try{const p=await c.newPage();p.setDefaultTimeout(10000);await p.goto(origin+'/login?next='+encodeURIComponent(next));await p.locator('#email').fill(email);await p.locator('#password').fill(password);await p.getByRole('button',{name:'Sign in',exact:true}).click();await p.waitForURL(u=>u.pathname!=='/login');assert.equal(p.url(),origin+expected);}finally{await c.close();}
  });
