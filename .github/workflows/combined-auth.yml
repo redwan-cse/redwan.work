@@ -11,13 +11,17 @@ jobs:
   auth:
     name: Combined / real Auth and mailbox
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      statuses: write
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -86,6 +90,41 @@ jobs:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
         run: node tests/reliability/run-product-browser.mjs
+      - name: Approved wave baseline reproduction and candidate browser-to-database acceptance
+        env:
+          AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/auth-browser-tools
+        run: node tests/wave-one-browser.mjs
+      - name: Publish finite wave acceptance counts only
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'wave-browser-result.json'
+          r=json.loads(p.read_text()) if p.exists() else {}
+          desc=[];ok=r.get('complete') is True
+          for mode in ['baseline','candidate']:
+            row=r.get(mode) or {};parts=[]
+            for group in ['A01','I01','I02']:
+              value=row.get(group) or {};passed=value.get('pass',0);failed=value.get('fail',0)
+              assert type(passed) is int and type(failed) is int and 0<=passed<=100 and 0<=failed<=100
+              parts.append(group+'='+str(passed)+'/'+str(failed))
+              ok=ok and passed>0 and (failed>0 if mode=='baseline' else failed==0)
+            phase=row.get('phase','unavailable')
+            if phase not in ['startup','fixtures','build','server','A01','I01','I02']:phase='unavailable'
+            desc.append(mode+':'+','.join(parts)+' '+phase)
+          desc.append('cleanup='+str(bool(r.get('complete'))))
+          sha=os.environ['STATUS_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          payload={'context':'wave-one/browser-db','state':'success' if ok else 'failure','description':'; '.join(desc)[:140],'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+          req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=15) as response:assert response.status==201
+          except Exception:raise SystemExit('Safe acceptance status publication failed')
+          print('; '.join(desc))
+          PY
       - name: Destroy disposable services
         if: always()
         run: |
