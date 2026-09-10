@@ -1,0 +1,66 @@
+name: Bounded wave-one form alignment
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/wave-one-form.yml]
+permissions:
+  contents: read
+jobs:
+  align:
+    if: github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    steps:
+      - name: Apply exact reviewed producer changes, no checkout or dependency execution
+        env:
+          EDIT_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,urllib.request
+          repository='redwan-cse/redwan.work'
+          branch='fix/direct-public-asset-uploads'
+          assert os.environ['GITHUB_REPOSITORY']==repository
+          assert os.environ['GITHUB_REF']=='refs/heads/'+branch
+          root='https://api.github.com/repos/'+repository
+          def api(path,data=None):
+            req=urllib.request.Request(root+path,data=None if data is None else json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['EDIT_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'},method='GET' if data is None else 'PUT')
+            try:
+              with urllib.request.urlopen(req,timeout=20) as r:return json.load(r)
+            except Exception:raise SystemExit('Guarded development edit unavailable; no raw provider output')
+          assert api('/git/ref/heads/'+branch)['object']['sha']==os.environ['GITHUB_SHA'],'Candidate moved; refuse edit'
+          path='/contents/components/enhanced-contact-form.tsx'
+          item=api(path+'?ref='+branch)
+          assert item['sha']=='6060a3ba3ebb09f1e08cffc2aca7f61fded839a1','Producer changed; refuse edit'
+          s=base64.b64decode(item['content']).decode()
+          def change(old,new,count=1):
+            global s
+            assert s.count(old)==count,'Reviewed source anchor mismatch'
+            s=s.replace(old,new)
+          change("import { formatBytes } from '@/lib/format';", "import { formatBytes } from '@/lib/format';\nimport { parseBudgetRange } from '@/lib/contact/intake-contract';")
+          change('ndaConfidentiality: string;   // Non-empty if checked','ndaConfidentiality: boolean;  // Explicit intent; serialized as true/false')
+          change("ndaConfidentiality: '',",'ndaConfidentiality: false,',2)
+          change("ndaConfidentiality: formData.ndaConfidentiality || '',", "ndaConfidentiality: formData.ndaConfidentiality ? 'true' : 'false',")
+          change("handleInputChange('ndaConfidentiality', checked ? 'Yes - NDA or strict confidentiality required' : '')", "handleInputChange('ndaConfidentiality', checked === true)")
+          start=s.index('    // Budget validation\n')
+          end=s.index('    setErrors(newErrors);',start)
+          old=s[start:end]
+          assert 'const hasMinBudget' in old and 'const hasMaxBudget' in old and 'Maximum budget must be greater' in old
+          s=s[:start]+'''    // Same whole-dollar contract as the server; never coerce user input.
+              const budget = parseBudgetRange(formData.budgetMin, formData.budgetMax);
+              if (!budget.ok) {
+                newErrors.budgetMin = budget.error;
+                newErrors.budgetMax = budget.error;
+                missingFields.push(budget.error);
+              }
+
+          '''+s[end:]
+          for field in ['budgetMin','budgetMax']:
+            change('id="'+field+'"\n                type="number"\n                min="0"\n                step="100"', 'id="'+field+'"\n                type="text"\n                inputMode="numeric"')
+          assert 'step="100"' not in s
+          assert api('/git/ref/heads/'+branch)['object']['sha']==os.environ['GITHUB_SHA'],'Candidate moved; refuse edit'
+          result=api(path,{'message':'fix: preserve NDA intent and share strict whole-dollar form validation','content':base64.b64encode(s.encode()).decode(),'sha':item['sha'],'branch':branch})
+          print('Reviewed form changes committed to development branch; no production operation.')
+          print('Commit: '+result['commit']['sha'])
+          PY
