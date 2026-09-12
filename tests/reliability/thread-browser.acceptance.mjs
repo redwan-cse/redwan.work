@@ -3,7 +3,7 @@ assert.equal(process.env.DISPOSABLE_AUTH_CI,'true');const api=new URL(process.en
 const origin='http://localhost:3399',admin=createClient(api.origin,process.env.SUPABASE_SECRET_KEY,{auth:{persistSession:false,autoRefreshToken:false}}),safe=r=>{if(r.error)throw Error('Synthetic service assertion failed');return r.data;};
 const {chromium}=createRequire(resolve(process.env.BROWSER_TOOLS_DIR,'package.json'))('playwright');
 // Real service readers, real PostgREST and SQL; no module replacement for ticket history.
-registerHooks({resolve(s,c,n){if(s==='server-only')return {url:'data:text/javascript,export {};',shortCircuit:true};if(s.startsWith('@/lib/'))return {url:new URL('../../'+s.slice(2)+'.ts',import.meta.url).href,shortCircuit:true};return n(s,c);}});
+registerHooks({resolve(s,c,n){if(s==='server-only')return {url:'data:text/javascript,export {};',shortCircuit:true};if(s==='@/lib/email')return {url:new URL('../../lib/email/index.ts',import.meta.url).href,shortCircuit:true};if(s.startsWith('@/lib/'))return {url:new URL('../../'+s.slice(2)+'.ts',import.meta.url).href,shortCircuit:true};return n(s,c);}});
 const {getOwnTicketThread}=await import('../../lib/crm/tickets.ts');
 test('bounded thread history through real SQL and admin/client browsers',{timeout:300000},async()=>{
  let phase='fixtures',failure=null,server,browser,ticket;const users=[],contexts=[];const temp=mkdtempSync(join(tmpdir(),'thread-browser-')),flag=join(temp,'mode'),preload=join(temp,'network.mjs');writeFileSync(flag,'ok');
