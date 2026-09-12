@@ -165,8 +165,10 @@ export async function updateDraftInvoice(invoiceId: string, patch: { project_id?
   if (patch.due_at !== undefined) { if (!validDate(patch.due_at)) return invalid(); updates.due_at = patch.due_at || null; }
   if (patch.payment_note !== undefined) updates.payment_note = patch.payment_note?.trim() || null;
   if (!Object.keys(updates).length) return invalid('No changes provided.');
-  const { error } = await getSupabaseAdmin().from('invoices').update(updates).eq('id', invoiceId).eq('status', 'draft');
-  return error ? crmError('Invoice operation failed.') : { ok: true };
+  const { error, count } = await getSupabaseAdmin().from('invoices').update(updates, { count: 'exact' }).eq('id', invoiceId).eq('status', 'draft');
+  if (error) return crmError('Invoice operation failed.');
+  if (count !== 1) return crmError('Invoice could not be saved. It may have changed or been removed. Refresh and try again.');
+  return { ok: true };
 }
 
 export async function addInvoiceItem(invoiceId: string, input: { description: string; qty: number; unit_price_cents: number; position?: number }): Promise<CrmResult> { if (!validInvoiceItemShape(input)) return invalid(); const found = await getRaw(invoiceId); if (!found.ok) return found; if (found.raw.status !== 'draft') return crmError('Only draft invoices can be edited.'); if (input.description.trim().length < 1 || input.description.trim().length > 500 || !validAmount(input.qty, input.unit_price_cents) || (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0))) return invalid(); const { error } = await getSupabaseAdmin().from('invoice_items').insert({ invoice_id: invoiceId, description: input.description.trim(), qty: input.qty, unit_price_cents: input.unit_price_cents, position: input.position ?? 0 }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
