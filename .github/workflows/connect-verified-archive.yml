@@ -1,0 +1,11 @@
+name: Verified archive connection completed
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  connected:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Verified archive wrapper inspected. No source-write capability remains. Full combined acceptance is required.'

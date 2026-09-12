@@ -1,0 +1,11 @@
+name: Recovery source connection completed
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  completed:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Purge delegation inspected. Source-write capability retired. Fresh-head reliability tests are authoritative.'

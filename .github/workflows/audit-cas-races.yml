@@ -1,0 +1,69 @@
+name: Audit-only acknowledgement and cursor races
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - name: Start network-isolated disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          docker pull postgres:17
+          docker run -d --name "audit-cas-$GITHUB_RUN_ID" --network none -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=audit_cas postgres:17 > /dev/null
+          for i in $(seq 1 60); do
+            if docker exec "audit-cas-$GITHUB_RUN_ID" pg_isready -U postgres -d audit_cas > /dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          echo '::error::Disposable PostgreSQL did not become ready.'; exit 1
+      - name: Actual modules with real SQL zero-row outcomes and synthetic storage
+        env:
+          AUDIT_CAS_DISPOSABLE: 'true'
+          AUDIT_CAS_CONTAINER: audit-cas-${{ github.run_id }}
+        run: |
+          node --experimental-strip-types --input-type=module - <<'JS'
+          process.argv[2]=process.env.RUNNER_TEMP+'/cas-result.json';
+          try{await import('./tests/audit-cas-races.mjs');}catch(e){
+            const text=String(e.stderr??e.message??'');
+            const category=e.code==='ERR_ASSERTION'?'assertion':text.includes('already exists')?'fixture-already-exists':text.includes('does not exist')?'fixture-missing':text.includes('syntax error')?'sql-syntax':text.includes('connection')||text.includes('shutting down')?'database-not-ready':e.name==='SyntaxError'?'javascript-syntax':'execution-other';
+            const location=String(e.stack??'').match(/audit-cas-races.mjs:(\d+):/);
+            console.log('::error::CAS category='+category+' line='+(location?.[1]??'unknown'));process.exitCode=1;
+          }
+          JS
+      - name: Destroy disposable database container
+        if: always()
+        run: |
+          if docker inspect "audit-cas-$GITHUB_RUN_ID" > /dev/null 2>&1; then docker rm -fv "audit-cas-$GITHUB_RUN_ID" > /dev/null; fi
+          if docker inspect "audit-cas-$GITHUB_RUN_ID" > /dev/null 2>&1; then exit 1; fi
+          touch "$RUNNER_TEMP/cas-teardown-ok"
+      - name: Report finite reproduction outcomes only
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,json,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP']);r=json.loads((p/'cas-result.json').read_text()) if (p/'cas-result.json').exists() else {}
+          keys=['setup','drainSingle','drainRace','cursorSingle','cursorRace','cursorAba','cleanup'];ok=all(r.get(k) is True for k in keys) and (p/'cas-teardown-ok').exists()
+          text=' '.join(k+'='+str(r.get(k) is True) for k in ['setup','drainSingle','drainRace','cursorSingle','cursorRace','cleanup'])
+          sha=os.environ['STATUS_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          data={'context':'audit/cas-reproduction','state':'success' if ok else 'failure','description':text[:140],'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+          req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Content-Type':'application/json'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=15) as response:assert response.status==201
+          except Exception:raise SystemExit('Safe reproduction report unavailable')
+          print(text)
+          PY

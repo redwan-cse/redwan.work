@@ -1,6 +1,7 @@
 'use server';
 
-import { headers } from 'next/headers';
+import { parseMilestoneMoney } from '@/lib/crm/milestone-money';
+import { validateDeliverable } from '@/lib/crm/deliverable-validation';
 import { revalidatePath } from 'next/cache';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -28,7 +29,6 @@ import {
   presignPrivatePut,
   putPublicObject,
   validateContactFile,
-  verifyStoredObjectSize,
 } from '@/lib/r2';
 import { extFromFilename, isAllowedAssetMime } from '@/lib/mime';
 import { formatBytes } from '@/lib/format';
@@ -51,26 +51,17 @@ async function requireAdmin() {
   return session;
 }
 
-// Actions derive origins from request headers only — never from client input.
-// Each action that needs a redirect base inlines this pattern (headers() is
-// available inside server actions):
-//   const h = await headers();
-//   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'redwan.work';
-//   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-//   const redirectToBase = `${proto}://${host}`;
-
 export async function convertLeadAction(leadId: string): Promise<CrmActionState> {
   const session = await requireAdmin();
   if (!session) return { error: 'Unauthorized.' };
 
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'redwan.work';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  let origin: string;
+  try { origin = await emailOrigin(); } catch { return { error: 'Account email configuration unavailable.' }; }
 
-  const result = await convertLead(leadId, `${proto}://${host}`);
+  const result = await convertLead(leadId, origin);
   if (!result.ok) return { error: result.error };
   revalidatePath('/admin');
-  return { notice: 'Client invited — ask them to check their inbox.' };
+  return { notice: 'Client setup completed. New accounts receive an invitation; existing accounts keep their sign-in.' };
 }
 
 export async function replyToTicketAction(
@@ -109,20 +100,19 @@ export async function inviteClientAction(
   const session = await requireAdmin();
   if (!session) return { error: 'Unauthorized.' };
 
-  const h = await headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'redwan.work';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  let origin: string;
+  try { origin = await emailOrigin(); } catch { return { error: 'Account email configuration unavailable.' }; }
 
   const result = await inviteClient({
     email: String(formData.get('email') ?? ''),
     fullName: String(formData.get('fullName') ?? '') || undefined,
     company: String(formData.get('company') ?? '') || undefined,
-    redirectToBase: `${proto}://${host}`,
+    redirectToBase: origin,
   });
   if (!result.ok) return { error: result.error };
   revalidatePath('/admin/clients');
   revalidatePath('/admin');
-  return { notice: 'Invitation sent.' };
+  return { notice: 'Client setup completed. New accounts receive an invitation; existing accounts keep their sign-in.' };
 }
 
 export async function setClientActiveAction(
@@ -206,19 +196,9 @@ export async function addMilestoneAction(
   const title = String(formData.get('title') ?? '');
   const currency = String(formData.get('currency') ?? '').trim() || undefined;
 
-  let amount_cents: number | undefined;
-  const rawCents = String(formData.get('amount_cents') ?? '').trim();
-  const rawAmount = String(formData.get('amount') ?? '').trim();
-  if (rawCents) {
-    const n = Number(rawCents);
-    if (!Number.isFinite(n)) return { error: 'Invalid amount.' };
-    amount_cents = Math.round(n);
-  } else if (rawAmount) {
-    const n = Number(rawAmount);
-    if (!Number.isFinite(n)) return { error: 'Invalid amount.' };
-    // amount could be dollars with decimals
-    amount_cents = Math.round(n * 100);
-  }
+  const parsed = parseMilestoneMoney(String(formData.get('amount_cents') ?? ''), String(formData.get('amount') ?? ''));
+  if (!parsed.ok) return { error: 'Invalid amount. Use whole cents or at most two decimal places.' };
+  const amount_cents = parsed.amount_cents;
 
   const result = await addMilestone(projectId, { title, amount_cents, currency });
   if (!result.ok) return { error: result.error };
@@ -246,12 +226,10 @@ export async function updateMilestoneAction(
   } else {
     if (formData.has('title')) patch.title = String(formData.get('title') ?? '');
     if (formData.has('status')) patch.status = String(formData.get('status') ?? '') as 'pending' | 'in_progress' | 'done';
-    if (formData.has('amount_cents')) {
-      const v = String(formData.get('amount_cents') ?? '').trim();
-      if (v) patch.amount_cents = Number(v);
-    } else if (formData.has('amount')) {
-      const v = String(formData.get('amount') ?? '').trim();
-      if (v) patch.amount_cents = Math.round(Number(v) * 100);
+    if (formData.has('amount_cents') || formData.has('amount')) {
+      const parsed = parseMilestoneMoney(String(formData.get('amount_cents') ?? ''), String(formData.get('amount') ?? ''));
+      if (!parsed.ok) return { error: 'Invalid amount. Use whole cents or at most two decimal places.' };
+      if (parsed.amount_cents !== undefined) patch.amount_cents = parsed.amount_cents;
     }
   }
 
@@ -339,8 +317,8 @@ export async function getDeliverablePresignAction(
   if (!check.ok) return { ok: false, error: check.error };
 
   const admin = getSupabaseAdmin();
-  const { data: project, error } = await admin.from('projects').select('client_id').eq('id', projectId).maybeSingle();
-  if (error) return { ok: false, error: `Project lookup failed: ${error.message}` };
+  const { data: project, error } = await admin.from('projects').select('client_id').eq('id', projectId).is('archived_at', null).maybeSingle();
+  if (error) return { ok: false, error: 'Project lookup failed.' };
   if (!project) return { ok: false, error: 'Project not found.' };
 
   const clientId = (project as { client_id: string }).client_id;
@@ -350,7 +328,7 @@ export async function getDeliverablePresignAction(
     key = makeDeliverableKey(clientId, projectId, check.ext);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
+    return { ok: false, error: 'Upload preparation failed. Please try again.' };
   }
 
   try {
@@ -358,7 +336,7 @@ export async function getDeliverablePresignAction(
     return { ok: true, key, uploadUrl };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
+    return { ok: false, error: 'Upload preparation failed. Please try again.' };
   }
 }
 
@@ -369,18 +347,9 @@ export async function confirmDeliverableAction(
   const session = await requireAdmin();
   if (!session) return { error: 'Unauthorized.' };
 
-  const sizeOk = await verifyStoredObjectSize(meta.key, meta.size_bytes);
-  if (!sizeOk) {
-    console.error('Size mismatch for deliverable key:', meta.key);
-    return { error: 'Attachment data is invalid. Please re-upload your files.' };
-  }
-
-  // Ensure key's project segment matches target project
-  const projectMatch = meta.key.match(/project_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/);
-  if (!projectMatch || projectMatch[1] !== projectId) {
-    console.error('Project segment mismatch for key:', meta.key, 'expected project:', projectId);
-    return { error: 'Attachment data is invalid. Please re-upload your files.' };
-  }
+  const validated = await validateDeliverable(projectId, meta);
+  if (!validated) return { error: 'Attachment data is invalid. Please re-upload your files.' };
+  meta = validated;
 
   const result = await createFileRow({
     bucket: 'private',
@@ -458,7 +427,7 @@ export async function archiveProjectAction(projectId: string): Promise<CrmAction
   if (!result.ok) return { error: result.error };
   revalidatePath('/admin/projects');
   revalidatePath('/admin');
-  return { notice: 'Project archived. Download the backup from the Projects list within 30 days.' };
+  return { notice: 'Project archived with a verified backup. Download it from the Projects list; recovery copies are retained.' };
 }
 
 export async function purgeArchivedProjectAction(projectId: string): Promise<CrmActionState> {
@@ -558,7 +527,7 @@ export async function uploadAssetAction(_prev: AssetActionState, formData: FormD
     await putPublicObject(key, Buffer.from(await file.arrayBuffer()), mime);
     return { notice: 'Asset uploaded.', url, key };
   } catch (e) {
-    console.error('Asset upload failed:', e instanceof Error ? e.message : e);
+    console.error('Asset upload failed.');
     return { error: 'Upload failed. Please try again.' };
   }
 }
@@ -574,7 +543,7 @@ export async function deleteAssetAction(key: string): Promise<CrmActionState> {
     await deletePublicObject(key);
     return {};
   } catch (e) {
-    console.error('Asset delete failed:', e instanceof Error ? e.message : e);
+    console.error('Asset delete failed.');
     return { error: 'Delete failed. Please try again.' };
   }
 }

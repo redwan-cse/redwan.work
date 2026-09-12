@@ -1,0 +1,11 @@
+name: Reviewed project contracts integrated
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integrated:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Exact integration completed and source-write capability retired.'

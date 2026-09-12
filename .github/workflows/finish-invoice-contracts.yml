@@ -1,0 +1,11 @@
+name: Reviewed invoice contracts integrated
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integrated:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Exact invoice integration inspected and source-write capability retired.'

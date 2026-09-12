@@ -1,0 +1,11 @@
+# Project detail and milestone transactions
+
+Migration 0031 is additive and must be applied before the matching application code. Existing migrations and stored data are unchanged. No production execution is authorized by this document. Keep the functions on rollback; reverting application code reintroduces the old multi-write hazard, so prefer a forward repair.
+
+The server-only milestone RPC serializes add, update, delete and reorder on the parent project before child mutation, matching archive/purge/invoicing lock order. Archived and missing projects refuse changes. Runtime input types, integer cents within Postgres int range, enum direction/status and field allowlists are checked. Financial provenance retains its restrictive foreign key. Reorder uses one atomic statement and deterministic position/id order, normalizing legacy gaps/ties only in the project explicitly being reordered. This is transaction safety, not request-idempotency: an intentionally repeated successful move moves again.
+
+Project detail uses a single SQL snapshot with exact counts and two independent 25-row pages. Stable child ordering includes UUID tie breakers. There is no PostgREST 1000-row truncation or per-project Auth lookup fan-out. Page parameters are bounded and empty/out-of-range pages clamp to the available range. UI pagination preserves the other collection's page and distinguishes database failure from not found. Page-boundary move buttons use global counts, not page-local first/last assumptions.
+
+Both RPCs are denied to public, anon and authenticated and granted only to service_role. Current-admin authorization stays at the server action/page boundary; these are not client-callable functions. No claims are made that a privileged SQL operator cannot directly bypass the application mutation service.
+
+Testing: runtime invalid-input/no-call and error-redaction cases, exact RPC wiring; disposable SQL parallel adds/reorders, rollback after a forced mid-update exception, direction/archived/financial refusal, >1000 child rows with exact counts and final-page completeness, and service-only privileges. Existing combined browser/storage/archive acceptance must also pass on the final integrated head. Production restore, independent review, hosted configuration and retention policy remain separate gates.

@@ -51,9 +51,10 @@ export async function POST(request: NextRequest) {
       path,
       now: Date.now(),
     });
-  } catch (err) {
+  } catch {
+    console.error('Blog revalidation failed.');
     return NextResponse.json(
-      { message: 'Error revalidating', error: String(err) },
+      { message: 'Error revalidating', error: 'Revalidation unavailable.' },
       { status: 500 }
     );
   }

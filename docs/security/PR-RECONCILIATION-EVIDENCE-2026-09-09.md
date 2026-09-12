@@ -1,0 +1,9 @@
+# PR reconciliation evidence follow-up
+
+Contact acceptance at b52140de39954dabe0145cde801afe37565dfe63 passed: https://github.com/redwan-cse/redwan.work/actions/runs/34331701333/job/102401536050 and https://github.com/redwan-cse/redwan.work/actions/runs/34331697572/job/102401523341 . These reran the exact integrated component, serialization, lint/types/build and real desktop/mobile browser interactions. No actual provider calls were performed.
+
+The companion reconciliation job failed, not due to dependencies or missing ancestry, but because its raw text assertion searched the entire workflow for forbidden permissions text and matched the assertion's own string literals. That self-match was reproduced locally. The repaired guard matches actual YAML permission/environment lines and secret-expression syntax instead; dependency and ancestry assertions were not relaxed.
+
+Before changing that guard, a separate finite-category evidence run at7f31aa9e3333bdb9c75db954ee76fcd4900d7c36 reported all14 statuses: exact heads49/50/51/52/54/55 INCLUDED; both frozen main27ab3e3 and candidate report lodash ABSENT, Next16.3.4, ajv6.15.0 and minimatch10.2.6/3.1.5/9.0.9. This corroborates the all14 disposition table. GitHub reporting-success statuses mean metadata collection, not release approval. No branch, dependency, production or rule mutation occurred in that evidence job. Its status-write capability was retired after capture.
+
+See ALL-14-PR-DISPOSITION-2026-09-09.md for every PR and proposed13 supersession closures. The repaired final reconciliation job and final full application acceptance still need exact-head results before the final tracker update. No superseded PR has been closed or merged. Main remains unchanged; release blockers stay on56. Implementation completion and organizational consolidation must not be confused with production readiness.

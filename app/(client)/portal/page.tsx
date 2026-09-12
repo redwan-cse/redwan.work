@@ -1,141 +1,15 @@
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { getCurrentSession } from '@/lib/auth/session';
-import { countOwnOpenTickets, listOwnTickets } from '@/lib/crm/tickets';
-import { countOwnActiveProjects, listOwnProjects } from '@/lib/crm/projects';
-import { countOwnOutstandingInvoices } from '@/lib/crm/invoices';
-import { redirect } from 'next/navigation';
-
-export const dynamic = 'force-dynamic';
-
-const STATUS_BADGE: Record<string, string> = {
-  open: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  answered: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  awaiting_client: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  closed: 'bg-muted text-muted-foreground',
-};
-
-const PROJECT_BADGE: Record<string, string> = {
-  active: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  paused: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  done: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-};
-
-export default async function PortalDashboardPage() {
-  const session = await getCurrentSession();
-  if (!session) redirect('/login?next=/portal');
-
-  const [openTickets, recent, activeProjects, ownProjects, outstandingInvoices] = await Promise.all([
-    countOwnOpenTickets(session.userId),
-    listOwnTickets(session.userId, 4),
-    countOwnActiveProjects(session.userId),
-    listOwnProjects(session.userId),
-    countOwnOutstandingInvoices(session.userId),
-  ]);
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Open tickets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{openTickets}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Awaiting a reply from support</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active projects</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{activeProjects}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {activeProjects === 1 ? '1 active project' : `${activeProjects} active`}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding invoice</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{outstandingInvoices || '—'}</p>
-            <Link href="/portal/invoices" className="mt-1 block text-xs text-muted-foreground hover:underline">
-              {outstandingInvoices === 0 ? 'No outstanding invoices' : outstandingInvoices === 1 ? 'View invoice' : 'View invoices'}
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {activeProjects > 0 && ownProjects.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Projects</h2>
-            <Link href="/portal/files" className="text-sm underline-offset-4 hover:underline">
-              View files
-            </Link>
-          </div>
-          <div className="overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
-              <tbody>
-                {ownProjects.map((p) => (
-                  <tr key={p.id} className="border-t first:border-t-0">
-                    <td className="px-4 py-2">
-                      <Link href="/portal/files" className="underline-offset-4 hover:underline">
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <Badge variant="outline" className={PROJECT_BADGE[p.status] ?? ''}>
-                        {p.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent tickets</h2>
-          <Link href="/portal/tickets" className="text-sm underline-offset-4 hover:underline">
-            View all
-          </Link>
-        </div>
-        {recent.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No tickets yet.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
-              <tbody>
-                {recent.map((t) => (
-                  <tr key={t.id} className="border-t">
-                    <td className="px-4 py-2 font-mono text-xs">TKT-{t.number}</td>
-                    <td className="px-4 py-2">
-                      <Link href={`/portal/tickets/${t.id}`} className="underline-offset-4 hover:underline">
-                        {t.subject}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[t.status] ?? ''}`}>
-                        {t.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
-  );
+import {redirect} from 'next/navigation';
+import {Card,CardContent,CardHeader,CardTitle} from '@/components/ui/card';
+import {Badge} from '@/components/ui/badge';
+import {workflowSession} from '@/lib/crm/workflow-access';
+import {getSupabaseAdmin} from '@/lib/supabase/admin';
+export const dynamic='force-dynamic';
+type Dashboard={openTickets:number;activeProjects:number;outstandingInvoices:number;projects:Array<{id:string;name:string;status:string}>;tickets:Array<{id:string;number:number;subject:string;status:string}>};
+export default async function PortalDashboardPage(){
+ const session=await workflowSession('client');if(!session)redirect('/login?next=/portal');
+ const {data,error}=await getSupabaseAdmin().rpc('portal_dashboard',{p_actor:session.userId});if(error||!data)throw new Error('Could not load dashboard.');const dashboard=data as Dashboard;
+ return <div className="space-y-6"><h1 className="text-2xl font-semibold">Dashboard</h1><div className="grid gap-4 sm:grid-cols-3">{[{title:'Open tickets',value:dashboard.openTickets,href:'/portal/tickets',text:'Awaiting a reply from support'},{title:'Active projects',value:dashboard.activeProjects,href:'/portal/projects',text:'View projects'},{title:'Outstanding invoices',value:dashboard.outstandingInvoices,href:'/portal/invoices',text:'View invoices'}].map(card=><Card key={card.title}><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold">{card.value}</p><Link href={card.href} className="mt-1 block text-xs text-muted-foreground underline">{card.text}</Link></CardContent></Card>)}</div>
+ <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Projects</h2><Link className="text-sm underline" href="/portal/projects">View all</Link></div>{!dashboard.projects.length?<p className="text-sm text-muted-foreground">No projects yet.</p>:<ul className="rounded-lg border">{dashboard.projects.map(project=><li key={project.id} className="flex items-center justify-between gap-3 border-t p-3 first:border-t-0"><Link href={`/portal/projects/${project.id}`} className="min-w-0 break-words underline">{project.name}</Link><Badge variant="outline">{project.status}</Badge></li>)}</ul>}</section>
+ <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Recent tickets</h2><Link className="text-sm underline" href="/portal/tickets">View all</Link></div>{!dashboard.tickets.length?<p className="text-sm text-muted-foreground">No tickets yet.</p>:<ul className="rounded-lg border">{dashboard.tickets.map(ticket=><li key={ticket.id} className="flex flex-wrap items-center justify-between gap-3 border-t p-3 first:border-t-0"><span className="font-mono text-xs">TKT-{ticket.number}</span><Link className="min-w-0 flex-1 break-words underline" href={`/portal/tickets/${ticket.id}`}>{ticket.subject}</Link><Badge variant="outline">{ticket.status.replaceAll('_',' ')}</Badge></li>)}</ul>}</section></div>;
 }

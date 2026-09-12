@@ -1,0 +1,58 @@
+name: Disposable reliability database
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: reliability-db-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  database:
+    name: Reliability / disposable database
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Start a fresh local-only stack
+        run: |
+          set -euo pipefail
+          umask 077
+          stage=cli
+          trap 'echo "::error::Disposable database setup failed at $stage"' ERR
+          curl --fail --silent --show-error --location https://github.com/supabase/cli/releases/download/v2.116.0/supabase_2.116.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/supabase.tar.gz"
+          echo "5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158  $RUNNER_TEMP/supabase.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/rel-cli" "$RUNNER_TEMP/rel-db"
+          tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/rel-cli" supabase
+          stage=init
+          "$RUNNER_TEMP/rel-cli/supabase" init --workdir "$RUNNER_TEMP/rel-db" > "$RUNNER_TEMP/rel-init.log" 2>&1
+          python3 - <<'PY'
+          import os,pathlib,re
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'rel-db/supabase/config.toml'
+          s,n=re.subn(r'^project_id = .*$', 'project_id = "redwan-reliability-ci"',p.read_text(),flags=re.M)
+          assert n==1
+          p.write_text(s)
+          PY
+          mkdir -p "$RUNNER_TEMP/rel-db/supabase/migrations"
+          cp supabase/migrations/*.sql "$RUNNER_TEMP/rel-db/supabase/migrations/"
+          stage=migrations
+          "$RUNNER_TEMP/rel-cli/supabase" start --workdir "$RUNNER_TEMP/rel-db" > "$RUNNER_TEMP/rel-start.log" 2>&1
+      - name: Test transactions, workflows and account isolation
+        run: |
+          set -euo pipefail
+          python3 tests/reliability/database.py
+          for script in tests/reliability/*-db.py; do python3 "$script"; done
+      - name: Destroy this job's local stack
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -x "$RUNNER_TEMP/rel-cli/supabase" ] && [ -f "$RUNNER_TEMP/rel-db/supabase/config.toml" ]; then
+            if ! "$RUNNER_TEMP/rel-cli/supabase" stop --workdir "$RUNNER_TEMP/rel-db" --no-backup > "$RUNNER_TEMP/rel-stop.log" 2>&1; then
+              echo '::error::Disposable database teardown failed.'
+              exit 1
+            fi
+          fi
