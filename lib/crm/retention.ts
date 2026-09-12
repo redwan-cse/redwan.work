@@ -63,9 +63,15 @@ export async function drainStorageDeletions(limit=100):Promise<{completed:number
   for(const row of data??[]) {
     try {
       await deletePrivateObjects([row.r2_key]);
-      const result=await admin.from('storage_deletions').update({completed_at:new Date().toISOString()}).eq('r2_key',row.r2_key).is('completed_at',null);
+      const result=await admin.from('storage_deletions').update({completed_at:new Date().toISOString()},{count:'exact'}).eq('r2_key',row.r2_key).is('completed_at',null);
       if(result.error)throw new Error('Cleanup acknowledgement failed');
-      completed++;
+      if(result.count===1){completed++;continue;}
+      if(result.count===0){
+        const current=await admin.from('storage_deletions').select('completed_at').eq('r2_key',row.r2_key).maybeSingle();
+        // Another worker acknowledged it. Skip rather than crediting this invocation.
+        if(!current.error&&current.data?.completed_at)continue;
+      }
+      throw new Error('Cleanup acknowledgement unverified');
     } catch {failed++;}
   }
   return {completed,failed};
