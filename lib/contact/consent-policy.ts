@@ -35,8 +35,16 @@ function policyText(value: unknown): value is string {
   if (/[-\u0009\u000b-\u001f\u007f]/u.test(value)) return false;
   return Buffer.from(value, 'utf8').toString('utf8') === value;
 }
-export function archivePolicy(bundle: PolicyBundle): ArchivedPolicy {
-  if (!bundle || typeof bundle.version !== 'string' || !VERSION.test(bundle.version) || ![bundle.checkbox,bundle.privacyNotice,bundle.attachmentNotice,bundle.policyText].every(policyText)) throw new Error('Invalid policy bundle.');
+function isPolicyBundle(value: unknown): value is PolicyBundle {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && 'version' in value && typeof value.version === 'string' && VERSION.test(value.version)
+    && 'checkbox' in value && policyText(value.checkbox)
+    && 'privacyNotice' in value && policyText(value.privacyNotice)
+    && 'attachmentNotice' in value && policyText(value.attachmentNotice)
+    && 'policyText' in value && policyText(value.policyText);
+}
+export function archivePolicy(bundle: unknown): ArchivedPolicy {
+  if (!isPolicyBundle(bundle)) throw new Error('Invalid policy bundle.');
   const canonical = JSON.stringify({schema:1,version:bundle.version,checkbox:bundle.checkbox,privacyNotice:bundle.privacyNotice,attachmentNotice:bundle.attachmentNotice,policyText:bundle.policyText});
   if (Buffer.byteLength(canonical,'utf8') > 262144) throw new Error('Invalid policy bundle.');
   return Object.freeze({version:bundle.version,canonical,hash:createHash('sha256').update(canonical,'utf8').digest('hex')});
@@ -49,7 +57,7 @@ function verifiedRegistry(policies: readonly ArchivedPolicy[]): Map<string, Arch
       if (!policy || typeof policy.canonical !== 'string' || Buffer.byteLength(policy.canonical,'utf8') > 262144 || typeof policy.hash !== 'string' || !/^[a-f0-9]{64}$/.test(policy.hash)) return null;
       const parsed: unknown = JSON.parse(policy.canonical);
       if (!parsed || typeof parsed !== 'object' || !('schema' in parsed) || parsed.schema !== 1) return null;
-      const checked = archivePolicy(parsed as PolicyBundle);
+      const checked = archivePolicy(parsed);
       if (checked.version !== policy.version || checked.hash !== policy.hash || checked.canonical !== policy.canonical || registry.has(checked.version)) return null;
       registry.set(checked.version, checked);
     }
@@ -88,9 +96,10 @@ export function consentEvidenceView(row: Partial<Record<keyof ConsentEvidence, u
   if (!row) return 'invalid';
   const {consent_policy_version:version,consent_policy_hash:hash,consent_capture_method:method,consent_at:at} = row;
   if (version == null && hash == null && method == null) return 'unknown';
-  if (typeof version !== 'string' || typeof hash !== 'string' || method !== 'explicit-checkbox-v1' || typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(at)) return 'invalid';
+  if (typeof version !== 'string' || typeof hash !== 'string' || method !== 'explicit-checkbox-v1' || typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(at) || Number(at.slice(0,4)) < 1) return 'invalid';
   const parsed = new Date(at);
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== at) return 'invalid';
+  // Validate calendar/time without rewriting the stored microsecond precision.
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0,19) !== at.slice(0,19)) return 'invalid';
   const registry = verifiedRegistry(policies);
   return registry?.get(version)?.hash === hash ? 'recorded' : 'invalid';
 }
