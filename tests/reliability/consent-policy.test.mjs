@@ -32,7 +32,7 @@ for(const key of ['checkbox','privacyNotice','attachmentNotice','policyText'])te
  assert.notEqual(archivePolicy({...bundle,[key]:bundle[key]+' revised'}).hash,first.hash);
 });
 test('invalid encoding and oversized bundles are rejected without truncation',()=>{
- for(const text of ['', '', '\r\n', '\ud800', 'x'.repeat(131073)])assert.throws(()=>archivePolicy({...bundle,policyText:text}),/Invalid policy/);
+ for(const text of ['', String.fromCharCode(0), '\r\n', String.fromCharCode(0xd800), 'x'.repeat(131073)])assert.throws(()=>archivePolicy({...bundle,policyText:text}),/Invalid policy/);
  assert.throws(()=>archivePolicy({...bundle,version:'../unsafe'}));
 });
 for(const value of [null,'false','TRUE','1',' true ','yes'])test(`nonliteral consent ${String(value)} is rejected`,()=>{
@@ -79,4 +79,12 @@ test('PostgreSQL UTC timestamps retain recorded meaning without rewriting micros
   const row={...evidence,consent_at:at};assert.equal(consentEvidenceView(row,policies),'recorded');assert.equal(row.consent_at,at);
  }
  for(const at of ['2026-02-30T00:00:00Z','2026-09-12T24:00:00Z','not-a-date'])assert.equal(consentEvidenceView({...evidence,consent_at:at},policies),'invalid');
+});
+test('ordinary hyphens remain valid policy text',()=>{
+ assert.doesNotThrow(()=>archivePolicy({...bundle,policyText:'SYNTHETIC TEST ONLY: policy-version and re-consent.'}));
+});
+test('each forbidden control byte is rejected in every archived text field',()=>{
+ for(const code of [...Array.from({length:32},(_,i)=>i).filter(i=>i!==10),127]){
+  for(const key of ['checkbox','privacyNotice','attachmentNotice','policyText'])assert.throws(()=>archivePolicy({...bundle,[key]:'Synthetic'+String.fromCharCode(code)+'text'}),/Invalid policy/);
+ }
 });
