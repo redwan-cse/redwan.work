@@ -74,3 +74,9 @@ test('existing intake remains unwired and policy text is not published by infras
   const source=readFileSync(path,'utf8');assert.doesNotMatch(source,/from ['"][^'"]*consent-policy/);assert.doesNotMatch(source,/SYNTHETIC TEST ONLY/);
  }
 });
+test('PostgreSQL UTC timestamps retain recorded meaning without rewriting microseconds',()=>{
+ for(const at of ['2026-09-12T00:00:00+00:00','2026-09-12T00:00:00.123456+00:00','2026-09-12T00:00:00.1Z']){
+  const row={...evidence,consent_at:at};assert.equal(consentEvidenceView(row,policies),'recorded');assert.equal(row.consent_at,at);
+ }
+ for(const at of ['2026-02-30T00:00:00Z','2026-09-12T24:00:00Z','not-a-date'])assert.equal(consentEvidenceView({...evidence,consent_at:at},policies),'invalid');
+});
