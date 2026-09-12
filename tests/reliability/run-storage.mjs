@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';import {readFileSync,existsSync} from 'node:fs';import {spawnSync} from 'node:child_process';import {randomBytes} from 'node:crypto';import {setTimeout as delay} from 'node:timers/promises';
 for(const f of ['.env','.env.local','.env.production','.env.production.local'])assert.equal(existsSync(f),false);
 const status=JSON.parse(readFileSync(process.env.AUTH_STATUS_FILE,'utf8'));const api=new URL(status.API_URL);assert.ok(api.protocol==='http:'&&['localhost','127.0.0.1'].includes(api.hostname)&&api.port==='54321');assert.ok(status.PUBLISHABLE_KEY.startsWith('sb_publishable_')&&status.SECRET_KEY.startsWith('sb_secret_'));
+// Publisher signature and signed S3 contracts verified in run34670209100; owner approved this exact digest.
+const image='cgr.dev/chainguard/minio@sha256:039800e64ec7247d2fde7cff3697e964f6fe20b6d7d2c46aa7d82cc63355d512';
 const name='redwan-storage-'+randomBytes(6).toString('hex'),access='synthetic-'+randomBytes(8).toString('hex'),secret=randomBytes(32).toString('hex');const baseEnv=Object.fromEntries(['PATH','HOME','TMPDIR'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));let exit=1,stage='container-start';
 try{
- const start=spawnSync('docker',['run','--detach','--name',name,'--publish','127.0.0.1:9000:9000','--env','MINIO_ROOT_USER','--env','MINIO_ROOT_PASSWORD','minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e','server','/data'],{env:{...baseEnv,MINIO_ROOT_USER:access,MINIO_ROOT_PASSWORD:secret},encoding:'utf8'});
+ const start=spawnSync('docker',['run','--detach','--name',name,'--platform','linux/amd64','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--tmpfs','/data:rw,nosuid,nodev,size=512m,uid=65532,gid=65532','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--publish','127.0.0.1:9000:9000','--env','MINIO_ROOT_USER','--env','MINIO_ROOT_PASSWORD',image,'server','/data','--address',':9000','--console-address',':9001','--anonymous'],{env:{...baseEnv,MINIO_ROOT_USER:access,MINIO_ROOT_PASSWORD:secret},encoding:'utf8'});
  if(start.status!==0){const text=(start.stderr??'').toLowerCase();const category=text.includes('manifest unknown')?'image-manifest-unavailable':text.includes('toomanyrequests')||text.includes('rate limit')?'registry-rate-limit':text.includes('no space left')?'runner-disk-full':text.includes('port is already allocated')||text.includes('address already in use')?'port-unavailable':text.includes('unauthorized')||text.includes('denied')?'registry-access-denied':text.includes('timeout')?'registry-timeout':'container-start-failed';console.log('::error::Disposable storage category: '+category);throw Error('Container start failed');}
+ const inspected=spawnSync('docker',['image','inspect',image],{env:baseEnv,encoding:'utf8'});assert.equal(inspected.status,0);const info=JSON.parse(inspected.stdout)[0];assert.ok(info.RepoDigests.includes(image));assert.equal(info.Config.User.split(':')[0],'65532');
  stage='health-ready';let ready=false;const deadline=Date.now()+45000;while(Date.now()<deadline){try{if((await fetch('http://127.0.0.1:9000/minio/health/ready')).ok){ready=true;break;}}catch{}await delay(200);}assert.ok(ready);
  const env={...baseEnv,DISPOSABLE_AUTH_CI:'true',NEXT_PUBLIC_SUPABASE_URL:api.origin,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:status.PUBLISHABLE_KEY,SUPABASE_SECRET_KEY:status.SECRET_KEY,R2_ENDPOINT:'http://127.0.0.1:9000',R2_PRIVATE_BUCKET:'synthetic-private',R2_PUBLIC_BUCKET:'synthetic-public',R2_PRIVATE_ACCESS_KEY_ID:access,R2_PRIVATE_SECRET_ACCESS_KEY:secret,R2_PUBLIC_ACCESS_KEY_ID:access,R2_PUBLIC_SECRET_ACCESS_KEY:secret,NEXT_PUBLIC_R2_PUBLIC_BASE_URL:'http://127.0.0.1:9000/synthetic-public'};
  exit=0;stage='suites';
@@ -14,5 +17,5 @@ try{
   else console.log('Passed: '+file+' with exact fixture cleanup.');
  }
 }catch{console.log('::error::Disposable storage setup or runner failed at '+stage+'.');exit=1;}
-finally{const stopped=spawnSync('docker',['rm','--force',name],{env:baseEnv,encoding:'utf8'});if(stopped.status!==0){console.log('::error::Disposable storage teardown failed.');exit=1;}}
+finally{const stopped=spawnSync('docker',['rm','--force','--volumes',name],{env:baseEnv,encoding:'utf8'});if(stopped.status!==0){console.log('::error::Disposable storage teardown failed.');exit=1;}}
 process.exit(exit);
