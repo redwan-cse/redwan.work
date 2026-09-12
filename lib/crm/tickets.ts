@@ -24,6 +24,7 @@ export async function listTickets(params: { status?: TicketStatus; page?: number
   const { data, error, count } = await query;
   if (error) throw new Error('Could not load tickets.');
   const rows = (data ?? []) as unknown as TicketJoin[];
+  // Deduplicate account hydration within the bounded page.
   const emails = new Map<string, string>();
   await Promise.all([...new Set(rows.map(row => row.client_id))].map(async id => {
     const { data: user } = await admin.auth.admin.getUserById(id); emails.set(id, user?.user?.email ?? '');
@@ -122,7 +123,7 @@ export async function createTicket(clientId: string, subject: string, body: stri
     const recipients = await adminRecipients();
     const clientName = await recipientName(clientId);
     const origin = await emailOrigin();
-    return sendToAll(recipients,to => sendNewTicketEmail({ to,ticketId:ctx.ticketId,ticketNumber:ctx.ticketId,ticketNumber:ctx.ticketNumber,subject:ctx.subject,clientName,ticketLink:`${origin}/admin/tickets/${ctx.ticketId}` }),{ template:'new-ticket',entityType:'ticket',entityId:ticketId });
+    return sendToAll(recipients,to => sendNewTicketEmail({ to,ticketId:ctx.ticketId,ticketNumber:ctx.ticketNumber,subject:ctx.subject,clientName,ticketLink:`${origin}/admin/tickets/${ctx.ticketId}` }),{ template:'new-ticket',entityType:'ticket',entityId:ticketId });
   });
   return { ok:true,ticketId };
 }
