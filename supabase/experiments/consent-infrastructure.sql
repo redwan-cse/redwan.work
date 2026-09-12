@@ -1,0 +1,4 @@
+-- I03 synthetic-policy infrastructure, NOT an automatic migration.
+-- Activation remains disabled. Never run this file against production.
+-- Test-first schema placeholder: deliberately no DDL or policy publication.
+-- Desired schema behavior is specified by consent-policy-db.py before repair.
