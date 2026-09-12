@@ -32,7 +32,10 @@ function policyText(value: unknown): value is string {
   if (typeof value !== 'string' || !value.length || Buffer.byteLength(value, 'utf8') > 131072) return false;
   // LF only; reject controls and non-roundtrippable Unicode. Do not normalize,
   // trim, truncate or rewrite bytes that a person may have been shown.
-  if (/[-\u0009\u000b-\u001f\u007f]/u.test(value)) return false;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if ((code < 32 && code !== 10) || code === 127) return false;
+  }
   return Buffer.from(value, 'utf8').toString('utf8') === value;
 }
 function isPolicyBundle(value: unknown): value is PolicyBundle {
