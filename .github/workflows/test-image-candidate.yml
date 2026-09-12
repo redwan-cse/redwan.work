@@ -1,0 +1,72 @@
+name: Disposable storage image candidate verification
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/test-image-candidate.yml]
+permissions: {}
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      statuses: write
+    steps:
+      - name: Resolve public image and verify immutable pull and isolated startup
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,subprocess,json,re,secrets,time,urllib.request,shutil,tempfile
+          root=pathlib.Path(os.environ['RUNNER_TEMP']);config=pathlib.Path(tempfile.mkdtemp(dir=root,prefix='image-probe-'))
+          env={k:os.environ[k] for k in ['PATH','HOME']};env['DOCKER_CONFIG']=str(config)
+          repo='cgr.dev/chainguard/minio';name='replacement-'+os.environ['GITHUB_RUN_ID']
+          report={'phase':'resolve','digest':'','pull':False,'startup':False,'nonroot':False,'cleanup':False}
+          def run(args):return subprocess.run(args,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=120)
+          try:
+            r=run(['docker','pull','--platform','linux/amd64',repo+':latest'])
+            if r.returncode:raise RuntimeError('Pull unavailable')
+            data=json.loads(run(['docker','image','inspect',repo+':latest']).stdout)[0]
+            refs=[x for x in data['RepoDigests'] if re.fullmatch(re.escape(repo)+r'@sha256:[0-9a-f]{64}',x)];assert len(refs)==1
+            image=refs[0];report['digest']=image.split('@')[1];report['phase']='digest-pull'
+            assert run(['docker','pull','--platform','linux/amd64',image]).returncode==0;report['pull']=True
+            data=json.loads(run(['docker','image','inspect',image]).stdout)[0];assert data['Architecture']=='amd64'
+            user=data['Config'].get('User','');report['nonroot']=bool(user and user.split(':')[0] not in ['0','root']);assert report['nonroot']
+            report['phase']='startup'
+            env['MINIO_ROOT_USER']='synthetic-'+secrets.token_hex(8);env['MINIO_ROOT_PASSWORD']=secrets.token_hex(32)
+            # No host mounts or registry credentials; writable storage is isolated ephemeral tmpfs.
+            r=run(['docker','run','-d','--name',name,'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--publish','127.0.0.1:19000:9000','--tmpfs','/data:rw,nosuid,nodev,size=128m,uid=65532,gid=65532','--tmpfs','/tmp:rw,nosuid,nodev,size=32m','--env','MINIO_ROOT_USER','--env','MINIO_ROOT_PASSWORD',image,'server','/data','--address',':9000','--console-address',':9001','--anonymous'])
+            assert r.returncode==0
+            for _ in range(120):
+              try:
+                with urllib.request.urlopen('http://127.0.0.1:19000/minio/health/ready',timeout=2) as res:
+                  if res.status==200:report['startup']=True;break
+              except Exception:pass
+              time.sleep(.25)
+            assert report['startup'];report['phase']='complete'
+          except Exception:pass
+          finally:
+            r=run(['docker','rm','-fv',name]);absent=run(['docker','inspect',name]).returncode!=0
+            shutil.rmtree(config);report['cleanup']=absent and not config.exists()
+            (root/'candidate-image.json').write_text(json.dumps(report))
+          print('Image probe phase='+report['phase']+'; fixed metadata only retained.')
+          if not (report['pull'] and report['startup'] and report['nonroot'] and report['cleanup']):raise SystemExit(1)
+          PY
+      - name: Publish public digest and fixed outcomes only
+        if: always()
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,json,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-image.json';r=json.loads(p.read_text()) if p.exists() else {}
+          sha=os.environ['GITHUB_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          def emit(context,text,ok):
+            data={'context':context,'description':text[:140],'state':'success' if ok else 'failure','target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+            req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(data).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Content-Type':'application/json'},method='POST')
+            try:
+              with urllib.request.urlopen(req,timeout=15) as response:assert response.status==201
+            except Exception:raise SystemExit('Safe image result publication failed')
+          digest=r.get('digest','');assert digest=='' or re.fullmatch('sha256:[0-9a-f]{64}',digest)
+          phase=r.get('phase','unavailable');assert phase in ['resolve','digest-pull','startup','complete','unavailable']
+          ok=all(r.get(k) is True for k in ['pull','startup','nonroot','cleanup'])
+          emit('test-image/candidate','phase='+phase+' '+','.join(k+'='+str(r.get(k) is True) for k in ['pull','startup','nonroot','cleanup']),ok)
+          if digest:emit('test-image/digest',digest,ok)
+          PY
