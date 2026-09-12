@@ -1,0 +1,80 @@
+name: Isolated approved registry pull verification
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/registry-pull-verification.yml]
+permissions: {}
+jobs:
+  verify:
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/direct-public-asset-uploads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      statuses: write
+    steps:
+      - name: Verify login and exact digest without checkout or application execution
+        env:
+          REGISTRY_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,tempfile,subprocess,json,shutil
+          image='minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          config=pathlib.Path(tempfile.mkdtemp(prefix='registry-private-',dir=root));config.chmod(0o700)
+          report={'login':'not_attempted','pull':'not_attempted','digest_verified':False,'credentials_removed':False}
+          user=os.environ.pop('REGISTRY_USER','');token=os.environ.pop('REGISTRY_TOKEN','')
+          env={k:os.environ[k] for k in ['PATH','HOME','TMPDIR'] if k in os.environ};env['DOCKER_CONFIG']=str(config)
+          def run(args,input=None):
+            return subprocess.run(args,input=input,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=180)
+          def category(r):
+            text=(r.stderr+' '+r.stdout).lower()
+            if 'toomanyrequests' in text or 'rate limit' in text:return 'rate_limited'
+            if 'manifest unknown' in text or 'manifest not found' in text:return 'manifest_unavailable'
+            if 'unauthorized' in text or 'denied' in text:return 'access_denied'
+            if 'timeout' in text:return 'timeout'
+            return 'failed_unclassified'
+          try:
+            if not user or not token:report['login']='secrets_missing'
+            else:
+              r=run(['docker','login','docker.io','--username',user,'--password-stdin'],token+'\n');token=''
+              report['login']='success' if r.returncode==0 else category(r)
+              if r.returncode==0:
+                r=run(['docker','pull',image]);report['pull']='success' if r.returncode==0 else category(r)
+                if r.returncode==0:
+                  r=run(['docker','image','inspect','--format','{{json .RepoDigests}}',image])
+                  if r.returncode==0:report['digest_verified']=image in json.loads(r.stdout)
+          except subprocess.TimeoutExpired:
+            report['pull' if report['login']=='success' else 'login']='timeout'
+          except Exception:
+            report['pull' if report['login']=='success' else 'login']='failed_unclassified'
+          finally:
+            token='';user=''
+            try:run(['docker','logout','docker.io'])
+            except Exception:pass
+            shutil.rmtree(config)
+            report['credentials_removed']=not config.exists()
+            p=root/'registry-pull-result.json';p.write_text(json.dumps(report));p.chmod(0o600)
+          print('Registry verification finished; only fixed result categories retained.')
+          if not (report['login']=='success' and report['pull']=='success' and report['digest_verified'] and report['credentials_removed']):raise SystemExit(1)
+          PY
+      - name: Publish safe outcome only, no registry credentials
+        if: always()
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,json,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'registry-pull-result.json';r=json.loads(p.read_text()) if p.exists() else {}
+          allowed=['not_attempted','secrets_missing','success','rate_limited','manifest_unavailable','access_denied','timeout','failed_unclassified']
+          login=r.get('login','failed_unclassified');pull=r.get('pull','not_attempted');assert login in allowed and pull in allowed
+          clean=r.get('credentials_removed') is True;digest=r.get('digest_verified') is True
+          text='login='+login+' pull='+pull+' digest_verified='+str(digest)+' credentials_removed='+str(clean)
+          sha=os.environ['GITHUB_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          payload={'context':'registry/isolated-pull','state':'success' if login=='success' and pull=='success' and digest and clean else 'failure','description':text[:140],'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+          req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Content-Type':'application/json'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=15) as response:assert response.status==201
+          except Exception:raise SystemExit('Safe registry outcome reporting unavailable')
+          print(text)
+          PY
