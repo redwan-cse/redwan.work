@@ -1,3 +1,4 @@
+# Retry authorized after repository secrets were added on 2026-09-12.
 name: Isolated approved registry pull verification
 on:
   push:
