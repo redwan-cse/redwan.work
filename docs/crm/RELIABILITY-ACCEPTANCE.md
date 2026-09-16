@@ -78,8 +78,23 @@ Verification suite `tests/reliability/thread-keyset-pagination.test.mjs` (14 cas
 - Error classification: database failures return retryable `{ ok: false, kind: 'unavailable', error: 'Could not load messages.' }`, preventing false 404 errors during transient outages.
 - Author profile hydration: joins `profiles!ticket_messages_author_id_fkey(full_name, role)`, accurately distinguishing `'admin'` from `'client'` roles, and safely falling back to `author_name: null, author_role: 'client'` when profile records are missing.
 
+## Privileged account protection and administrator invariants (Issue #40 / U01): 16 September 2026
+
+Verification suite `tests/reliability/privileged-account-protection.test.mjs` (12 cases) confirms:
+- Dual-store role synchronization & protection: protects administrator accounts across all combinations of Supabase Auth `app_metadata.role` and PostgreSQL `public.profiles.role` (`['admin', 'admin']`, `['admin', 'client']`, `['client', 'admin']`, `[undefined, 'admin']`); `inviteClient` and `convertLead` reject targeting any admin account with `'That email belongs to an admin account.'` or `'That email belongs to a protected account.'`, queuing 0 emails and performing 0 profile or auth mutations.
+- Admin deactivation refusal: `setClientActive` and `setClientActiveAction` enforce `profile.role === 'client'`; any attempt to deactivate or reactivate an admin account fails closed with `'Client not found.'`, performing 0 database updates and 0 Auth `updateUserById` ban calls; admins cannot deactivate themselves or any other administrator.
+- Input validation: `setClientActive` strictly rejects non-boolean `active` parameters (`'false'`, `'true'`, `null`, `undefined`, integers) with `'Invalid account state.'`.
+- Lead conversion safety: `convertLead` checks if the lead's email matches an admin in either store, refusing conversion, leaving `converted_client_id: null` and status `'new'`, and preserving the admin account completely unchanged.
+- Profile field scoping: during onboarding, name and company updates in `profiles` are strictly filtered on `.eq('role', 'client')`; database errors during profile updates return safe recovery guidance without leaking internal database diagnostics.
+- Directory separation: `listClients` filters exclusively on `profiles.eq('role', 'client')`, ensuring that no administrator accounts are ever leaked or enumerated in client listings.
+- Fail-closed partial state transitions:
+  - Deactivation: profile is deactivated first (advancing the `tokens_valid_after` token cutoff); if the subsequent Auth ban call fails, returns `'Portal access is disabled. Sign-in blocking failed; retry deactivation.'` while keeping the profile deactivated (fail-closed).
+  - Reactivation: Auth unban is executed first; if unban fails, the profile is never activated, returning `'Reactivation failed. Account remains disabled.'` (fail-closed).
+- Session authority & drift rejection: `getCurrentSession()` requires both Auth JWT claims and the live `profiles` record to agree on role (`role === 'admin'` or `'client'`) and requires `profile.is_active === true`; any role drift or deactivated state immediately returns `null`.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
+
 
 
