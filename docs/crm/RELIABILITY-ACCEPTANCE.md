@@ -56,6 +56,18 @@ Verification suite `tests/reliability/email-outbox-lifecycle.test.mjs` (25 cases
 - Cron endpoint security (`GET /api/cron/email-outbox`): requires valid `Bearer <CRON_SECRET>`; returns 401 on unauthorized calls; returns 503 on deferred/failed events; returns 200 on clean drain; emits `Cache-Control: no-store`.
 - Diagnostic redaction & legacy isolation: ensures no private bodies, tokens, or raw provider strings enter `email_outbox` or `email_log`; verifies compatibility `sendEmail` helper refuses transport to prevent duplicate sends.
 
+## Intake and consent diagnostic contracts (Issue #45 / I01 / I02): 16 September 2026
+
+Verification suite `tests/reliability/intake-consent.test.mjs` (11 cases) and `tests/wave-one.test.mjs` (80 cases) confirm:
+- Intake NDA contract (I01): `parseNdaValues` in `lib/contact/intake-contract.ts` accepts omitted entries (`[]`), empty strings (`''`), literal `'false'`, literal `'true'`, and exact legacy copy (`'Yes - NDA or strict confidentiality required'`); strictly rejects unknown strings (`'yes'`, `'TRUE'`, `'1'`), duplicate entries (`['true', 'true']`), and file blobs with 400 `NDA_ERROR`.
+- Whole-dollar USD budget contract (I02): `parseBudgetRange` accepts both blank or whole numbers between 0 and 10,000,000 USD where `min <= max`; strictly rejects decimals (`1.5`), exponents (`1e3`), hex (`0x10`), currency codes (`100USD`, `$100`), explicit signs (`+1`, `-1`), commas (`1,000`), negative values, inverted ranges (`min > max`), asymmetric blanks, and duplicate fields with `BUDGET_ERROR`.
+- Explicit consent contract (Issue #45): requires exactly one `gdprConsent` field containing literal `'true'`; rejects omitted, empty, `'false'`, non-literal truthy values (`'1'`, `'on'`, `'TRUE'`), and duplicate fields with 400 `'Please agree to the Data & Privacy policy before submitting.'`; produces server-generated ISO `consent_at` timestamp evidence while discarding wire overrides.
+- Turnstile replay & verification: verifies token with Cloudflare siteverify endpoint; enforces 300s single-use replay protection via `consume_rate_limit(p_kind='turnstile')`, rejecting replayed tokens with 400 `'Verification token already used. Please reload the form.'`.
+- IP rate controls: limits submissions to 5 per hour per IP hash (`consume_rate_limit(p_kind='ip')`), returning 429 when exhausted; fails closed with 503 if RPC errors occur.
+- Configuration and origin guardrails: missing `LEAD_IP_HASH_SALT`, `TURNSTILE_SECRET_KEY`, or Supabase configuration returns 503 fail-closed; cross-origin requests return 403.
+- Attachment validation & scope: enforces 5-file cap, 1 byte to 10 MB limits, `contact/{uuid}/{uuid}.{ext}` schema, and byte-exact R2 HEAD checks (`verifyStoredObjectSize`); drops client-submitted `retained` flags.
+- Lead persistence & error masking: returns server-issued `TKT-<number>` reference only after successful insert; database errors mask internal Postgres diagnostics behind generic 502 copy.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
