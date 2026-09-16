@@ -92,9 +92,22 @@ Verification suite `tests/reliability/privileged-account-protection.test.mjs` (1
   - Reactivation: Auth unban is executed first; if unban fails, the profile is never activated, returning `'Reactivation failed. Account remains disabled.'` (fail-closed).
 - Session authority & drift rejection: `getCurrentSession()` requires both Auth JWT claims and the live `profiles` record to agree on role (`role === 'admin'` or `'client'`) and requires `profile.is_active === true`; any role drift or deactivated state immediately returns `null`.
 
+## Retained storage, verified archive integrity, and recoverable project purge (Issue #30 / S02): 16 September 2026
+
+Verification suite `tests/reliability/verified-archive.test.mjs` (16 cases) confirms:
+- Project archive integrity & zip-slip protection: `archiveProject` assembles manifests (`project.json`, `milestones.json`, `files.json`, `recovery.json`); customer display filenames remain solely within metadata JSON, while ZIP internal entries strictly use immutable IDs (`files/${file.id}`) to prevent path traversal; verifies that each R2 source object byte length matches database `file.size_bytes`; uploads archive to `archive/project_${projectId}/verified_${uuid}.zip` and conducts mandatory SHA-256 and byte length readback verification before invoking `mark_project_archived` RPC.
+- Concurrency & drift protection: `archiveProject` rejects already archived projects (`'Project already archived.'`), malformed UUIDs (`'Project not found.'`), and concurrent project modifications detected during `mark_project_archived` (`'Project changed during archive. Source data is preserved; retry after review.'`), preserving source records upon any failure.
+- Financial retention blocker: `purgeArchivedProject` checks for linked invoices in both the application layer and the atomic database transaction; projects with linked invoices (regardless of invoice state — draft, sent, paid, or void) strictly refuse deletion with `'Project has retained invoices and cannot be purged.'`; database lookup errors fail closed with `'Financial retention check unavailable.'`.
+- Unarchived project refusal: `purgeArchivedProject` rejects unarchived projects with `'Project is not archived.'`.
+- Purge idempotency & recovery verification: if `project_recovery` already contains a recovery record for the project, returns `{ ok: true }` without repeating operations; computes round-trip SHA-256 and length readback on the uploaded recovery ZIP, aborting with `'Could not verify recovery backup. Project and source files were not purged.'` if readback bytes differ.
+- Atomic cleanup transaction: `prepare_project_cleanup` verifies snapshot equality under row locks, inserts a verifiable record into `project_recovery`, queues each file's key into `storage_deletions(source='project')`, and cascades project deletion only after recovery is durably verified.
+- Archive download presigning: `getArchiveDownloadUrl` generates 60-second presigned GET URLs for verified archives; rejects unarchived projects (`'Project is not archived.'`) or missing records; masks R2 signing errors behind `'Archive download unavailable.'`.
+- Admin action boundaries: `archiveProjectAction`, `purgeArchivedProjectAction`, and `archiveDownloadUrlAction` require active administrator authority (`requireAdmin()`), rejecting unauthenticated, client, and inactive admin callers with `{ error: 'Unauthorized.' }` and revalidating Next.js project paths on success.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
+
 
 
 
