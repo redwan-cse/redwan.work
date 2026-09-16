@@ -25,7 +25,17 @@ Verification suite `tests/reliability/ticket-attachments.test.mjs` (37 cases) co
 - Client ticket creation: `createTicketWithAttachmentsAction` validates client session and pending attachments prior to atomic ticket creation.
 - Route boundary: `POST /api/uploads/ticket-presign` enforces same-origin/sec-fetch-site checks (403), authentication (401), and JSON validation (400).
 
+## Bounded abandoned upload retention lifecycle and sweep concurrency: 16 September 2026
+
+Verification suite `tests/reliability/retention-lifecycle.test.mjs` (18 cases) confirms:
+- Endpoint protection: `GET /api/cron/r2-retention` requires valid `Bearer <CRON_SECRET>` (401 on missing, bad, or non-bearer tokens); fails closed with 503 if R2 is unconfigured or if `maintenance_cursors` table is unavailable or missing cursor rows; returns `Cache-Control: no-store` on all responses.
+- Bound vs. unbound separation: bound ticket attachments (`private/{user}/ticket_{ticketId}/...` or `files.ticket_id IS NOT NULL`) and bound deliverables (`private/{user}/project_{projectId}/...` or `files.project_id IS NOT NULL`) are strictly excluded from retention claims; fresh pending uploads (< 24 hours) are preserved; abandoned pending uploads (>= 24 hours, unbound) are claimed by `claim_expired_storage`, snapshotted into `storage_deletions(source='pending')`, and deleted from `files`; lead attachments (`contact/...`) are preserved if < 90 days or marked `retained: true`, and expired unretained attachments are queued for deletion.
+- CAS cursor concurrency: compare-and-set updates on `maintenance_cursors` (`contact`, `private`, `projects`) return 503 with `Retry-After: 60` upon detecting a concurrent worker race (`count === 0`); uncontested sweeps advance cursors cleanly.
+- Storage drain reliability: `drainStorageDeletions` requires exact per-key acknowledgement; storage failures retain `completed_at: null` for retry; concurrent worker acknowledgements are skipped without false error.
+- Project retention safeguards: projects with linked invoices or unarchived status are refused; clean archived projects require verified recovery archives before deletion.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
+
 
