@@ -26,6 +26,21 @@ Test-first evidence:
 
 Self-review confirmed the bounded diff and preserved ID/status filters; independent APPROVED review remains absent. Concurrent draft-to-draft lost updates are not solved by row counting. Item mutations, other financial results, notification freshness, consent versioning, migrations and release gates remain outside this slice. No production access/change, real mail, schema change, merge or deployment occurred. Later documentation-only commits do not change the tested application, but their own current-head checks must still be inspected before claiming current-head verification.
 
+## Bounded F01 item-mutation repair: 16 September 2026
+
+Owner approved extending exact-affected-row validation to invoice line-item mutations (`updateInvoiceItem` and `deleteInvoiceItem`) with test-first verification. Supporting checkpoint for [PR56](https://github.com/redwan-cse/redwan.work/pull/56).
+
+`updateInvoiceItem` and `deleteInvoiceItem` now request `{ count: 'exact' }` and bind both the item ID and parent `invoice_id`. Success requires no database error and count exactly 1. Zero, missing or unexpected counts return a deterministic refresh/retry conflict message (`Invoice item could not be saved. It may have changed or been removed. Refresh and try again.` or `Invoice item could not be deleted. It may have changed or been removed. Refresh and try again.`); provider errors retain the generic failure. Existing validation, admin authorization, and caller error propagation are unchanged.
+
+Test-first suite `tests/reliability/invoice-item-mutation.test.mjs` (29 cases) covers:
+- Zero-row false success reproduction: items removed or changed before write return conflict.
+- Exact-count success: matching draft items update/delete with `{ count: 'exact' }` and `['id', 'invoice_id']` predicates.
+- Unconfirmed counts (`null`, `absent`, `zero`, `multiple`, `negative`, `string`) refuse without false success.
+- Database failures stay generic (`Invoice operation failed.`).
+- Missing items and non-draft invoices refuse before mutation without database writes.
+- Admin actions propagate conflicts without success revalidation, and revalidate on confirmed mutations.
+- Caller role gates deny anonymous, client, inactive, and changed-role sessions.
+
 ## Verification and release
 
 Disposable tests cover decimal quantities, atomic financial operations, milestone snapshot/retry behavior, paginated counts and access restrictions. Complete current-head browser billing/payment/print acceptance and hosted delivery remain release gates. Never cascade-delete financial data as test cleanup on production. Any production migration needs reviewed dependency order, verified backup/restore and explicit approval. Applied migrations are not rewritten; application rollback does not automatically undo new financial/provenance constraints.
