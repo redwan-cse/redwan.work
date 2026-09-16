@@ -33,6 +33,15 @@ Verification suite `tests/reliability/retention-lifecycle.test.mjs` (18 cases) c
 - CAS cursor concurrency: compare-and-set updates on `maintenance_cursors` (`contact`, `private`, `projects`) return 503 with `Retry-After: 60` upon detecting a concurrent worker race (`count === 0`); uncontested sweeps advance cursors cleanly.
 - Storage drain reliability: `drainStorageDeletions` requires exact per-key acknowledgement; storage failures retain `completed_at: null` for retry; concurrent worker acknowledgements are skipped without false error.
 - Project retention safeguards: projects with linked invoices or unarchived status are refused; clean archived projects require verified recovery archives before deletion.
+## Action manifest & caller inventory verification (Issue #42 / V01): 16 September 2026
+
+Verification suite `tests/reliability/caller-inventory.test.mjs` (6 cases) and `docs/security/CALLER-INVENTORY-V01.md` confirm:
+- Complete HTTP entry point inventory: 8 API route handlers (`app/api/**/route.ts`) and 41 server actions across 6 modules (`lib/auth/actions.ts`, `lib/crm/admin-actions.ts`, `lib/crm/client-actions.ts`, `lib/crm/public-asset-actions.ts`, `lib/crm/workflow-actions.ts`, `lib/crm/ticket-upload-actions.ts`).
+- Build manifest agreement: `.next/server/server-reference-manifest.json` entries map directly to real, exported server action definitions.
+- Universal fail-closed authorization: admin mutations reject anonymous callers, client sessions, deactivated profiles (`is_active=false`), stale roles, and DB lookup errors with `{ error: 'Unauthorized.' }`. Client mutations strictly reject non-clients and deactivated accounts.
+- Anti-enumeration: cross-client ticket interactions and foreign profile edits return opaque 404 responses (`'Ticket not found.'` / `'Client not found.'`).
+- Bearer routes: `/api/cron/email-outbox`, `/api/cron/r2-retention`, and `/api/revalidate` strictly enforce length-guarded Bearer authorization and fail closed when tokens or configuration are omitted.
+- Latent export governance: 3 latent server actions (`uploadAssetAction`, `getTicketAttachmentPresignAction`, `confirmTicketAttachmentAction`) remain compiled for API stability but enforce full caller authorization gates.
 
 ## Deployment and rollback
 
