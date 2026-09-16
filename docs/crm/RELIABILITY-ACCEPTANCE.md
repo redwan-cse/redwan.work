@@ -43,6 +43,19 @@ Verification suite `tests/reliability/caller-inventory.test.mjs` (6 cases) and `
 - Bearer routes: `/api/cron/email-outbox`, `/api/cron/r2-retention`, and `/api/revalidate` strictly enforce length-guarded Bearer authorization and fail closed when tokens or configuration are omitted.
 - Latent export governance: 3 latent server actions (`uploadAssetAction`, `getTicketAttachmentPresignAction`, `confirmTicketAttachmentAction`) remain compiled for API stability but enforce full caller authorization gates.
 
+## Email outbox lifecycle, authority verification, and retry backoff (Issues #38, #41 / E01): 16 September 2026
+
+Verification suite `tests/reliability/email-outbox-lifecycle.test.mjs` (25 cases) confirms:
+- Template rendering & payload contracts (`renderOutboxEvent`): validates exact subjects and deep links for all 6 lifecycle events (`new-ticket`, `reply-posted` admin and client audiences, `status-changed`, `deliverable-uploaded`, `invoice-issued`, `payment-confirmed`); rejects invalid currencies, malformed amounts, and unsupported templates.
+- Strict site origin parsing: accepts only clean HTTPS origins (or loopback HTTP for localhost/127.0.0.1); rejects non-root paths, query strings, hash fragments, and embedded credentials with fail-closed `render_failed` error.
+- Bounded queue draining: budget is clamped between 1 and 3; empty queues exit without overhead; `claim_email_event` DB errors fail closed.
+- Two-phase delivery authority (`email_dispatch_recipient`): rechecks profile activity, role matching, bans, and resource ownership before envelope rendering and immediately before Resend transport; rejects and suppresses events if authority changes in-flight; enforces that frozen retry envelopes strictly match the recipient's current normalized Auth address to prevent emailing reassigned addresses.
+- Idempotency & 409 conflict taxonomy: Resend 409 `concurrent_idempotent_requests` defers (`state='pending'`); 409 `invalid_idempotent_request` (payload conflict) or unknown categories fail permanently (`state='failed'`); oversized 409 responses (> 4096 bytes) and non-JSON fail closed; 429 and 5xx defer; 400 fails permanently.
+- Transport timeout & network recovery: AbortSignal timeouts map to `provider_timeout` (`state='pending'`); disconnects map to `provider_unavailable` (`state='pending'`).
+- Configuration and persistence guardrails: missing `RESEND_API_KEY` or `RESEND_FROM_EMAIL` defers with `configuration_unavailable`; envelope persistence failure defers with `audit_unavailable`; outcome persistence failure throws fail-closed error.
+- Cron endpoint security (`GET /api/cron/email-outbox`): requires valid `Bearer <CRON_SECRET>`; returns 401 on unauthorized calls; returns 503 on deferred/failed events; returns 200 on clean drain; emits `Cache-Control: no-store`.
+- Diagnostic redaction & legacy isolation: ensures no private bodies, tokens, or raw provider strings enter `email_outbox` or `email_log`; verifies compatibility `sendEmail` helper refuses transport to prevent duplicate sends.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
