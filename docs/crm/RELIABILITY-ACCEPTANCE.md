@@ -68,6 +68,16 @@ Verification suite `tests/reliability/intake-consent.test.mjs` (11 cases) and `t
 - Attachment validation & scope: enforces 5-file cap, 1 byte to 10 MB limits, `contact/{uuid}/{uuid}.{ext}` schema, and byte-exact R2 HEAD checks (`verifyStoredObjectSize`); drops client-submitted `retained` flags.
 - Lead persistence & error masking: returns server-issued `TKT-<number>` reference only after successful insert; database errors mask internal Postgres diagnostics behind generic 502 copy.
 
+## Thread keyset pagination and microsecond cursor invariants (Issue #44 / T01): 16 September 2026
+
+Verification suite `tests/reliability/thread-keyset-pagination.test.mjs` (14 cases) and `tests/reliability/thread-pagination.test.mjs` (8 cases) confirm:
+- 50-message bounded windows & 51-row lookahead: queries fetch up to 50 visible items with `limit(51)` to verify `olderCursor` presence without an extra `COUNT(*)` database scan; empty threads return clean empty arrays; exactly 50 messages produces no older cursor; exactly 51 messages triggers an older cursor lookahead.
+- Deterministic compound keyset tiebreakers: cursor filters combine `created_at` with `id` (`created_at.lt.X,and(created_at.eq.X,id.lt.Y)` and `created_at.gt.X,and(created_at.eq.X,id.gt.Y)`), deterministically resolving sub-second timestamp collisions across page boundaries without skipping or duplicating records.
+- Cursor tampering & injection protection: `decodeThreadCursor` enforces Base64url encoding, ticket binding (`x.ticketId === ticketId`), strict key allowlist (`createdAt,direction,id,ticketId,v`), UUID format, and ISO timestamp grammar; rejects PostgREST filter injection in `id` or `createdAt`, non-UTC offsets, invalid calendar dates (e.g. Feb 30), standard base64 padding/characters (`=`, `+`, `/`), and extra JSON keys.
+- Caller scoping & anti-enumeration: `getOwnTicketThread` verifies client ownership before querying messages; unowned or foreign tickets return opaque 404 (`'Ticket not found.'`) with 0 queries to `ticket_messages`.
+- Error classification: database failures return retryable `{ ok: false, kind: 'unavailable', error: 'Could not load messages.' }`, preventing false 404 errors during transient outages.
+- Author profile hydration: joins `profiles!ticket_messages_author_id_fkey(full_name, role)`, accurately distinguishing `'admin'` from `'client'` roles, and safely falling back to `author_name: null, author_role: 'client'` when profile records are missing.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
