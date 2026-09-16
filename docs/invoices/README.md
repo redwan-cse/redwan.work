@@ -41,6 +41,25 @@ Test-first suite `tests/reliability/invoice-item-mutation.test.mjs` (29 cases) c
 - Admin actions propagate conflicts without success revalidation, and revalidate on confirmed mutations.
 - Caller role gates deny anonymous, client, inactive, and changed-role sessions.
 
+## Bounded F01 payment-transition error classification: 16 September 2026
+
+Payment confirmation (`confirmPayment`) and rejection (`rejectPayment`) in `lib/crm/invoices.ts` now map atomic PostgreSQL RPC domain exceptions to client-safe, actionable conflict messages rather than opaque generic failures:
+- `'Payment is no longer pending'` -> `'Payment is no longer pending. Refresh and try again.'`
+- `'Payment exceeds invoice total'` -> `'Payment exceeds invoice total.'`
+- `'Payment transition is not allowed'` -> `'Payment transition is not allowed.'`
+- Unrecognized or transport database errors continue to fail closed with generic `'Invoice operation failed.'` without leaking provider diagnostics.
+- UUID validation for `paymentId` and `adminId` occurs prior to database interaction.
+
+Test-first suite `tests/reliability/payment-transitions.test.mjs` (19 cases) covers:
+- Successful transition invokes atomic RPC and succeeds with fail-soft receipt handling.
+- Pending conflict errors return actionable conflict strings rather than generic failures.
+- Overpayment and invalid transition state violations return domain-specific error messages.
+- Unexpected database and transport failures stay generic without leaking diagnostics.
+- UUID parameter validation fails before RPC invocation.
+- Admin actions (`confirmPaymentAction`, `rejectPaymentAction`) propagate conflict messages without revalidating invoices, and revalidate on success.
+- Caller session validation denies anonymous, client, inactive, and changed-role callers before mutation.
+
 ## Verification and release
 
 Disposable tests cover decimal quantities, atomic financial operations, milestone snapshot/retry behavior, paginated counts and access restrictions. Complete current-head browser billing/payment/print acceptance and hosted delivery remain release gates. Never cascade-delete financial data as test cleanup on production. Any production migration needs reviewed dependency order, verified backup/restore and explicit approval. Applied migrations are not rewritten; application rollback does not automatically undo new financial/provenance constraints.
+

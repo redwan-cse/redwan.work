@@ -217,7 +217,16 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
   if (readError) console.error('Payment pre-read failed.');
 
   const { error } = await getSupabaseAdmin().rpc('confirm_invoice_payment_atomic', { p_payment_id: paymentId, p_confirmed_by: adminId });
-  if (error) return crmError('Invoice operation failed.');
+  if (error) {
+    const message = error.message === 'Payment is no longer pending'
+      ? 'Payment is no longer pending. Refresh and try again.'
+      : error.message === 'Payment exceeds invoice total'
+      ? 'Payment exceeds invoice total.'
+      : error.message === 'Payment transition is not allowed'
+      ? 'Payment transition is not allowed.'
+      : 'Invoice operation failed.';
+    return crmError(message);
+  }
 
   // Receipt to the client. Fail-soft.
   const invoiceId = (payment as { invoice_id?: string } | null)?.invoice_id;
@@ -253,5 +262,17 @@ export async function confirmPayment(paymentId: string, adminId: string): Promis
 
   return { ok: true };
 }
-export async function rejectPayment(paymentId: string): Promise<CrmResult> { if (!validUuid(paymentId)) return crmError('Payment is no longer pending.'); const { error } = await getSupabaseAdmin().rpc('reject_invoice_payment_atomic', { p_payment_id: paymentId }); return error ? crmError('Invoice operation failed.') : { ok: true }; }
+export async function rejectPayment(paymentId: string): Promise<CrmResult> {
+  if (!validUuid(paymentId)) return invalid();
+  const { error } = await getSupabaseAdmin().rpc('reject_invoice_payment_atomic', { p_payment_id: paymentId });
+  if (error) {
+    const message = error.message === 'Payment is no longer pending'
+      ? 'Payment is no longer pending. Refresh and try again.'
+      : error.message === 'Payment transition is not allowed'
+      ? 'Payment transition is not allowed.'
+      : 'Invoice operation failed.';
+    return crmError(message);
+  }
+  return { ok: true };
+}
 export async function submitPayment(invoiceId: string, clientId: string, input: { method: PaymentMethod; reference: string; amount_cents: number }): Promise<CrmResult> { if (!invoiceRecord(input) || !validUuid(invoiceId) || !validUuid(clientId) || !validMethod(input.method) || !Number.isInteger(input.amount_cents) || input.amount_cents <= 0 || typeof input.reference !== 'string' || input.reference.trim().length < 1 || input.reference.trim().length > 200) return crmError('Payment submission could not be processed.'); const { error } = await getSupabaseAdmin().rpc('submit_invoice_payment_atomic', { p_invoice_id: invoiceId, p_client_id: clientId, p_method: input.method, p_reference: input.reference.trim(), p_amount_cents: input.amount_cents }); return error ? crmError('Payment submission could not be processed.') : { ok: true }; }
