@@ -3,7 +3,8 @@ import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import type {NormalizedLead} from '@/lib/contact/lead-schema';
 export async function insertLead(lead:NormalizedLead):Promise<{ok:true;ticketRef:string}|{ok:false;error:string}>{
  try{
-  const {data,error}=await getSupabaseAdmin().from('leads').insert(lead).select('ticket_number').single();
+  const { consent_policy_version: _ignored, ...record } = lead;
+  const {data,error}=await getSupabaseAdmin().from('leads').insert(record).select('ticket_number').single();
   if(error||!data||!Number.isSafeInteger(data.ticket_number)||data.ticket_number<1)throw new Error('Lead persistence unavailable');
   return {ok:true,ticketRef:`TKT-${data.ticket_number}`};
  }catch{
