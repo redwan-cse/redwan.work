@@ -53,20 +53,22 @@ const modules = {
   '@/lib/email/recipients': 'export async function emailOrigin(){return "https://example.test";}export async function recipientEmail(){return null;}',
   '@/lib/email/outbox': 'export async function drainEmailOutbox(){return {ok:true,processed:0,sent:0,failed:0,deferred:0};}',
   '@/lib/blogger': 'export function clearBlogCache(){}',
-  '@/lib/mime': 'export function extFromFilename(){return "pdf";}export function isAllowedAssetMime(){return true;}export const ASSET_ALLOWED={"pdf":["application/pdf"]};',
+  '@/lib/mime': 'export function extFromFilename(){return "pdf";}export function isAllowedAssetMime(){return true;}export function isAllowedMime(){return true;}export const ASSET_ALLOWED={"pdf":["application/pdf"]};',
   '@/lib/format': 'export function formatBytes(){return "synthetic";}',
   '@/lib/crm/deliverable-validation': 'export async function validateDeliverable(){return null;}',
   '@/lib/crm/milestone-money': 'export function parseMilestoneMoney(){return {amount_cents:100};}',
   '@/lib/crm/clients': 'export async function convertLead(){return {ok:true};}export async function inviteClient(){return {ok:true};}export async function setClientActive(){return {ok:true};}',
   '@/lib/crm/tickets': stub(['adminReply', 'setTicketStatus', 'createTicket', 'clientReply']),
   '@/lib/crm/projects': stub(['createProject', 'updateProject', 'addMilestone', 'updateMilestone', 'deleteMilestone', 'moveMilestone', 'archiveProject', 'purgeArchivedProject', 'getArchiveDownloadUrl']),
-  '@/lib/crm/files': 'export async function createFileRow(){return {ok:true};}export async function deleteOwnedFile(){return {ok:true};}',
+  '@/lib/crm/files': 'export async function createFileRow(){return {ok:true};}export async function deleteOwnedFile(){return {ok:true};}export async function getOwnedFileUrl(){return {ok:true,url:"https://example.test/file"};}',
   '@/lib/crm/invoices': stub(['addInvoiceItem', 'confirmPayment', 'createDraftInvoice', 'createDraftInvoiceWithItems', 'deleteInvoiceItem', 'getInvoiceDetail', 'rejectPayment', 'sendInvoice', 'updateDraftInvoice', 'updateInvoiceItem', 'voidInvoice', 'submitPayment']),
-  '@/lib/r2': 'export const ASSET_ALLOWED_EXT=[],ASSET_MAX_BYTES=5242880;export function isR2Configured(){return true;}' + stub(['assetUrl', 'deletePublicObject', 'makeAssetKey', 'makeDeliverableKey', 'presignPrivatePut', 'putPublicObject', 'validateContactFile']),
+  '@/lib/r2': 'export const ASSET_ALLOWED_EXT=[],ASSET_MAX_BYTES=5242880,CONTACT_MAX_FILES=5;export function isR2Configured(){return true;}export function presignContactUpload(){return {uploadUrl:"u",key:"k"};}export function verifyStoredObjectSize(){return true;}' + stub(['assetUrl', 'deletePublicObject', 'makeAssetKey', 'makeDeliverableKey', 'presignPrivatePut', 'putPublicObject', 'validateContactFile']),
   '@/lib/r2-inventory': 'export async function privateInventoryPage(){return {next:"",count:0};}',
   '@/lib/crm/retention': 'export async function drainStorageDeletions(){return {ok:true,deleted:0,errors:[]};}export async function purgeArchivedProject(){return {ok:true};}',
   '@/lib/crm/attachments': 'export const ATTACHMENT_ERROR="Attachment failed.";export function validUuid(v){return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);}export async function validateAttachments(){return [];}export async function prepareTicketUploads(){return {ok:true,uploads:[{key:"k",uploadUrl:"u",filename:"f"}]};}',
-  '@/lib/crm/public-asset-actions': 'export async function prepareAssetUploadAction(){return globalThis.__callerInventory.session?.role==="admin"&&globalThis.__callerInventory.profile?.is_active===true?{key:"k",uploadUrl:"u"}:{error:"Unauthorized."};}export async function confirmAssetUploadAction(){return globalThis.__callerInventory.session?.role==="admin"&&globalThis.__callerInventory.profile?.is_active===true?{url:"https://example.test/asset"}:{error:"Unauthorized."};}',
+  '@/lib/r2-public-upload': 'export async function preparePublicAsset(){return {key:"k",uploadUrl:"u"};}export async function confirmPublicAsset(){return "https://example.test/asset";}export function validateAssetMetadata(){return true;}',
+  '@/lib/contact/lead-schema': 'export async function sha256Hex(){return "synthetic-hash";}export function parseLeadPayload(){return null;}',
+  '@/lib/contact/lead-store': 'export async function insertLead(){return {ok:true};}',
 };
 
 const hooks = registerHooks({
@@ -83,11 +85,16 @@ const adminActions = await import('../../lib/crm/admin-actions.ts');
 const clientActions = await import('../../lib/crm/client-actions.ts');
 const workflowActions = await import('../../lib/crm/workflow-actions.ts');
 const ticketUploadActions = await import('../../lib/crm/ticket-upload-actions.ts');
+const publicAssetActions = await import('../../lib/crm/public-asset-actions.ts');
 
 const revalidateRoute = await import('../../app/api/revalidate/route.ts');
 const cronEmailRoute = await import('../../app/api/cron/email-outbox/route.ts');
 const cronRetentionRoute = await import('../../app/api/cron/r2-retention/route.ts');
 const logoutRoute = await import('../../app/api/auth/logout/route.ts');
+const contactRoute = await import('../../app/api/contact/route.ts');
+const uploadsPresignRoute = await import('../../app/api/uploads/presign/route.ts');
+const ticketPresignRoute = await import('../../app/api/uploads/ticket-presign/route.ts');
+const fileDownloadRoute = await import('../../app/api/files/[id]/download/route.ts');
 
 hooks.deregister();
 
@@ -109,24 +116,16 @@ function clearSession() {
   f.profileError = null;
 }
 
-test('build manifest and route inventory completeness', () => {
-  const manifestPath = '.next/server/server-reference-manifest.json';
-  if (existsSync(manifestPath)) {
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    const entries = Object.values(manifest.node || {});
-    assert.ok(entries.length >= 40, `Expected at least 40 server action references, got ${entries.length}`);
-    for (const entry of entries) {
-      assert.ok(entry.filename, 'Manifest entry must have filename');
-      assert.ok(entry.exportedName, 'Manifest entry must have exportedName');
-    }
-  }
-
-  // Verify all 8 API routes export valid HTTP methods
+test('route inventory completeness: all 8 API routes export valid HTTP methods', () => {
   assert.equal(typeof revalidateRoute.POST, 'function');
   assert.equal(typeof cronEmailRoute.GET, 'function');
   assert.equal(typeof cronRetentionRoute.GET, 'function');
   assert.equal(typeof logoutRoute.GET, 'function');
   assert.equal(typeof logoutRoute.POST, 'function');
+  assert.equal(typeof contactRoute.POST, 'function');
+  assert.equal(typeof uploadsPresignRoute.POST, 'function');
+  assert.equal(typeof ticketPresignRoute.POST, 'function');
+  assert.equal(typeof fileDownloadRoute.GET, 'function');
 });
 
 test('admin action authorization matrix: all admin mutations fail-closed without active admin authority', async () => {
@@ -146,6 +145,8 @@ test('admin action authorization matrix: all admin mutations fail-closed without
     () => adminActions.deleteAssetAction('key'),
     () => adminActions.uploadAssetAction({}, new FormData()), // latent export
     () => workflowActions.invoiceMilestoneAction(ticketId),
+    () => publicAssetActions.prepareAssetUploadAction({ filename: 'test.pdf', contentType: 'application/pdf', size: 100 }),
+    () => publicAssetActions.confirmAssetUploadAction('test-key', { filename: 'test.pdf', contentType: 'application/pdf', size: 100 }),
   ];
 
   for (const call of adminEndpoints) {

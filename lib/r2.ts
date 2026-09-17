@@ -104,8 +104,11 @@ export function isPortalKey(key: string): boolean {
   if (key.startsWith('archive/')) return key.startsWith('archive/project_') && key.endsWith('.zip');
   return /^private\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//.test(key);
 }
+function reservedFinalKey(key:string):boolean {
+  return /^private\/.*\/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.[a-z]+$/.test(key);
+}
 export async function presignPrivatePut(key: string, mime: string, size: number, expiresIn = 600): Promise<string> {
-  if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  if (!isPortalKey(key)||reservedFinalKey(key)||(key.startsWith('archive/')&&!/^archive\/project_[0-9a-f-]{36}\/upload_[0-9a-f-]{36}\.zip$/.test(key))) throw new Error('Invalid upload destination.');
   if (!Number.isSafeInteger(size) || size < 1) throw new Error('Invalid file size.');
   return getSignedUrl(privateClient(), new PutObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, ContentType: mime, ContentLength: size }), { expiresIn });
 }
@@ -136,7 +139,7 @@ export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
   return Buffer.from(await response.Body?.transformToByteArray() ?? []);
 }
 export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
-  if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  if (!isPortalKey(key)||reservedFinalKey(key)) throw new Error('Invalid mutable portal key.');
   const { Upload } = await import('@aws-sdk/lib-storage');
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }

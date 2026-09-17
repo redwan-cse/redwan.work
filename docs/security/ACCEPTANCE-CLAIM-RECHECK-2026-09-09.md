@@ -125,3 +125,16 @@ These corrections are authoritative here; complete semantic replacement of all h
 Added tests/wave-one.test.mjs and .github/workflows/wave-one.yml as a bounded red-phase slice. Actual action/parser modules are imported, with explicit synthetic Supabase/Next/storage adapters. This is not browser, SQL, hosted or production acceptance. The job installs the committed lockfile without provider credentials, then runs tests in a network-disabled container. No test transport targets production. Expected desired-contract failures are not suppressed; every test must pass after repair. Existing consent-version challenge remains separately failed.
 
 M00 status: all20 original issues accounted for at criterion level; inventory and documentation sweep explicitly incomplete. A01/I01/I02 implementation NOT YET performed by this test-only commit. Verification pending exact execution. Self-review only; independent review absent. Deployed: no. Monitored: no. Next: inspect meaningful red evidence, implement minimal fixes, then actual built-browser and disposable DB verification.
+
+---
+
+## Post-PR56 Current-Source Audit Reconciliation (17 September 2026)
+
+- **PR56 Squash Merge**: PR #56 merged into `main` via commit `432c7d1d25d85a74d90d0b8e4dc09b11ec6513fc` (head commit `31ff564d815b912bce3ab6d26a8ddc744ef1cad0`).
+- **Production Database Rollout**: All 35 migrations (`0001_initial_schema.sql` through `0035_crm_milestone_target_date.sql`) were successfully applied to production Supabase project `cqxtmzzlywolulechcob` on 17 September 2026, loading all 38 PostgREST functions cleanly and resolving the `/admin` crash.
+- **Audit Follow-up Remediation** (Branch `fix/audit-followup-remediation`):
+  1. **Blogger Pagination, Cache Bounds & Cap Disclosure**: Up to 300 posts fetched honestly into shared snapshot; Page 1 pagination controls rendered correctly; non-overlapping window slices eliminate duplicates; cache bounded to 50 entries with expired-key sweep, LRU eviction, and in-flight request deduplication; explicit UI disclosure of 300-post cap in badge (`300+ Articles`), note, and pagination summary (`Showing 1-9 of 300+`). Verified by 11 unit tests in `tests/reliability/blogger-pagination.test.mjs`.
+  2. **Server-Authenticated HMAC Retry Authority & Replay Prevention**: In `lib/auth/actions.ts`, password update retry after single-use token consumption uses server-authenticated HMAC-SHA256 signed authority tokens (`recovery_proof` / `invite_proof`) with 300s TTL, binding purpose, authenticated user ID (`sub`), and OTP token hash. Cryptographic nonces are tracked and consumed immediately on password update, preventing replay attacks. Rejects unrelated sessions, expired sessions, wrong users, tampered payloads, forged cookies, and replay attempts fail-closed. Verified by stateful and security tests in `tests/reliability/recovery-controls.test.mjs`.
+  3. **Build Manifest Verification**: Dedicated post-build manifest audit `scripts/audit-manifests.mjs` verifying all 41 Server Actions and 8 API routes; caller inventory tests assert against real public asset actions.
+  4. **Consent Deferral Status**: F20 (I03) explicitly documented as deferred (`CONSENT_ACTIVATION_ENABLED = false`), separating isolated contract tests from production activation claims.
+

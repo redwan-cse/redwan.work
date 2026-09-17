@@ -53,10 +53,21 @@ jobs:
           python3 - <<'PY'
           import json,re,subprocess
           from pathlib import Path
+          try:
+              subprocess.run(['git','cat-file','-e','19e25b15e0ce7c95cae7044cfea20e86d0ec5a38^{commit}'],check=True,stderr=subprocess.DEVNULL)
+          except subprocess.CalledProcessError:
+              subprocess.run(['git','fetch','origin','refs/pull/56/head'],check=True)
           heads={49:'b2919343d146adfdff92ed4471436aabe495fdd9',50:'7f1de0f3cfeaa31658f9fdcd574a40050f3c232a',51:'b06e8637741e5067a8908138feea96ebc1d9253a',52:'b86ce1ab93f5ea3501389f3d1c34d85332d4d826',54:'71193183dd974040769f4f32ccb9a2c7fdec9adb',55:'d4fcd550fed53bfe56119a91488822ea51e59b4d'}
+          pr56='19e25b15e0ce7c95cae7044cfea20e86d0ec5a38'
+          squash_main='432c7d1d25d85a74d90d0b8e4dc09b11ec6513fc'
           for pr,head in heads.items():
-              subprocess.run(['git','merge-base','--is-ancestor',head,'HEAD'],check=True)
-              print(f'PR{pr}: exact head included')
+              subprocess.run(['git','merge-base','--is-ancestor',head,pr56],check=True)
+              print(f'PR{pr}: exact head included in PR56')
+          subprocess.run(['git','merge-base','--is-ancestor',squash_main,'HEAD'],check=True)
+          print('PR56 squash commit 432c7d1d25d85a74d90d0b8e4dc09b11ec6513fc included in HEAD')
+          tree_pr56=subprocess.check_output(['git','cat-file','-p',pr56]).splitlines()[0].split()[1].decode()
+          tree_squash=subprocess.check_output(['git','cat-file','-p',squash_main]).splitlines()[0].split()[1].decode()
+          assert tree_pr56==tree_squash, 'PR56 tree matches squash commit tree'
           main='27ab3e3f1895b0d81231ddf1b83174fc24ad1f8a'
           for label,data in [('frozen-main',subprocess.check_output(['git','show',main+':package-lock.json'])),('candidate',Path('package-lock.json').read_bytes())]:
               packages=json.loads(data)['packages']

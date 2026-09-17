@@ -4,7 +4,7 @@ import {registerHooks} from 'node:module';
 const fixture={role:'client',failed:false};globalThis.__loginReturn=fixture;
 const modules={
  'next/navigation':'export function redirect(destination){throw Object.assign(new Error("Synthetic redirect"),{destination});}',
- 'next/headers':'export async function headers(){throw Error("Unexpected headers");}',
+ 'next/headers':'export async function headers(){throw Error("Unexpected headers");} export async function cookies(){throw Error("Unexpected cookies");}',
  '@/lib/contact/lead-schema':'export async function sha256Hex(){throw Error("Unexpected OTP use");}',
  '@/lib/supabase/admin':'export function getSupabaseAdmin(){throw Error("Unexpected admin access");}',
  '@/lib/supabase/server':'export async function createSupabaseServerClient(){const f=globalThis.__loginReturn;return {auth:{signInWithPassword:async()=>({error:f.failed?{}:null}),getClaims:async()=>({data:{claims:{app_metadata:{role:f.role}}}})}};}'

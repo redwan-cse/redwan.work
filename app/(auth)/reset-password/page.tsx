@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,8 +32,10 @@ export default function ResetPasswordPage() {
         <CardHeader>
           <CardTitle className="text-xl">Invalid link</CardTitle>
           <CardDescription>
-            This password-reset link is missing its token. Request a new one from the sign-in
-            page.
+            This password-reset link is missing its token.{' '}
+            <Link href="/login" className="underline underline-offset-4 hover:text-primary">
+              Request a new one from the sign-in page.
+            </Link>
           </CardDescription>
         </CardHeader>
       </Card>
@@ -76,6 +79,11 @@ export default function ResetPasswordPage() {
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? 'Saving…' : 'Save new password'}
           </Button>
+          <div className="text-center text-xs">
+            <Link href="/login" className="text-muted-foreground underline-offset-4 hover:underline">
+              Need a new reset link? Back to sign in
+            </Link>
+          </div>
         </form>
       </CardContent>
     </Card>
