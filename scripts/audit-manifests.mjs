@@ -1,140 +1,31 @@
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const EXPECTED_ACTIONS = {
-  'lib/crm/admin-actions.ts': [
-    'convertLeadAction',
-    'deleteAssetAction',
-    'inviteClientAction',
-    'setClientActiveAction',
-    'addInvoiceItemAction',
-    'confirmPaymentAction',
-    'createDraftInvoiceWithItemsAction',
-    'deleteInvoiceItemAction',
-    'rejectPaymentAction',
-    'sendInvoiceAction',
-    'updateDraftInvoiceAction',
-    'updateInvoiceItemAction',
-    'voidInvoiceAction',
-    'addMilestoneAction',
-    'archiveDownloadUrlAction',
-    'archiveProjectAction',
-    'confirmDeliverableAction',
-    'createProjectAction',
-    'deleteFileAction',
-    'deleteMilestoneAction',
-    'getDeliverablePresignAction',
-    'moveMilestoneAction',
-    'purgeArchivedProjectAction',
-    'setMilestoneStatusAction',
-    'updateProjectAction',
-    'replyToTicketAction',
-    'setTicketStatusAction',
-  ],
-  'lib/crm/public-asset-actions.ts': [
-    'prepareAssetUploadAction',
-    'confirmAssetUploadAction',
-  ],
-  'lib/crm/workflow-actions.ts': [
-    'editClientProfileAction',
-    'invoiceMilestoneAction',
-  ],
-  'lib/crm/ticket-upload-actions.ts': [
-    'shareTicketFilesAction',
-  ],
-  'lib/auth/actions.ts': [
-    'acceptInviteAction',
-    'signInWithPasswordAction',
-    'requestMagicLinkAction',
-    'requestPasswordResetAction',
-    'consumeMagicLinkTokenAction',
-    'setNewPasswordFromRecoveryAction',
-  ],
-  'lib/crm/client-actions.ts': [
-    'submitPaymentAction',
-    'createTicketWithAttachmentsAction',
-    'clientReplyAction',
-  ],
+import {readFileSync,existsSync} from 'node:fs';
+import {resolve} from 'node:path';
+const EXPECTED_ACTIONS={
+ 'lib/crm/admin-actions.ts':['convertLeadAction','deleteAssetAction','inviteClientAction','setClientActiveAction','addInvoiceItemAction','confirmPaymentAction','createDraftInvoiceWithItemsAction','deleteInvoiceItemAction','rejectPaymentAction','sendInvoiceAction','updateDraftInvoiceAction','updateInvoiceItemAction','voidInvoiceAction','addMilestoneAction','archiveDownloadUrlAction','archiveProjectAction','confirmDeliverableAction','createProjectAction','deleteFileAction','deleteMilestoneAction','getDeliverablePresignAction','moveMilestoneAction','purgeArchivedProjectAction','setMilestoneStatusAction','updateProjectAction','replyToTicketAction','setTicketStatusAction'],
+ 'lib/crm/public-asset-actions.ts':['prepareAssetUploadAction','confirmAssetUploadAction'],
+ 'lib/crm/workflow-actions.ts':['editClientProfileAction','invoiceMilestoneAction'],
+ 'lib/crm/ticket-upload-actions.ts':['shareTicketFilesAction'],
+ 'lib/auth/actions.ts':['acceptInviteAction','signInWithPasswordAction','requestMagicLinkAction','requestPasswordResetAction','consumeMagicLinkTokenAction','setNewPasswordFromRecoveryAction'],
+ 'lib/crm/client-actions.ts':['submitPaymentAction','createTicketWithAttachmentsAction','clientReplyAction'],
 };
-
-const EXPECTED_ROUTES = [
-  { path: 'app/api/auth/logout/route.ts', manifestKey: '/api/auth/logout/route', methods: ['GET', 'POST'] },
-  { path: 'app/api/contact/route.ts', manifestKey: '/api/contact/route', methods: ['POST'] },
-  { path: 'app/api/cron/email-outbox/route.ts', manifestKey: '/api/cron/email-outbox/route', methods: ['GET'] },
-  { path: 'app/api/cron/r2-retention/route.ts', manifestKey: '/api/cron/r2-retention/route', methods: ['GET'] },
-  { path: 'app/api/files/[id]/download/route.ts', manifestKey: '/api/files/[id]/download/route', methods: ['GET'] },
-  { path: 'app/api/revalidate/route.ts', manifestKey: '/api/revalidate/route', methods: ['POST'] },
-  { path: 'app/api/uploads/presign/route.ts', manifestKey: '/api/uploads/presign/route', methods: ['POST'] },
-  { path: 'app/api/uploads/ticket-presign/route.ts', manifestKey: '/api/uploads/ticket-presign/route', methods: ['POST'] },
+const EXPECTED_ROUTES=[
+ ['app/api/auth/logout/route.ts','/api/auth/logout/route',['GET','POST']],
+ ['app/api/contact/route.ts','/api/contact/route',['POST']],
+ ['app/api/cron/email-outbox/route.ts','/api/cron/email-outbox/route',['GET']],
+ ['app/api/cron/r2-retention/route.ts','/api/cron/r2-retention/route',['GET']],
+ ['app/api/files/[id]/download/route.ts','/api/files/[id]/download/route',['GET']],
+ ['app/api/revalidate/route.ts','/api/revalidate/route',['POST']],
+ ['app/api/uploads/presign/route.ts','/api/uploads/presign/route',['POST']],
+ ['app/api/uploads/ticket-presign/route.ts','/api/uploads/ticket-presign/route',['POST']],
+ ['app/api/recovery/route.ts','/api/recovery/route',['GET','POST']],
 ];
-
-function main() {
-  const refManifestPath = resolve(process.cwd(), '.next/server/server-reference-manifest.json');
-  if (!existsSync(refManifestPath)) {
-    console.error('::error::Server reference manifest missing at ' + refManifestPath + '. Run npm run build first.');
-    process.exit(1);
-  }
-
-  const pathsManifestPath = resolve(process.cwd(), '.next/server/app-paths-manifest.json');
-  if (!existsSync(pathsManifestPath)) {
-    console.error('::error::App paths manifest missing at ' + pathsManifestPath + '. Run npm run build first.');
-    process.exit(1);
-  }
-
-  const refManifest = JSON.parse(readFileSync(refManifestPath, 'utf8'));
-  const pathsManifest = JSON.parse(readFileSync(pathsManifestPath, 'utf8'));
-  const entries = Object.values(refManifest.node || {});
-
-  const foundByFile = new Map();
-  for (const entry of entries) {
-    assert.ok(entry.filename, 'Manifest entry missing filename');
-    assert.ok(entry.exportedName, 'Manifest entry missing exportedName');
-    const norm = entry.filename.replace(/\\/g, '/');
-    if (!foundByFile.has(norm)) foundByFile.set(norm, new Set());
-    foundByFile.get(norm).add(entry.exportedName);
-  }
-
-  let totalExpectedActions = 0;
-  for (const [file, actions] of Object.entries(EXPECTED_ACTIONS)) {
-    const foundActions = foundByFile.get(file);
-    if (!foundActions) {
-      console.error(`::error::Manifest missing all actions for ${file}`);
-      process.exit(1);
-    }
-    for (const action of actions) {
-      totalExpectedActions++;
-      if (!foundActions.has(action)) {
-        console.error(`::error::Manifest missing action ${action} in ${file}`);
-        process.exit(1);
-      }
-    }
-  }
-
-  assert.equal(entries.length, totalExpectedActions, `Expected exactly ${totalExpectedActions} actions in manifest, found ${entries.length}`);
-
-  // Check all 8 API routes in app-paths-manifest and source export methods
-  for (const route of EXPECTED_ROUTES) {
-    if (!pathsManifest[route.manifestKey]) {
-      console.error(`::error::App paths manifest missing route ${route.manifestKey}`);
-      process.exit(1);
-    }
-    const fullPath = resolve(process.cwd(), route.path);
-    if (!existsSync(fullPath)) {
-      console.error(`::error::Route source file missing at ${route.path}`);
-      process.exit(1);
-    }
-    const content = readFileSync(fullPath, 'utf8');
-    for (const method of route.methods) {
-      const pattern = new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\b`);
-      if (!pattern.test(content)) {
-        console.error(`::error::Route ${route.path} missing exported function ${method}`);
-        process.exit(1);
-      }
-    }
-  }
-
-  console.log(`Passed: Manifest audit verified ${entries.length} server actions and ${EXPECTED_ROUTES.length} API routes against built manifests.`);
-}
-
-main();
+const refPath=resolve('.next/server/server-reference-manifest.json'),appPath=resolve('.next/server/app-paths-manifest.json');
+assert.ok(existsSync(refPath)&&existsSync(appPath),'Built manifests required; run npm run build first.');
+const refs=JSON.parse(readFileSync(refPath,'utf8')),paths=JSON.parse(readFileSync(appPath,'utf8'));const entries=Object.values(refs.node||{}),found=new Map();
+for(const entry of entries){assert.ok(entry.filename);assert.ok(entry.exportedName);const file=entry.filename.replace(/\\/g,'/');if(!found.has(file))found.set(file,new Set());found.get(file).add(entry.exportedName);}
+let count=0;for(const [file,actions]of Object.entries(EXPECTED_ACTIONS)){assert.ok(found.has(file),`Missing action file ${file}`);for(const action of actions){count++;assert.ok(found.get(file).has(action),`Missing action ${file}:${action}`);}}
+assert.equal(entries.length,count,'Unexpected server action population');
+for(const [file,key,methods]of EXPECTED_ROUTES){assert.ok(paths[key],`Missing route ${key}`);assert.ok(existsSync(file));const source=readFileSync(file,'utf8');for(const method of methods)assert.match(source,new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\b`));}
+assert.deepEqual(Object.keys(paths).filter(k=>k.startsWith('/api/')&&k.endsWith('/route')).sort(),EXPECTED_ROUTES.map(([,key])=>key).sort(),'Unexpected API route population');
+console.log(`Passed: Manifest audit verified ${entries.length} server actions and ${EXPECTED_ROUTES.length} API routes against built manifests.`);
