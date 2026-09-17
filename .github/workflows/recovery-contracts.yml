@@ -1,0 +1,29 @@
+name: Recovery contract diagnostics
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - run: npm ci --ignore-scripts
+      - name: Run contracts with bounded synthetic diagnostics
+        run: |
+          python3 - <<'PY'
+          import re,subprocess
+          r=subprocess.run(['bash','-c','node --experimental-strip-types --test tests/reliability/*.test.mjs'],capture_output=True,text=True)
+          names=re.findall(r'^not ok \d+ - (.+)$',r.stdout,re.M)
+          print('Failed test groups: '+str(len(names)))
+          for name in names[:25]:
+            if re.fullmatch(r'[A-Za-z0-9 /_.:,()\-]{1,180}',name): print('::error::'+name)
+          raise SystemExit(r.returncode)
+          PY
