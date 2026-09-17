@@ -30,8 +30,8 @@ try{
  await check('presign-request-context',async()=>{const r=await presign.POST(request('https://'+sentinel+'.test'));assert.equal(r.status,403);assert.equal(f.fetches,0);assert.equal(f.signs,0);clean(await r.text());});
  await check('presign-timeout-control',async()=>{f.mode='timeout';const r=await presign.POST(request());assert.equal(r.status,408);assert.equal(f.signs,0);clean(await r.text());});
  await check('presign-success-control',async()=>{const r=await presign.POST(request());assert.equal(r.status,200);assert.equal(f.signs,1);assert.equal(f.fetches,1);clean(await r.json());});
- await check('blog-upstream-error',async()=>{f.mode='blog';const r=await blog.getBlogPostsPage(1,9);assert.equal(f.blogCalls,1);assert.deepEqual(r,{posts:[],totalItems:0});clean(r);assert.ok(logs.length>0);});
- await check('blog-credential-parse-error',async()=>{process.env.GOOGLE_CREDENTIALS_B64=Buffer.from(sentinel).toString('base64');const r=await blog.getBlogPostsPage(1,9);assert.equal(f.blogCalls,0);assert.deepEqual(r,{posts:[],totalItems:0});clean(r);});
+ await check('blog-upstream-error',async()=>{f.mode='blog';const r=await blog.getBlogPostsPage(1,9);assert.equal(f.blogCalls,1);assert.deepEqual(r,{posts:[],totalItems:0,isCapped:false});clean(r);assert.ok(logs.length>0);});
+ await check('blog-credential-parse-error',async()=>{process.env.GOOGLE_CREDENTIALS_B64=Buffer.from(sentinel).toString('base64');const r=await blog.getBlogPostsPage(1,9);assert.equal(f.blogCalls,0);assert.deepEqual(r,{posts:[],totalItems:0,isCapped:false});clean(r);});
  await check('blog-cache-control',async()=>{await blog.getBlogPostsPage(1,9);await blog.getBlogPostsPage(1,9);assert.equal(f.blogCalls,1);clean(logs);});
  await check('email-page-error',async()=>{f.pageError={code:'SYNTHETIC',message:sentinel};await assert.rejects(email.listEmailLogs(1,{email:sentinel}),{message:'Email log is unavailable.'});clean(logs);assert.ok(logs.length>0);});
  await check('email-range-control',async()=>{f.pageError={code:'PGRST103',message:sentinel};const r=await email.listEmailLogs(2);assert.deepEqual(r.rows,[]);clean(r);});

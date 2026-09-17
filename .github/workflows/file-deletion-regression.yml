@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           cp lib/crm/files.ts "$RUNNER_TEMP/current-files.ts"
           trap 'cp "$RUNNER_TEMP/current-files.ts" lib/crm/files.ts' EXIT
-          git show afe82188a0e4ae7d5936ce9a448be7ea492f6551:lib/crm/files.ts > lib/crm/files.ts
+          git show 678e6d76317e6c6305cb1146fc909bf459ea9edf:lib/crm/files.ts > lib/crm/files.ts
           if node --experimental-strip-types --test tests/reliability/file-deletion-order.test.mjs > "$RUNNER_TEMP/red.txt" 2>&1; then
             echo '::error::Old implementation unexpectedly passed regression.'
             exit 1

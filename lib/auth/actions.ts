@@ -68,53 +68,206 @@ export async function requestPasswordResetAction(_prev:ActionState,formData:Form
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
  return {notice:'If that address has an account, a reset link is on its way.'};
 }
-export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
- const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
- const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();
- const cookieStore=await cookies();
- const recoveryProof=cookieStore.get('recovery_proof')?.value;
+import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 
- const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
- if(!otpError&&otpData?.user?.id){
-  const proof=await sha256Hex(`recovery:${tokenHash}:${otpData.user.id}`);
-  cookieStore.set('recovery_proof',proof,{httpOnly:true,secure:process.env.NODE_ENV==='production',maxAge:300,sameSite:'lax',path:'/'});
- }else{
-  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
-  if(claimsErr||!sub||!recoveryProof)return {error:INVALID_LINK};
-  const expectedProof=await sha256Hex(`recovery:${tokenHash}:${sub}`);
-  if(recoveryProof!==expectedProof)return {error:INVALID_LINK};
- }
-
- const updated=await supabase.auth.updateUser({password:checked.password});
- if(updated.error)return {error:'Could not update your password. Try again.'};
- cookieStore.delete('recovery_proof');
- redirect(await panelHomeForCurrentUser());
+interface RetryAuthorityPayload {
+  p: 'recovery' | 'invite';
+  sub: string;
+  tok: string;
+  exp: number;
+  nonce: string;
 }
+
+const consumedRetryNonces = new Map<string, number>();
+
+function isRetryNonceConsumed(nonce: string): boolean {
+  const expiry = consumedRetryNonces.get(nonce);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    consumedRetryNonces.delete(nonce);
+    return false;
+  }
+  return true;
+}
+
+function markRetryNonceConsumed(nonce: string, expMs: number): void {
+  const now = Date.now();
+  if (consumedRetryNonces.size > 500) {
+    for (const [key, exp] of consumedRetryNonces) {
+      if (now > exp) consumedRetryNonces.delete(key);
+    }
+  }
+  consumedRetryNonces.set(nonce, expMs);
+}
+
+function getRetryAuthoritySecret(): string {
+  const secret =
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.LEAD_IP_HASH_SALT;
+  if (!secret) {
+    throw new Error('Server secret unavailable for retry authority.');
+  }
+  return secret;
+}
+
+const RETRY_TTL_SECONDS = 300;
+
+function createRetryAuthorityToken(purpose: 'recovery' | 'invite', sub: string, tokenHash: string): string {
+  const secret = getRetryAuthoritySecret();
+  const exp = Math.floor(Date.now() / 1000) + RETRY_TTL_SECONDS;
+  const nonce = randomBytes(16).toString('hex');
+  const payload: RetryAuthorityPayload = { p: purpose, sub, tok: tokenHash, exp, nonce };
+  const rawPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = createHmac('sha256', secret).update(rawPayload).digest('base64url');
+  return `${rawPayload}.${signature}`;
+}
+
+function verifyRetryAuthorityToken(
+  token: string | undefined,
+  expectedPurpose: 'recovery' | 'invite',
+  expectedSub: string,
+  expectedTokenHash: string
+): { valid: true; nonce: string; exp: number } | { valid: false } {
+  if (!token || typeof token !== 'string') return { valid: false };
+  const parts = token.split('.');
+  if (parts.length !== 2) return { valid: false };
+  const [rawPayload, signature] = parts;
+  if (!rawPayload || !signature) return { valid: false };
+
+  let secret: string;
+  try {
+    secret = getRetryAuthoritySecret();
+  } catch {
+    return { valid: false };
+  }
+
+  const expectedSig = createHmac('sha256', secret).update(rawPayload).digest('base64url');
+  const sigBuf = Buffer.from(signature);
+  const expSigBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expSigBuf.length || !timingSafeEqual(sigBuf, expSigBuf)) {
+    return { valid: false };
+  }
+
+  let payload: RetryAuthorityPayload;
+  try {
+    payload = JSON.parse(Buffer.from(rawPayload, 'base64url').toString('utf8'));
+  } catch {
+    return { valid: false };
+  }
+
+  if (
+    payload.p !== expectedPurpose ||
+    payload.sub !== expectedSub ||
+    payload.tok !== expectedTokenHash ||
+    typeof payload.exp !== 'number' ||
+    Date.now() >= payload.exp * 1000 ||
+    !payload.nonce ||
+    typeof payload.nonce !== 'string' ||
+    isRetryNonceConsumed(payload.nonce)
+  ) {
+    return { valid: false };
+  }
+
+  return { valid: true, nonce: payload.nonce, exp: payload.exp };
+}
+
+export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
+  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
+  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
+  const supabase=await createSupabaseServerClient();
+  const cookieStore=await cookies();
+  const retryCookieName='recovery_retry_authority';
+  const existingAuthority=cookieStore.get(retryCookieName)?.value;
+
+  let activeNonce: string | null = null;
+  let activeExp: number = 0;
+
+  const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
+  if(!otpError&&otpData?.user?.id){
+    try {
+      const authorityToken = createRetryAuthorityToken('recovery', otpData.user.id, tokenHash);
+      cookieStore.set(retryCookieName, authorityToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: RETRY_TTL_SECONDS,
+        sameSite: 'lax',
+        path: '/',
+      });
+      const parts = authorityToken.split('.');
+      const p = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+      activeNonce = p.nonce;
+      activeExp = p.exp;
+    } catch {
+      // If server secret unavailable, continue without retry authority
+    }
+  } else {
+    const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+    const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+    if(claimsErr||!sub||!existingAuthority)return {error:INVALID_LINK};
+    const verification = verifyRetryAuthorityToken(existingAuthority, 'recovery', sub, tokenHash);
+    if(!verification.valid)return {error:INVALID_LINK};
+    activeNonce = verification.nonce;
+    activeExp = verification.exp;
+  }
+
+  const updated=await supabase.auth.updateUser({password:checked.password});
+  if(updated.error)return {error:'Could not update your password. Try again.'};
+
+  if(activeNonce){
+    markRetryNonceConsumed(activeNonce, activeExp * 1000);
+  }
+  cookieStore.delete(retryCookieName);
+  redirect(await panelHomeForCurrentUser());
+}
+
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
- const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
- const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();
- const cookieStore=await cookies();
- const inviteProof=cookieStore.get('invite_proof')?.value;
+  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
+  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
+  const supabase=await createSupabaseServerClient();
+  const cookieStore=await cookies();
+  const retryCookieName='invite_retry_authority';
+  const existingAuthority=cookieStore.get(retryCookieName)?.value;
 
- const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
- if(!otpError&&otpData?.user?.id){
-  const proof=await sha256Hex(`invite:${tokenHash}:${otpData.user.id}`);
-  cookieStore.set('invite_proof',proof,{httpOnly:true,secure:process.env.NODE_ENV==='production',maxAge:300,sameSite:'lax',path:'/'});
- }else{
-  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
-  if(claimsErr||!sub||!inviteProof)return {error:INVALID_LINK};
-  const expectedProof=await sha256Hex(`invite:${tokenHash}:${sub}`);
-  if(inviteProof!==expectedProof)return {error:INVALID_LINK};
- }
+  let activeNonce: string | null = null;
+  let activeExp: number = 0;
 
- const updated=await supabase.auth.updateUser({password:checked.password});
- if(updated.error)return {error:'Could not save your password. Try again.'};
- cookieStore.delete('invite_proof');
- redirect(await panelHomeForCurrentUser());
+  const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
+  if(!otpError&&otpData?.user?.id){
+    try {
+      const authorityToken = createRetryAuthorityToken('invite', otpData.user.id, tokenHash);
+      cookieStore.set(retryCookieName, authorityToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: RETRY_TTL_SECONDS,
+        sameSite: 'lax',
+        path: '/',
+      });
+      const parts = authorityToken.split('.');
+      const p = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+      activeNonce = p.nonce;
+      activeExp = p.exp;
+    } catch {
+      // If server secret unavailable, continue without retry authority
+    }
+  } else {
+    const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+    const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+    if(claimsErr||!sub||!existingAuthority)return {error:INVALID_LINK};
+    const verification = verifyRetryAuthorityToken(existingAuthority, 'invite', sub, tokenHash);
+    if(!verification.valid)return {error:INVALID_LINK};
+    activeNonce = verification.nonce;
+    activeExp = verification.exp;
+  }
+
+  const updated=await supabase.auth.updateUser({password:checked.password});
+  if(updated.error)return {error:'Could not save your password. Try again.'};
+
+  if(activeNonce){
+    markRetryNonceConsumed(activeNonce, activeExp * 1000);
+  }
+  cookieStore.delete(retryCookieName);
+  redirect(await panelHomeForCurrentUser());
 }
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
  if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};return {ok:true,home:await panelHomeForCurrentUser()};

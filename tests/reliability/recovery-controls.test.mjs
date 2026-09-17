@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
-import {createHash} from 'node:crypto';
+import {createHash, createHmac} from 'node:crypto';
 import test from 'node:test';
 
 const f = {
@@ -196,39 +196,71 @@ test('recovery password update validates password before token consumption and h
   assert.equal(f.updateCalls.length, 0);
   f.sessionUser = null;
 
-  // updateUser failure consumes single-use token and establishes recovery session with recovery_proof cookie
+  // updateUser failure consumes single-use token and establishes recovery session with recovery_retry_authority cookie
   f.verifyResult = {error: null};
   f.updateResult = {error: {message: 'synthetic provider error'}};
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'Could not update your password. Try again.'});
   assert.deepEqual(f.updateCalls, [{password: 'valid-password-123'}]);
   assert.equal(f.consumedTokens.has('valid-tok'), true);
   assert.ok(f.sessionUser);
-  assert.ok(f.cookieStore.has('recovery_proof'), 'recovery_proof cookie must be set on initial verifyOtp success');
+  assert.ok(f.cookieStore.has('recovery_retry_authority'), 'recovery_retry_authority cookie must be set on initial verifyOtp success');
 
-  // Wrong-user session retry fails closed: recovery_proof was for user A, but active session belongs to user B
-  const initialProof = f.cookieStore.get('recovery_proof');
+  const validAuthority = f.cookieStore.get('recovery_retry_authority');
+
+  // Forged-cookie attempt: invalid HMAC signature fails closed with INVALID_LINK
+  f.cookieStore.set('recovery_retry_authority', validAuthority + 'tampered-sig');
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 1);
+
+  // Forged-cookie attempt: forged with wrong secret fails closed
+  const fakePayload = Buffer.from(JSON.stringify({p: 'recovery', sub: 'usr-synthetic', tok: 'valid-tok', exp: Math.floor(Date.now() / 1000) + 300, nonce: 'forged-nonce'})).toString('base64url');
+  const fakeSig = createHmac('sha256', 'wrong-secret').update(fakePayload).digest('base64url');
+  f.cookieStore.set('recovery_retry_authority', `${fakePayload}.${fakeSig}`);
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 1);
+
+  // Tampered-payload attempt: modified user/token with original signature fails closed
+  const tamperedPayload = Buffer.from(JSON.stringify({p: 'recovery', sub: 'different-user', tok: 'valid-tok', exp: Math.floor(Date.now() / 1000) + 300, nonce: 'tampered-nonce'})).toString('base64url');
+  f.cookieStore.set('recovery_retry_authority', `${tamperedPayload}.${validAuthority.split('.')[1]}`);
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 1);
+
+  // Expired authority attempt: exp in the past fails closed
+  const expiredPayload = Buffer.from(JSON.stringify({p: 'recovery', sub: 'usr-synthetic', tok: 'valid-tok', exp: Math.floor(Date.now() / 1000) - 10, nonce: 'expired-nonce'})).toString('base64url');
+  const expiredSig = createHmac('sha256', process.env.LEAD_IP_HASH_SALT).update(expiredPayload).digest('base64url');
+  f.cookieStore.set('recovery_retry_authority', `${expiredPayload}.${expiredSig}`);
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 1);
+
+  // Wrong-user session retry fails closed: authority was for user A, but active session belongs to user B
+  f.cookieStore.set('recovery_retry_authority', validAuthority);
   f.sessionUser = {sub: 'different-user-B', role: 'client'};
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-hijack', confirm: 'valid-password-hijack'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
-  assert.equal(f.updateCalls.length, 1); // updateUser not invoked for wrong user
+  assert.equal(f.updateCalls.length, 1);
 
-  // Wrong-token retry fails closed: recovery_proof was for valid-tok, form submits wrong-token
+  // Wrong-token retry fails closed: authority was for valid-tok, form submits wrong-token
   f.consumedTokens.add('wrong-tok');
   f.sessionUser = {sub: 'usr-synthetic', role: 'client'};
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'wrong-tok', password: 'valid-password-wrong', confirm: 'valid-password-wrong'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.equal(f.updateCalls.length, 1);
 
-  // Expired session retry fails closed: recovery_proof missing from cookies
-  f.cookieStore.delete('recovery_proof');
+  // Expired/missing authority retry fails closed
+  f.cookieStore.delete('recovery_retry_authority');
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-789', confirm: 'valid-password-789'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.equal(f.updateCalls.length, 1);
 
-  // Restore matching recovery_proof for legitimate retry: same session, same user, same token succeeds
-  f.cookieStore.set('recovery_proof', initialProof);
+  // Legitimate retry: same session, same user, same token succeeds
+  f.cookieStore.set('recovery_retry_authority', validAuthority);
   f.updateResult = {error: null};
   assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'valid-tok', password: 'valid-password-456', confirm: 'valid-password-456'})), {redirect: '/portal'});
   assert.equal(f.updateCalls.length, 2);
   assert.equal(f.updateCalls[1].password, 'valid-password-456');
-  assert.equal(f.cookieStore.has('recovery_proof'), false, 'recovery_proof cookie must be deleted on success');
+  assert.equal(f.cookieStore.has('recovery_retry_authority'), false, 'recovery_retry_authority cookie must be deleted on success');
+
+  // Replay attempt: replaying the consumed authority token fails closed
+  f.cookieStore.set('recovery_retry_authority', validAuthority);
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-replay', confirm: 'valid-password-replay'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 2); // updateUser must NOT be called on replayed authority!
 
   // Admin role recovery redirect
   f.consumedTokens.delete('admin-tok');
@@ -271,15 +303,23 @@ test('invite acceptance validates password before token consumption and handles 
   assert.equal(f.updateCalls.length, 0);
   f.sessionUser = null;
 
-  // updateUser failure maps to safe message while consuming token and establishing session with invite_proof cookie
+  // updateUser failure maps to safe message while consuming token and establishing session with invite_retry_authority cookie
   f.verifyResult = {error: null};
   f.updateResult = {error: {message: 'synthetic provider error'}};
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'Could not save your password. Try again.'});
   assert.equal(f.consumedTokens.has('valid-invite-tok'), true);
   assert.ok(f.sessionUser);
-  assert.ok(f.cookieStore.has('invite_proof'));
+  assert.ok(f.cookieStore.has('invite_retry_authority'));
+
+  const validInviteAuthority = f.cookieStore.get('invite_retry_authority');
+
+  // Forged invite authority fails closed
+  f.cookieStore.set('invite_retry_authority', validInviteAuthority + 'fake');
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-hijack', confirm: 'valid-password-hijack'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 1);
 
   // Wrong-user session retry fails closed
+  f.cookieStore.set('invite_retry_authority', validInviteAuthority);
   f.sessionUser = {sub: 'wrong-user-c', role: 'client'};
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-hijack', confirm: 'valid-password-hijack'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.equal(f.updateCalls.length, 1);
@@ -290,7 +330,12 @@ test('invite acceptance validates password before token consumption and handles 
   assert.deepEqual(await callAction(acceptInviteAction, {}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-456', confirm: 'valid-password-456'})), {redirect: '/portal'});
   assert.equal(f.updateCalls.length, 2);
   assert.equal(f.updateCalls[1].password, 'valid-password-456');
-  assert.equal(f.cookieStore.has('invite_proof'), false);
+  assert.equal(f.cookieStore.has('invite_retry_authority'), false);
+
+  // Replay attempt on consumed invite authority fails closed
+  f.cookieStore.set('invite_retry_authority', validInviteAuthority);
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-replay', confirm: 'valid-password-replay'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 2);
 
   // Unauthenticated caller submitting already-consumed invite token fails closed
   f.sessionUser = null;
