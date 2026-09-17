@@ -31,7 +31,6 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
       archive.on('data',(chunk:Buffer)=>{compressed+=chunk.length;if(compressed>ARCHIVE_MAX_BYTES){archive.abort();reject(new Error('Recovery too large'));}else chunks.push(chunk);});
       archive.on('error',reject);archive.on('end',()=>resolve(Buffer.concat(chunks)));
     });
-    // Attach a handler immediately so a failed read does not leave a rejected promise unobserved.
     void finished.catch(()=>{});
     archive.append(manifest,{name:'recovery.json'});
     try {
@@ -39,7 +38,6 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
         if(!Number.isSafeInteger(Number(file.size_bytes))||Number(file.size_bytes)<1||total+Number(file.size_bytes)>ARCHIVE_MAX_BYTES)throw new Error('Recovery size invalid');
         const bytes=await getPrivateObjectBytes(file.r2_key);total+=bytes.length;
         if(bytes.length!==Number(file.size_bytes)||total>ARCHIVE_MAX_BYTES)throw new Error('Recovery byte mismatch');
-        // Never trust customer filenames as ZIP paths. The manifest preserves display names.
         archive.append(bytes,{name:`files/${file.id}`});
       }
       await archive.finalize();
@@ -57,18 +55,25 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
 }
 export async function drainStorageDeletions(limit=100):Promise<{completed:number;failed:number}> {
   const admin=getSupabaseAdmin();
-  const {data,error}=await admin.from('storage_deletions').select('r2_key').is('completed_at',null).order('created_at').order('r2_key').limit(Math.max(1,Math.min(100,limit)));
+  const {data,error}=await admin.from('storage_deletions').select('r2_key,source,file_id').is('completed_at',null).order('created_at').order('r2_key').limit(Math.max(1,Math.min(100,limit)));
   if(error)throw new Error('Cleanup queue unavailable.');
   let completed=0,failed=0;
   for(const row of data??[]) {
     try {
+      if(row.source==='individual'){
+        if(!row.file_id)throw new Error('Legacy individual deletion requires review');
+        const backup=await admin.from('file_recovery').select('recovery_key,sha256,archive_bytes,file_snapshot').eq('file_id',row.file_id).maybeSingle();
+        if(backup.error||!backup.data||backup.data.file_snapshot?.r2_key!==row.r2_key)throw new Error('Verified backup unavailable');
+        const {readRecoveryBytes}=await import('@/lib/crm/recovery-storage');
+        const bytes=await readRecoveryBytes(backup.data.recovery_key,Number(backup.data.archive_bytes));
+        if(bytes.length!==Number(backup.data.archive_bytes)||createHash('sha256').update(bytes).digest('hex')!==backup.data.sha256)throw new Error('Verified backup unavailable');
+      }
       await deletePrivateObjects([row.r2_key]);
       const result=await admin.from('storage_deletions').update({completed_at:new Date().toISOString()},{count:'exact'}).eq('r2_key',row.r2_key).is('completed_at',null);
       if(result.error)throw new Error('Cleanup acknowledgement failed');
       if(result.count===1){completed++;continue;}
       if(result.count===0){
         const current=await admin.from('storage_deletions').select('completed_at').eq('r2_key',row.r2_key).maybeSingle();
-        // Another worker acknowledged it. Skip rather than crediting this invocation.
         if(!current.error&&current.data?.completed_at)continue;
       }
       throw new Error('Cleanup acknowledgement unverified');
