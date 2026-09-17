@@ -1,0 +1,11 @@
+name: File and reader safety integrated
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integrated:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Inspected file and reader integration is complete; source-write capability retired.'

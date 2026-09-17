@@ -1,139 +1,32 @@
 'use client';
-
-import { useRef, useState, useTransition } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { deleteAssetAction, uploadAssetAction } from '@/lib/crm/admin-actions';
-import { formatBytes } from '@/lib/format';
-
-type UploadedAsset = { key: string; url: string };
-
-export function AssetUploader({ accept, maxBytes }: { accept: string; maxBytes: number }) {
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [items, setItems] = useState<UploadedAsset[]>([]);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    // reset so re-selecting the same file fires change again
-    if (inputRef.current) inputRef.current.value = '';
-    if (!file) return;
-    setError(null);
-    setNotice(null);
-    setCopied(null);
-    if (file.size < 1) {
-      setError('Choose a file to upload.');
-      return;
-    }
-    if (file.size > maxBytes) {
-      setError(`File is too large. Maximum size is ${formatBytes(maxBytes)}.`);
-      return;
-    }
-    setBusy(true);
-    setProgress(`Uploading ${file.name}…`);
-    const formData = new FormData();
-    formData.append('file', file);
-    startTransition(async () => {
-      try {
-        const state = await uploadAssetAction({}, formData);
-        if (state.error || !state.url || !state.key) {
-          setError(state.error ?? 'Upload failed. Please try again.');
-          return;
-        }
-        setItems((prev) => [{ key: state.key as string, url: state.url as string }, ...prev]);
-        setNotice(state.notice ?? 'Asset uploaded.');
-      } catch {
-        setError('Upload failed. Please try again.');
-      } finally {
-        setBusy(false);
-        setProgress(null);
-      }
-    });
-  }
-
-  function onDelete(key: string) {
-    if (deletingKey) return;
-    setError(null);
-    setNotice(null);
-    setDeletingKey(key);
-    startTransition(async () => {
-      try {
-        const state = await deleteAssetAction(key);
-        if (state.error) {
-          setError(state.error);
-          return;
-        }
-        setItems((prev) => prev.filter((it) => it.key !== key));
-        setNotice('Asset deleted.');
-      } catch {
-        setError('Delete failed. Please try again.');
-      } finally {
-        setDeletingKey(null);
-      }
-    });
-  }
-
-  async function onCopy(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(url);
-    } catch {
-      setError('Copy failed. Select the URL manually.');
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="asset-file">Upload asset</Label>
-        <Input
-          ref={inputRef}
-          id="asset-file"
-          type="file"
-          accept={accept}
-          onChange={onFileSelected}
-          disabled={busy}
-        />
-        {busy && <p className="text-xs text-muted-foreground">{progress ?? 'Uploading…'}</p>}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {notice && !error && <p className="text-sm text-emerald-600 dark:text-emerald-400">{notice}</p>}
-        <p className="text-xs text-muted-foreground">
-          Accepted: {accept.replaceAll('.', '').replaceAll(',', ', ')} · up to {formatBytes(maxBytes)} each.
-        </p>
-      </div>
-
-      {items.length > 0 && (
-        <ul className="space-y-2">
-          {items.map((it) => (
-            <li key={it.key} className="flex flex-wrap items-center gap-2 rounded-md border p-3">
-              <div className="min-w-0 flex-1">
-                <a
-                  href={it.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block truncate text-sm font-medium underline underline-offset-4"
-                >
-                  {it.url}
-                </a>
-                <p className="truncate text-xs text-muted-foreground">{it.key}</p>
-              </div>
-              <Button size="sm" variant="outline" onClick={() => onCopy(it.url)}>
-                {copied === it.url ? 'Copied' : 'Copy'}
-              </Button>
-              <Button size="sm" variant="ghost" disabled={busy || deletingKey === it.key} onClick={() => onDelete(it.key)}>
-                {deletingKey === it.key ? 'Deleting…' : 'Delete'}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {deleteAssetAction} from '@/lib/crm/admin-actions';
+import {prepareAssetUploadAction,confirmAssetUploadAction} from '@/lib/crm/public-asset-actions';
+import {ASSET_ALLOWED,extFromFilename} from '@/lib/mime';
+import {formatBytes} from '@/lib/format';
+export function AssetUploader({accept,maxBytes}:{accept:string;maxBytes:number}) {
+ const [busy,setBusy]=useState(false);const [error,setError]=useState<string|null>(null);const [notice,setNotice]=useState<string|null>(null);const [items,setItems]=useState<Array<{key:string;url:string}>>([]);const [copied,setCopied]=useState<string|null>(null);
+ async function upload(file:File) {
+  setError(null);setNotice(null);
+  const mime=ASSET_ALLOWED[extFromFilename(file.name)]?.[0];
+  if(!mime||file.size<1||file.size>maxBytes){setError(`Choose a supported file between 1 byte and ${formatBytes(maxBytes)}.`);return;}
+  const metadata={filename:file.name,mime,size:file.size};setBusy(true);
+  try {
+   const prepared=await prepareAssetUploadAction(metadata);
+   if(prepared.error||!prepared.key||!prepared.uploadUrl)throw new Error(prepared.error??'Could not prepare upload.');
+   const response=await fetch(prepared.uploadUrl,{method:'PUT',body:file,headers:{'Content-Type':mime}});
+   if(!response.ok)throw new Error('Direct upload failed. Check bucket CORS and retry.');
+   const confirmed=await confirmAssetUploadAction(prepared.key,metadata);
+   if(confirmed.error||!confirmed.url)throw new Error(confirmed.error??'Could not verify upload.');
+   setItems(current=>[{key:prepared.key!,url:confirmed.url!},...current]);setNotice('Asset uploaded and verified.');
+  }catch(e){setError(e instanceof Error?e.message:'Upload failed.');}finally{setBusy(false);}
+ }
+ async function remove(key:string) {
+  if(!window.confirm('Delete this public asset? Existing links may stop working, and cached copies may remain.'))return;
+  setBusy(true);setError(null);try{const result=await deleteAssetAction(key);if(result.error)throw new Error(result.error);setItems(current=>current.filter(item=>item.key!==key));setNotice('Asset deleted from origin.');}catch{setError('Deletion failed. Please retry.');}finally{setBusy(false);}
+ }
+ return <div className="space-y-4"><div className="space-y-2"><Label htmlFor="asset-file">Upload public asset</Label><Input id="asset-file" type="file" accept={accept} disabled={busy} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)void upload(file);}}/><p className="text-xs text-muted-foreground">Files upload directly to R2, then the server verifies their size and type. Maximum {formatBytes(maxBytes)}.</p>{busy&&<p role="status">Uploading or updating asset...</p>}{error&&<p role="alert" className="text-sm text-destructive">{error}</p>}{notice&&!error&&<p role="status" className="text-sm">{notice}</p>}</div><ul className="space-y-2">{items.map(item=><li key={item.key} className="flex flex-wrap items-center gap-2 rounded-md border p-3"><a className="min-w-0 flex-1 truncate underline" href={item.url} target="_blank" rel="noreferrer">{item.url}</a><Button type="button" size="sm" variant="outline" onClick={async()=>{try{await navigator.clipboard.writeText(item.url);setCopied(item.url);}catch{setError('Copy failed. Select the URL manually.');}}}>{copied===item.url?'Copied':'Copy'}</Button><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={()=>void remove(item.key)}>Delete</Button></li>)}</ul></div>;
 }

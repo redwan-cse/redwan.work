@@ -1,298 +1,67 @@
 'use server';
-
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { randomUUID } from 'crypto';
 import { getCurrentSession } from '@/lib/auth/session';
 import { createTicket, clientReply } from '@/lib/crm/tickets';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { createFileRow } from '@/lib/crm/files';
-import {
-  CONTACT_ALLOWED_EXT,
-  isPortalKey,
-  makePendingAttachmentKey,
-  makeTicketAttachmentKey,
-  presignPrivatePut,
-  validateContactFile,
-  verifyStoredObjectSize,
-} from '@/lib/r2';
+import { prepareTicketUploads, validateAttachments, validUuid, ATTACHMENT_ERROR, type AttachmentEntry } from '@/lib/crm/attachments';
 import { submitPayment } from '@/lib/crm/invoices';
-
 export type PortalActionState = { error?: string; notice?: string };
-
 async function requireClient() {
   const session = await getCurrentSession();
   if (!session || session.role !== 'client') return null;
-
-  const admin = getSupabaseAdmin();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('is_active')
-    .eq('id', session.userId)
-    .maybeSingle();
-  if (profile?.is_active !== true) return null;
-
-  return session;
+  const { data: profile, error } = await getSupabaseAdmin().from('profiles').select('role, is_active').eq('id', session.userId).maybeSingle();
+  return !error && profile?.role === 'client' && profile.is_active === true ? session : null;
 }
-
-export async function createTicketWithAttachmentsAction(
-  subject: string,
-  body: string,
-  entries: Array<{ key: string; filename: string; mime: string; size_bytes: number }>
-): Promise<PortalActionState> {
+function refreshTicket(id: string) {
+  revalidatePath(`/portal/tickets/${id}`); revalidatePath('/portal/tickets'); revalidatePath('/portal');
+}
+export async function createTicketWithAttachmentsAction(subject: string, body: string, entries: AttachmentEntry[], requestId?: string): Promise<PortalActionState> {
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };
-
-  // Validate attachments before creating ticket — fail whole batch before any insert
-  if (entries && entries.length > 0) {
-    if (entries.length > 10) {
-      return { error: 'A ticket can have at most 10 attachments.' };
-    }
-    const prefix = `private/${session.userId}/`;
-    for (const e of entries) {
-      if (typeof e.key !== 'string' || !isPortalKey(e.key) || !e.key.startsWith(prefix)) {
-        return { error: 'Attachment data is invalid. Please re-upload your files.' };
-      }
-      const keyExt = e.key.split('.').pop()?.toLowerCase() ?? '';
-      if (!CONTACT_ALLOWED_EXT.includes(keyExt as (typeof CONTACT_ALLOWED_EXT)[number])) {
-        return { error: 'Attachment data is invalid. Please re-upload your files.' };
-      }
-      if (
-        typeof e.filename !== 'string' ||
-        e.filename.trim().length < 1 ||
-        e.filename.length > 255 ||
-        typeof e.mime !== 'string' ||
-        e.mime.length < 1 ||
-        e.mime.length > 128 ||
-        !Number.isFinite(e.size_bytes) ||
-        e.size_bytes < 1 ||
-        e.size_bytes > 10 * 1024 * 1024
-      ) {
-        return { error: 'Attachment data is invalid. Please re-upload your files.' };
-      }
-      const check = validateContactFile({ filename: e.filename, mime: e.mime, size: e.size_bytes });
-      if (!check.ok) {
-        return { error: 'Attachment data is invalid. Please re-upload your files.' };
-      }
-      if (check.ext !== keyExt) {
-        return { error: 'Attachment data is invalid. Please re-upload your files.' };
-      }
-    }
-  }
-
-  const result = await createTicket(session.userId, subject, body);
+  if (requestId !== undefined && !validUuid(requestId)) return { error: 'Invalid submission. Please reopen the form.' };
+  const validated = await validateAttachments(entries, session.userId, null);
+  if (!validated) return { error: ATTACHMENT_ERROR };
+  // The supplied identity passed the full UUID regex above; crypto's return type is a template literal.
+  const identity = requestId === undefined ? randomUUID() : requestId as ReturnType<typeof randomUUID>;
+  const result = await createTicket(session.userId, subject, body, validated, identity);
   if (!result.ok) return { error: result.error };
-
-  const ticketId = result.ticketId;
-
-  if (entries && entries.length > 0) {
-    const admin = getSupabaseAdmin();
-    const { count, error: countError } = await admin
-      .from('files')
-      .select('id', { count: 'exact', head: true })
-      .eq('ticket_id', ticketId)
-      .eq('kind', 'attachment');
-    if (countError) { console.error('Count error:', countError.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
-    if ((count ?? 0) + entries.length > 10) {
-      return { error: 'A ticket can have at most 10 attachments.' };
-    }
-
-    for (const e of entries) {
-      const { error } = await admin.from('files').insert({
-        bucket: 'private',
-        r2_key: e.key,
-        kind: 'attachment',
-        ticket_id: ticketId,
-        project_id: null,
-        uploaded_by: session.userId,
-        filename: e.filename,
-        mime: e.mime,
-        size_bytes: e.size_bytes,
-      });
-      if (error) { console.error('File insert error:', error.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
-    }
-  }
-
-  revalidatePath(`/portal/tickets/${ticketId}`);
-  revalidatePath('/portal/tickets');
-  revalidatePath('/portal');
-  redirect(`/portal/tickets/${ticketId}`);
+  refreshTicket(result.ticketId);
+  redirect(`/portal/tickets/${result.ticketId}`);
 }
-
-export async function clientReplyAction(
-  ticketId: string,
-  _prev: PortalActionState,
-  formData: FormData
-): Promise<PortalActionState> {
+export async function clientReplyAction(ticketId: string, _prev: PortalActionState, formData: FormData): Promise<PortalActionState> {
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };
-
+  if (!validUuid(ticketId)) return { error: 'Ticket not found.' };
   const result = await clientReply(ticketId, session.userId, String(formData.get('body') ?? ''));
   if (!result.ok) return { error: result.error };
-  revalidatePath(`/portal/tickets/${ticketId}`);
-  revalidatePath('/portal/tickets');
-  revalidatePath('/portal');
+  refreshTicket(ticketId);
   return {};
 }
-
-export async function getTicketAttachmentPresignAction(input: {
-  ticketId: string | null;
-  filename: string;
-  mime: string;
-  size: number;
-}): Promise<{ ok: true; key: string; uploadUrl: string } | { ok: false; error: string }> {
+export async function getTicketAttachmentPresignAction(input: { ticketId: string | null; filename: string; mime: string; size: number }): Promise<{ ok: true; key: string; uploadUrl: string } | { ok: false; error: string }> {
   const session = await requireClient();
   if (!session) return { ok: false, error: 'Unauthorized.' };
-
-  const check = validateContactFile({ filename: input.filename, mime: input.mime, size: input.size });
-  if (!check.ok) return { ok: false, error: check.error };
-
-  const admin = getSupabaseAdmin();
-
-  if (input.ticketId) {
-    const { data: ticket, error } = await admin
-      .from('tickets')
-      .select('id, client_id')
-      .eq('id', input.ticketId)
-      .maybeSingle();
-
-    if (error) { console.error('Ticket lookup error:', error.message); return { ok: false, error: 'Ticket not found.' }; }
-    if (!ticket || (ticket as { client_id: string }).client_id !== session.userId) {
-      return { ok: false, error: 'Ticket not found.' };
-    }
-
-    const { count, error: countError } = await admin
-      .from('files')
-      .select('id', { count: 'exact', head: true })
-      .eq('ticket_id', input.ticketId)
-      .eq('kind', 'attachment');
-
-    if (countError) { console.error('Count error:', countError.message); return { ok: false, error: 'A ticket can have at most 10 attachments.' }; }
-    if ((count ?? 0) >= 10) {
-      return { ok: false, error: 'A ticket can have at most 10 attachments.' };
-    }
-
-    let key: string;
-    try {
-      key = makeTicketAttachmentKey(session.userId, input.ticketId, check.ext);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: msg };
-    }
-
-    try {
-      const uploadUrl = await presignPrivatePut(key, input.mime, input.size, 600);
-      return { ok: true, key, uploadUrl };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return { ok: false, error: msg };
-    }
-  }
-
-  let key: string;
-  try {
-    key = makePendingAttachmentKey(session.userId, check.ext);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
-  }
-
-  try {
-    const uploadUrl = await presignPrivatePut(key, input.mime, 600);
-    return { ok: true, key, uploadUrl };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
-  }
+  if (!input) return { ok: false, error: ATTACHMENT_ERROR };
+  const result = await prepareTicketUploads(session, input.ticketId, [{ filename: input.filename, mime: input.mime, size: input.size }]);
+  return result.ok ? { ok: true, key: result.uploads[0].key, uploadUrl: result.uploads[0].uploadUrl } : { ok: false, error: result.error };
 }
-
-export async function confirmTicketAttachmentAction(input: {
-  ticketId: string | null;
-  entries: Array<{ key: string; filename: string; mime: string; size_bytes: number }>;
-}): Promise<PortalActionState> {
+export async function confirmTicketAttachmentAction(input: { ticketId: string | null; entries: AttachmentEntry[] }): Promise<PortalActionState> {
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };
-
-  if (!input.entries || input.entries.length === 0) return { error: 'No files provided.' };
-  if (input.entries.length > 10) {
-    return { error: 'A ticket can have at most 10 attachments.' };
-  }
-
-  if (input.ticketId) {
-    const admin = getSupabaseAdmin();
-    const { data: ticket } = await admin
-      .from('tickets')
-      .select('id, client_id')
-      .eq('id', input.ticketId)
-      .maybeSingle();
-    if (!ticket || (ticket as { client_id: string }).client_id !== session.userId) {
-      return { error: 'Ticket not found.' };
-    }
-    const { count, error: countError } = await admin
-      .from('files')
-      .select('id', { count: 'exact', head: true })
-      .eq('ticket_id', input.ticketId)
-      .eq('kind', 'attachment');
-    if (countError) { console.error('Count error:', countError.message); return { error: 'Attachment data is invalid. Please re-upload your files.' }; }
-    if ((count ?? 0) + input.entries.length > 10) {
-      return { error: 'A ticket can have at most 10 attachments.' };
-    }
-  }
-
-  // Validate all entries before any insert — defense against forged keys/metadata
-  const prefix = `private/${session.userId}/`;
-  for (const e of input.entries) {
-    if (typeof e.key !== 'string' || !isPortalKey(e.key) || !e.key.startsWith(prefix)) {
-      return { error: 'Attachment data is invalid. Please re-upload your files.' };
-    }
-    const keyExt = e.key.split('.').pop()?.toLowerCase() ?? '';
-    if (!CONTACT_ALLOWED_EXT.includes(keyExt as (typeof CONTACT_ALLOWED_EXT)[number])) {
-      return { error: 'Attachment data is invalid. Please re-upload your files.' };
-    }
-    if (
-      typeof e.filename !== 'string' ||
-      e.filename.trim().length < 1 ||
-      e.filename.length > 255 ||
-      typeof e.mime !== 'string' ||
-      e.mime.length < 1 ||
-      e.mime.length > 128 ||
-      !Number.isFinite(e.size_bytes) ||
-      e.size_bytes < 1 ||
-      e.size_bytes > 10 * 1024 * 1024
-    ) {
-      return { error: 'Attachment data is invalid. Please re-upload your files.' };
-    }
-    const check = validateContactFile({ filename: e.filename, mime: e.mime, size: e.size_bytes });
-    if (!check.ok) {
-      return { error: 'Attachment data is invalid. Please re-upload your files.' };
-    }
-    if (check.ext !== keyExt) {
-      return { error: 'Attachment data is invalid. Please re-upload your files.' };
-    }
-  }
-
-  for (const e of input.entries) {
-    const result = await createFileRow({
-      bucket: 'private',
-      r2_key: e.key,
-      kind: 'attachment',
-      ticket_id: input.ticketId ?? undefined,
-      uploaded_by: session.userId,
-      filename: e.filename,
-      mime: e.mime,
-      size_bytes: e.size_bytes,
-    });
-    if (!result.ok) return { error: result.error };
-  }
-
-  if (input.ticketId) {
-    revalidatePath(`/portal/tickets/${input.ticketId}`);
-    revalidatePath('/portal/tickets');
-    revalidatePath('/portal');
-  }
-
-  return {};
+  if (!input || !validUuid(input.ticketId)) return { error: 'Choose a ticket before confirming files.' };
+  const admin = getSupabaseAdmin();
+  const { data: ticket, error } = await admin.from('tickets').select('client_id').eq('id', input.ticketId).maybeSingle();
+  if (error || ticket?.client_id !== session.userId) return { error: 'Ticket not found.' };
+  const entries = await validateAttachments(input.entries, session.userId, input.ticketId);
+  if (!entries || !entries.length) return { error: ATTACHMENT_ERROR };
+  try {
+    const { error: saveError } = await admin.rpc('attach_ticket_files_atomic', { p_actor: session.userId, p_ticket: input.ticketId, p_entries: entries });
+    if (saveError) return { error: saveError.message === 'Attachment limit reached' ? 'A ticket can have at most 10 attachments.' : ATTACHMENT_ERROR };
+  } catch { return { error: ATTACHMENT_ERROR }; }
+  refreshTicket(input.ticketId);
+  return { notice: 'Files shared with this ticket.' };
 }
-
 export async function submitPaymentAction(invoiceId: string, input: { method: 'bank' | 'bkash' | 'paypal' | 'other'; reference: string; amount_cents: number }): Promise<PortalActionState> {
   const session = await requireClient();
   if (!session) return { error: 'Unauthorized.' };

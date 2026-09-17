@@ -1,0 +1,58 @@
+name: Integrated foundation smoke
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: integrated-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    name: Foundation / integrated smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 4e9ca493fd6cdd11a82be742670455b752ca4c95
+          path: _foundation-source
+          persist-credentials: false
+      - name: Copy reviewed tests only, never old application code
+        run: |
+          set -euo pipefail
+          mkdir -p tests/server tests/browser
+          cp _foundation-source/tests/bearer.test.mjs tests/bearer.test.mjs
+          cp _foundation-source/tests/server/production-smoke.test.mjs tests/server/production-smoke.test.mjs
+          cp _foundation-source/tests/browser/auth-screens.test.mjs tests/browser/auth-screens.test.mjs
+          rm -rf _foundation-source
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Verify full locked dependency audit
+        run: npm audit --audit-level=low
+      - name: Exact bearer contract
+        run: node --experimental-strip-types --test tests/bearer.test.mjs
+      - name: Build integrated app without provider credentials
+        run: npm run build
+      - name: Built server and security-header smoke
+        run: node --test tests/server/production-smoke.test.mjs
+      - name: Install isolated Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/foundation-browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/foundation-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real desktop and mobile auth-screen smoke
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/foundation-browser
+        run: node --test tests/browser/auth-screens.test.mjs

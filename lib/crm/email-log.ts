@@ -185,8 +185,8 @@ export async function listEmailLogs(
         applied,
       };
     }
-    // The message is truncated, not redacted: PostgREST may quote the pattern.
-    console.error('email_log query failed:', error.message.slice(0, 200));
+    // Query errors may quote recipient filters; never log even a truncated message.
+    console.error('Email log query unavailable.');
     throw new Error('Email log is unavailable.');
   }
 

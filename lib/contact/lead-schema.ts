@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { BUDGET_ERROR, parseBudgetRange, parseNdaValues } from '@/lib/contact/intake-contract';
 import {
   CONTACT_MAX_FILES,
   CONTACT_MAX_SIZE_BYTES,
@@ -42,7 +43,6 @@ export interface NormalizedLead {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_SUMMARY = 5000;
-const MAX_BUDGET = 10_000_000;
 const MAX_FILENAME = 255;
 const MAX_MIME = 128;
 export const ATTACHMENT_INVALID_ERROR =
@@ -108,6 +108,9 @@ export function parseLeadPayload(
   formData: FormData,
   meta: { ipHash: string | null; userAgent: string | null }
 ): { ok: true; lead: NormalizedLead } | { ok: false; error: string } {
+  if (formData.getAll('gdprConsent').length !== 1 || formData.get('gdprConsent') !== 'true') {
+    return { ok: false, error: 'Please agree to the Data & Privacy policy before submitting.' };
+  }
   const name = nullable(str(formData, 'name'), 200);
   const emailRaw = str(formData, 'email').toLowerCase();
   const summary = str(formData, 'projectSummary');
@@ -129,8 +132,16 @@ export function parseLeadPayload(
     whatsappE164 = parsed.number;
   }
 
-  const budgetMin = Number.parseInt(str(formData, 'budgetMin'), 10);
-  const budgetMax = Number.parseInt(str(formData, 'budgetMax'), 10);
+  const nda = parseNdaValues(formData.getAll('ndaConfidentiality'));
+  if (!nda.ok) return nda;
+  for (const key of ['budgetMin', 'budgetMax']) {
+    const values = formData.getAll(key);
+    if (values.length > 1 || (values.length === 1 && typeof values[0] !== 'string')) {
+      return { ok: false, error: BUDGET_ERROR };
+    }
+  }
+  const budget = parseBudgetRange(str(formData, 'budgetMin'), str(formData, 'budgetMax'));
+  if (!budget.ok) return budget;
 
   // Client merges "Other" into a comma-joined string; store as one-element array
   const serviceType = str(formData, 'serviceType');
@@ -163,10 +174,10 @@ export function parseLeadPayload(
       company: nullable(str(formData, 'company')),
       project_url: nullable(str(formData, 'projectUrlOrFiles')),
       project_summary: summary,
-      nda_required: str(formData, 'ndaConfidentiality').toLowerCase() === 'yes',
+      nda_required: nda.required,
       urgency: nullable(str(formData, 'urgency')),
-      budget_min: Number.isFinite(budgetMin) ? Math.min(Math.max(budgetMin, 0), MAX_BUDGET) : null,
-      budget_max: Number.isFinite(budgetMax) ? Math.min(Math.max(budgetMax, 0), MAX_BUDGET) : null,
+      budget_min: budget.minimum,
+      budget_max: budget.maximum,
       how_found: nullable(str(formData, 'howDidYouFindMe'), 300),
       source_page: nullable(str(formData, 'sourcePage'), 300),
       device_type: nullable(str(formData, 'deviceType')),

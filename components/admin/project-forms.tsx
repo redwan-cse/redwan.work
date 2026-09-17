@@ -228,7 +228,7 @@ export function AddMilestoneForm({ projectId }: { projectId: string }) {
         <Input id="ms-title" name="title" required maxLength={200} placeholder="Milestone title" />
       </div>
       <div className="w-28 space-y-1.5">
-        <Label htmlFor="ms-amount">Amount ($)</Label>
+        <Label htmlFor="ms-amount">Amount</Label>
         <Input id="ms-amount" name="amount" type="number" step="0.01" min="0" placeholder="0.00" />
       </div>
       <div className="w-20 space-y-1.5">
@@ -277,6 +277,7 @@ export function MilestoneRow({
   }
 
   function onDelete() {
+    if (!window.confirm('Delete this milestone? Financially referenced milestones cannot be deleted.')) return;
     setError(null);
     startTransition(async () => {
       const state = await deleteMilestoneAction(milestone.id);
@@ -594,14 +595,14 @@ export function PurgeProjectButton({ projectId, projectName }: { projectId: stri
     >
       <DialogTrigger asChild>
         <Button size="sm" variant="destructive">
-          Delete forever
+          Prepare cleanup
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Delete forever</DialogTitle>
+          <DialogTitle>Prepare cleanup</DialogTitle>
           <DialogDescription>
-            This will permanently delete the project, its milestones, files, and backup ZIP. Type{' '}
+            This verifies and retains a recovery backup, removes project records, and queues source files for deletion. Projects with invoices are refused. Type{' '}
             <span className="font-mono font-medium">{projectName}</span> to confirm.
           </DialogDescription>
         </DialogHeader>
@@ -621,7 +622,7 @@ export function PurgeProjectButton({ projectId, projectName }: { projectId: stri
             Cancel
           </Button>
           <Button size="sm" variant="destructive" onClick={onConfirm} disabled={pending || !canDelete}>
-            {pending ? 'Deleting…' : 'Delete forever'}
+            {pending ? 'Deleting…' : 'Prepare cleanup'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,0 +1,86 @@
+name: Wave redirect browser isolation
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [tests/wave-redirect-diagnose.mjs, .github/workflows/wave-redirect.yml]
+permissions:
+  contents: read
+jobs:
+  redirects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install pinned disposable tools
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --prefix "$RUNNER_TEMP/browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps chromium
+          curl --fail --silent --show-error --location https://github.com/supabase/cli/releases/download/v2.116.0/supabase_2.116.0_linux_amd64.tar.gz -o "$RUNNER_TEMP/supabase.tar.gz"
+          echo "5b3031cb297d51b25be4c284e4c852254460ec722ec221d3b81b07d55acfd158  $RUNNER_TEMP/supabase.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/cli"
+          tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/cli" supabase
+      - name: Initialize loopback-only fixture project
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/redirect-ci"
+          "$RUNNER_TEMP/cli/supabase" init --workdir "$RUNNER_TEMP/redirect-ci" > "$RUNNER_TEMP/init.log" 2>&1
+          mkdir -p "$RUNNER_TEMP/redirect-ci/supabase/migrations"
+          cp supabase/migrations/*.sql "$RUNNER_TEMP/redirect-ci/supabase/migrations/"
+          python3 - <<'PY'
+          import os,pathlib,re,tomllib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'redirect-ci/supabase/config.toml'
+          s,n=re.subn(r'^project_id = .*$', 'project_id = "wave-redirect-ci"',p.read_text(),flags=re.M);assert n==1
+          s,n=re.subn(r'^site_url = .*$', 'site_url = "http://localhost:3399"',s,flags=re.M);assert n==1
+          tomllib.loads(s);p.write_text(s)
+          PY
+          "$RUNNER_TEMP/cli/supabase" start --workdir "$RUNNER_TEMP/redirect-ci" > "$RUNNER_TEMP/start.log" 2>&1
+          "$RUNNER_TEMP/cli/supabase" status --workdir "$RUNNER_TEMP/redirect-ci" --output json > "$RUNNER_TEMP/status.json" 2> "$RUNNER_TEMP/status.log"
+      - name: Reproduce unchanged final-url assertions
+        env:
+          AUTH_STATUS_FILE: ${{ runner.temp }}/status.json
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/browser
+        run: node tests/wave-redirect-diagnose.mjs
+      - name: Publish allowlisted case numbers and boolean evidence
+        if: always()
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP'],'redirect-result.json');r=json.loads(p.read_text()) if p.exists() else {}
+          sha=os.environ['GITHUB_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          def emit(context,state,description):
+            payload={'context':context,'state':state,'description':description[:140],'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+            req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Content-Type':'application/json'},method='POST')
+            try:
+              with urllib.request.urlopen(req,timeout=15) as res:assert res.status==201
+            except Exception:raise SystemExit('Safe result reporting unavailable')
+          cases=r.get('cases',[]);ok=r.get('phase')=='complete' and r.get('cleanup') is True and len(cases)==12 and all(c.get('pass') is True for c in cases)
+          emit('wave-one/redirect-isolation','success' if ok else 'failure','pass='+str(sum(c.get('pass') is True for c in cases))+' total='+str(len(cases))+' cleanup='+str(r.get('cleanup') is True))
+          for c in cases:
+            if c.get('pass') is True:continue
+            assert type(c['index']) is int and 0<=c['index']<12
+            assert c['stage'] in ['login','submit','navigation','assertion'] and c['kind'] in ['none','timeout','assertion','other'] and c['path'] in ['unknown','portal','admin','login','project','other']
+            text='case='+str(c['index'])+' '+c['stage']+' '+c['kind']+' path='+c['path']+' sameOrigin='+str(c['origin'] is True)+' expectedPath='+str(c['expectedPath'] is True)+' query='+str(c['query'] is True)+' next='+str(c['postedNext'] is True)
+            emit('wave-one/redirect-case-'+str(c['index']),'failure',text)
+          PY
+      - name: Destroy disposable services
+        if: always()
+        run: |
+          if [ -x "$RUNNER_TEMP/cli/supabase" ] && [ -f "$RUNNER_TEMP/redirect-ci/supabase/config.toml" ]; then
+            if ! "$RUNNER_TEMP/cli/supabase" stop --workdir "$RUNNER_TEMP/redirect-ci" --no-backup > "$RUNNER_TEMP/stop.log" 2>&1; then
+              echo '::error::Disposable redirect teardown failed.'; exit 1
+            fi
+          fi

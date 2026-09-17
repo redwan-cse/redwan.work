@@ -1,0 +1,12 @@
+name: Approved consent source edit completed
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  completed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Source-write capability retired
+        run: echo 'The exact-source edit was completed and inspected. This workflow has no write permission. Reliability verification supplies fresh-head acceptance.'

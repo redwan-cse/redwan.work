@@ -1,241 +1,95 @@
 import 'server-only';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { crmError, type CrmResult } from '@/lib/crm/result';
-import { findAuthUserByEmail } from '@/lib/crm/auth-admin';
-import { queueEmail, recordExternalSend, recordUnsent } from '@/lib/email';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-export interface ClientRow {
-  id: string;
-  email: string;
-  full_name: string | null;
-  company: string | null;
-  is_active: boolean;
-  created_at: string;
+import {getSupabaseAdmin} from '@/lib/supabase/admin';
+import {crmError,type CrmResult} from '@/lib/crm/result';
+import {findAuthUserByEmail} from '@/lib/crm/auth-admin';
+import {queueEmail,recordExternalSend,recordUnsent} from '@/lib/email';
+const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export interface ClientRow {id:string;email:string;full_name:string|null;company:string|null;is_active:boolean;created_at:string;}
+export async function listClients():Promise<ClientRow[]> {
+  const admin=getSupabaseAdmin();
+  const {data,error}=await admin.from('profiles').select('id,full_name,company,is_active,created_at').eq('role','client').order('created_at',{ascending:false});
+  if(error)throw new Error('Could not load clients.');
+  const rows=(data??[]) as Omit<ClientRow,'email'>[];const result:ClientRow[]=[];
+  for(let i=0;i<rows.length;i+=10) {
+    const batch=await Promise.all(rows.slice(i,i+10).map(async row=>{const {data:user,error:authError}=await admin.auth.admin.getUserById(row.id);if(authError)throw new Error('Could not load client details.');return {...row,email:user?.user?.email??''};}));
+    result.push(...batch);
+  }
+  return result;
 }
-
-export async function listClients(): Promise<ClientRow[]> {
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin
-    .from('profiles')
-    .select('id, full_name, company, is_active, created_at')
-    .eq('role', 'client')
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(`clients query failed: ${error.message}`);
-  const rows = (data ?? []) as Array<{
-    id: string;
-    full_name: string | null;
-    company: string | null;
-    is_active: boolean;
-    created_at: string;
-  }>;
-
-  // Emails live on auth.users, not profiles — resolve via admin lookup.
-  // Interim: Supabase Admin has no bulk get-by-ids, so issue N concurrent
-  // getUserById calls in chunks of 10 (concurrency limit). Promise.all per
-  // chunk preserves row order.
-  const CHUNK_SIZE = 10;
-  const emails: string[] = [];
-  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-    const chunk = rows.slice(i, i + CHUNK_SIZE);
-    const chunkEmails = await Promise.all(
-      chunk.map(async (row) => {
-        const { data: userData } = await admin.auth.admin.getUserById(row.id);
-        return userData?.user?.email ?? '';
-      })
-    );
-    emails.push(...chunkEmails);
-  }
-  const items: ClientRow[] = rows.map((row, index) => ({
-    id: row.id,
-    email: emails[index] ?? '',
-    full_name: row.full_name,
-    company: row.company,
-    is_active: row.is_active,
-    created_at: row.created_at,
-  }));
-  return items.sort((a, b) => b.created_at.localeCompare(a.created_at));
+async function claimClient(userId:string):Promise<CrmResult> {
+  const admin=getSupabaseAdmin();
+  const [{data:user,error:authError},{data:profile,error:profileError}]=await Promise.all([admin.auth.admin.getUserById(userId),admin.from('profiles').select('role,is_active').eq('id',userId).maybeSingle()]);
+  if(authError||profileError||!user?.user||!profile)return crmError('Account setup unavailable.');
+  if(user.user.app_metadata?.role==='admin'||profile.role!=='client')return crmError('That email belongs to a protected account.');
+  if(profile.is_active!==true)return crmError('That client account is inactive.');
+  if(user.user.app_metadata?.role==='client')return {ok:true};
+  const {error}=await admin.auth.admin.updateUserById(userId,{app_metadata:{...user.user.app_metadata,role:'client'}});
+  if(error)return crmError('Account exists, but role setup failed. Retry account setup before granting access.');
+  // signOut accepts a user's JWT, never a UUID. No invalid UUID logout call here.
+  return {ok:true};
 }
-
-async function setClaimRole(userId: string, role: 'admin' | 'client'): Promise<CrmResult> {
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin.auth.admin.getUserById(userId);
-  if (error || !data?.user) return crmError('Auth user lookup failed.');
-  const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
-    app_metadata: { ...(data.user.app_metadata ?? {}), role },
-  });
-  if (updErr) return crmError(`Setting role claim failed: ${updErr.message}`);
-  const { error: signOutErr } = await admin.auth.admin.signOut(userId);
-  if (signOutErr) return crmError('Session revocation failed.');
-  return { ok: true };
+async function inviteOrClaim(email:string,origin:string):Promise<{ok:true;userId:string;fresh:boolean}|{ok:false;error:string}> {
+  const admin=getSupabaseAdmin();
+  let existing;
+  try {existing=await findAuthUserByEmail(email);}catch{return {ok:false,error:'Account lookup unavailable.'};}
+  if(existing) {
+    const {data:profile,error}=await admin.from('profiles').select('role').eq('id',existing.id).maybeSingle();
+    if(error||!profile)return {ok:false,error:'Account lookup unavailable.'};
+    if(existing.role==='admin'||profile.role==='admin')return {ok:false,error:'That email belongs to an admin account.'};
+    const claim=await claimClient(existing.id);if(!claim.ok)return claim;
+    queueEmail(()=>recordUnsent({template:'invite',reason:'Existing account claimed; no invite email sent',to:email,entityType:'client',entityId:existing.id}));
+    return {ok:true,userId:existing.id,fresh:false};
+  }
+  const {data,error}=await admin.auth.admin.inviteUserByEmail(email,{redirectTo:`${origin}/invite/accept`});
+  if(error||!data?.user) {
+    queueEmail(async()=>{await recordExternalSend({to:email,template:'invite',entityType:'client',status:'failed',error:'Invitation provider request failed'});return {ok:false,error:'Invitation provider request failed'};});
+    return {ok:false,error:'Invitation could not be sent. Please try again.'};
+  }
+  const userId=data.user.id;
+  queueEmail(async()=>{await recordExternalSend({to:email,template:'invite',entityType:'client',entityId:userId});return {ok:true,resendId:null};});
+  const claim=await claimClient(userId);if(!claim.ok)return claim;
+  return {ok:true,userId,fresh:true};
 }
-
-export async function inviteClient(input: {
-  email: string;
-  fullName?: string;
-  company?: string;
-  redirectToBase: string;
-}): Promise<CrmResult> {
-  const email = input.email.trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return crmError('Enter a valid email address.');
-
-  const admin = getSupabaseAdmin();
-  const existing = await findAuthUserByEmail(email);
-  if (existing?.role === 'client') return crmError('That email is already a client.');
-
-  let userId: string;
-  if (existing) {
-    userId = existing.id;
-    const claimed = await setClaimRole(userId, 'client');
-    if (!claimed.ok) return claimed;
-    // No invite is sent when an account already exists; record why, so the
-    // viewer distinguishes this from a trigger that never fired.
-    const claimedId = userId;
-    queueEmail(() =>
-      recordUnsent({
-        template: 'invite',
-        reason: 'Existing account claimed; no invite email sent',
-        to: email,
-        entityType: 'client',
-        entityId: claimedId,
-      })
-    );
-  } else {
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${input.redirectToBase}/invite/accept`,
-    });
-    if (error || !data?.user) {
-      // Supabase Auth owns this send (Resend SMTP relay); record the failure.
-      // Queued, not awaited: audit plumbing must not block the invite path.
-      const failureReason = error?.message ?? 'no user returned';
-      queueEmail(async () => {
-        await recordExternalSend({
-          to: email,
-          template: 'invite',
-          entityType: 'client',
-          status: 'failed',
-          error: failureReason,
-        });
-        return { ok: false as const, error: failureReason };
-      });
-      return crmError(`Invite failed: ${failureReason}`);
-    }
-    userId = data.user.id;
-    const invitedId = userId;
-    queueEmail(async () => {
-      await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: invitedId });
-      return { ok: true as const, resendId: null };
-    });
-    const claimed = await setClaimRole(userId, 'client');
-    if (!claimed.ok) return claimed;
+export async function inviteClient(input:{email:string;fullName?:string;company?:string;redirectToBase:string}):Promise<CrmResult> {
+  if(!input||typeof input.email!=='string')return crmError('Enter a valid email address.');
+  const email=input.email.trim().toLowerCase();if(!EMAIL_RE.test(email))return crmError('Enter a valid email address.');
+  if((input.fullName?.trim().length??0)>200||(input.company?.trim().length??0)>200)return crmError('Name and company must be at most 200 characters.');
+  const result=await inviteOrClaim(email,input.redirectToBase);if(!result.ok)return result;
+  const patch:Record<string,unknown>={};if(input.fullName?.trim())patch.full_name=input.fullName.trim();if(input.company?.trim())patch.company=input.company.trim();
+  if(Object.keys(patch).length) {
+    const {data,error}=await getSupabaseAdmin().from('profiles').update(patch).eq('id',result.userId).eq('role','client').select('id').maybeSingle();
+    if(error||!data)return crmError('Account exists. Update its profile from Clients before continuing.');
   }
-
-  const profile: Record<string, unknown> = { id: userId, role: 'client' };
-  if (input.fullName?.trim()) profile.full_name = input.fullName.trim();
-  if (input.company?.trim()) profile.company = input.company.trim();
-
-  const { error: profileErr } = await admin.from('profiles').upsert(profile, { onConflict: 'id' });
-  if (profileErr) return crmError(`Profile save failed: ${profileErr.message}`);
-
-  return { ok: true };
+  return {ok:true};
 }
-
-export async function setClientActive(clientId: string, active: boolean): Promise<CrmResult> {
-  const admin = getSupabaseAdmin();
-  const { error } = await admin
-    .from('profiles')
-    .update({ is_active: active })
-    .eq('id', clientId)
-    .eq('role', 'client');
-  if (error) return crmError(`Update failed: ${error.message}`);
-
-  if (!active) {
-    const { error: signOutErr } = await admin.auth.admin.signOut(clientId);
-    if (signOutErr) return crmError('Session revocation failed.');
+export async function setClientActive(clientId:string,active:boolean):Promise<CrmResult> {
+  if(typeof active!=='boolean')return crmError('Invalid account state.');
+  const admin=getSupabaseAdmin();
+  const {data:profile,error:readError}=await admin.from('profiles').select('id,role').eq('id',clientId).maybeSingle();
+  if(readError||!profile||profile.role!=='client')return crmError('Client not found.');
+  if(active) {
+    const {error}=await admin.auth.admin.updateUserById(clientId,{ban_duration:'none'});
+    if(error)return crmError('Reactivation failed. Account remains disabled.');
   }
-
-  return { ok: true };
+  const {data,error}=await admin.from('profiles').update({is_active:active}).eq('id',clientId).eq('role','client').select('id').maybeSingle();
+  if(error||!data)return crmError('Account state could not be saved.');
+  if(!active) {
+    const {error:banError}=await admin.auth.admin.updateUserById(clientId,{ban_duration:'876000h'});
+    if(banError)return crmError('Portal access is disabled. Sign-in blocking failed; retry deactivation.');
+  }
+  return {ok:true};
 }
-
-export async function convertLead(leadId: string, redirectToBase: string): Promise<CrmResult> {
-  const admin = getSupabaseAdmin();
-
-  const { data: lead, error: leadErr } = await admin
-    .from('leads')
-    .select('id, email, name, company, converted_client_id')
-    .eq('id', leadId)
-    .maybeSingle();
-  if (leadErr) return crmError(`Lead lookup failed: ${leadErr.message}`);
-  if (!lead) return crmError('Lead not found.');
-  if (lead.converted_client_id) return crmError('This lead was already converted.');
-
-  const email = String(lead.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return crmError('Lead has no usable email address.');
-
-  const existing = await findAuthUserByEmail(email);
-  if (existing?.role === 'admin') return crmError('That email belongs to an admin account.');
-
-  let userId: string;
-  const freshAccount = !existing;
-  if (existing) {
-    userId = existing.id;
-    const claimed = await setClaimRole(userId, 'client');
-    if (!claimed.ok) return claimed;
-    const claimedId = userId;
-    queueEmail(() =>
-      recordUnsent({
-        template: 'invite',
-        reason: 'Existing account claimed; no invite email sent',
-        to: email,
-        entityType: 'client',
-        entityId: claimedId,
-      })
-    );
-  } else {
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${redirectToBase}/invite/accept`,
-    });
-    if (error || !data?.user) {
-      const failureReason = error?.message ?? 'no user returned';
-      queueEmail(async () => {
-        await recordExternalSend({
-          to: email,
-          template: 'invite',
-          entityType: 'client',
-          status: 'failed',
-          error: failureReason,
-        });
-        return { ok: false as const, error: failureReason };
-      });
-      return crmError(`Invite failed: ${failureReason}`);
-    }
-    userId = data.user.id;
-    const convertedId = userId;
-    queueEmail(async () => {
-      await recordExternalSend({ to: email, template: 'invite', entityType: 'client', entityId: convertedId });
-      return { ok: true as const, resendId: null };
-    });
-    const claimed = await setClaimRole(userId, 'client');
-    if (!claimed.ok) return claimed;
+export async function convertLead(leadId:string,redirectToBase:string):Promise<CrmResult> {
+  const admin=getSupabaseAdmin();
+  const {data:lead,error}=await admin.from('leads').select('id,email,name,company,converted_client_id').eq('id',leadId).maybeSingle();
+  if(error)return crmError('Lead lookup failed.');if(!lead)return crmError('Lead not found.');if(lead.converted_client_id)return crmError('This lead was already converted.');
+  const email=String(lead.email??'').trim().toLowerCase();if(!EMAIL_RE.test(email))return crmError('Lead has no usable email address.');
+  const result=await inviteOrClaim(email,redirectToBase);if(!result.ok)return result;
+  if(result.fresh) {
+    const {error:profileError}=await admin.from('profiles').update({full_name:typeof lead.name==='string'?lead.name.trim().slice(0,200):null,company:typeof lead.company==='string'?lead.company.trim().slice(0,200):null}).eq('id',result.userId).eq('role','client');
+    if(profileError)return crmError('Account exists. Update its profile and retry conversion.');
   }
-
-  const profile: Record<string, unknown> = { id: userId, role: 'client' };
-  if (freshAccount && typeof lead.name === 'string' && lead.name.trim()) {
-    profile.full_name = lead.name.trim();
-  }
-  if (freshAccount && typeof lead.company === 'string' && lead.company.trim()) {
-    profile.company = lead.company.trim();
-  }
-  const { error: profileErr } = await admin.from('profiles').upsert(profile, { onConflict: 'id' });
-  if (profileErr) return crmError(`Profile save failed: ${profileErr.message}`);
-
-  const { error: leadUpdErr } = await admin
-    .from('leads')
-    .update({ converted_client_id: userId, status: 'won' })
-    .eq('id', leadId);
-  if (leadUpdErr) return crmError(`Lead update failed: ${leadUpdErr.message}`);
-
-  return { ok: true };
+  const {data:changed,error:updateError}=await admin.from('leads').update({converted_client_id:result.userId,status:'won'}).eq('id',leadId).is('converted_client_id',null).select('id').maybeSingle();
+  if(updateError||!changed)return crmError('Account exists, but the lead changed. Refresh and retry conversion.');
+  return {ok:true};
 }

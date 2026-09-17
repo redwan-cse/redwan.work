@@ -99,8 +99,8 @@ async function consumeDbRateLimit(
     });
     if (error) throw error;
     return data === true;
-  } catch (err) {
-    console.error('DB rate limit unavailable:', err instanceof Error ? err.message : err);
+  } catch {
+    console.error('Contact presign rate control unavailable.');
     return null; // signals fail-closed
   }
 }
@@ -113,10 +113,8 @@ export async function POST(request: NextRequest) {
   try {
     // ---- 1. Same-origin check first ----
     if (!isSameOrigin(request)) {
-      console.warn('Presign rejected: cross-origin request', {
-        origin: request.headers.get('origin'),
-        host: request.headers.get('host'),
-      });
+      // Do not log caller-controlled Origin or Host values.
+      console.warn('Contact presign origin rejected.');
       return jsonError('Request origin not allowed.', 403);
     }
 
@@ -258,10 +256,8 @@ export async function POST(request: NextRequest) {
       const turnstileResult: TurnstileValidationResponse = await turnstileResponse.json();
 
       if (!turnstileResult.success) {
-        console.warn('Turnstile validation failed:', {
-          errors: turnstileResult['error-codes'],
-          timestamp: new Date().toISOString(),
-        });
+        // Provider categories are untrusted response data, not safe log fields.
+        console.warn('Contact presign verification rejected.');
         return jsonError('Security verification failed. Please reload the form.', 400);
       }
     } catch (error) {
@@ -272,7 +268,7 @@ export async function POST(request: NextRequest) {
         return jsonError('Verification timeout. Please try again.', 408);
       }
 
-      console.error('Turnstile validation error:', error);
+      console.error('Contact presign verification unavailable.');
       return jsonError('Verification service unavailable. Please try again.', 503);
     }
 
@@ -301,9 +297,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ uploads });
-  } catch (error) {
-    // Catch-all error handler — never expose internal details
-    console.error('❌ Presign submission error:', error instanceof Error ? error.message : 'Unknown error');
+  } catch {
+    // Catch-all error handler: never log exception text or request metadata.
+    console.error('Contact presign submission failed.');
     return jsonError(
       'An error occurred while processing your request. Please try again.',
       500

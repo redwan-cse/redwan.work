@@ -1,0 +1,79 @@
+name: Contact cleanup and PR reconciliation
+on:
+  push:
+    branches: [fix/direct-public-asset-uploads]
+    paths: [.github/workflows/contact-cleanup.yml, tests/contact-cleanup.mjs, components/enhanced-contact-form.tsx]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: contact-cleanup-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: https://example.test
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: node tests/contact-cleanup.mjs source
+      - run: npm ci
+      - name: Lint, strict types and production build without provider credentials
+        run: |
+          npm run lint
+          npx tsc --noEmit
+          npm run build
+      - name: Install isolated Chromium tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/contact-browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
+          node "$RUNNER_TEMP/contact-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Real desktop/mobile payload, consent, retry and reference verification
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
+        run: node tests/contact-cleanup.mjs browser
+  reconciliation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact included heads and frozen main dependency evidence
+        run: |
+          python3 - <<'PY'
+          import json,re,subprocess
+          from pathlib import Path
+          heads={49:'b2919343d146adfdff92ed4471436aabe495fdd9',50:'7f1de0f3cfeaa31658f9fdcd574a40050f3c232a',51:'b06e8637741e5067a8908138feea96ebc1d9253a',52:'b86ce1ab93f5ea3501389f3d1c34d85332d4d826',54:'71193183dd974040769f4f32ccb9a2c7fdec9adb',55:'d4fcd550fed53bfe56119a91488822ea51e59b4d'}
+          for pr,head in heads.items():
+              subprocess.run(['git','merge-base','--is-ancestor',head,'HEAD'],check=True)
+              print(f'PR{pr}: exact head included')
+          main='27ab3e3f1895b0d81231ddf1b83174fc24ad1f8a'
+          for label,data in [('frozen-main',subprocess.check_output(['git','show',main+':package-lock.json'])),('candidate',Path('package-lock.json').read_bytes())]:
+              packages=json.loads(data)['packages']
+              versions=lambda name: sorted({v['version'] for k,v in packages.items() if k.endswith('node_modules/'+name)})
+              assert versions('lodash')==[], 'Do not reintroduce removed lodash'
+              assert versions('next')==['16.3.4']
+              assert versions('ajv')==['6.15.0']
+              assert versions('minimatch')==['10.2.6','3.1.5','9.0.9']
+              print(label+': PR11/12/14/16 dependency objectives superseded')
+          form=Path('components/enhanced-contact-form.tsx').read_text()
+          assert "formFields.append('entry." not in form and 'generateTicketId' not in form
+          assert "formFields.append('gdprConsent'" in form
+          assert '4e9ca493fd6cdd11a82be742670455b752ca4c95' in Path('.github/workflows/integrated-foundation-smoke.yml').read_text()
+          print('PR27 cleanup and PR48 foundation reconciliation present; behavior verified by acceptance jobs')
+          workflow=Path('.github/workflows/contact-cleanup.yml').read_text()
+          assert not re.search(r'^\s*(?:contents|statuses):\s*write\s*$',workflow,re.M)
+          assert not re.search(r'^\s*environment:',workflow,re.M)
+          assert not re.search(r'\$\{\{\s*secrets\.',workflow)
+          print('One-shot development write capability retired')
+          PY

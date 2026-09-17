@@ -1,0 +1,13 @@
+# Recoverable cleanup contract
+
+Branch-only remediation for #30/#36/#43. No actual production cleanup is authorized by these files.
+
+Before deleting a project, the service reads a complete SQL snapshot, refuses any linked invoice, constructs a fresh recovery ZIP containing the manifest and all file bytes, reads the uploaded ZIP back and verifies SHA-256/length. Customer filenames never become ZIP paths. Compressed/uncompressed data is capped at 100 MB. The database then locks project/children, rechecks invoice references and snapshot equality, and atomically records recovery proof, durable per-key deletion jobs and project removal. Any FK/trigger/refusal rolls back the entire database operation before source storage is touched. A storage failure afterward retains the recovery ZIP, complete row snapshot and retry tracking.
+
+The existing UI purge wrapper delegates to the new preparation service. Success means prepared for asynchronous physical deletion, not that every storage object has already disappeared. The next cron drains at most 100 queued keys, requiring explicit per-object acknowledgement before recording completion. Tombstones remain, so late uploads cannot bind deleted keys. A retry after ambiguous acknowledgement safely repeats the same S3 delete.
+
+Contact/pending cleanup checks full database EXISTS queries per candidate instead of truncated REST retained/reference sets. Key-scoped advisory locks are shared with new file/lead reference triggers: a cleanup claim and a late binding cannot both succeed. Pending bound files are retained; old unbound tracking is snapshotted before transactional removal. The complete storage listing refuses missing/repeated cursors. No independent archive-age sweep is run: recovery archives are held until the owner approves their recovery-retention/disposal policy. This intentionally prioritizes preservation over deleting the only backup.
+
+Remaining operational validation: actual R2 ZIP recovery exercise, restored database/object reconciliation, bounded/cursor sweep progress under very large inventories and the owner's archive-retention policy. Disposable tests are not production restore evidence. A production rollout requires verified backup/restore and exact migration approval. Do not discard project_recovery or storage_deletions rows as a rollback shortcut.
+
+Security annotation on #53 was traced to the retired one-time urllib source-edit script. On this branch it is replaced with an inert, no-network stub rather than suppressing the scanner. The exact source-connection script uses a fixed HTTPSConnection host and non-forced update of one named development branch; after its diff is inspected its write capability is retired as well.

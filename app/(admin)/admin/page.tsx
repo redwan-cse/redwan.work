@@ -1,121 +1,13 @@
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ConvertLeadButton } from '@/components/admin/convert-lead-button';
-import { countOpenTickets } from '@/lib/crm/tickets';
-import { listRecentLeads } from '@/lib/crm/leads';
-import { listClients } from '@/lib/crm/clients';
-import { listArchivedProjects } from '@/lib/crm/projects';
-import { countUnpaidInvoices } from '@/lib/crm/invoices';
-
-export const dynamic = 'force-dynamic';
-
-const LEAD_BADGE: Record<string, string> = {
-  new: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-  contacted: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  won: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  lost: 'bg-muted text-muted-foreground',
-};
-
-export default async function AdminOverviewPage() {
-  const [openTickets, leads, clients, archived, unpaidInvoices] = await Promise.all([
-    countOpenTickets(),
-    listRecentLeads(5),
-    listClients(),
-    listArchivedProjects(),
-    countUnpaidInvoices(),
-  ]);
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Overview</h1>
-
-      {archived.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-          {archived.length} archived project(s) awaiting deletion —{' '}
-          <Link href="/admin/projects" className="underline underline-offset-4">
-            download backups from Projects
-          </Link>
-          .
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Open tickets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{openTickets}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Awaiting your reply</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Unpaid invoices</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{unpaidInvoices}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Sent with an outstanding balance</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Clients</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{clients.length}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{clients.filter((c) => c.is_active).length} active</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Recent leads</h2>
-        {leads.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No leads yet.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Ref</th>
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-4 py-2 font-medium">Company</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => {
-                  const converted = lead.converted_client_id !== null;
-                  return (
-                    <tr key={lead.id} className="border-t">
-                      <td className="px-4 py-2 font-mono text-xs">TKT-{lead.number}</td>
-                      <td className="px-4 py-2">{lead.name}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{lead.company ?? '—'}</td>
-                      <td className="px-4 py-2">
-                        <Badge variant="outline" className={LEAD_BADGE[lead.status] ?? ''}>
-                          {lead.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {!converted && lead.status !== 'won' ? (
-                          <ConvertLeadButton leadId={lead.id} label={lead.email} />
-                        ) : converted ? (
-                          <span className="text-xs text-muted-foreground">Converted</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
-  );
+import {notFound} from 'next/navigation';
+import {Badge} from '@/components/ui/badge';
+import {Card,CardContent,CardHeader,CardTitle} from '@/components/ui/card';
+import {ConvertLeadButton} from '@/components/admin/convert-lead-button';
+import {getSupabaseAdmin} from '@/lib/supabase/admin';
+import {workflowSession} from '@/lib/crm/workflow-access';
+export const dynamic='force-dynamic';
+type Overview={openTickets:number;clients:number;activeClients:number;archived:number;unpaidInvoices:number;leads:Array<{id:string;number:number;name:string;email:string;company:string|null;status:string;converted_client_id:string|null}>};
+export default async function AdminOverviewPage(){
+ const session=await workflowSession('admin');if(!session)notFound();const {data,error}=await getSupabaseAdmin().rpc('admin_overview',{p_actor:session.userId});if(error||!data)throw new Error('Could not load overview.');const overview=data as Overview;
+ return <div className="space-y-6"><h1 className="text-2xl font-semibold">Overview</h1>{overview.archived>0&&<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">{overview.archived} archived projects held for recovery or cleanup. <Link href="/admin/projects?archived=true" className="underline">Review backups and retention</Link>.</div>}<div className="grid gap-4 sm:grid-cols-3">{[{title:'Open tickets',value:overview.openTickets,text:'Awaiting your reply'},{title:'Unpaid invoices',value:overview.unpaidInvoices,text:'Sent with an outstanding balance'},{title:'Clients',value:overview.clients,text:`${overview.activeClients} active`}].map(item=><Card key={item.title}><CardHeader><CardTitle className="text-sm font-medium text-muted-foreground">{item.title}</CardTitle></CardHeader><CardContent><p className="text-3xl font-semibold">{item.value}</p><p className="mt-1 text-xs text-muted-foreground">{item.text}</p></CardContent></Card>)}</div><section className="space-y-3"><h2 className="text-lg font-semibold">Recent leads</h2>{!overview.leads.length?<p className="text-sm text-muted-foreground">No leads yet.</p>:<div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[550px] text-sm"><thead className="bg-muted/50 text-left"><tr><th className="p-3">Ref</th><th className="p-3">Name</th><th className="p-3">Company</th><th className="p-3">Status</th><th className="p-3" aria-label="Actions"/></tr></thead><tbody>{overview.leads.map(lead=><tr key={lead.id} className="border-t"><td className="p-3 font-mono text-xs">TKT-{lead.number}</td><td className="p-3">{lead.name}</td><td className="p-3">{lead.company??'Not set'}</td><td className="p-3"><Badge variant="outline">{lead.status}</Badge></td><td className="p-3">{!lead.converted_client_id&&lead.status!=='won'?<ConvertLeadButton leadId={lead.id} label={lead.email}/>:<span className="text-xs text-muted-foreground">Converted</span>}</td></tr>)}</tbody></table></div>}</section></div>;
 }
