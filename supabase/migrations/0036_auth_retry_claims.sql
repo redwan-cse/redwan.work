@@ -10,11 +10,12 @@ create table public.auth_retry_claims (
   consumed_at timestamptz not null default now()
 );
 
+-- B-tree index for efficient expiry range queries and retention cleanup
 create index auth_retry_claims_expires_at_idx on public.auth_retry_claims (expires_at);
 
 alter table public.auth_retry_claims enable row level security;
-revoke all on public.auth_retry_claims from anon, authenticated;
-grant all on public.auth_retry_claims to service_role;
+revoke all on table public.auth_retry_claims from public, anon, authenticated;
+grant all on table public.auth_retry_claims to service_role;
 
 create or replace function public.claim_auth_retry_nonce(
   p_nonce_hash text,
@@ -29,7 +30,12 @@ as $$
 declare
   v_now timestamptz := now();
 begin
-  -- Periodic purge of expired claims whose retention window has passed (7 days past expiration)
+  -- Restrict runtime access: reject direct anon or authenticated PostgREST calls even if grant bypass occurs
+  if coalesce(current_setting('request.jwt.claim.role', true), '') in ('anon', 'authenticated') then
+    raise exception 'Permission denied';
+  end if;
+
+  -- Opportunistic purge of expired claims whose retention window has passed (7 days past expiration)
   delete from public.auth_retry_claims where expires_at < v_now - interval '7 days';
 
   -- Reject if claim is already expired at submission time
@@ -47,5 +53,33 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from anon, authenticated;
+revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from public;
+revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from anon;
+revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from authenticated;
 grant execute on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) to service_role;
+
+-- Dedicated maintenance cleanup procedure for scheduled retention sweeps
+create or replace function public.cleanup_expired_auth_retry_claims()
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_deleted bigint;
+begin
+  if coalesce(current_setting('request.jwt.claim.role', true), '') in ('anon', 'authenticated') then
+    raise exception 'Permission denied';
+  end if;
+
+  delete from public.auth_retry_claims
+  where expires_at < now() - interval '7 days';
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.cleanup_expired_auth_retry_claims() from public;
+revoke all on function public.cleanup_expired_auth_retry_claims() from anon;
+revoke all on function public.cleanup_expired_auth_retry_claims() from authenticated;
+grant execute on function public.cleanup_expired_auth_retry_claims() to service_role;

@@ -316,7 +316,11 @@ test('recovery password update validates password before token consumption and h
   // User attempts retry with authority token: atomic claim succeeds, cookie is deleted, updateUser fails with ambiguous error
   f.verifyResult = {error: {message: 'Token already used or expired'}};
   const failRes = await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'failover-tok', password: 'valid-password-f2', confirm: 'valid-password-f2'}));
-  assert.deepEqual(failRes, {error: 'Could not update your password. Try again.'});
+  assert.deepEqual(failRes, {
+    error: 'Could not update your password. This reset link is no longer valid. Please request a new password reset link.',
+    linkHref: '/login',
+    linkText: 'Request a new password reset link',
+  });
   assert.equal(f.cookieStore.has('recovery_retry_authority'), false, 'Authority cookie must be deleted immediately upon consumption');
 
   // Any subsequent retry attempt (replaying the token or cookie) must fail closed — authority is NEVER reopened
@@ -417,7 +421,11 @@ test('invite acceptance validates password before token consumption and handles 
   assert.ok(f.cookieStore.has('invite_retry_authority'), 'Authority cookie set on initial failure');
   // Retry consumes authority and encounters ambiguous failure
   f.verifyResult = {error: {message: 'Token already used or expired'}};
-  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'failover-invite-tok', password: 'valid-password-f2', confirm: 'valid-password-f2'})), {error: 'Could not save your password. Try again.'});
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'failover-invite-tok', password: 'valid-password-f2', confirm: 'valid-password-f2'})), {
+    error: 'Could not save your password. This invitation link is no longer valid. Please ask an administrator to send a new invitation.',
+    linkHref: '/login',
+    linkText: 'Return to sign in',
+  });
   assert.equal(f.cookieStore.has('invite_retry_authority'), false, 'Authority cookie must be deleted upon consumption');
   // Subsequent attempt fails closed — authority is never reopened
   f.cookieStore.set('invite_retry_authority', validInviteAuthority);

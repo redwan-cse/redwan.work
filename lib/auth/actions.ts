@@ -4,7 +4,7 @@ import {headers, cookies} from 'next/headers';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
-export type ActionState={error?:string;notice?:string};
+export type ActionState={error?:string;notice?:string;linkHref?:string;linkText?:string};
 function safeRelativePath(raw:FormDataEntryValue|null):string|null {
  const hasControl=(value:string)=>Array.from(value).some(character=>{const code=character.charCodeAt(0);return code<32||code===127;});
  if(typeof raw!=='string'||!raw.startsWith('/')||raw.startsWith('//')||raw.includes('\\')||hasControl(raw))return null;
@@ -22,6 +22,8 @@ async function panelHomeForCurrentUser():Promise<string> {
 }
 const MIN_PASSWORD=12;
 const INVALID_LINK='This link is invalid or has expired. Ask for a new one.';
+const SPENT_RECOVERY_LINK='Could not update your password. This reset link is no longer valid. Please request a new password reset link.';
+const SPENT_INVITE_LINK='Could not save your password. This invitation link is no longer valid. Please ask an administrator to send a new invitation.';
 const OTP_RATE_MESSAGE='Too many requests. Please try again later.';
 async function checkOtpRateLimit():Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;if(!salt){console.error('OTP configuration unavailable.');return false;}
@@ -260,7 +262,7 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
 
   const updated=await supabase.auth.updateUser({password:checked.password});
   if(updated.error){
-    return {error:'Could not update your password. Try again.'};
+    return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
   }
 
   redirect(await panelHomeForCurrentUser());
@@ -313,7 +315,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
 
   const updated=await supabase.auth.updateUser({password:checked.password});
   if(updated.error){
-    return {error:'Could not save your password. Try again.'};
+    return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
   }
 
   redirect(await panelHomeForCurrentUser());
