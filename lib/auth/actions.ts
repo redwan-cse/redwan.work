@@ -73,6 +73,7 @@ import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 interface RetryAuthorityPayload {
   p: 'recovery' | 'invite';
   sub: string;
+  sid: string;
   tok: string;
   exp: number;
   nonce: string;
@@ -100,11 +101,38 @@ function markRetryNonceConsumed(nonce: string, expMs: number): void {
   consumedRetryNonces.set(nonce, expMs);
 }
 
+function unmarkRetryNonceConsumed(nonce: string): void {
+  consumedRetryNonces.delete(nonce);
+}
+
+function extractSessionId(session: unknown, claims: unknown): string | null {
+  if (claims && typeof claims === 'object') {
+    const c = claims as Record<string, unknown>;
+    if (typeof c.session_id === 'string' && c.session_id) return c.session_id;
+    if (typeof c.sid === 'string' && c.sid) return c.sid;
+  }
+  if (session && typeof session === 'object') {
+    const s = session as Record<string, unknown>;
+    if (typeof s.id === 'string' && s.id) return s.id;
+    if (typeof s.session_id === 'string' && s.session_id) return s.session_id;
+    if (typeof s.access_token === 'string' && s.access_token.includes('.')) {
+      try {
+        const parts = s.access_token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          if (typeof payload?.session_id === 'string' && payload.session_id) return payload.session_id;
+          if (typeof payload?.sid === 'string' && payload.sid) return payload.sid;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return null;
+}
+
 function getRetryAuthoritySecret(): string {
-  const secret =
-    process.env.SUPABASE_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.LEAD_IP_HASH_SALT;
+  const secret = process.env.SUPABASE_SECRET_KEY || process.env.LEAD_IP_HASH_SALT;
   if (!secret) {
     throw new Error('Server secret unavailable for retry authority.');
   }
@@ -113,11 +141,16 @@ function getRetryAuthoritySecret(): string {
 
 const RETRY_TTL_SECONDS = 300;
 
-function createRetryAuthorityToken(purpose: 'recovery' | 'invite', sub: string, tokenHash: string): string {
+function createRetryAuthorityToken(
+  purpose: 'recovery' | 'invite',
+  sub: string,
+  sid: string,
+  tokenHash: string
+): string {
   const secret = getRetryAuthoritySecret();
   const exp = Math.floor(Date.now() / 1000) + RETRY_TTL_SECONDS;
   const nonce = randomBytes(16).toString('hex');
-  const payload: RetryAuthorityPayload = { p: purpose, sub, tok: tokenHash, exp, nonce };
+  const payload: RetryAuthorityPayload = { p: purpose, sub, sid, tok: tokenHash, exp, nonce };
   const rawPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = createHmac('sha256', secret).update(rawPayload).digest('base64url');
   return `${rawPayload}.${signature}`;
@@ -127,6 +160,7 @@ function verifyRetryAuthorityToken(
   token: string | undefined,
   expectedPurpose: 'recovery' | 'invite',
   expectedSub: string,
+  expectedSid: string,
   expectedTokenHash: string
 ): { valid: true; nonce: string; exp: number } | { valid: false } {
   if (!token || typeof token !== 'string') return { valid: false };
@@ -159,6 +193,7 @@ function verifyRetryAuthorityToken(
   if (
     payload.p !== expectedPurpose ||
     payload.sub !== expectedSub ||
+    payload.sid !== expectedSid ||
     payload.tok !== expectedTokenHash ||
     typeof payload.exp !== 'number' ||
     Date.now() >= payload.exp * 1000 ||
@@ -172,6 +207,46 @@ function verifyRetryAuthorityToken(
   return { valid: true, nonce: payload.nonce, exp: payload.exp };
 }
 
+async function consumeAtomicRetryNonce(nonce: string, expMs: number): Promise<boolean> {
+  try {
+    const salt = process.env.LEAD_IP_HASH_SALT || 'auth-retry-salt';
+    const keyHash = await sha256Hex(salt + ':retry:' + nonce);
+    const windowSeconds = Math.max(1, Math.ceil((expMs - Date.now()) / 1000));
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin.rpc('consume_rate_limit', {
+      p_kind: 'auth-retry',
+      p_key_hash: keyHash,
+      p_window_seconds: windowSeconds,
+      p_max_count: 1,
+    });
+    if (!error && typeof data === 'boolean') {
+      if (!data) return false;
+      markRetryNonceConsumed(nonce, expMs);
+      return true;
+    }
+  } catch {
+    // Fall back to in-memory check if DB is unconfigured in test environment
+  }
+
+  if (isRetryNonceConsumed(nonce)) {
+    return false;
+  }
+  markRetryNonceConsumed(nonce, expMs);
+  return true;
+}
+
+async function releaseAtomicRetryNonce(nonce: string): Promise<void> {
+  unmarkRetryNonceConsumed(nonce);
+  try {
+    const salt = process.env.LEAD_IP_HASH_SALT || 'auth-retry-salt';
+    const keyHash = await sha256Hex(salt + ':retry:' + nonce);
+    const admin = getSupabaseAdmin();
+    await admin.from('rate_limits').delete().eq('kind', 'auth-retry').eq('key_hash', keyHash);
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
   const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
   const checked=validatePasswordPair(formData);if('error' in checked)return checked;
@@ -180,43 +255,58 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   const retryCookieName='recovery_retry_authority';
   const existingAuthority=cookieStore.get(retryCookieName)?.value;
 
-  let activeNonce: string | null = null;
-  let activeExp: number = 0;
-
   const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
   if(!otpError&&otpData?.user?.id){
-    try {
-      const authorityToken = createRetryAuthorityToken('recovery', otpData.user.id, tokenHash);
-      cookieStore.set(retryCookieName, authorityToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: RETRY_TTL_SECONDS,
-        sameSite: 'lax',
-        path: '/',
-      });
-      const parts = authorityToken.split('.');
-      const p = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
-      activeNonce = p.nonce;
-      activeExp = p.exp;
-    } catch {
-      // If server secret unavailable, continue without retry authority
+    const {data:claimsData}=await supabase.auth.getClaims();
+    const sessionId=extractSessionId(otpData.session,claimsData?.claims);
+    const updated=await supabase.auth.updateUser({password:checked.password});
+    if(updated.error){
+      if(sessionId){
+        try{
+          const authorityToken=createRetryAuthorityToken('recovery',otpData.user.id,sessionId,tokenHash);
+          cookieStore.set(retryCookieName,authorityToken,{
+            httpOnly:true,
+            secure:process.env.NODE_ENV==='production',
+            maxAge:RETRY_TTL_SECONDS,
+            sameSite:'lax',
+            path:'/',
+          });
+        }catch{}
+      }
+      return {error:'Could not update your password. Try again.'};
     }
-  } else {
-    const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-    const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
-    if(claimsErr||!sub||!existingAuthority)return {error:INVALID_LINK};
-    const verification = verifyRetryAuthorityToken(existingAuthority, 'recovery', sub, tokenHash);
-    if(!verification.valid)return {error:INVALID_LINK};
-    activeNonce = verification.nonce;
-    activeExp = verification.exp;
+    cookieStore.delete(retryCookieName);
+    redirect(await panelHomeForCurrentUser());
   }
+
+  // Retry path: verifyOtp already consumed
+  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+  const sessionId=extractSessionId(null,claimsData?.claims);
+  if(claimsErr||!sub||!sessionId||!existingAuthority)return {error:INVALID_LINK};
+
+  const verification=verifyRetryAuthorityToken(existingAuthority,'recovery',sub,sessionId,tokenHash);
+  if(!verification.valid)return {error:INVALID_LINK};
+
+  const consumed=await consumeAtomicRetryNonce(verification.nonce,verification.exp*1000);
+  if(!consumed)return {error:INVALID_LINK};
 
   const updated=await supabase.auth.updateUser({password:checked.password});
-  if(updated.error)return {error:'Could not update your password. Try again.'};
-
-  if(activeNonce){
-    markRetryNonceConsumed(activeNonce, activeExp * 1000);
+  if(updated.error){
+    await releaseAtomicRetryNonce(verification.nonce);
+    try{
+      const freshToken=createRetryAuthorityToken('recovery',sub,sessionId,tokenHash);
+      cookieStore.set(retryCookieName,freshToken,{
+        httpOnly:true,
+        secure:process.env.NODE_ENV==='production',
+        maxAge:RETRY_TTL_SECONDS,
+        sameSite:'lax',
+        path:'/',
+      });
+    }catch{}
+    return {error:'Could not update your password. Try again.'};
   }
+
   cookieStore.delete(retryCookieName);
   redirect(await panelHomeForCurrentUser());
 }
@@ -229,43 +319,57 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
   const retryCookieName='invite_retry_authority';
   const existingAuthority=cookieStore.get(retryCookieName)?.value;
 
-  let activeNonce: string | null = null;
-  let activeExp: number = 0;
-
   const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
   if(!otpError&&otpData?.user?.id){
-    try {
-      const authorityToken = createRetryAuthorityToken('invite', otpData.user.id, tokenHash);
-      cookieStore.set(retryCookieName, authorityToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: RETRY_TTL_SECONDS,
-        sameSite: 'lax',
-        path: '/',
-      });
-      const parts = authorityToken.split('.');
-      const p = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
-      activeNonce = p.nonce;
-      activeExp = p.exp;
-    } catch {
-      // If server secret unavailable, continue without retry authority
+    const {data:claimsData}=await supabase.auth.getClaims();
+    const sessionId=extractSessionId(otpData.session,claimsData?.claims);
+    const updated=await supabase.auth.updateUser({password:checked.password});
+    if(updated.error){
+      if(sessionId){
+        try{
+          const authorityToken=createRetryAuthorityToken('invite',otpData.user.id,sessionId,tokenHash);
+          cookieStore.set(retryCookieName,authorityToken,{
+            httpOnly:true,
+            secure:process.env.NODE_ENV==='production',
+            maxAge:RETRY_TTL_SECONDS,
+            sameSite:'lax',
+            path:'/',
+          });
+        }catch{}
+      }
+      return {error:'Could not save your password. Try again.'};
     }
-  } else {
-    const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-    const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
-    if(claimsErr||!sub||!existingAuthority)return {error:INVALID_LINK};
-    const verification = verifyRetryAuthorityToken(existingAuthority, 'invite', sub, tokenHash);
-    if(!verification.valid)return {error:INVALID_LINK};
-    activeNonce = verification.nonce;
-    activeExp = verification.exp;
+    cookieStore.delete(retryCookieName);
+    redirect(await panelHomeForCurrentUser());
   }
+
+  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+  const sessionId=extractSessionId(null,claimsData?.claims);
+  if(claimsErr||!sub||!sessionId||!existingAuthority)return {error:INVALID_LINK};
+
+  const verification=verifyRetryAuthorityToken(existingAuthority,'invite',sub,sessionId,tokenHash);
+  if(!verification.valid)return {error:INVALID_LINK};
+
+  const consumed=await consumeAtomicRetryNonce(verification.nonce,verification.exp*1000);
+  if(!consumed)return {error:INVALID_LINK};
 
   const updated=await supabase.auth.updateUser({password:checked.password});
-  if(updated.error)return {error:'Could not save your password. Try again.'};
-
-  if(activeNonce){
-    markRetryNonceConsumed(activeNonce, activeExp * 1000);
+  if(updated.error){
+    await releaseAtomicRetryNonce(verification.nonce);
+    try{
+      const freshToken=createRetryAuthorityToken('invite',sub,sessionId,tokenHash);
+      cookieStore.set(retryCookieName,freshToken,{
+        httpOnly:true,
+        secure:process.env.NODE_ENV==='production',
+        maxAge:RETRY_TTL_SECONDS,
+        sameSite:'lax',
+        path:'/',
+      });
+    }catch{}
+    return {error:'Could not save your password. Try again.'};
   }
+
   cookieStore.delete(retryCookieName);
   redirect(await panelHomeForCurrentUser());
 }
