@@ -1,0 +1,1 @@
+-- Test-first restore migration placeholder. No production execution.
