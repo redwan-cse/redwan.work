@@ -104,6 +104,31 @@ Verification suite `tests/reliability/verified-archive.test.mjs` (16 cases) conf
 - Archive download presigning: `getArchiveDownloadUrl` generates 60-second presigned GET URLs for verified archives; rejects unarchived projects (`'Project is not archived.'`) or missing records; masks R2 signing errors behind `'Archive download unavailable.'`.
 - Admin action boundaries: `archiveProjectAction`, `purgeArchivedProjectAction`, and `archiveDownloadUrlAction` require active administrator authority (`requireAdmin()`), rejecting unauthenticated, client, and inactive admin callers with `{ error: 'Unauthorized.' }` and revalidating Next.js project paths on success.
 
+## Reachable error redaction and safe diagnostic categorization (Issue #46 / R01): 16 September 2026
+
+Verification suite `tests/reliability/diagnostic-redaction.test.mjs` (19 cases) and standalone runner `tests/r01-redaction.mjs` confirm:
+- Contact upload presigning (`POST /api/uploads/presign`):
+  - Database rate limit RPC failure or thrown error returns 503 and logs categorical `'Contact presign rate control unavailable.'` with zero Turnstile fetches and zero sentinels leaked.
+  - Turnstile token single-use replay check failure returns 503 fail-closed with zero sentinels leaked.
+  - Turnstile siteverify network failure or malformed JSON responses return 503 and log `'Contact presign verification unavailable.'` without quoting raw provider exceptions.
+  - Turnstile siteverify denial (`success: false`, `error-codes: [...]`) returns 400 and logs `'Contact presign verification rejected.'` without quoting untrusted provider error code arrays.
+  - R2 presigning exception returns 500 and logs `'Contact presign submission failed.'` without echoing internal exception messages.
+  - Cross-origin request returns 403 and logs `'Contact presign origin rejected.'` without echoing caller-controlled `Origin` or `Host` headers.
+  - Turnstile validation timeout returns 408 with `'Turnstile validation timeout'`.
+  - Valid request returns 200 with presigned PUT URLs and zero sentinels leaked.
+- Blogger service (`lib/blogger.ts`):
+  - Upstream API exceptions return empty fallback `{ posts: [], totalItems: 0 }` and log `'Blogger fetch unavailable.'` without leaking GoogleAuth or gaxios exception traces.
+  - Malformed credentials return `{ posts: [], totalItems: 0 }` safely without throwing or leaking raw credential buffers.
+  - In-process module TTL cache prevents duplicate upstream network requests across identical queries within the cache window.
+- Email log viewer (`lib/crm/email-log.ts`):
+  - PostgREST query failure rejects with `'Email log is unavailable.'` and logs `'Email log query unavailable.'`; eliminates "truncation-as-redaction" by completely avoiding logging raw query error messages that could quote caller email search filters.
+  - `PGRST103` (unsatisfiable range / page past end) returns `{ rows: [] }` rather than throwing or emitting a 500 error.
+  - Count query failure reports `counts: { sent: null, failed: null }` rather than misleading zeros or thrown errors.
+- On-demand revalidation route (`POST /api/revalidate`):
+  - Handler exception returns 500 with `{ message: 'Error revalidating', error: 'Revalidation unavailable.' }` and logs `'Blog revalidation failed.'`, with zero raw exception strings in HTTP responses or console streams.
+  - Unauthorized bearer token or unlisted revalidation path returns 401/400.
+  - Authorized call revalidates path and clears in-process Blogger cache.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
