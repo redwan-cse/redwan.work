@@ -129,6 +129,28 @@ Verification suite `tests/reliability/diagnostic-redaction.test.mjs` (19 cases) 
   - Unauthorized bearer token or unlisted revalidation path returns 401/400.
   - Authorized call revalidates path and clears in-process Blogger cache.
 
+## Large inventory protection and namespace retention capacity (Issue #43 / S03): 17 September 2026
+
+Verification suite `tests/reliability/inventory.test.mjs` (10 cases) and `tests/reliability/retention.test.mjs` (6 cases) confirm:
+- Above-page namespace inventory traversal (> 1000 items):
+  - `privateInventoryPage` sequentially traverses large namespaces (> 1000 items across 12 successive 100-item S3 pages) to complete exhaustion without skipping objects, stalling, or losing cursor alignment.
+  - Cursor tracking strictly passes the last key of the active page to S3 `StartAfter` for subsequent page fetches.
+  - Final page cursor wrapping: when `IsTruncated` is false, `next` returns an empty string `''`, resetting the namespace cursor for subsequent sweep cycles.
+  - Empty namespaces return `{ items: [], next: '' }` immediately without redundant queries.
+- Strict monotonic ordering & corruption rejection:
+  - Non-monotonic keys (`key <= previous`) or duplicate keys throw `'Storage inventory incomplete.'`.
+  - Foreign prefix leakage (e.g. `private/` or `archive/` or `public_assets/` within a `contact/` listing) throws `'Storage inventory incomplete.'`, preventing accidental claims across foreign namespaces.
+  - Missing `Key` or missing `LastModified` timestamp attributes throw `'Storage inventory incomplete.'`.
+  - Non-progressing truncated responses (`IsTruncated: true` with zero items) throw `'Storage inventory made no progress.'`.
+  - Invalid cursor strings (`after` not starting with the target prefix) throw `'Invalid inventory cursor.'` before contacting S3.
+  - Missing storage credentials fail closed with `'Storage unavailable.'`.
+- Connection lifecycle:
+  - S3Client `destroy()` is guaranteed to execute in `finally` blocks across all successful listings and error aborts, preventing memory and socket leaks during high-frequency cron sweeps.
+- Storage deletion drainage capacity (`drainStorageDeletions`):
+  - Enforces bounded processing by clamping `limit` strictly between 1 and 100 (`Math.max(1, Math.min(100, limit))`), ensuring large deletion backlogs (> 1000 items) drain in controlled batches without exceeding serverless function execution deadlines.
+  - Partial batch failure resilience: successfully deleted R2 keys update `completed_at` timestamps, while failed S3 deletions or DB update errors retain `completed_at: null` for retry in subsequent cron runs.
+  - Concurrent worker safety: if another worker has already acknowledged a key (`count === 0` and `completed_at` is set), the item is skipped cleanly without registering a false failure.
+
 ## Deployment and rollback
 
 Do not run a remote migration from CI. Validate all old migrations plus 0018 against a fresh disposable database and representative synthetic data. Before an authorized production release, take and verify a backup; apply additive 0018 before deploying the dependent application. Roll back application code if needed, retaining the additive table/functions and existing data. Never reset production or delete submission identities as a rollback shortcut.
