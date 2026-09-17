@@ -79,32 +79,6 @@ interface RetryAuthorityPayload {
   nonce: string;
 }
 
-const consumedRetryNonces = new Map<string, number>();
-
-function isRetryNonceConsumed(nonce: string): boolean {
-  const expiry = consumedRetryNonces.get(nonce);
-  if (!expiry) return false;
-  if (Date.now() > expiry) {
-    consumedRetryNonces.delete(nonce);
-    return false;
-  }
-  return true;
-}
-
-function markRetryNonceConsumed(nonce: string, expMs: number): void {
-  const now = Date.now();
-  if (consumedRetryNonces.size > 500) {
-    for (const [key, exp] of consumedRetryNonces) {
-      if (now > exp) consumedRetryNonces.delete(key);
-    }
-  }
-  consumedRetryNonces.set(nonce, expMs);
-}
-
-function unmarkRetryNonceConsumed(nonce: string): void {
-  consumedRetryNonces.delete(nonce);
-}
-
 function extractSessionId(session: unknown, claims: unknown): string | null {
   if (claims && typeof claims === 'object') {
     const c = claims as Record<string, unknown>;
@@ -198,8 +172,7 @@ function verifyRetryAuthorityToken(
     typeof payload.exp !== 'number' ||
     Date.now() >= payload.exp * 1000 ||
     !payload.nonce ||
-    typeof payload.nonce !== 'string' ||
-    isRetryNonceConsumed(payload.nonce)
+    typeof payload.nonce !== 'string'
   ) {
     return { valid: false };
   }
@@ -207,43 +180,35 @@ function verifyRetryAuthorityToken(
   return { valid: true, nonce: payload.nonce, exp: payload.exp };
 }
 
-async function consumeAtomicRetryNonce(nonce: string, expMs: number): Promise<boolean> {
-  try {
-    const salt = process.env.LEAD_IP_HASH_SALT || 'auth-retry-salt';
-    const keyHash = await sha256Hex(salt + ':retry:' + nonce);
-    const windowSeconds = Math.max(1, Math.ceil((expMs - Date.now()) / 1000));
-    const admin = getSupabaseAdmin();
-    const { data, error } = await admin.rpc('consume_rate_limit', {
-      p_kind: 'auth-retry',
-      p_key_hash: keyHash,
-      p_window_seconds: windowSeconds,
-      p_max_count: 1,
-    });
-    if (!error && typeof data === 'boolean') {
-      if (!data) return false;
-      markRetryNonceConsumed(nonce, expMs);
-      return true;
-    }
-  } catch {
-    // Fall back to in-memory check if DB is unconfigured in test environment
-  }
-
-  if (isRetryNonceConsumed(nonce)) {
+async function consumeAtomicRetryClaim(
+  nonce: string,
+  userId: string,
+  purpose: 'recovery' | 'invite',
+  expTimestampSecs: number
+): Promise<boolean> {
+  const salt = process.env.LEAD_IP_HASH_SALT;
+  if (!salt) {
+    console.error('Retry authority configuration unavailable.');
     return false;
   }
-  markRetryNonceConsumed(nonce, expMs);
-  return true;
-}
-
-async function releaseAtomicRetryNonce(nonce: string): Promise<void> {
-  unmarkRetryNonceConsumed(nonce);
   try {
-    const salt = process.env.LEAD_IP_HASH_SALT || 'auth-retry-salt';
-    const keyHash = await sha256Hex(salt + ':retry:' + nonce);
+    const nonceHash = await sha256Hex(salt + ':retry:' + nonce);
+    const expiresAt = new Date(expTimestampSecs * 1000).toISOString();
     const admin = getSupabaseAdmin();
-    await admin.from('rate_limits').delete().eq('kind', 'auth-retry').eq('key_hash', keyHash);
+    const { data, error } = await admin.rpc('claim_auth_retry_nonce', {
+      p_nonce_hash: nonceHash,
+      p_user_id: userId,
+      p_purpose: purpose,
+      p_expires_at: expiresAt,
+    });
+    if (error || typeof data !== 'boolean') {
+      console.error('Retry authority claim failure.');
+      return false;
+    }
+    return data;
   } catch {
-    // ignore cleanup errors
+    console.error('Retry authority claim unavailable.');
+    return false;
   }
 }
 
@@ -288,26 +253,16 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   const verification=verifyRetryAuthorityToken(existingAuthority,'recovery',sub,sessionId,tokenHash);
   if(!verification.valid)return {error:INVALID_LINK};
 
-  const consumed=await consumeAtomicRetryNonce(verification.nonce,verification.exp*1000);
-  if(!consumed)return {error:INVALID_LINK};
+  const claimed=await consumeAtomicRetryClaim(verification.nonce,sub,'recovery',verification.exp);
+  if(!claimed)return {error:INVALID_LINK};
+
+  cookieStore.delete(retryCookieName);
 
   const updated=await supabase.auth.updateUser({password:checked.password});
   if(updated.error){
-    await releaseAtomicRetryNonce(verification.nonce);
-    try{
-      const freshToken=createRetryAuthorityToken('recovery',sub,sessionId,tokenHash);
-      cookieStore.set(retryCookieName,freshToken,{
-        httpOnly:true,
-        secure:process.env.NODE_ENV==='production',
-        maxAge:RETRY_TTL_SECONDS,
-        sameSite:'lax',
-        path:'/',
-      });
-    }catch{}
     return {error:'Could not update your password. Try again.'};
   }
 
-  cookieStore.delete(retryCookieName);
   redirect(await panelHomeForCurrentUser());
 }
 
@@ -351,26 +306,16 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
   const verification=verifyRetryAuthorityToken(existingAuthority,'invite',sub,sessionId,tokenHash);
   if(!verification.valid)return {error:INVALID_LINK};
 
-  const consumed=await consumeAtomicRetryNonce(verification.nonce,verification.exp*1000);
-  if(!consumed)return {error:INVALID_LINK};
+  const claimed=await consumeAtomicRetryClaim(verification.nonce,sub,'invite',verification.exp);
+  if(!claimed)return {error:INVALID_LINK};
+
+  cookieStore.delete(retryCookieName);
 
   const updated=await supabase.auth.updateUser({password:checked.password});
   if(updated.error){
-    await releaseAtomicRetryNonce(verification.nonce);
-    try{
-      const freshToken=createRetryAuthorityToken('invite',sub,sessionId,tokenHash);
-      cookieStore.set(retryCookieName,freshToken,{
-        httpOnly:true,
-        secure:process.env.NODE_ENV==='production',
-        maxAge:RETRY_TTL_SECONDS,
-        sameSite:'lax',
-        path:'/',
-      });
-    }catch{}
     return {error:'Could not save your password. Try again.'};
   }
 
-  cookieStore.delete(retryCookieName);
   redirect(await panelHomeForCurrentUser());
 }
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {

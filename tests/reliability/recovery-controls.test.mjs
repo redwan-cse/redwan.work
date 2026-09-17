@@ -43,27 +43,19 @@ const modules = {
       rpc: async (name, params) => {
         if (name === 'consume_rate_limit') {
           f.rateCalls++;
-          if (params?.p_kind === 'auth-retry') {
-            if (f.consumedRetryKeys.has(params.p_key_hash)) return { data: false, error: null };
-            f.consumedRetryKeys.add(params.p_key_hash);
-            return { data: true, error: null };
-          }
           return f.rate;
         }
+        if (name === 'claim_auth_retry_nonce') {
+          f.claimCalls = (f.claimCalls || 0) + 1;
+          if (f.claimRpcError) return { data: null, error: f.claimRpcError };
+          if (f.consumedRetryKeys.has(params?.p_nonce_hash)) {
+            return { data: false, error: null };
+          }
+          f.consumedRetryKeys.add(params?.p_nonce_hash);
+          return { data: true, error: null };
+        }
         return { data: null, error: null };
-      },
-      from: (table) => ({
-        delete: () => ({
-          eq: (col1, val1) => ({
-            eq: (col2, val2) => {
-              if (table === 'rate_limits' && col1 === 'kind' && val1 === 'auth-retry' && col2 === 'key_hash') {
-                f.consumedRetryKeys.delete(val2);
-              }
-              return Promise.resolve({ error: null });
-            }
-          })
-        })
-      })
+      }
     };
   }`,
   '@/lib/contact/lead-schema': `
@@ -306,28 +298,36 @@ test('recovery password update validates password before token consumption and h
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-xinst', confirm: 'valid-password-xinst'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.equal(f.updateCalls.length, 2, 'Replay on another instance must not call updateUser');
 
-  // Defined failure recovery: if updateUser fails during retry, the retry reservation is released and refreshed so user can retry again
+  // Fail-closed when durable claim fails (no fail-open memory fallback)
+  f.claimRpcError = {message: 'database connection down'};
+  f.cookieStore.set('recovery_retry_authority', validAuthority);
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-failclosed', confirm: 'valid-password-failclosed'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 2, 'Must never call updateUser when durable claim fails');
+  f.claimRpcError = null;
+
+  // Ambiguous provider failure: if updateUser fails during retry, authority is consumed and NEVER reopened
   f.consumedTokens.delete('failover-tok');
   f.verifyResult = {error: null};
-  f.updateResult = {error: {message: 'transient failure 1'}};
+  f.updateResult = {error: {message: 'ambiguous provider failure 1'}};
+  // Initial attempt consumes the OTP token and sets authority cookie
   await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'failover-tok', password: 'valid-password-f1', confirm: 'valid-password-f1'}));
-  assert.ok(f.cookieStore.has('recovery_retry_authority'));
-  // Second attempt also experiences updateUser failure
+  assert.ok(f.cookieStore.has('recovery_retry_authority'), 'Authority cookie set for initial retry');
+  
+  // User attempts retry with authority token: atomic claim succeeds, cookie is deleted, updateUser fails with ambiguous error
   f.verifyResult = {error: {message: 'Token already used or expired'}};
-  f.updateResult = {error: {message: 'transient failure 2'}};
   const failRes = await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'failover-tok', password: 'valid-password-f2', confirm: 'valid-password-f2'}));
   assert.deepEqual(failRes, {error: 'Could not update your password. Try again.'});
-  // Failure recovery provided a refreshed authority token in cookieStore
-  assert.ok(f.cookieStore.has('recovery_retry_authority'));
-  // Third attempt succeeds
-  f.updateResult = {error: null};
-  const succRes = await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'failover-tok', password: 'valid-password-f3', confirm: 'valid-password-f3'}));
-  assert.deepEqual(succRes, {redirect: '/portal'});
-  assert.equal(f.cookieStore.has('recovery_retry_authority'), false);
+  assert.equal(f.cookieStore.has('recovery_retry_authority'), false, 'Authority cookie must be deleted immediately upon consumption');
+
+  // Any subsequent retry attempt (replaying the token or cookie) must fail closed — authority is NEVER reopened
+  f.cookieStore.set('recovery_retry_authority', validAuthority);
+  const replayAfterFail = await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-f3', confirm: 'valid-password-f3'}));
+  assert.deepEqual(replayAfterFail, {error: 'This link is invalid or has expired. Ask for a new one.'}, 'Authority must never be reopened after ambiguous provider failure');
 
   // Admin role recovery redirect
   f.consumedTokens.delete('admin-tok');
   f.verifyResult = {error: null};
+  f.updateResult = {error: null};
   f.sessionUser = {sub: 'usr-admin', sessionId: 'sess-admin', role: 'admin'};
   f.claims = {data: {claims: {app_metadata: {role: 'admin'}}}, error: null};
   assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'admin-tok', password: 'valid-password-adm', confirm: 'valid-password-adm'})), {redirect: '/admin'});
@@ -407,10 +407,26 @@ test('invite acceptance validates password before token consumption and handles 
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-replay', confirm: 'valid-password-replay'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.equal(f.updateCalls.length, 2);
 
+  // Ambiguous provider failure on invite retry: authority is consumed and NEVER reopened
+  f.consumedTokens.delete('failover-invite-tok');
+  f.verifyResult = {error: null};
+  f.updateResult = {error: {message: 'ambiguous provider failure'}};
+  f.sessionUser = {sub: 'usr-synthetic', sessionId: 'sess-synthetic', role: 'client'};
+  // Initial attempt consumes the OTP token and sets authority cookie
+  await acceptInviteAction({}, makeForm({token_hash: 'failover-invite-tok', password: 'valid-password-f1', confirm: 'valid-password-f1'}));
+  assert.ok(f.cookieStore.has('invite_retry_authority'), 'Authority cookie set on initial failure');
+  // Retry consumes authority and encounters ambiguous failure
+  f.verifyResult = {error: {message: 'Token already used or expired'}};
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'failover-invite-tok', password: 'valid-password-f2', confirm: 'valid-password-f2'})), {error: 'Could not save your password. Try again.'});
+  assert.equal(f.cookieStore.has('invite_retry_authority'), false, 'Authority cookie must be deleted upon consumption');
+  // Subsequent attempt fails closed — authority is never reopened
+  f.cookieStore.set('invite_retry_authority', validInviteAuthority);
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-f3', confirm: 'valid-password-f3'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+
   // Unauthenticated caller submitting already-consumed invite token fails closed
   f.sessionUser = null;
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-789', confirm: 'valid-password-789'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
-  assert.equal(f.updateCalls.length, 2);
+  assert.equal(f.updateCalls.length, 4);
 });
 
 test('magic link token consumption rejects empty tokens without consuming rate limit and verifies securely', async () => {
