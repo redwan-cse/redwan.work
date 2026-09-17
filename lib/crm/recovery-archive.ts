@@ -62,8 +62,6 @@ export function decodeRecoveryArchive(archive: Buffer): Map<string, Buffer> {
       const crc = archive.readUInt32LE(cursor + 16), compressedSize = archive.readUInt32LE(cursor + 20), size = archive.readUInt32LE(cursor + 24);
       const nameLength = archive.readUInt16LE(cursor + 28), extraLength = archive.readUInt16LE(cursor + 30), commentLength = archive.readUInt16LE(cursor + 32);
       const disk = archive.readUInt16LE(cursor + 34), attrs = archive.readUInt32LE(cursor + 38), localOffset = archive.readUInt32LE(cursor + 42);
-      // No encryption, ZIP64, multipart, comments, unknown flags, directories or
-      // Unix symlinks/devices. Ordinary archive file permissions are accepted.
       const unixType = (attrs >>> 16) & 0xf000;
       if (version > 20 || (flags & ~(8 | 2048)) !== 0 || (method !== 0 && method !== 8) || disk || extraLength || commentLength || (attrs & 16) || (unixType !== 0 && unixType !== 0x8000)) return invalid();
       const next = cursor + 46 + nameLength;
@@ -88,9 +86,11 @@ export function decodeRecoveryArchive(archive: Buffer): Map<string, Buffer> {
         if (compressedSize !== size) return invalid();
         bytes = Buffer.from(payload);
       } else {
-        const inflated = inflateRawSync(payload, { maxOutputLength: Math.max(1, size), info: true });
-        if (inflated.engine.bytesWritten !== compressedSize) return invalid();
-        bytes = inflated.buffer;
+        // Node returns {buffer, engine} with info:true; installed @types/node
+        // declares the generic overload as Buffer. Validate the actual shape.
+        const info: unknown = inflateRawSync(payload, { maxOutputLength: Math.max(1, size), info: true });
+        if (!info || typeof info !== 'object' || !('buffer' in info) || !Buffer.isBuffer(info.buffer) || !('engine' in info) || !info.engine || typeof info.engine !== 'object' || !('bytesWritten' in info.engine) || info.engine.bytesWritten !== compressedSize) return invalid();
+        bytes = info.buffer;
       }
       if (bytes.length !== size || crc32(bytes) !== crc) return invalid();
       result.set(name, bytes); ranges.push([localOffset, finish]); cursor = next;
