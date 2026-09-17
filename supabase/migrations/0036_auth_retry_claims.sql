@@ -14,8 +14,7 @@ create table public.auth_retry_claims (
 create index auth_retry_claims_expires_at_idx on public.auth_retry_claims (expires_at);
 
 alter table public.auth_retry_claims enable row level security;
-revoke all on table public.auth_retry_claims from public, anon, authenticated;
-grant all on table public.auth_retry_claims to service_role;
+revoke all on table public.auth_retry_claims from public, anon, authenticated, service_role;
 
 create or replace function public.claim_auth_retry_nonce(
   p_nonce_hash text,

@@ -27,16 +27,19 @@ Verification suite `tests/reliability/recovery-controls.test.mjs` and PostgreSQL
 - Using resetting rate-limit windows for single-use token consumption creates a critical security defect: once the window passes, an attacker could replay the spent nonce.
 - Migration `0036_auth_retry_claims.sql` establishes `public.auth_retry_claims` with primary key `nonce_hash`. Once inserted via `claim_auth_retry_nonce`, the claim is permanent and non-resetting.
 
-### 2. Runtime Access Restriction & PUBLIC Execution Revocation
+### 2. Runtime Access Restriction & Direct Table Privilege Revocation
 - Functions in PostgreSQL grant `EXECUTE` to pseudo-role `PUBLIC` by default.
-- Migration `0036` explicitly executes:
-  - `revoke all on table public.auth_retry_claims from public, anon, authenticated;`
-  - `grant all on table public.auth_retry_claims to service_role;`
+- Direct table privileges on `public.auth_retry_claims` are completely revoked from all roles, including `service_role`:
+  - `revoke all on table public.auth_retry_claims from public, anon, authenticated, service_role;`
+- Direct table mutations (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`) are denied with SQLSTATE `42501` (`insufficient_privilege`) for `anon`, `authenticated`, and `service_role`.
+- Access is mediated exclusively through `SECURITY DEFINER` functions:
   - `revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from public;`
   - `revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from anon;`
   - `revoke all on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) from authenticated;`
   - `grant execute on function public.claim_auth_retry_nonce(text, uuid, text, timestamptz) to service_role;`
+  - `grant execute on function public.cleanup_expired_auth_retry_claims() to service_role;`
 - Defense-in-depth: `claim_auth_retry_nonce` and `cleanup_expired_auth_retry_claims` inspect `coalesce(current_setting('request.jwt.claim.role', true), '') in ('anon', 'authenticated')` and raise exceptions immediately if called by untrusted roles.
+- Database test suite `tests/reliability/auth-retry-claims-db.py` parses psql stdout correctly across `SET` tags, confirms `service_role` and untrusted role `42501` denial SQLSTATEs, and verifies separate-worker concurrency.
 
 ### 3. Expiry-Based Cleanup Mechanism
 - **Table Index**: An index `auth_retry_claims_expires_at_idx` is placed on `expires_at` for efficient range deletion.

@@ -7,19 +7,25 @@ users = [str(uuid.uuid4()) for _ in range(2)]
 claimed_nonces = []
 phase = 'init'
 
-def sql(statement, succeeds=True):
+def sql(statement, succeeds=True, expected_sqlstate='42501'):
     result = subprocess.run(
-        ['docker', 'exec', '-i', C, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1'],
+        ['docker', 'exec', '-i', C, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose'],
         input=statement,
         text=True,
         capture_output=True,
         timeout=30
     )
-    if succeeds and result.returncode:
-        raise RuntimeError(f'database assertion failed: {result.stderr.strip()}')
-    if not succeeds and not result.returncode:
-        raise RuntimeError('expected database rejection')
-    return result.stdout.strip()
+    if succeeds:
+        if result.returncode != 0:
+            raise RuntimeError(f'database assertion failed: {result.stderr.strip()}')
+        lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip() and l.strip() != 'SET']
+        return lines[-1] if lines else ''
+    else:
+        if result.returncode == 0:
+            raise RuntimeError(f'expected database rejection but command succeeded: {statement}')
+        if expected_sqlstate and expected_sqlstate not in result.stderr:
+            raise RuntimeError(f'expected SQLSTATE {expected_sqlstate} in rejection, got: {result.stderr.strip()}')
+        return result.stderr.strip()
 
 def claim(nonce_hash, user_id, purpose='recovery', expiry="now() + interval '5 minutes'"):
     claimed_nonces.append(nonce_hash)
@@ -28,32 +34,51 @@ def claim(nonce_hash, user_id, purpose='recovery', expiry="now() + interval '5 m
 try:
     sql(f"insert into auth.users(id, email) values ('{users[0]}', 'retry-fixture-0@example.test'), ('{users[1]}', 'retry-fixture-1@example.test');")
 
-    phase = 'role privileges and public execution revocation'
+    phase = 'role privileges and direct table privilege revocation'
+    table_privileges = ['select', 'insert', 'update', 'delete', 'truncate']
+
     # PUBLIC must have no execution or table privileges
     assert sql("select has_function_privilege('public', 'public.claim_auth_retry_nonce(text,uuid,text,timestamptz)', 'execute');") == 'f'
     assert sql("select has_function_privilege('public', 'public.cleanup_expired_auth_retry_claims()', 'execute');") == 'f'
-    assert sql("select has_table_privilege('public', 'public.auth_retry_claims', 'select');") == 'f'
-    assert sql("select has_table_privilege('public', 'public.auth_retry_claims', 'insert');") == 'f'
+    for priv in table_privileges:
+        assert sql(f"select has_table_privilege('public', 'public.auth_retry_claims', '{priv}');") == 'f'
 
+    # anon and authenticated must have no execution or table privileges
     for role in ['anon', 'authenticated']:
-        assert sql(f"select has_table_privilege('{role}', 'public.auth_retry_claims', 'select');") == 'f'
-        assert sql(f"select has_table_privilege('{role}', 'public.auth_retry_claims', 'insert');") == 'f'
         assert sql(f"select has_function_privilege('{role}', 'public.claim_auth_retry_nonce(text,uuid,text,timestamptz)', 'execute');") == 'f'
         assert sql(f"select has_function_privilege('{role}', 'public.cleanup_expired_auth_retry_claims()', 'execute');") == 'f'
+        for priv in table_privileges:
+            assert sql(f"select has_table_privilege('{role}', 'public.auth_retry_claims', '{priv}');") == 'f'
 
+    # service_role has execute privileges on functions, but ZERO direct table privileges
     assert sql("select has_function_privilege('service_role', 'public.claim_auth_retry_nonce(text,uuid,text,timestamptz)', 'execute');") == 't'
     assert sql("select has_function_privilege('service_role', 'public.cleanup_expired_auth_retry_claims()', 'execute');") == 't'
+    for priv in table_privileges:
+        assert sql(f"select has_table_privilege('service_role', 'public.auth_retry_claims', '{priv}');") == 'f'
 
-    phase = 'actual role execution calls and denial'
+    phase = 'untrusted role execution calls and SQLSTATE 42501 denial'
     n_role_test = 'role-test-' + str(uuid.uuid4())
-    # Direct actual role calls under anon and authenticated must fail with permission denied
+    # Direct actual role calls under anon and authenticated must fail with permission denied (SQLSTATE 42501)
     for role in ['anon', 'authenticated']:
-        sql(f"set role {role}; select public.claim_auth_retry_nonce('{n_role_test}', '{users[0]}', 'recovery', now() + interval '5 minutes');", False)
-        sql(f"set role {role}; select public.cleanup_expired_auth_retry_claims();", False)
-        sql(f"set role {role}; select * from public.auth_retry_claims;", False)
-        sql(f"set role {role}; insert into public.auth_retry_claims (nonce_hash, user_id, purpose, expires_at) values ('{n_role_test}', '{users[0]}', 'recovery', now() + interval '5 minutes');", False)
+        sql(f"set role {role}; select public.claim_auth_retry_nonce('{n_role_test}', '{users[0]}', 'recovery', now() + interval '5 minutes');", False, '42501')
+        sql(f"set role {role}; select public.cleanup_expired_auth_retry_claims();", False, '42501')
+        sql(f"set role {role}; select * from public.auth_retry_claims;", False, '42501')
+        sql(f"set role {role}; insert into public.auth_retry_claims (nonce_hash, user_id, purpose, expires_at) values ('{n_role_test}', '{users[0]}', 'recovery', now() + interval '5 minutes');", False, '42501')
+        sql(f"set role {role}; update public.auth_retry_claims set purpose = 'invite';", False, '42501')
+        sql(f"set role {role}; delete from public.auth_retry_claims;", False, '42501')
+        sql(f"set role {role}; truncate table public.auth_retry_claims;", False, '42501')
 
-    # Execution as service_role must succeed
+    phase = 'service_role direct table mutation denial (SQLSTATE 42501)'
+    # service_role must be denied direct SELECT, INSERT, UPDATE, DELETE, and TRUNCATE
+    sql("set role service_role; select * from public.auth_retry_claims;", False, '42501')
+    sql(f"set role service_role; insert into public.auth_retry_claims (nonce_hash, user_id, purpose, expires_at) values ('direct-sr', '{users[0]}', 'recovery', now() + interval '5 minutes');", False, '42501')
+    sql("set role service_role; update public.auth_retry_claims set purpose = 'invite';", False, '42501')
+    sql("set role service_role; delete from public.auth_retry_claims;", False, '42501')
+    sql("set role service_role; truncate table public.auth_retry_claims;", False, '42501')
+
+    phase = 'service_role authorized RPC execution'
+    # Execution of claim_auth_retry_nonce as service_role must succeed via security definer
+    # psql without -q outputs SET\nt; sql() parses results correctly by filtering SET lines
     assert sql(f"set role service_role; select public.claim_auth_retry_nonce('{n_role_test}', '{users[0]}', 'recovery', now() + interval '5 minutes');") == 't'
     assert sql(f"select count(*) from public.auth_retry_claims where nonce_hash = '{n_role_test}';") == '1'
 
@@ -87,7 +112,8 @@ try:
             capture_output=True,
             timeout=30
         )
-        return res.stdout.strip()
+        lines = [l.strip() for l in res.stdout.strip().splitlines() if l.strip() and l.strip() != 'SET']
+        return lines[-1] if lines else ''
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         results = list(executor.map(worker_claim, range(12)))
@@ -106,7 +132,8 @@ try:
             capture_output=True,
             timeout=30
         )
-        return res.stdout.strip()
+        lines = [l.strip() for l in res.stdout.strip().splitlines() if l.strip() and l.strip() != 'SET']
+        return lines[-1] if lines else ''
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         distinct_results = list(executor.map(distinct_worker_claim, range(8)))
@@ -123,14 +150,14 @@ try:
     sql(f"insert into public.auth_retry_claims (nonce_hash, user_id, purpose, expires_at, consumed_at) values ('{old_expired_nonce}', '{users[0]}', 'recovery', now() - interval '8 days', now() - interval '8 days');")
     assert sql(f"select count(*) from public.auth_retry_claims where nonce_hash = '{old_expired_nonce}';") == '1'
     
-    # Run cleanup procedure
-    deleted_count = int(sql("select public.cleanup_expired_auth_retry_claims();"))
+    # Run cleanup procedure via service_role
+    deleted_count = int(sql("set role service_role; select public.cleanup_expired_auth_retry_claims();"))
     assert deleted_count >= 1, f"Expected at least 1 deleted row, got {deleted_count}"
     assert sql(f"select count(*) from public.auth_retry_claims where nonce_hash = '{old_expired_nonce}';") == '0', "Expired claim > 7 days must be purged"
     # Fresh active claim must remain intact
     assert sql(f"select count(*) from public.auth_retry_claims where nonce_hash = '{n1}';") == '1', "Active claim must not be purged"
 
-    print('Passed: actual role calls, public revocation, separate-worker concurrency, durable claims, and expiry-based cleanup.')
+    print('Passed: actual role calls, public and service_role table denial (SQLSTATE 42501), separate-worker concurrency, durable claims, and expiry-based cleanup.')
 except Exception as e:
     print(f'::error::Auth retry claims database acceptance failed at {phase}: {e}')
     raise SystemExit(1)
