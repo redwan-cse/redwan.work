@@ -84,9 +84,32 @@ Preserve main, cleanup/contact-legacy-payload (#27), the four open Dependabot PR
 
 Not ready for a new release on the audited evidence. Close Critical findings with verification, resolve or explicitly accept Important risks, triage outstanding security outcomes and execute the unavailable gates. Scanner success alone is insufficient. This plan is not an instruction to shut down production or alter any live setting.
 
-## Audit remediation completion and branch retirement (17 September 2026)
+## Audit remediation status and branch retirement (17 September 2026)
 
-All twenty findings (F01–F20) across open backlog issues #28–#47 have been remediated, verified with 454 automated regression tests, and merged into `main` via PR #56 (Merge commit `432c7d1`).
+Findings F01 through F19 across open backlog issues #28–#47 have been remediated, verified with automated regression tests, and merged into `main` via PR #56 (Merge commit `432c7d1`).
+
+### F20 (Consent Policy Integration / I03) Approved Deferral
+Finding F20 is intentionally deferred and not claimed as active in production:
+- In `lib/contact/consent-policy.ts`, `CONSENT_ACTIVATION_ENABLED = false`.
+- Intake route `app/api/contact/route.ts` validates explicit consent presence, but is not wired to database-backed multi-version consent registry gating.
+- Test suites in `tests/reliability/consent-writers-db.py` use synthetic bypasses for isolated contract validation only.
+- Full activation requires future database schema additions, published policy bundles, and explicit owner approval.
+
+### Follow-up Audit Remediation (Branch `fix/audit-followup-remediation`)
+Following current-source audit on `main` (commit `31ff564`), four specific technical limitations were resolved:
+1. **Blogger Pagination & Cache Bounds** (`lib/blogger.ts`, `app/blogs/page.tsx`):
+   - Honest post collection up to `MAX_POSTS_FETCH` (300) so Page 1 displays accurate total items and renders pagination controls.
+   - Non-overlapping window slicing `(page - 1) * perPage` eliminating tail overlap duplication on later pages.
+   - Bounded in-memory cache (max 50 entries) with expired-key sweep, LRU eviction, and in-flight request deduplication.
+   - Verified by 11 unit tests in `tests/reliability/blogger-pagination.test.mjs`.
+2. **Recovery & Invite OTP Single-Use Retry** (`lib/auth/actions.ts`):
+   - Handles password update retry after single-use OTP consumption: if `verifyOtp` fails because the token was already consumed but an authenticated session was established during the recovery/invite flow, `updateUser` is retried safely.
+   - Verified by stateful token consumption tests in `tests/reliability/recovery-controls.test.mjs`.
+3. **Build Manifest & Route Verification** (`scripts/audit-manifests.mjs`, `tests/reliability/caller-inventory.test.mjs`, `tests/reliability/verify.py`):
+   - Separated post-build manifest verification (`node scripts/audit-manifests.mjs`) checking all 41 Server Actions and 8 API routes against built manifests.
+   - Tested real `public-asset-actions.ts` with leaf R2 upload mock in caller inventory unit tests.
+4. **Evidence Ledger Reconciliation**:
+   - Reconciled F20 deferral status and trust-boundary limits across documentation.
 
 ### Branch retirement record
 The four legacy audit/remediation branches have been retired and deleted from remote tracking:
