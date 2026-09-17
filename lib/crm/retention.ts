@@ -20,6 +20,14 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
     const invoices=await admin.from('invoices').select('id',{count:'exact',head:true}).eq('project_id',projectId);
     if(invoices.error||invoices.count===null)return {ok:false,error:'Financial retention check unavailable.'};
     if(invoices.count)return {ok:false,error:'Project has retained invoices and cannot be purged.'};
+    if(!Array.isArray(snapshot.files)||snapshot.files.length>2000)return {ok:false,error:'Project exceeds supported recovery limits.'};
+    if(snapshot.files.length){
+      const {verifyImmutableUpload}=await import('@/lib/crm/immutable-upload');
+      for(const file of snapshot.files){
+        if(file.bucket!=='private'||file.kind!=='deliverable')return {ok:false,error:'Project contains an unsupported recovery file. Source data is preserved.'};
+        try{await verifyImmutableUpload(file.r2_key,Number(file.size_bytes));}catch{return {ok:false,error:'Project purge is held: legacy or changed uploads require administrator review.'};}
+      }
+    }
     const manifest=Buffer.from(JSON.stringify(snapshot));
     let total=manifest.length;
     if(total>ARCHIVE_MAX_BYTES)return {ok:false,error:'Recovery backup exceeds 100 MB.'};
@@ -42,6 +50,8 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
       }
       await archive.finalize();
       const buffer=await finished;
+      // Prove our actual archiver output is accepted by the restore parser.
+      const {decodeRecoveryArchive}=await import('@/lib/crm/recovery-archive');decodeRecoveryArchive(buffer);
       const digest=createHash('sha256').update(buffer).digest('hex');
       const recoveryKey=`archive/project_${projectId}/recovery_${randomUUID()}.zip`;
       await putPrivateObject(recoveryKey,buffer,'application/zip');
@@ -55,18 +65,30 @@ export async function purgeArchivedProject(projectId:string):Promise<CrmResult> 
 }
 export async function drainStorageDeletions(limit=100):Promise<{completed:number;failed:number}> {
   const admin=getSupabaseAdmin();
-  const {data,error}=await admin.from('storage_deletions').select('r2_key,source,file_id').is('completed_at',null).order('created_at').order('r2_key').limit(Math.max(1,Math.min(100,limit)));
+  const {data,error}=await admin.from('storage_deletions').select('r2_key,source,file_id,project_id').is('completed_at',null).order('created_at').order('r2_key').limit(Math.max(1,Math.min(100,limit)));
   if(error)throw new Error('Cleanup queue unavailable.');
   let completed=0,failed=0;
   for(const row of data??[]) {
     try {
-      if(row.source==='individual'){
-        if(!row.file_id)throw new Error('Legacy individual deletion requires review');
-        const backup=await admin.from('file_recovery').select('recovery_key,sha256,archive_bytes,file_snapshot').eq('file_id',row.file_id).maybeSingle();
-        if(backup.error||!backup.data||backup.data.file_snapshot?.r2_key!==row.r2_key)throw new Error('Verified backup unavailable');
+      if(row.source==='individual'||row.source==='project'){
+        const {isImmutableUploadKey}=await import('@/lib/crm/immutable-upload');
+        if(!isImmutableUploadKey(row.r2_key))throw new Error('Legacy deletion held');
+        const proof=await admin.from('immutable_uploads').select('sha256').eq('r2_key',row.r2_key).maybeSingle();
+        if(proof.error||!proof.data)throw new Error('Finalized proof unavailable');
         const {readRecoveryBytes}=await import('@/lib/crm/recovery-storage');
-        const bytes=await readRecoveryBytes(backup.data.recovery_key,Number(backup.data.archive_bytes));
-        if(bytes.length!==Number(backup.data.archive_bytes)||createHash('sha256').update(bytes).digest('hex')!==backup.data.sha256)throw new Error('Verified backup unavailable');
+        if(row.source==='individual'){
+          if(!row.file_id)throw new Error('Legacy individual deletion requires review');
+          const backup=await admin.from('file_recovery').select('recovery_key,sha256,archive_bytes,file_snapshot').eq('file_id',row.file_id).maybeSingle();
+          if(backup.error||!backup.data||backup.data.file_snapshot?.r2_key!==row.r2_key)throw new Error('Verified backup unavailable');
+          const bytes=await readRecoveryBytes(backup.data.recovery_key,Number(backup.data.archive_bytes));
+          if(bytes.length!==Number(backup.data.archive_bytes)||createHash('sha256').update(bytes).digest('hex')!==backup.data.sha256)throw new Error('Verified backup unavailable');
+        }else{
+          if(!row.project_id)throw new Error('Project recovery unavailable');
+          const backup=await admin.from('project_recovery').select('recovery_key,sha256,snapshot').eq('project_id',row.project_id).maybeSingle();
+          if(backup.error||!backup.data||!Array.isArray(backup.data.snapshot?.files)||!backup.data.snapshot.files.some((f:{r2_key:string})=>f.r2_key===row.r2_key))throw new Error('Project recovery unavailable');
+          const bytes=await readRecoveryBytes(backup.data.recovery_key);
+          if(createHash('sha256').update(bytes).digest('hex')!==backup.data.sha256)throw new Error('Project recovery unavailable');
+        }
       }
       await deletePrivateObjects([row.r2_key]);
       const result=await admin.from('storage_deletions').update({completed_at:new Date().toISOString()},{count:'exact'}).eq('r2_key',row.r2_key).is('completed_at',null);
