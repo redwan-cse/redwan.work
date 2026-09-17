@@ -38,7 +38,6 @@ export interface NormalizedLead {
   user_agent: string | null;
   ip_hash: string | null;
   consent_at: string;
-  consent_policy_version?: string;
   attachments: LeadAttachment[];
 }
 
@@ -185,7 +184,6 @@ export function parseLeadPayload(
       user_agent: meta.userAgent?.slice(0, 400) ?? null,
       ip_hash: meta.ipHash,
       consent_at: new Date().toISOString(),
-      consent_policy_version: '2026-09-09',
       attachments: attachments.attachments,
     },
   };
