@@ -1,6 +1,6 @@
 import os,subprocess,uuid,json
 if os.environ.get('GITHUB_ACTIONS')!='true':raise SystemExit('Disposable CI required')
-C='supabase_db_redwan-reliability-ci';a,u,p,f,op=[str(uuid.uuid4()) for _ in range(5)];fid=str(uuid.uuid5(uuid.NAMESPACE_URL,op));key=f'private/{u}/project_{p}/{fid}.pdf';source=key.replace('-5','-4',1);phase='setup';sha='c'*64
+C='supabase_db_redwan-reliability-ci';a,u,p,f,op=[str(uuid.uuid4()) for _ in range(5)];fid=str(uuid.uuid5(uuid.NAMESPACE_URL,op));prefix=f'private/{u}/project_{p}/';key=prefix+fid+'.pdf';source=prefix+fid[:14]+'4'+fid[15:]+'.pdf';phase='setup';sha='c'*64
 # Keys are synthetic proof fixtures. This suite does not claim storage writes.
 def sql(s,code=None):
  r=subprocess.run(['docker','exec','-i',C,'psql','-U','postgres','-d','postgres','-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-v','VERBOSITY=verbose'],input=s,text=True,capture_output=True,timeout=30)
