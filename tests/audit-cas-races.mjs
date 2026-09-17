@@ -12,7 +12,7 @@ const fixtures={from(table){let patch=null,exact=false,selection=null,single=fal
   assert.ok(['storage_deletions','maintenance_cursors','projects'].includes(table));
   if(table==='projects')return {data:Array.from({length:10},(_,i)=>({id:'00000000-0000-0000-0000-'+String(i+1).padStart(12,'0')})),error:null};
   if(patch){assert.ok(filters.length);assert.ok(Object.keys(patch).every(k=>['completed_at','last_key','updated_at'].includes(k)));const changes=Object.entries(patch).map(([k,v])=>k+'='+literal(v)).join(',');const affected=Number(sql(`with changed as (update public.${table} set ${changes} where ${filters.join(' and ')} returning 1) select count(*) from changed;`));state.updates.push({table,affected});return {data:null,count:exact?affected:null,error:null};}
-  assert.ok(['r2_key','completed_at','name,last_key'].includes(selection));
+  assert.ok(['r2_key','r2_key,source,file_id','completed_at','name,last_key'].includes(selection));
   const rows=JSON.parse(sql(`select coalesce(json_agg(t),'[]'::json) from (select ${selection} from public.${table} ${filters.length?'where '+filters.join(' and '):''} ${table==='storage_deletions'?'order by created_at,r2_key limit '+limit:''}) t;`));state.reads++;
   if(!single&&((table==='storage_deletions'&&state.mode==='drain-race')||(table==='maintenance_cursors'&&state.mode==='cursor-race')))await state.barrier();
   return {data:single?(rows[0]??null):rows,error:null};
@@ -23,7 +23,7 @@ registerHooks({resolve(s,c,n){if(Object.hasOwn(modules,s))return {url:'data:text
 const {drainStorageDeletions}=await import('../lib/crm/retention.ts');const {GET}=await import('../app/api/cron/r2-retention/route.ts');
 const result={setup:false,drainSingle:false,drainRace:false,cursorSingle:false,cursorRace:false,cursorAba:false,cleanup:false,observations:{}};
 try{
- const migration=readFileSync('supabase/migrations/0021_recoverable_storage_cleanup.sql','utf8');const tables=['project_recovery','storage_deletions'].map(name=>{const match=migration.match(new RegExp('create table public\\.'+name+' \\([\\s\\S]*?\\n\\);'));assert.ok(match);return match[0];}).join('\n');sql('create role anon;create role authenticated;create role service_role;'+tables+readFileSync('supabase/migrations/0024_maintenance_cursors.sql','utf8'));result.setup=true;
+ const migration=readFileSync('supabase/migrations/0021_recoverable_storage_cleanup.sql','utf8');const tables=['project_recovery','storage_deletions'].map(name=>{const match=migration.match(new RegExp('create table public\\.'+name+' \\([\\s\\S]*?\\n\\);'));assert.ok(match);return match[0];}).join('\n');sql('create role anon;create role authenticated;create role service_role;'+tables+'alter table public.storage_deletions add column file_id uuid;'+readFileSync('supabase/migrations/0024_maintenance_cursors.sql','utf8'));result.setup=true;
  function reset(mode){sql("truncate public.storage_deletions;update public.maintenance_cursors set last_key='';");Object.assign(state,{mode,barrier:async()=>{},updates:[],deleteCalls:0,objects:new Set(['fixture-key']),physicalDeletes:0,reads:0});}
  function seed(){sql("insert into public.storage_deletions(r2_key,source) values('fixture-key','contact');");}
  reset('single');seed();assert.deepEqual(await drainStorageDeletions(),{completed:1,failed:0});assert.equal(state.updates[0].affected,1);result.drainSingle=true;
