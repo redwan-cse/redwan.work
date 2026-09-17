@@ -9,6 +9,8 @@ const f = {
   magicOtpCalls: [],
   verifyCalls: [],
   updateCalls: [],
+  sessionUser: null,
+  consumedTokens: new Set(),
   claims: {data: {claims: {app_metadata: {role: 'client'}}}, error: null},
   magicOtpResult: {error: null},
   resetResult: {error: null},
@@ -21,7 +23,7 @@ globalThis.__recoveryControls = f;
 const modules = {
   'next/navigation': 'export function redirect(dest){globalThis.__recoveryControls.redirects.push(dest);throw Object.assign(new Error("Synthetic redirect"),{destination:dest});}',
   'next/headers': 'export async function headers(){return new Headers({host:"attacker.invalid","x-forwarded-host":"attacker.invalid","x-forwarded-for":"synthetic"});}',
-  '@/lib/supabase/server': 'export async function createSupabaseServerClient(){const f=globalThis.__recoveryControls;return {auth:{async resetPasswordForEmail(email,options){f.calls.push({email,options});return f.resetResult;},async signInWithOtp(params){f.magicOtpCalls.push(params);return f.magicOtpResult;},async verifyOtp(params){f.verifyCalls.push(params);return f.verifyResult;},async updateUser(params){f.updateCalls.push(params);return f.updateResult;},async getClaims(){return f.claims;}}};}',
+  '@/lib/supabase/server': 'export async function createSupabaseServerClient(){const f=globalThis.__recoveryControls;return {auth:{async resetPasswordForEmail(email,options){f.calls.push({email,options});return f.resetResult;},async signInWithOtp(params){f.magicOtpCalls.push(params);return f.magicOtpResult;},async verifyOtp(params){f.verifyCalls.push(params);if(f.verifyResult?.error)return f.verifyResult;if(f.consumedTokens.has(params.token_hash))return {data:{user:null,session:null},error:{message:"Token already used or expired"}};f.consumedTokens.add(params.token_hash);f.sessionUser={sub:"usr-synthetic",role:f.claims?.data?.claims?.app_metadata?.role||"client"};return {data:{user:{id:"usr-synthetic"},session:{}},error:null};},async updateUser(params){f.updateCalls.push(params);return f.updateResult;},async getClaims(){if(f.sessionUser)return {data:{claims:{sub:f.sessionUser.sub,app_metadata:{role:f.claims?.data?.claims?.app_metadata?.role||f.sessionUser.role}}},error:null};return f.claims;}}};}',
   '@/lib/supabase/admin': 'export function getSupabaseAdmin(){return {rpc:async()=>{globalThis.__recoveryControls.rateCalls++;return globalThis.__recoveryControls.rate;}};}',
   '@/lib/contact/lead-schema': 'export async function sha256Hex(){return "synthetic-hash";}',
 };
@@ -148,6 +150,9 @@ test('recovery password update validates password before token consumption and h
   f.updateResult = {error: null};
   f.verifyCalls = [];
   f.updateCalls = [];
+  f.sessionUser = null;
+  f.consumedTokens.clear();
+  f.claims = {data: {claims: null}, error: null};
 
   // Missing token
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
@@ -155,30 +160,41 @@ test('recovery password update validates password before token consumption and h
   // Password < 12 characters: verifyOtp must NOT be called (preserves single-use token)
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'tok-123', password: 'short', confirm: 'short'})), {error: 'Password must be at least 12 characters.'});
   assert.equal(f.verifyCalls.length, 0);
+  assert.equal(f.consumedTokens.has('tok-123'), false);
 
   // Password confirmation mismatch: verifyOtp must NOT be called
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'tok-123', password: 'valid-password-123', confirm: 'mismatch-123'})), {error: 'Passwords do not match.'});
   assert.equal(f.verifyCalls.length, 0);
+  assert.equal(f.consumedTokens.has('tok-123'), false);
 
-  // verifyOtp failure (expired or replayed token)
+  // verifyOtp failure (expired or unknown token) without established session fails closed
   f.verifyResult = {error: {message: 'Token expired'}};
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'expired-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
   assert.deepEqual(f.verifyCalls, [{type: 'recovery', token_hash: 'expired-tok'}]);
   assert.equal(f.updateCalls.length, 0);
 
-  // updateUser failure maps to safe message without diagnostic leakage
+  // updateUser failure consumes single-use token and establishes recovery session, returning safe error copy
   f.verifyResult = {error: null};
   f.updateResult = {error: {message: 'synthetic provider error'}};
   assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'Could not update your password. Try again.'});
   assert.deepEqual(f.updateCalls, [{password: 'valid-password-123'}]);
+  assert.equal(f.consumedTokens.has('valid-tok'), true);
+  assert.ok(f.sessionUser);
 
-  // Success redirects to role home
+  // Single-use token retry: resubmitting with the same consumed token succeeds via established recovery session
   f.updateResult = {error: null};
-  f.claims = {data: {claims: {app_metadata: {role: 'client'}}}, error: null};
-  assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {redirect: '/portal'});
+  assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'valid-tok', password: 'valid-password-456', confirm: 'valid-password-456'})), {redirect: '/portal'});
+  assert.equal(f.updateCalls.length, 2);
+  assert.equal(f.updateCalls[1].password, 'valid-password-456');
 
-  f.claims = {data: {claims: {app_metadata: {role: 'admin'}}}, error: null};
-  assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'valid-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {redirect: '/admin'});
+  // Unauthenticated caller submitting an already-consumed token fails closed
+  f.sessionUser = null;
+  assert.deepEqual(await setNewPasswordFromRecoveryAction({}, makeForm({token_hash: 'valid-tok', password: 'valid-password-789', confirm: 'valid-password-789'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 2); // updateUser not invoked
+
+  // Admin role recovery redirect
+  f.sessionUser = {sub: 'usr-admin', role: 'admin'};
+  assert.deepEqual(await callAction(setNewPasswordFromRecoveryAction, {}, makeForm({token_hash: 'valid-tok', password: 'valid-password-adm', confirm: 'valid-password-adm'})), {redirect: '/admin'});
 });
 
 test('invite acceptance validates password before token consumption and handles failures cleanly', async () => {
@@ -186,6 +202,9 @@ test('invite acceptance validates password before token consumption and handles 
   f.updateResult = {error: null};
   f.verifyCalls = [];
   f.updateCalls = [];
+  f.sessionUser = null;
+  f.consumedTokens.clear();
+  f.claims = {data: {claims: null}, error: null};
 
   // Missing token
   assert.deepEqual(await acceptInviteAction({}, makeForm({password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
@@ -193,9 +212,11 @@ test('invite acceptance validates password before token consumption and handles 
   // Password validation preserves single-use token
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'invite-tok', password: 'short', confirm: 'short'})), {error: 'Password must be at least 12 characters.'});
   assert.equal(f.verifyCalls.length, 0);
+  assert.equal(f.consumedTokens.has('invite-tok'), false);
 
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'invite-tok', password: 'valid-password-123', confirm: 'mismatch-123'})), {error: 'Passwords do not match.'});
   assert.equal(f.verifyCalls.length, 0);
+  assert.equal(f.consumedTokens.has('invite-tok'), false);
 
   // verifyOtp failure
   f.verifyResult = {error: {message: 'Token expired'}};
@@ -203,15 +224,23 @@ test('invite acceptance validates password before token consumption and handles 
   assert.deepEqual(f.verifyCalls, [{type: 'invite', token_hash: 'expired-invite-tok'}]);
   assert.equal(f.updateCalls.length, 0);
 
-  // updateUser failure maps to safe message
+  // updateUser failure maps to safe message while consuming token and establishing session
   f.verifyResult = {error: null};
   f.updateResult = {error: {message: 'synthetic provider error'}};
   assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {error: 'Could not save your password. Try again.'});
+  assert.equal(f.consumedTokens.has('valid-invite-tok'), true);
+  assert.ok(f.sessionUser);
 
-  // Success redirects to role home
+  // Single-use token retry: resubmitting with same consumed token succeeds via established session
   f.updateResult = {error: null};
-  f.claims = {data: {claims: {app_metadata: {role: 'client'}}}, error: null};
-  assert.deepEqual(await callAction(acceptInviteAction, {}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-123', confirm: 'valid-password-123'})), {redirect: '/portal'});
+  assert.deepEqual(await callAction(acceptInviteAction, {}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-456', confirm: 'valid-password-456'})), {redirect: '/portal'});
+  assert.equal(f.updateCalls.length, 2);
+  assert.equal(f.updateCalls[1].password, 'valid-password-456');
+
+  // Unauthenticated caller submitting already-consumed invite token fails closed
+  f.sessionUser = null;
+  assert.deepEqual(await acceptInviteAction({}, makeForm({token_hash: 'valid-invite-tok', password: 'valid-password-789', confirm: 'valid-password-789'})), {error: 'This link is invalid or has expired. Ask for a new one.'});
+  assert.equal(f.updateCalls.length, 2);
 });
 
 test('magic link token consumption rejects empty tokens without consuming rate limit and verifies securely', async () => {
@@ -219,6 +248,8 @@ test('magic link token consumption rejects empty tokens without consuming rate l
   f.verifyResult = {error: null};
   f.rateCalls = 0;
   f.verifyCalls = [];
+  f.sessionUser = null;
+  f.consumedTokens.clear();
 
   // Empty or missing token rejects without consuming rate limit
   assert.deepEqual(await consumeMagicLinkTokenAction(''), {ok: false, error: 'This link is invalid or has expired. Ask for a new one.'});
@@ -241,6 +272,8 @@ test('magic link token consumption rejects empty tokens without consuming rate l
   f.claims = {data: {claims: {app_metadata: {role: 'client'}}}, error: null};
   assert.deepEqual(await consumeMagicLinkTokenAction('valid-tok'), {ok: true, home: '/portal'});
 
+  f.sessionUser = null;
+  f.consumedTokens.delete('valid-tok-admin');
   f.claims = {data: {claims: {app_metadata: {role: 'admin'}}}, error: null};
-  assert.deepEqual(await consumeMagicLinkTokenAction('valid-tok'), {ok: true, home: '/admin'});
+  assert.deepEqual(await consumeMagicLinkTokenAction('valid-tok-admin'), {ok: true, home: '/admin'});
 });

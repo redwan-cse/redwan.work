@@ -71,12 +71,20 @@ export async function requestPasswordResetAction(_prev:ActionState,formData:Form
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});if(error)return {error:INVALID_LINK};
+ const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
+ if(error){
+  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+  if(claimsErr||(!claimsData?.claims?.sub&&!claimsData?.claims?.app_metadata?.role))return {error:INVALID_LINK};
+ }
  const updated=await supabase.auth.updateUser({password:checked.password});if(updated.error)return {error:'Could not update your password. Try again.'};redirect(await panelHomeForCurrentUser());
 }
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});if(error)return {error:INVALID_LINK};
+ const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
+ if(error){
+  const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
+  if(claimsErr||(!claimsData?.claims?.sub&&!claimsData?.claims?.app_metadata?.role))return {error:INVALID_LINK};
+ }
  const updated=await supabase.auth.updateUser({password:checked.password});if(updated.error)return {error:'Could not save your password. Try again.'};redirect(await panelHomeForCurrentUser());
 }
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
