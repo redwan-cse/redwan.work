@@ -14,6 +14,7 @@ export interface BlogPost {
 export interface BlogPostsPage {
   posts: BlogPost[];
   totalItems: number;
+  isCapped?: boolean;
 }
 
 /**
@@ -35,8 +36,8 @@ interface CacheEntry {
 const blogCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<BlogPostsPage>>();
 
-let rawPostsSnapshot: { items: BloggerPostItem[]; totalItems: number; expiresAt: number } | null = null;
-let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number }> | null = null;
+let rawPostsSnapshot: { items: BloggerPostItem[]; totalItems: number; isCapped: boolean; expiresAt: number } | null = null;
+let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> | null = null;
 
 function sweepExpiredCache(now: number) {
   for (const [key, entry] of blogCache.entries()) {
@@ -116,16 +117,17 @@ const MAX_POSTS_FETCH = 300;
 // Blogger caps a single posts.list response well below this
 const POSTS_PER_API_CALL = 100;
 
-async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; totalItems: number }> {
+async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
   const client = createBloggerClient();
 
   if (!client) {
     console.error("❌ Missing environment variables: BLOGGER_BLOG_ID or GOOGLE_CREDENTIALS_B64");
-    return { items: [], totalItems: 0 };
+    return { items: [], totalItems: 0, isCapped: false };
   }
 
   const allItems: BloggerPostItem[] = [];
   let pageToken: string | undefined;
+  let isCapped = false;
 
   do {
     const remaining = MAX_POSTS_FETCH - allItems.length;
@@ -141,10 +143,12 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
 
     const items = (response.data.items ?? []) as BloggerPostItem[];
     allItems.push(...items);
-    pageToken =
-      allItems.length < MAX_POSTS_FETCH && response.data.nextPageToken
-        ? response.data.nextPageToken
-        : undefined;
+    if (allItems.length >= MAX_POSTS_FETCH && response.data.nextPageToken) {
+      isCapped = true;
+      pageToken = undefined;
+    } else {
+      pageToken = response.data.nextPageToken ?? undefined;
+    }
   } while (pageToken);
 
   let totalItems = allItems.length;
@@ -153,17 +157,22 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
       const blogMeta = await client.blogger.blogs.get({ blogId: client.blogId });
       const metaCount = Number(blogMeta?.data?.posts?.totalItems);
       if (Number.isSafeInteger(metaCount) && metaCount > 0) {
-        totalItems = Math.max(allItems.length, metaCount);
+        if (metaCount > MAX_POSTS_FETCH) {
+          isCapped = true;
+          totalItems = MAX_POSTS_FETCH;
+        } else {
+          totalItems = Math.max(allItems.length, metaCount);
+        }
       }
     } catch {
       // Graceful fallback to allItems.length
     }
   }
 
-  return { items: allItems, totalItems };
+  return { items: allItems, totalItems, isCapped };
 }
 
-async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalItems: number }> {
+async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
   const now = Date.now();
   if (rawPostsSnapshot && rawPostsSnapshot.expiresAt > now) {
     return rawPostsSnapshot;
@@ -195,10 +204,11 @@ async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPo
     return {
       posts,
       totalItems: snapshot.totalItems,
+      isCapped: snapshot.isCapped,
     };
   } catch {
     console.error('Blogger fetch unavailable.');
-    return { posts: [], totalItems: 0 };
+    return { posts: [], totalItems: 0, isCapped: false };
   }
 }
 

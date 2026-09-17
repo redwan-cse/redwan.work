@@ -1,6 +1,6 @@
 'use server';
 import {redirect} from 'next/navigation';
-import {headers} from 'next/headers';
+import {headers, cookies} from 'next/headers';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
@@ -71,21 +71,50 @@ export async function requestPasswordResetAction(_prev:ActionState,formData:Form
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
- if(error){
+ const supabase=await createSupabaseServerClient();
+ const cookieStore=await cookies();
+ const recoveryProof=cookieStore.get('recovery_proof')?.value;
+
+ const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
+ if(!otpError&&otpData?.user?.id){
+  const proof=await sha256Hex(`recovery:${tokenHash}:${otpData.user.id}`);
+  cookieStore.set('recovery_proof',proof,{httpOnly:true,secure:process.env.NODE_ENV==='production',maxAge:300,sameSite:'lax',path:'/'});
+ }else{
   const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-  if(claimsErr||(!claimsData?.claims?.sub&&!claimsData?.claims?.app_metadata?.role))return {error:INVALID_LINK};
+  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+  if(claimsErr||!sub||!recoveryProof)return {error:INVALID_LINK};
+  const expectedProof=await sha256Hex(`recovery:${tokenHash}:${sub}`);
+  if(recoveryProof!==expectedProof)return {error:INVALID_LINK};
  }
- const updated=await supabase.auth.updateUser({password:checked.password});if(updated.error)return {error:'Could not update your password. Try again.'};redirect(await panelHomeForCurrentUser());
+
+ const updated=await supabase.auth.updateUser({password:checked.password});
+ if(updated.error)return {error:'Could not update your password. Try again.'};
+ cookieStore.delete('recovery_proof');
+ redirect(await panelHomeForCurrentUser());
 }
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
- const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};const checked=validatePasswordPair(formData);if('error' in checked)return checked;
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
- if(error){
+ const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
+ const checked=validatePasswordPair(formData);if('error' in checked)return checked;
+ const supabase=await createSupabaseServerClient();
+ const cookieStore=await cookies();
+ const inviteProof=cookieStore.get('invite_proof')?.value;
+
+ const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
+ if(!otpError&&otpData?.user?.id){
+  const proof=await sha256Hex(`invite:${tokenHash}:${otpData.user.id}`);
+  cookieStore.set('invite_proof',proof,{httpOnly:true,secure:process.env.NODE_ENV==='production',maxAge:300,sameSite:'lax',path:'/'});
+ }else{
   const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
-  if(claimsErr||(!claimsData?.claims?.sub&&!claimsData?.claims?.app_metadata?.role))return {error:INVALID_LINK};
+  const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+  if(claimsErr||!sub||!inviteProof)return {error:INVALID_LINK};
+  const expectedProof=await sha256Hex(`invite:${tokenHash}:${sub}`);
+  if(inviteProof!==expectedProof)return {error:INVALID_LINK};
  }
- const updated=await supabase.auth.updateUser({password:checked.password});if(updated.error)return {error:'Could not save your password. Try again.'};redirect(await panelHomeForCurrentUser());
+
+ const updated=await supabase.auth.updateUser({password:checked.password});
+ if(updated.error)return {error:'Could not save your password. Try again.'};
+ cookieStore.delete('invite_proof');
+ redirect(await panelHomeForCurrentUser());
 }
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
  if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};return {ok:true,home:await panelHomeForCurrentUser()};

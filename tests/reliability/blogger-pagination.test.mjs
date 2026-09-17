@@ -195,7 +195,8 @@ test('boundary sizes: 300 posts respects MAX_POSTS_FETCH and paginates cleanly',
 test('boundary sizes: 301 posts is capped safely at 300 items', async () => {
   resetState(301);
   const page1 = await getBlogPostsPage(1, 100);
-  assert.equal(page1.totalItems, 301); // metadata reflects 301, items capped at 300
+  assert.equal(page1.totalItems, 300);
+  assert.equal(page1.isCapped, true);
   const page3 = await getBlogPostsPage(3, 100);
   assert.equal(page3.posts.length, 100);
   assert.equal(page3.posts[99].id, 'post-300');
