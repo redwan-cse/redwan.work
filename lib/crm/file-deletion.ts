@@ -9,8 +9,6 @@ export async function deleteOwnedFile(fileId:string,viewer:{userId:string;role:'
  if(typeof fileId!=='string'||!UUID.test(fileId)||!viewer||typeof viewer.userId!=='string'||!UUID.test(viewer.userId)||!['admin','client'].includes(viewer.role))return {ok:false,error:'File not found.'};
  const admin=getSupabaseAdmin();
  try{
-  // Reuse only a fully recorded backup. New backup authorization happens in SQL
-  // before reading any source bytes; preparation rechecks the row under locks.
   const existing=await admin.from('file_recovery').select('file_id,requested_by,file_snapshot,recovery_key,sha256,archive_bytes').eq('file_id',fileId).maybeSingle();
   if(existing.error)return {ok:false,error:'Backup tracking unavailable. File was not deleted.'};
   let snapshot:Record<string,unknown>,key:string,hash:string,size:number;
@@ -22,6 +20,8 @@ export async function deleteOwnedFile(fileId:string,viewer:{userId:string;role:'
    if(found.error||!found.data)return {ok:false,error:'File deletion refused. No storage operation was attempted.'};
    snapshot=found.data as Record<string,unknown>;
    if(snapshot.id!==fileId||typeof snapshot.r2_key!=='string'||!storage.isPortalKey(snapshot.r2_key)||!Number.isSafeInteger(Number(snapshot.size_bytes))||Number(snapshot.size_bytes)<1||Number(snapshot.size_bytes)>storage.CONTACT_MAX_SIZE_BYTES)throw new Error();
+   const {verifyImmutableUpload}=await import('@/lib/crm/immutable-upload');
+   try{await verifyImmutableUpload(snapshot.r2_key,Number(snapshot.size_bytes));}catch{return {ok:false,error:'File deletion is held: finalized upload proof is unavailable. Original data is preserved for administrator review.'};}
    const {readRecoveryBytes,writeRecoveryBytes}=await import('@/lib/crm/recovery-storage');
    const {encodeRecoveryArchive}=await import('@/lib/crm/recovery-archive');
    const source=await readRecoveryBytes(snapshot.r2_key,Number(snapshot.size_bytes));
@@ -36,8 +36,9 @@ export async function deleteOwnedFile(fileId:string,viewer:{userId:string;role:'
   const prepared=await admin.rpc('prepare_backed_up_file_deletion',{p_file:fileId,p_actor:viewer.userId,p_role:viewer.role,p_expected:snapshot,p_key:key,p_sha256:hash,p_bytes:size});
   if(prepared.error||!prepared.data||typeof prepared.data.key!=='string'||!storage.isPortalKey(prepared.data.key)||typeof prepared.data.completed!=='boolean')return {ok:false,error:'File changed or backup preparation was refused. Source deletion was not attempted.'};
   if(prepared.data.completed)return {ok:true};
-  // Recheck the backup even on retries. A registry row alone is not live bytes.
   const {readRecoveryBytes}=await import('@/lib/crm/recovery-storage');
+  const {isImmutableUploadKey}=await import('@/lib/crm/immutable-upload');
+  if(!isImmutableUploadKey(prepared.data.key))return {ok:false,error:'Legacy deletion is held; retained backup and source require administrator review.'};
   if(digest(await readRecoveryBytes(key,size))!==hash)throw new Error();
   try{
    await storage.deletePrivateObjects([prepared.data.key]);
