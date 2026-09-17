@@ -1,5 +1,6 @@
 import 'server-only';
 import {GetObjectCommand,PutObjectCommand,S3Client} from '@aws-sdk/client-s3';
+import {createHash} from 'node:crypto';
 const MAX=100*1024*1024;
 function client(){
  const endpoint=process.env.R2_ENDPOINT,accessKeyId=process.env.R2_PRIVATE_ACCESS_KEY_ID,secretAccessKey=process.env.R2_PRIVATE_SECRET_ACCESS_KEY;
@@ -21,6 +22,20 @@ export async function readRecoveryBytes(key:string,maxBytes=MAX):Promise<Buffer>
  }finally{clearTimeout(timer);controller.abort();s3.destroy();}
 }
 export async function writeRecoveryBytes(key:string,bytes:Buffer):Promise<void>{
- if(!/^archive\/project_[0-9a-f-]{36}\/individual_[0-9a-f-]{36}\.zip$/.test(key)||!Buffer.isBuffer(bytes)||bytes.length<1||bytes.length>MAX)throw new Error('Recovery storage unavailable.');
- const s3=client();try{await s3.send(new PutObjectCommand({Bucket:process.env.R2_PRIVATE_BUCKET,Key:key,Body:bytes,ContentType:'application/zip',ContentLength:bytes.length,IfNoneMatch:'*'}),{abortSignal:AbortSignal.timeout(30000)});}finally{s3.destroy();}
+ if(!/^archive\/project_[0-9a-f-]{36}\/(individual|import)_[0-9a-f-]{36}\.zip$/.test(key))throw new Error('Recovery storage unavailable.');
+ await writeRestoredObject(key,bytes,'application/zip');
+}
+/** Conditional PUT cannot overwrite an existing key. Identical bytes can be
+ * reused after an interrupted restore; different contents always conflict.
+ */
+export async function writeRestoredObject(key:string,bytes:Buffer,mime:string):Promise<void>{
+ if(!valid(key)||!Buffer.isBuffer(bytes)||bytes.length<1||bytes.length>MAX||typeof mime!=='string'||mime.length>128)throw new Error('Recovery storage unavailable.');
+ const s3=client();
+ try{
+  await s3.send(new PutObjectCommand({Bucket:process.env.R2_PRIVATE_BUCKET,Key:key,Body:bytes,ContentType:mime,ContentLength:bytes.length,IfNoneMatch:'*'}),{abortSignal:AbortSignal.timeout(30000)});
+ }catch(error){
+  if(!error||typeof error!=='object'||!('$metadata' in error)||(error.$metadata as {httpStatusCode?:number})?.httpStatusCode!==412)throw new Error('Recovery write failed.');
+  const existing=await readRecoveryBytes(key,bytes.length);
+  if(existing.length!==bytes.length||createHash('sha256').update(existing).digest('hex')!==createHash('sha256').update(bytes).digest('hex'))throw new Error('Recovery object conflict.');
+ }finally{s3.destroy();}
 }
