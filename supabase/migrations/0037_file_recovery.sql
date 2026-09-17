@@ -1,0 +1,3 @@
+-- Approved backup/restore implementation, test-first placeholder.
+-- No production execution. Existing individual deletion must gain backup guards
+-- before this migration is considered implemented or deployable.
