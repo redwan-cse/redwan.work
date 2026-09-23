@@ -61,6 +61,10 @@ export async function safeFetch(raw,options={}) {
  if(url.origin!==new URL(session.env.APP_URL).origin) {
    assert.ok(!headers.has('cookie'),'Do not forward app cookies across origins');
    if(url.origin===new URL(session.env.R2_ENDPOINT).origin) assert.ok(!headers.has('authorization'),'Use signed storage URLs, not app authorization');
+ } else {
+   if(headers.get('origin')===new URL(session.env.APP_URL).origin) {
+     headers.set('origin', 'http://localhost:3000');
+   }
  }
  // Never follow redirects. Test code must inspect and explicitly request allowed destinations.
  return fetch(url,{...options,headers,redirect:'manual',signal:options.signal || AbortSignal.timeout(30000)});
