@@ -18,9 +18,34 @@ function fileRows(row:ImportRow):FileRow[]{const s=row.snapshot as {files?:FileR
 function newId(operation:string,source:string){const h=createHash('sha256').update(operation+':'+source).digest('hex');return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-8${h.slice(17,20)}-${h.slice(20,32)}`;}
 async function readImport(id:string,actor:string):Promise<ImportRow>{const r=await getSupabaseAdmin().from('recovery_imports').select('id,actor,upload_key,sealed_key,sha256,kind,snapshot,result,created_at,object_plan,completed_files').eq('id',id).eq('actor',actor).maybeSingle();if(r.error||!r.data)throw new Error();return r.data as ImportRow;}
 function verifyEntries(row:ImportRow,zip:Buffer){if(!row.sha256||hash(zip)!==row.sha256)throw new Error();const entries=decodeRecoveryArchive(zip);const files=fileRows(row);if(entries.size!==files.length+1&&!(row.kind==='project'&&entries.size===files.length+4))throw new Error();for(const f of files){const bytes=entries.get(`files/${f.id}`);if(!bytes||bytes.length!==Number(f.size_bytes))throw new Error();}return entries;}
+function importStatus(row:ImportRow){
+ const created=Date.parse(row.created_at);if(!Number.isFinite(created))throw new Error();
+ const expiresAt=new Date(created+86400000).toISOString();
+ // A committed result remains readable after the unfinished-import deadline.
+ // Return an allowlist, never the saved snapshot, object keys or signed URLs.
+ if(row.result!==null){
+  const r=row.result as {projectId?:unknown;fileIds?:unknown};
+  if(!r||!(r.projectId===null||(typeof r.projectId==='string'&&UUID.test(r.projectId)))||!Array.isArray(r.fileIds)||r.fileIds.length>2000||!r.fileIds.every(v=>typeof v==='string'&&UUID.test(v)))throw new Error();
+  return {id:row.id,state:'completed',result:{projectId:r.projectId,fileIds:r.fileIds},expiresAt};
+ }
+ if(created<Date.now()-86400000)return {id:row.id,state:'expired',expiresAt};
+ if(row.sha256===null)return {id:row.id,state:'uploading',expiresAt};
+ if(!/^[a-f0-9]{64}$/.test(row.sha256)||!['individual','project'].includes(row.kind??''))throw new Error();
+ const files=fileRows(row),ids=new Set(files.map(f=>f.id));
+ if(ids.size!==files.length||!Array.isArray(row.completed_files)||new Set(row.completed_files).size!==row.completed_files.length||!row.completed_files.every(id=>ids.has(id)))throw new Error();
+ const name=row.kind==='project'?(row.snapshot as {project:{name:unknown}}).project.name:files[0].filename;
+ if(typeof name!=='string')throw new Error();
+ return {id:row.id,state:'ready',kind:row.kind,name,files:files.length,completed:row.completed_files.length,expiresAt,notice:'Continue this same import from its saved checkpoint. Remaining bytes and permissions are verified during restore. Existing data is not overwritten.'};
+}
 export async function GET(request:NextRequest){
  try{
-  if(!await workflowSession('admin',{requireUnbannedAuthUser:true}))return reply({error:'Unauthorized.'},401);
+  const session=await workflowSession('admin',{requireUnbannedAuthUser:true});if(!session)return reply({error:'Unauthorized.'},401);
+  const params=request.nextUrl.searchParams;
+  if(params.has('importId')){
+   const importId=params.get('importId');
+   if(!importId||!UUID.test(importId)||params.getAll('importId').length!==1||['id','kind','page'].some(k=>params.has(k)))return failure();
+   return reply(importStatus(await readImport(importId,session.userId)));
+  }
   const db=getSupabaseAdmin();const id=request.nextUrl.searchParams.get('id'),kind=request.nextUrl.searchParams.get('kind');
   if(id){
    if(!UUID.test(id)||!['individual','project'].includes(kind??''))return failure();
