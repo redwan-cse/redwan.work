@@ -11,7 +11,8 @@ type Result={projectId:string|null;fileIds:string[]};
 type ImportStatus=
  | {id:string;state:'ready';expiresAt:string;completed:number}&Preview
  | {id:string;state:'completed';expiresAt:string;result:Result}
- | {id:string;state:'uploading'|'expired';expiresAt:string};
+ | {id:string;state:'uploading';expiresAt:string}
+ | {id:string;state:'expired';expiresAt:string};
 const IMPORT_KEY='recovery-import-id';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 async function call(action:string,fields:Record<string,unknown>){const response=await fetch('/api/recovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...fields}),cache:'no-store'});const value=await response.json();if(!response.ok)throw new Error(value.error||'Recovery request failed.');return value;}
