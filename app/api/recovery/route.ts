@@ -20,7 +20,7 @@ async function readImport(id:string,actor:string):Promise<ImportRow>{const r=awa
 function verifyEntries(row:ImportRow,zip:Buffer){if(!row.sha256||hash(zip)!==row.sha256)throw new Error();const entries=decodeRecoveryArchive(zip);const files=fileRows(row);if(entries.size!==files.length+1&&!(row.kind==='project'&&entries.size===files.length+4))throw new Error();for(const f of files){const bytes=entries.get(`files/${f.id}`);if(!bytes||bytes.length!==Number(f.size_bytes))throw new Error();}return entries;}
 export async function GET(request:NextRequest){
  try{
-  if(!await workflowSession('admin'))return reply({error:'Unauthorized.'},401);
+  if(!await workflowSession('admin',{requireUnbannedAuthUser:true}))return reply({error:'Unauthorized.'},401);
   const db=getSupabaseAdmin();const id=request.nextUrl.searchParams.get('id'),kind=request.nextUrl.searchParams.get('kind');
   if(id){
    if(!UUID.test(id)||!['individual','project'].includes(kind??''))return failure();
