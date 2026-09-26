@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { createPublicKey, verify } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { provision } from '../acceptance/phase-b.mjs';
+import { runnerRecipe } from '../acceptance/prepare-browser.mjs';
 
 const candidate = 'b'.repeat(40);
 const cfg = {
@@ -255,4 +257,115 @@ test('Buildx driver parsing accepts CRLF and rejects missing, ambiguous or nonlo
   assert.equal(calls.length,1,'Rejected builder must not inspect or tag images');
  }
  assert.throws(()=>prepareAppBase(imageId,()=>{throw Error('Synthetic inspection failure');}),/Synthetic inspection failure/);
+});
+
+// Execute the generated recipes' real chmod operations on disposable POSIX files.
+// These mode checks do not claim a Docker build or real Chromium acceptance.
+const imageRoots=['/work','/opt/browser','/opt/pw-browsers'];
+const imagePath=(root,p)=>path.join(root,p.slice(1));
+function recipeSteps(recipe) {
+ return recipe.split('\n').filter(line=>line.startsWith('RUN ')).flatMap(line=>line.slice(4).split(' && '));
+}
+function applyImageChmod(root,step) {
+ const [command,recursive,mode,...targets]=step.split(' ');
+ assert.equal(command,'chmod');assert.equal(recursive,'-R');
+ assert.ok(targets.length&&targets.every(p=>imageRoots.includes(p)),'Only image content may be normalized');
+ execFileSync('chmod',['-R',mode,...targets.map(p=>imagePath(root,p))]);
+}
+function imageFixture() {
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'image-permissions-'));
+ const files=['/work/package.json','/work/tests/acceptance/disposable-bootstrap.mjs',
+  '/work/node_modules/example/cli.js','/opt/browser/package.json',
+  '/opt/browser/node_modules/example/index.js','/opt/pw-browsers/chromium/chrome'];
+ for(const p of files) {
+  fs.mkdirSync(path.dirname(imagePath(root,p)),{recursive:true,mode:0o700});
+  fs.writeFileSync(imagePath(root,p),'// synthetic fixture\n',{mode:0o600});
+ }
+ fs.chmodSync(imagePath(root,'/work/node_modules/example/cli.js'),0o700);
+ fs.chmodSync(imagePath(root,'/opt/pw-browsers/chromium/chrome'),0o700);
+ fs.chmodSync(path.join(root,'opt'),0o755);
+ fs.mkdirSync(path.join(root,'private'),{mode:0o700});
+ fs.writeFileSync(path.join(root,'private','material.json'),'synthetic-private',{mode:0o600});
+ return {root,files};
+}
+function verifyImageModes(root,files) {
+ for(const p of files) {
+  const st=fs.statSync(imagePath(root,p));
+  assert.equal(st.mode&0o444,0o444,`${p} must be readable by the non-owner runtime user`);
+  assert.equal(st.mode&0o222,0,`${p} must stay non-writable`);
+  assert.equal(fs.readFileSync(imagePath(root,p),'utf8'),'// synthetic fixture\n');
+  for(let dir=path.posix.dirname(p);dir!=='/';dir=path.posix.dirname(dir)) {
+   const mode=fs.statSync(imagePath(root,dir)).mode;
+   assert.equal(mode&0o111,0o111,`${dir} must be traversable by the non-owner runtime user`);
+   if(imageRoots.some(base=>dir===base||dir.startsWith(base+'/')))assert.equal(mode&0o222,0,`${dir} must stay non-writable`);
+  }
+ }
+ assert.equal(fs.statSync(path.join(root,'private')).mode&0o777,0o700);
+ assert.equal(fs.statSync(path.join(root,'private','material.json')).mode&0o777,0o600);
+}
+function removeImageFixture(root) {
+ // Restore only this test's disposable tree so non-root cleanup can traverse it.
+ execFileSync('chmod',['-R','u+rwX',root]);
+ fs.rmSync(root,{recursive:true,force:true});
+}
+const runnerInput={candidate,baseImage:`node@sha256:${'a'.repeat(64)}`};
+const appInput={appBase:`localhost/redwan-acceptance-base:${'a'.repeat(64)}`,publishableKey:'sb_publishable_synthetic'};
+
+test('runner recipe repairs private-umask copies without writable source or executable data files',()=>{
+ const {root,files}=imageFixture();
+ try {
+  const steps=recipeSteps(runnerRecipe(runnerInput)).filter(step=>step.startsWith('chmod '));
+  assert.ok(steps.length);
+  for(const step of steps)applyImageChmod(root,step);
+  verifyImageModes(root,files);
+  assert.equal(fs.statSync(imagePath(root,'/work/package.json')).mode&0o111,0,'Data files must not gain executable bits');
+  assert.equal(fs.statSync(imagePath(root,'/work/node_modules/example/cli.js')).mode&0o111,0o111);
+  assert.equal(fs.statSync(imagePath(root,'/opt/pw-browsers/chromium/chrome')).mode&0o111,0o111);
+ } finally {removeImageFixture(root);}
+});
+
+test('app recipe normalizes newly built private-umask artifacts before returning to non-root',async()=>{
+ const {appRecipe}=await load();const {root,files}=imageFixture();
+ try {
+  // The app inherits an already-readable, immutable runner layer.
+  applyImageChmod(root,'chmod -R a+rX,a-w /work /opt/browser /opt/pw-browsers');
+  let builds=0;
+  for(const step of recipeSteps(appRecipe(appInput))) {
+   if(step.startsWith('chmod '))applyImageChmod(root,step);
+   if(step==='npm run build') {
+    builds++;
+    for(const p of ['/work/.next/BUILD_ID','/work/.next/server/app-paths-manifest.json']) {
+     fs.mkdirSync(path.dirname(imagePath(root,p)),{recursive:true,mode:0o700});
+     fs.writeFileSync(imagePath(root,p),'// synthetic fixture\n',{mode:0o600});
+     files.unshift(p);
+    }
+   }
+  }
+  assert.equal(builds,1);
+  verifyImageModes(root,files);
+ } finally {removeImageFixture(root);}
+});
+
+test('prepared image recipes check real runtime entrypoints after switching to UID1000',async()=>{
+ const {appRecipe}=await load();
+ const runner=runnerRecipe(runnerInput),app=appRecipe(appInput);
+ for(const recipe of [runner,app]) {
+  const nonroot=recipe.slice(recipe.lastIndexOf('USER 1000:1000\n'));
+  assert.match(nonroot,/^USER 1000:1000\nRUN node --check /,'A build-time read check must run as the actual runtime user');
+  assert.doesNotMatch(nonroot,/USER root|chmod|npm run build/);
+ }
+ assert.match(runner,/node --check tests\/acceptance\/disposable-bootstrap\.mjs/);
+ assert.match(runner,/require\('@aws-sdk\/client-s3'\)/);
+ assert.match(runner,/chromium\.executablePath\(\)/);
+ assert.match(app,/node --check node_modules\/next\/dist\/bin\/next/);
+ assert.match(app,/\.next\/BUILD_ID/);
+ assert.match(app,/\.next\/server\/app-paths-manifest\.json/);
+});
+
+test('app image recipe accepts only the local prepared base and one-line opaque publishable key',async()=>{
+ const {appRecipe}=await load();
+ for(const appBase of ['node:latest','remote.invalid/base:tag',`${appInput.appBase}\nRUN unsafe`])
+  assert.throws(()=>appRecipe({...appInput,appBase}));
+ for(const publishableKey of ['legacy-key',`${appInput.publishableKey}\nRUN unsafe`,'sb_secret_private'])
+  assert.throws(()=>appRecipe({...appInput,publishableKey}));
 });

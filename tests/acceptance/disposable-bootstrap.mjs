@@ -422,6 +422,14 @@ function committedMigrations(candidate) {
  return migrationManifest(names.map(name=>({name,sql:command('git',['show',`${candidate}:supabase/migrations/${name}`])})));
 }
 
+export function appRecipe({appBase,publishableKey}) {
+ assert.match(appBase,/^localhost\/redwan-acceptance-base:[a-f0-9]{64}$/);
+ assert.match(publishableKey,/^sb_publishable_[A-Za-z0-9_-]+$/);
+ // Normalize the finished image too: builds can introduce new root-only paths.
+ // This never changes permissions on private host material or runtime tmpfs.
+ return `FROM ${appBase}\nUSER root\nWORKDIR /work\nENV NEXT_PUBLIC_SITE_URL=${ORIGIN} NEXT_PUBLIC_SUPABASE_URL=http://gateway:8000 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${publishableKey} R2_ENDPOINT=http://storage:9000 R2_PRIVATE_BUCKET=synthetic-private\nRUN chmod -R u+w /work && npm run build && chmod -R a+rX,a-w /work\nUSER 1000:1000\nRUN node --check node_modules/next/dist/bin/next && node -e "const fs=require('node:fs'); for(const file of ['package.json','.next/BUILD_ID','.next/server/app-paths-manifest.json'])fs.accessSync(file,fs.constants.R_OK)"\nCMD ["node","node_modules/next/dist/bin/next","start","--hostname","app","--port","3000"]\n`;
+}
+
 // images.json contains reviewed registry digests for node, database, auth, rest and storage.
 // Stock database image contract: official PostgreSQL17 Debian, UID999, contrib/pgcrypto.
 export function prepareBootstrap(images,privateDir) {
@@ -444,7 +452,7 @@ export function prepareBootstrap(images,privateDir) {
  const appBase=prepareAppBase(runner.imageId);
  // Build-time public configuration only. Server secret keys are supplied at runtime, not baked in.
  const buildDir=path.join(privateDir,'app-build');fs.mkdirSync(buildDir,{mode:0o700});
- const dockerfile=`FROM ${appBase}\nUSER root\nWORKDIR /work\nENV NEXT_PUBLIC_SITE_URL=${ORIGIN} NEXT_PUBLIC_SUPABASE_URL=http://gateway:8000 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${material.publishableKey} R2_ENDPOINT=http://storage:9000 R2_PRIVATE_BUCKET=synthetic-private\nRUN chmod -R u+w /work && npm run build\nUSER 1000:1000\nCMD ["node","node_modules/next/dist/bin/next","start","--hostname","app","--port","3000"]\n`;
+ const dockerfile=appRecipe({appBase,publishableKey:material.publishableKey});
  fs.writeFileSync(path.join(buildDir,'Dockerfile'),dockerfile,{mode:0o600});
  const log=fs.openSync(path.join(privateDir,'app-build.log'),'wx',0o600);
  try {command('docker',['build','--pull=false','--iidfile',path.join(privateDir,'app-image-id'),buildDir],{timeout:1200000,stdio:['pipe',log,log]});}

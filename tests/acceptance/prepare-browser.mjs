@@ -39,8 +39,11 @@ WORKDIR /work
 COPY source/package.json source/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY source/ ./
-RUN node -e "if(process.versions.node.split('.')[0]!=='22')process.exit(1)" && chmod -R a-w /work /opt/browser /opt/pw-browsers
+# Private host preparation can COPY root-owned 0700/0600 paths. Normalize only
+# image content: readable/traversable for UID1000, with every write bit removed.
+RUN node -e "if(process.versions.node.split('.')[0]!=='22')process.exit(1)" && chmod -R a+rX,a-w /work /opt/browser /opt/pw-browsers
 USER 1000:1000
+RUN node --check tests/acceptance/disposable-bootstrap.mjs && node -e "const fs=require('node:fs'); fs.accessSync('/opt/browser/package.json',fs.constants.R_OK); require('@aws-sdk/client-s3'); fs.accessSync(require('/opt/browser/node_modules/playwright-core').chromium.executablePath(),fs.constants.R_OK|fs.constants.X_OK)"
 ENV HOME=/tmp
 CMD ["node", "-e", "setInterval(()=>{},60000)"]
 `;
@@ -71,6 +74,7 @@ export function prepareBrowserRunner({ candidate, baseImage, manifestPath }) {
   const tracked = run('git', ['ls-tree', '-r', '--name-only', candidate]).trim().split('\n');
   assert.ok(!tracked.some(file => /(^|\/)\.env(?:\.|$)/.test(file) && !file.endsWith('.env.example')), 'Tracked environment files forbidden');
   // git archive excludes ignored/untracked .env files, credentials, .git and local build products.
+  // Keep the host umask private; runtime read permissions are normalized inside the image.
   const archive = run('git', ['archive', '--format=tar', candidate], { encoding: null, maxBuffer: 128 * 1024 * 1024 });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owned-browser-build-'));
   try {
@@ -104,6 +108,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const [candidate, baseImage, manifestPath] = process.argv.slice(2);
     prepareBrowserRunner({ candidate, baseImage, manifestPath });
-    console.log('Browser runner built; manifest recorded. Runtime and live acceptance remain unverified.');
-  } catch { console.error('Browser runner preparation failed. No stack was started or disposed.'); process.exitCode = 1; }
+    console.log('Prepared browser runner image; no services provisioned and no acceptance certified.');
+  } catch { console.error('Browser runner preparation failed. Inspect the private build log.'); process.exitCode = 1; }
 }
