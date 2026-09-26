@@ -1,5 +1,17 @@
 # Fresh acceptance claim challenge
 
+## Current PR57 recovery checkpoint: 26 September 2026
+
+Owner approved an 11-file development batch, not production, main merge, release, policy activation or issue closure. This entry supersedes broad completion wording below only for the named recovery work; historical evidence remains intact.
+
+Implemented: immutable-session guards; current saved-import assertions; real Chromium A-E replacing skipped placeholders; interruption Host correction preserving Origin; retained archive hashes; immutability checks before deletion; default PostgREST image command; and a disposable-only expiry RPC without broader application grants. Browser coverage includes reload/manual resume, dropped responses and completed results, cross-admin denial, unsealed/expired states, disabled storage, forget-reference semantics, mobile geometry and keyboard focus.
+
+69 dependency-free checks passed, zero failed/skipped, following six source/plan contract failures and a separate missing expiry-control failure. Source assertions are not live acceptance. Commands and boundaries: [disposable bootstrap guide](DISPOSABLE-AUTH-STORAGE-BOOTSTRAP.md).
+
+Pending: final exact-head CI; seven-service Docker startup and actual Auth/SQL/storage/browser execution; PostgreSQL image-report discrepancy reconciliation; independent GitHub approval. A separate AI source review found the fixture permission defect and informed its correction, not runtime/release approval.
+
+This batch does not prove all F01-F19 criteria or independently revalidate historical production-rollout assertions below. Original issues28-47 remain the criterion tracker; PR57 is current development, PR56 merged history rather than an open release vehicle. No blanket issue closure. F20 policy-version acceptance remains FAILED/DEFERRED. Deployed by this batch: NO. Monitored by this batch: NO. Release: BLOCKED.
+
 Owner requested actual acceptance execution and next-step advice September9 at15:58 Asia/Dhaka. Baseline application3a31f664c6f1615488de156613b5ade995245829. Test-only additions, no app/schema changes, main push, merge, production credentials or provider reads/writes. This branch commit triggers fresh regression/build, SQL, foundation, contact/browser, Auth/mailbox/storage/restore and security checks. Prior green jobs are historical, not today's fresh result.
 
 New credential-free, network-isolated challenge imports the actual ticket/client/parser modules with explicit service fixtures. It tests ticket count/read/write errors, both admin role stores and admin deactivation refusal, explicit consent/time and the separate issue45 policy-version criterion. It reports each claim as PASS/FAIL and the job fails if any claim fails; no continue-on-error or false green wrapper. It cannot prove real service behavior from mocks or a global final-admin invariant under arbitrary direct SQL/concurrency.
@@ -137,4 +149,3 @@ M00 status: all20 original issues accounted for at criterion level; inventory an
   2. **Server-Authenticated HMAC Retry Authority & Replay Prevention**: In `lib/auth/actions.ts`, password update retry after single-use token consumption uses server-authenticated HMAC-SHA256 signed authority tokens (`recovery_proof` / `invite_proof`) with 300s TTL, binding purpose, authenticated user ID (`sub`), and OTP token hash. Cryptographic nonces are tracked and consumed immediately on password update, preventing replay attacks. Rejects unrelated sessions, expired sessions, wrong users, tampered payloads, forged cookies, and replay attempts fail-closed. Verified by stateful and security tests in `tests/reliability/recovery-controls.test.mjs`.
   3. **Build Manifest Verification**: Dedicated post-build manifest audit `scripts/audit-manifests.mjs` verifying all 41 Server Actions and 8 API routes; caller inventory tests assert against real public asset actions.
   4. **Consent Deferral Status**: F20 (I03) explicitly documented as deferred (`CONSENT_ACTIVATION_ENABLED = false`), separating isolated contract tests from production activation claims.
-
