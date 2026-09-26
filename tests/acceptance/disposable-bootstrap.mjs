@@ -258,6 +258,18 @@ function command(bin,args,options={}) {
  try {return execFileSync(bin,args,{encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:120000,maxBuffer:32*1024*1024,...options});}
  catch {throw Error(`Disposable bootstrap ${bin} operation failed; no provider diagnostics published.`);}
 }
+// BuildKit cannot use a bare local image ID in FROM. A unique local-only tag is
+// checked against that ID before and after building; runtime still uses image IDs.
+export function prepareAppBase(imageId,execute=command) {
+ assert.match(imageId,/^sha256:[a-f0-9]{64}$/);
+ assert.equal(execute('docker',['buildx','inspect','--format','{{.Driver}}']).trim(),'docker','Local Docker builder required');
+ const tag=`localhost/redwan-acceptance-base:${imageId.slice(7)}`;
+ const inspect=ref=>JSON.parse(execute('docker',['image','inspect',ref]))[0].Id;
+ assert.equal(inspect(imageId),imageId);
+ execute('docker',['tag',imageId,tag]);
+ assert.equal(inspect(tag),imageId,'Local build reference changed');
+ return tag;
+}
 export function assertPartialOwnership(state,d=docker) {
  assert.match(state.runId,/^test-run-[a-f0-9-]{36}$/);
  const network=JSON.parse(d('network','inspect',state.networkId))[0];
@@ -404,17 +416,19 @@ export function prepareBootstrap(images,privateDir) {
  // Pull only reviewed content-addressed references during preparation, not isolated runtime.
  for(const image of Object.values(images))command('docker',['pull',image],{timeout:600000});
  const runner=prepareBrowserRunner({candidate,baseImage:images.node,manifestPath:path.join(privateDir,'runner.json')});
+ const appBase=prepareAppBase(runner.imageId);
  // Build-time public configuration only. Server secret keys are supplied at runtime, not baked in.
  const buildDir=path.join(privateDir,'app-build');fs.mkdirSync(buildDir,{mode:0o700});
- const dockerfile=`FROM ${runner.imageId}\nUSER root\nWORKDIR /work\nENV NEXT_PUBLIC_SITE_URL=${ORIGIN} NEXT_PUBLIC_SUPABASE_URL=http://gateway:8000 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${material.publishableKey} R2_ENDPOINT=http://storage:9000 R2_PRIVATE_BUCKET=synthetic-private\nRUN chmod -R u+w /work && npm run build\nUSER 1000:1000\nCMD ["node","node_modules/next/dist/bin/next","start","--hostname","app","--port","3000"]\n`;
+ const dockerfile=`FROM ${appBase}\nUSER root\nWORKDIR /work\nENV NEXT_PUBLIC_SITE_URL=${ORIGIN} NEXT_PUBLIC_SUPABASE_URL=http://gateway:8000 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${material.publishableKey} R2_ENDPOINT=http://storage:9000 R2_PRIVATE_BUCKET=synthetic-private\nRUN chmod -R u+w /work && npm run build\nUSER 1000:1000\nCMD ["node","node_modules/next/dist/bin/next","start","--hostname","app","--port","3000"]\n`;
  fs.writeFileSync(path.join(buildDir,'Dockerfile'),dockerfile,{mode:0o600});
  const log=fs.openSync(path.join(privateDir,'app-build.log'),'wx',0o600);
  try {command('docker',['build','--pull=false','--iidfile',path.join(privateDir,'app-image-id'),buildDir],{timeout:1200000,stdio:['pipe',log,log]});}
  finally{fs.closeSync(log);}
+ assert.equal(JSON.parse(command('docker',['image','inspect',appBase]))[0].Id,runner.imageId,'App base changed during build');
  const app=fs.readFileSync(path.join(privateDir,'app-image-id'),'utf8').trim();assert.match(app,/^sha256:[a-f0-9]{64}$/);
  const plan=createPlan({candidate,images:{...images,runner:runner.imageId,app},material});
  privateJson(path.join(privateDir,'plan.json'),plan);
- privateJson(path.join(privateDir,'preparation.json'),{candidate,images,runner:runner.imageId,app,recipeSha256:hash(dockerfile),
+ privateJson(path.join(privateDir,'preparation.json'),{candidate,images,runner:runner.imageId,app,appBase,recipeSha256:hash(dockerfile),
   phase:'prepared-not-provisioned',plannedContainers:7,plannedNetworks:1});
  return {candidate,phase:'prepared-not-provisioned',plannedContainers:7,plannedNetworks:1};
 }

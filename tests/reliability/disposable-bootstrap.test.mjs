@@ -189,3 +189,14 @@ test('public key, private signing key and storage credentials are scoped to the 
  const app=p.services.find(s=>s.role==='app');assert.ok(!JSON.stringify(app).includes(m.signingKey.d));
  assert.ok(!JSON.stringify(app).includes(m.databasePassword));
 });
+
+test('BuildKit app base uses a checked unique local tag and refuses remote builders',async()=>{
+ const {prepareAppBase}=await load();const imageId=`sha256:${'a'.repeat(64)}`;const calls=[];
+ const execute=(bin,args)=>{calls.push([bin,args]);if(args[0]==='buildx')return 'docker\n';
+  if(args[0]==='image')return JSON.stringify([{Id:imageId}]);return '';};
+ assert.equal(prepareAppBase(imageId,execute),`localhost/redwan-acceptance-base:${'a'.repeat(64)}`);
+ assert.ok(calls.some(([,args])=>args[0]==='tag'&&args[1]===imageId));
+ assert.ok(!calls.some(([,args])=>['push','rm','rmi'].includes(args[0])));
+ assert.throws(()=>prepareAppBase(imageId,()=> 'docker-container\n'));
+ assert.throws(()=>prepareAppBase(imageId,(bin,args)=>args[0]==='buildx'?'docker':JSON.stringify([{Id:'changed'}])));
+});
