@@ -108,6 +108,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const [candidate, baseImage, manifestPath] = process.argv.slice(2);
     prepareBrowserRunner({ candidate, baseImage, manifestPath });
-    console.log('Prepared browser runner image; no services provisioned and no acceptance certified.');
-  } catch { console.error('Browser runner preparation failed. Inspect the private build log.'); process.exitCode = 1; }
+    console.log('Browser runner built; manifest recorded. Runtime and live acceptance remain unverified.');
+  } catch { console.error('Browser runner preparation failed. No stack was started or disposed.'); process.exitCode = 1; }
 }
