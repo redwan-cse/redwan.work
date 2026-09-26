@@ -107,8 +107,10 @@ test('Section 4: Interrupted restore, retry, concurrency, and retention', { time
     const c1 = await admin.rpc('confirm_project_deliverable', { p_actor: adminUser, p_project: projectId, p_file: { r2_key: v1.key, filename: 'Spec1.pdf', mime: 'application/pdf', size_bytes: file1Bytes.length } });
     const c2 = await admin.rpc('confirm_project_deliverable', { p_actor: adminUser, p_project: projectId, p_file: { r2_key: v2.key, filename: 'Spec2.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size_bytes: file2Bytes.length } });
     assert.ok(!c1.error && c1.data && !c2.error && c2.data);
-    tracker.trackFile(c1.data.id);
-    tracker.trackFile(c2.data.id);
+    assert.match(c1.data, /^[0-9a-f-]{36}$/);
+    assert.match(c2.data, /^[0-9a-f-]{36}$/);
+    tracker.trackFile(c1.data);
+    tracker.trackFile(c2.data);
 
     const arcRes = await archiveProject(projectId);
     assert.equal(arcRes.ok, true);
@@ -336,6 +338,7 @@ test('Section 4: Interrupted restore, retry, concurrency, and retention', { time
     // Create an ephemeral loopback HTTP interceptor proxy to drop the client response after server commit
     const http = await import('node:http');
     let responseDropped = false;
+    let upstreamStatus;
     const proxyServer = http.createServer((clientReq, clientRes) => {
       const appUrlParsed = new URL(ENV.APP_URL);
       const forwardReq = http.request({
@@ -343,9 +346,12 @@ test('Section 4: Interrupted restore, retry, concurrency, and retention', { time
         port: appUrlParsed.port,
         path: clientReq.url,
         method: clientReq.method,
-        headers: clientReq.headers,
+        // Route to the real destination, preserving the caller's Origin unchanged.
+        headers: { ...clientReq.headers, host: appUrlParsed.host },
       }, (appRes) => {
-        // Next.js completed DB commit and began responding; abruptly destroy client socket
+        upstreamStatus = appRes.statusCode;
+        appRes.resume();
+        // Drop delivery; the independent database read below must prove commit.
         responseDropped = true;
         clientReq.socket.destroy();
       });
@@ -372,6 +378,7 @@ test('Section 4: Interrupted restore, retry, concurrency, and retention', { time
     }
 
     assert.ok(responseDropped, 'Server commit progress finished and response was dropped before client receipt');
+    assert.equal(upstreamStatus, 200, 'Fault must occur after a successful upstream response, not a CSRF refusal');
     assert.ok(clientErrorCaught, 'Client encountered connection drop exception simulating lost response');
 
     // Independently observe server commit in PostgreSQL
@@ -514,6 +521,9 @@ test('Section 4: Interrupted restore, retry, concurrency, and retention', { time
     // 3. Sealed key in recovery_imports
     const headSeal = await storage.send(new HeadObjectCommand({ Bucket: ENV.PRIVATE_BUCKET, Key: sealedKey }));
     assert.ok(headSeal.ContentLength > 0);
+    for (const key of [purgeArchiveKey, uploadKey, sealedKey]) {
+      assert.equal(sha256(await readRecoveryBytes(key)), purgeDigest, 'Retained archive bytes must match the registered digest');
+    }
 
     console.log('PASS 4.6: Zero purge of backups or staging; all storage artifacts remain retained');
   });
