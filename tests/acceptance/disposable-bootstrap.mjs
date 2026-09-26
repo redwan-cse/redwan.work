@@ -166,7 +166,7 @@ export function createPlan({candidate,images,material:m}) {
    GOTRUE_SMTP_ADMIN_EMAIL:'noreply@example.test',GOTRUE_LOG_LEVEL:'error'},[], '1000:1000',[tmp()]),
   service('rest',{PGRST_DB_URI:`postgres://authenticator:${m.databasePassword}@database:5432/postgres`,
    PGRST_DB_SCHEMAS:'public',PGRST_DB_ANON_ROLE:'anon',PGRST_JWT_SECRET:JSON.stringify(m.jwks),PGRST_JWT_AUD:'authenticated',
-   PGRST_SERVER_PORT:'3000',PGRST_DB_USE_LEGACY_GUCS:'false'},['postgrest'],'1000:1000',[tmp()]),
+   PGRST_SERVER_PORT:'3000',PGRST_DB_USE_LEGACY_GUCS:'false'},[],'1000:1000',[tmp()]),
   service('storage',{MINIO_ROOT_USER:m.storageAccess,MINIO_ROOT_PASSWORD:m.storageSecret,MINIO_API_CORS_ALLOW_ORIGIN:ORIGIN},
    ['server','/data','--address',':9000','--console-address',':9001','--anonymous'],'65532:65532',
    ['/data:rw,nosuid,nodev,size=1024m,uid=65532,gid=65532,mode=0700',tmp(64,65532)],1024),
@@ -234,6 +234,25 @@ create or replace function auth.jwt() returns jsonb language sql stable as $$
 $$;
 grant usage on schema auth to anon,authenticated,service_role;
 grant execute on function auth.uid(),auth.role(),auth.jwt() to anon,authenticated,service_role;`;
+}
+// Test control installed only by this fresh-database bootstrap, never an app migration.
+// It can age one unfinished synthetic import; no general table UPDATE grant.
+export function acceptanceFixtureSql() {
+ return `create function public.acceptance_expire_recovery_import(p_actor uuid,p_id uuid)
+returns boolean language plpgsql security definer set search_path=pg_catalog,public as $$
+declare changed integer;
+begin
+ if coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role','') <> 'service_role'
+ then raise exception 'Acceptance fixture denied'; end if;
+ if not exists(select 1 from auth.users where id=p_actor and email like '%@example.test')
+ then raise exception 'Synthetic actor required'; end if;
+ update public.recovery_imports set created_at=now()-interval '25 hours'
+ where id=p_id and actor=p_actor and result is null and created_at > now()-interval '24 hours';
+ get diagnostics changed = row_count;
+ return changed=1;
+end $$;
+revoke all on function public.acceptance_expire_recovery_import(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.acceptance_expire_recovery_import(uuid,uuid) to service_role;`;
 }
 export function migrationManifest(entries) {
  const ordered=[...entries].sort((a,b)=>a.name.localeCompare(b.name));
@@ -365,6 +384,7 @@ export function bootstrapPrepared({planPath,statePath,materialPath,manifest,prov
      sql(state,`begin;\n${migration.sql}\ninsert into bootstrap_internal.migrations(name,sha256) values('${migration.name}','${migration.sha256}');\ncommit;`);
     }
     assert.equal(sql(state,'select count(*) from bootstrap_internal.migrations;'),'40');
+    sql(state,acceptanceFixtureSql());
    }
    if(service.role==='storage') {
     health(state,'http://storage:9000/minio/health/ready');phase='synthetic-buckets';
