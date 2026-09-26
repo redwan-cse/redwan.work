@@ -262,7 +262,10 @@ function command(bin,args,options={}) {
 // checked against that ID before and after building; runtime still uses image IDs.
 export function prepareAppBase(imageId,execute=command) {
  assert.match(imageId,/^sha256:[a-f0-9]{64}$/);
- assert.equal(execute('docker',['buildx','inspect','--format','{{.Driver}}']).trim(),'docker','Local Docker builder required');
+ // buildx inspect has no --format option. Require exactly one top-level
+ // Driver field from its documented text output, with LF or CRLF line endings.
+ const drivers=execute('docker',['buildx','inspect']).split(/\r?\n/).filter(line=>line.startsWith('Driver:'));
+ assert.ok(drivers.length===1 && /^Driver:[ \t]+docker[ \t]*$/.test(drivers[0]),'Local Docker builder required');
  const tag=`localhost/redwan-acceptance-base:${imageId.slice(7)}`;
  const inspect=ref=>JSON.parse(execute('docker',['image','inspect',ref]))[0].Id;
  assert.equal(inspect(imageId),imageId);

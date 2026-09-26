@@ -192,11 +192,33 @@ test('public key, private signing key and storage credentials are scoped to the 
 
 test('BuildKit app base uses a checked unique local tag and refuses remote builders',async()=>{
  const {prepareAppBase}=await load();const imageId=`sha256:${'a'.repeat(64)}`;const calls=[];
- const execute=(bin,args)=>{calls.push([bin,args]);if(args[0]==='buildx')return 'docker\n';
+ const execute=(bin,args)=>{calls.push([bin,args]);if(args[0]==='buildx'){
+   assert.equal(bin,'docker');assert.deepEqual(args,['buildx','inspect']);
+   return 'Name:          default\nDriver:        docker\n\nNodes:\nName:          default\n';}
   if(args[0]==='image')return JSON.stringify([{Id:imageId}]);return '';};
  assert.equal(prepareAppBase(imageId,execute),`localhost/redwan-acceptance-base:${'a'.repeat(64)}`);
  assert.ok(calls.some(([,args])=>args[0]==='tag'&&args[1]===imageId));
  assert.ok(!calls.some(([,args])=>['push','rm','rmi'].includes(args[0])));
- assert.throws(()=>prepareAppBase(imageId,()=> 'docker-container\n'));
- assert.throws(()=>prepareAppBase(imageId,(bin,args)=>args[0]==='buildx'?'docker':JSON.stringify([{Id:'changed'}])));
+ assert.throws(()=>prepareAppBase(imageId,()=> 'Name: remote\nDriver: docker-container\n'),/Local Docker builder required/);
+ assert.throws(()=>prepareAppBase(imageId,(bin,args)=>args[0]==='buildx'?'Name: default\nDriver: docker\n':JSON.stringify([{Id:'changed'}])));
+});
+
+test('Buildx driver parsing accepts CRLF and rejects missing, ambiguous or nonlocal drivers before image writes',async()=>{
+ const {prepareAppBase}=await load();const imageId=`sha256:${'a'.repeat(64)}`;
+ for(const output of ['Name: default\nDriver: docker\n','Name: desktop-linux\r\nDriver:    docker\r\n']){
+  assert.equal(prepareAppBase(imageId,(bin,args)=>{
+   if(args[0]==='buildx'){assert.deepEqual(args,['buildx','inspect']);return output;}
+   if(args[0]==='image')return JSON.stringify([{Id:imageId}]);return '';
+  }),`localhost/redwan-acceptance-base:${'a'.repeat(64)}`);
+ }
+ for(const output of ['', 'docker\n', 'Name: default\n', 'Driver: remote\n',
+  'Driver: docker-container\n','Driver: kubernetes\n','Driver: docker-extra\n',
+  'Driver: docker\nDriver: remote\n','Driver: docker\nDriver: docker\n']){
+  const calls=[];
+  assert.throws(()=>prepareAppBase(imageId,(bin,args)=>{
+   calls.push(args);assert.equal(bin,'docker');assert.deepEqual(args,['buildx','inspect']);return output;
+  }),/Local Docker builder required/);
+  assert.equal(calls.length,1,'Rejected builder must not inspect or tag images');
+ }
+ assert.throws(()=>prepareAppBase(imageId,()=>{throw Error('Synthetic inspection failure');}),/Synthetic inspection failure/);
 });
