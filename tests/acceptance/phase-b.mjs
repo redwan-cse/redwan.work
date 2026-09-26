@@ -82,7 +82,7 @@ export function verifyOwnedRun(state, d = docker) {
 }
 
 // All resources are created by this process. Existing services/volumes/markers are never adopted.
-export function provision(plan, statePath, d = docker) {
+export function provision(plan, statePath, d = docker, afterStart = () => {}) {
   validatePlan(plan);
   requireValue(!fs.existsSync(statePath), 'State file already exists');
   // Deliberately use a local Docker daemon only. Remote contexts are outside this package's contract.
@@ -129,6 +129,10 @@ export function provision(plan, statePath, d = docker) {
       state.services.push({role:s.role,id,imageId:image.Id});
       save();
       d('container','start',id);
+      // Trusted host-side bootstrap only, not executable plan data. A thrown failure
+      // stops dependent services; the exact partial resource inventory is retained.
+      const initialized = afterStart({ service: s, state });
+      requireValue(!initialized || typeof initialized.then !== 'function', 'Startup hook must be synchronous');
     }
     verifyOwnedRun(state,d);
     state.phase = 'provisioned-not-accepted'; save();
