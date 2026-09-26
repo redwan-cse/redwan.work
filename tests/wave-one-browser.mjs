@@ -19,6 +19,11 @@ if(process.argv[2]!=='child'){
  const report={baseline:null,candidate:null,complete:false};
  try{
   mkdirSync(baseline);
+  try{
+   execFileSync('git',['cat-file','-e','8d0bd70f5f155ea1791265507274ecb8a2c56f0b^{commit}'],{stdio:'ignore'});
+  }catch{
+   execFileSync('git',['fetch','origin','refs/pull/56/head'],{stdio:'ignore'});
+  }
   execFileSync('git',['archive','--output='+join(scratch,'baseline.tar'),'8d0bd70f5f155ea1791265507274ecb8a2c56f0b'],{stdio:'ignore'});
   execFileSync('tar',['-xf',join(scratch,'baseline.tar'),'-C',baseline],{stdio:'ignore'});
   assert.equal(createHash('sha256').update(readFileSync(join(baseline,'package-lock.json'))).digest('hex'),createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'));

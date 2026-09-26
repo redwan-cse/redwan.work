@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';import test,{beforeEach,after} from 'node:test';import {registerHooks} from 'node:module';import {NextRequest} from 'next/server.js';
+const id='11111111-1111-4111-8111-111111111111',f={};globalThis.__recoveryApi=f;beforeEach(()=>Object.assign(f,{session:{userId:id,role:'admin'},rpc:0,storage:0,ranges:[],signed:0}));
+const modules={
+ 'server-only':'export {};',
+ '@/lib/crm/workflow-access':'export async function workflowSession(){return globalThis.__recoveryApi.session;}',
+ '@/lib/supabase/admin':`export function getSupabaseAdmin(){return {async rpc(name,args){const f=globalThis.__recoveryApi;f.rpc++;if(name==='open_recovery_import')return {data:{upload_key:'archive/project_${id}/upload_'+args.p_id+'.zip'},error:null};throw new Error('Unexpected RPC');},from(table){const q={select(){return q;},eq(){return q;},is(){return q;},order(){return q;},async maybeSingle(){return {data:null,error:null};},async range(a,b){globalThis.__recoveryApi.ranges.push([a,b]);return {data:[],error:null};}};return q;}};}`,
+ '@/lib/r2':`export async function presignPrivateGet(){globalThis.__recoveryApi.signed++;return 'https://storage.example.test/download';}export async function presignPrivatePut(){globalThis.__recoveryApi.signed++;return 'https://storage.example.test/upload';}`,
+ '@/lib/crm/recovery-storage':`export async function readRecoveryBytes(){globalThis.__recoveryApi.storage++;throw new Error('Unexpected storage');}export async function writeRecoveryBytes(){throw new Error('Unexpected storage');}export async function writeRestoredObject(){throw new Error('Unexpected storage');}`,
+ '@/lib/crm/recovery-archive':`export const RECOVERY_MAX_BYTES=104857600;export function decodeRecoveryArchive(){throw new Error('Unexpected archive');}`,
+};
+const hooks=registerHooks({resolve(s,c,n){if(s==='next/server')return n('next/server.js',c);if(Object.hasOwn(modules,s))return {url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true};return n(s,c);}});
+const {GET,POST}=await import('../../app/api/recovery/route.ts');after(()=>hooks.deregister());
+const post=(body,origin='https://example.test')=>new NextRequest('https://example.test/api/recovery',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:typeof body==='string'?body:JSON.stringify(body)});
+test('anonymous listing and upload fail before database or storage',async()=>{f.session=null;assert.equal((await GET(new NextRequest('https://example.test/api/recovery'))).status,401);assert.equal((await POST(post({action:'upload',size:100}))).status,401);assert.equal(f.rpc+f.storage+f.signed,0);});
+test('cross-origin mutation fails before RPC or signing',async()=>{assert.equal((await POST(post({action:'upload',size:100},'https://foreign.invalid'))).status,403);assert.equal(f.rpc+f.signed,0);});
+test('bounded catalog reads 26 rows per collection for lookahead',async()=>{const r=await GET(new NextRequest('https://example.test/api/recovery?page=2'));assert.equal(r.status,200);assert.deepEqual(f.ranges,[[25,50],[25,50]]);assert.equal(r.headers.get('cache-control'),'no-store');});
+for(const page of ['0','-1','1.5','100001','invalid'])test(`invalid catalog page ${page} refuses`,async()=>{assert.equal((await GET(new NextRequest('https://example.test/api/recovery?page='+page))).status,400);assert.equal(f.ranges.length,0);});
+for(const size of [0,21,104857601,'100',null])test(`invalid upload size ${size} refuses before signing`,async()=>{assert.equal((await POST(post({action:'upload',size}))).status,400);assert.equal(f.rpc+f.signed,0);});
+test('valid upload creates a scoped operation and signed transfer without reading bytes',async()=>{const r=await POST(post({action:'upload',size:1000}));assert.equal(r.status,200);assert.match((await r.json()).id,/^[0-9a-f-]{36}$/);assert.equal(f.rpc,1);assert.equal(f.signed,1);assert.equal(f.storage,0);});
+test('unknown backup download never signs an arbitrary key',async()=>{assert.equal((await GET(new NextRequest(`https://example.test/api/recovery?kind=individual&id=${id}`))).status,400);assert.equal(f.signed,0);});
+test('malformed JSON and missing import ID cause no restore side effects',async()=>{assert.equal((await POST(post('{bad'))).status,400);assert.equal((await POST(post({action:'restore'}))).status,400);assert.equal(f.rpc+f.storage,0);});
+test('unowned or missing operation cannot preview or restore',async()=>{for(const action of ['preview','restore'])assert.equal((await POST(post({action,id}))).status,400);assert.equal(f.rpc+f.storage,0);});
