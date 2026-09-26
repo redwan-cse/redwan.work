@@ -24,7 +24,8 @@ export function validatePlan(plan) {
   const byRole = new Map();
   for (const s of plan.services) {
     requireValue(/^[a-z][a-z0-9-]*$/.test(s.role) && !byRole.has(s.role), 'Unique safe role required');
-    requireValue(/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(s.image), 'Images must be digest pinned');
+    // Local builds have immutable image IDs but need not be pushed to any registry.
+    requireValue(/^(?:[a-z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(s.image), 'Images must be content addressed');
     requireValue(Array.isArray(s.command) && s.command.every(v => typeof v === 'string'), 'Explicit command array required');
     requireValue(s.env && Object.entries(s.env).every(([k,v]) => /^[A-Z_][A-Z0-9_]*$/.test(k) && typeof v === 'string' && !v.includes('\0')), 'Explicit environment required');
     requireValue(!['mounts','volumes','ports','privileged','network','devices','dockerSocket'].some(k => k in s), 'Host access options forbidden');
@@ -68,6 +69,10 @@ export function verifyOwnedRun(state, d = docker) {
     requireValue(!c.HostConfig.ExtraHosts?.length && c.HostConfig.Dns?.length===1 && c.HostConfig.Dns[0]==='127.0.0.1', 'External DNS/host mapping forbidden');
     requireValue(!['host','container'].some(x => String(c.HostConfig.PidMode).startsWith(x)), 'Shared host PID namespace forbidden');
     requireValue(!Object.keys(c.HostConfig.PortBindings || {}).length, 'Published ports forbidden');
+    if (service.role === 'runner' && c.Config.Labels?.['work.redwan.acceptance.browser']) {
+      requireValue(c.HostConfig.ReadonlyRootfs === true, 'Prepared browser runner must be read-only');
+      requireValue((c.Mounts || []).every(m => m.Type === 'tmpfs' && m.Destination === '/tmp'), 'Browser runner may only mount /tmp');
+    }
     requireValue((c.Mounts || []).every(m => m.Type === 'tmpfs'), 'Persistent/bind mount forbidden');
     const nets = Object.values(c.NetworkSettings.Networks || {});
     requireValue(nets.length === 1 && nets[0].NetworkID === state.networkId, 'Container attached outside owned network');
@@ -111,6 +116,10 @@ export function provision(plan, statePath, d = docker) {
       if(s.user) {
         requireValue(/^\d+:\d+$/.test(s.user),'Runtime user must be numeric UID:GID');
         args.push('--user',s.user);
+      }
+      if (s.role === 'runner' && image.Config.Labels?.['work.redwan.acceptance.browser']) {
+        requireValue(s.tmpfs.every(t => t.split(':')[0] === '/tmp'), 'Prepared runner may only mount /tmp');
+        args.push('--read-only');
       }
       for (const t of s.tmpfs) args.push('--tmpfs',t);
       // Only this plan's environment is passed. Host .env and ambient secrets are not inherited.

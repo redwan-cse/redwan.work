@@ -61,11 +61,9 @@ export async function safeFetch(raw,options={}) {
  if(url.origin!==new URL(session.env.APP_URL).origin) {
    assert.ok(!headers.has('cookie'),'Do not forward app cookies across origins');
    if(url.origin===new URL(session.env.R2_ENDPOINT).origin) assert.ok(!headers.has('authorization'),'Use signed storage URLs, not app authorization');
- } else {
-   if(headers.get('origin')===new URL(session.env.APP_URL).origin) {
-     headers.set('origin', 'http://localhost:3000');
-   }
  }
+ // Preserve the caller's Origin, including absent, opaque and hostile values.
+ // Fix server configuration when origins disagree; never normalize the test request.
  // Never follow redirects. Test code must inspect and explicitly request allowed destinations.
  return fetch(url,{...options,headers,redirect:'manual',signal:options.signal || AbortSignal.timeout(30000)});
 }
@@ -87,6 +85,7 @@ export async function getSessionCookie(email,password) {
  const {createServerClient}=require('@supabase/ssr');
  let cookies=[];
  const client=createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,{
+   global:{fetch:safeFetch},
    cookies:{getAll:()=>[],setAll:v=>{cookies=v;}}
  });
  const {error}=await client.auth.signInWithPassword({email,password});
