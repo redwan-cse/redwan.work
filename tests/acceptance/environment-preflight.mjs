@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createPublicKey, verify, randomBytes, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { assertEnvironmentVerified, createAdminClient, safeFetch, FixtureTracker } from './harness-env.mjs';
 const require = createRequire(import.meta.url);
@@ -70,6 +71,36 @@ export async function probeGateway(env, request = safeFetch) {
   });
   assert.equal(response.status, 200, 'JWKS discovery unavailable');
   return validatePublicJwks(await response.json());
+}
+
+export async function establishSyntheticAdminSession(
+  { admin, client, id, email, password, jwks, issuer, readCookies },
+  { now = Date.now, monotonicNow = () => performance.now(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}
+) {
+  const updated = await admin.from('profiles').update({ role: 'admin', is_active: true }).eq('id', id).select('id,tokens_valid_after').single();
+  assert.ok(!updated.error && updated.data?.id === id, 'Synthetic profile setup failed');
+  // Migration0020 advances this cutoff to the next whole second on promotion.
+  // Wait for the persisted value, never lower it or retry a stale sign-in.
+  const cutoff = updated.data.tokens_valid_after;
+  assert.ok(Number.isSafeInteger(cutoff) && cutoff >= 0 && Number.isSafeInteger(cutoff * 1000), 'Synthetic account cutoff invalid');
+  const deadline = monotonicNow() + 5000;
+  for (;;) {
+    const time = now();
+    assert.ok(Number.isSafeInteger(time) && time >= 0, 'Synthetic account clock invalid');
+    const remaining = cutoff * 1000 - time;
+    if (remaining <= 0) break;
+    const budget = deadline - monotonicNow();
+    assert.ok(remaining <= 5000 && budget > 0, 'Synthetic account cutoff wait exceeded');
+    await sleep(Math.min(remaining, budget));
+  }
+  const signedIn = await client.auth.signInWithPassword({ email, password });
+  assert.ok(!signedIn.error && signedIn.data?.session && readCookies().length, 'Synthetic sign-in failed');
+  const claims = verifySessionJwt(signedIn.data.session.access_token, jwks, {
+    issuer, subject: id, now: Math.floor(now() / 1000)
+  });
+  assert.ok(Number.isSafeInteger(claims.iat) && claims.iat >= cutoff, 'Synthetic session predates account cutoff');
+  const caller = await client.from('profiles').select('id').eq('id', id).single();
+  assert.ok(!caller.error && caller.data?.id === id, 'Caller JWT not accepted by PostgREST');
 }
 
 export async function probeBrowser(env, cookies, runtime) {
@@ -154,18 +185,15 @@ export async function runPreflight() {
     assert.ok(!created.error && created.data?.user?.id, 'Synthetic user creation failed');
     const id = tracker.trackUser(created.data.user.id);
     record({ state: 'running' });
-    const updated = await admin.from('profiles').update({ role: 'admin', is_active: true }).eq('id', id).select('id').single();
-    assert.ok(!updated.error && updated.data?.id === id, 'Synthetic profile setup failed');
     const { createServerClient } = require('@supabase/ssr');
     let cookies = [];
     const client = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
       global: { fetch: safeFetch }, cookies: { getAll: () => cookies, setAll: values => { cookies = values; } }
     });
-    const signedIn = await client.auth.signInWithPassword({ email, password });
-    assert.ok(!signedIn.error && signedIn.data?.session && cookies.length, 'Synthetic sign-in failed');
-    verifySessionJwt(signedIn.data.session.access_token, jwks, { issuer: `${env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`, subject: id });
-    const caller = await client.from('profiles').select('id').eq('id', id).single();
-    assert.ok(!caller.error && caller.data?.id === id, 'Caller JWT not accepted by PostgREST');
+    await establishSyntheticAdminSession({
+      admin, client, id, email, password, jwks,
+      issuer: `${env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`, readCookies: () => cookies
+    });
     phase = 'real-browser-origin-and-auth';
     const browser = await probeBrowser(env, cookies, runtime);
     phase = 'complete';

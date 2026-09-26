@@ -209,6 +209,179 @@ test('prepared browser runner cannot become writable or overlay the tested sourc
   }
 });
 
+// Exercise the real preflight setup with an explicit database/Auth adapter and clock.
+// The adapter models migration0020's next-second cutoff; JWT signatures are real ES256.
+function adminSessionFixture(options = {}) {
+  const epoch = Math.floor(Date.now() / 1000);
+  const id = '11111111-1111-4111-8111-111111111111';
+  const cutoff = Object.hasOwn(options, 'cutoff') ? options.cutoff : epoch + 1;
+  const state = { wall: epoch * 1000 + 250, elapsed: 0, waits: [], events: [], signIns: 0, callerReads: 0 };
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const jwks = { keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'cutoff-fixture', alg: 'ES256', use: 'sig' }] };
+  let issuedAt;
+  const credentials = { email: 'preflight-clock@example.test', password: 'Synthetic-test-only-password' };
+  const issuer = 'http://gateway:8000/auth/v1';
+  const admin = { from(table) {
+    assert.equal(table, 'profiles');
+    return { update(values) {
+      // In particular, the fixture must never reset tokens_valid_after or bypass the trigger.
+      assert.deepEqual(values, { role: 'admin', is_active: true });
+      state.events.push('promote');
+      return { eq(column, value) {
+        assert.equal(column, 'id'); assert.equal(value, id);
+        return { select(columns) {
+          const row = { id: options.wrongProfile ? 'another-profile' : id, tokens_valid_after: cutoff };
+          return { async single() {
+            return { error: options.updateError ? { code: 'synthetic-error' } : null,
+              data: Object.fromEntries(columns.split(',').map(key => [key, row[key]])) };
+          } };
+        } };
+      } };
+    } };
+  } };
+  const client = {
+    auth: { async signInWithPassword(values) {
+      assert.deepEqual(values, credentials);
+      state.signIns++; state.events.push('sign-in');
+      issuedAt = Object.hasOwn(options, 'issuedAt') ? options.issuedAt : Math.floor(state.wall / 1000);
+      const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+      const payload = `${encode({ alg: 'ES256', kid: 'cutoff-fixture', typ: 'JWT' })}.${encode({
+        sub: id, role: 'authenticated', app_metadata: { role: 'admin' }, aud: 'authenticated',
+        iss: issuer, iat: issuedAt, exp: epoch + 300
+      })}`;
+      const signature = sign('sha256', Buffer.from(payload), { key: privateKey, dsaEncoding: 'ieee-p1363' });
+      return { error: options.signInError ? { code: 'synthetic-error' } : null,
+        data: { session: options.missingSession ? null : { access_token: `${payload}.${signature.toString('base64url')}` } } };
+    } },
+    from(table) {
+      assert.equal(table, 'profiles');
+      return { select(columns) {
+        assert.equal(columns, 'id');
+        return { eq(column, value) {
+          assert.equal(column, 'id'); assert.equal(value, id);
+          return { async single() {
+            state.callerReads++; state.events.push('caller');
+            // A valid signature does not make a pre-promotion token current.
+            const allowed = !options.denyCaller && Number.isSafeInteger(issuedAt) && issuedAt >= cutoff;
+            return allowed ? { data: { id }, error: null } : { data: null, error: { code: 'PGRST116' } };
+          } };
+        } };
+      } };
+    }
+  };
+  return {
+    epoch, cutoff, state,
+    input: { admin, client, id, ...credentials, jwks, issuer,
+      readCookies: () => options.missingCookies ? [] : [{ name: 'synthetic-cookie', value: 'test-only' }] },
+    clock: {
+      now: () => state.wall, monotonicNow: () => state.elapsed,
+      sleep: async ms => {
+        assert.ok(ms > 0 && ms <= 5000);
+        state.waits.push(ms); state.events.push('wait'); state.elapsed += ms;
+        if (!options.freezeClock) state.wall += options.earlyWake && state.waits.length === 1 ? ms - 1 : ms;
+      }
+    }
+  };
+}
+
+test('preflight waits for the persisted promotion cutoff before its only sign-in', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const f = adminSessionFixture();
+  await establishSyntheticAdminSession(f.input, f.clock);
+  assert.deepEqual(f.state.waits, [750]);
+  assert.deepEqual(f.state.events, ['promote', 'wait', 'sign-in', 'caller']);
+  assert.equal(f.state.signIns, 1);
+  assert.equal(f.state.callerReads, 1);
+});
+
+test('preflight does not delay a cutoff already reached, including exact equality', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  for (const age of [0, 1000]) {
+    const f = adminSessionFixture();
+    f.state.wall = f.cutoff * 1000 + age;
+    await establishSyntheticAdminSession(f.input, f.clock);
+    assert.deepEqual(f.state.waits, []);
+    assert.equal(f.state.signIns, 1);
+    assert.equal(f.state.callerReads, 1);
+  }
+});
+
+test('preflight rechecks the cutoff when the timer wakes early', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const f = adminSessionFixture({ earlyWake: true });
+  await establishSyntheticAdminSession(f.input, f.clock);
+  assert.deepEqual(f.state.waits, [750, 1]);
+  assert.equal(f.state.signIns, 1);
+});
+
+test('preflight bounds a stalled wall clock without attempting sign-in', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const f = adminSessionFixture({ freezeClock: true });
+  await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic account cutoff wait exceeded/);
+  assert.equal(f.state.elapsed, 5000);
+  assert.equal(f.state.signIns, 0);
+  assert.equal(f.state.callerReads, 0);
+});
+
+test('preflight refuses missing, coerced or unsafe cutoff values before sign-in', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  for (const cutoff of [undefined, null, '', '1790447950', -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
+    const f = adminSessionFixture({ cutoff });
+    await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic account cutoff invalid/);
+    assert.equal(f.state.signIns, 0);
+    assert.equal(f.state.callerReads, 0);
+    assert.deepEqual(f.state.waits, []);
+  }
+});
+
+test('preflight fails closed on an unexpectedly distant cutoff rather than sleeping unboundedly', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const f = adminSessionFixture({ cutoff: Math.floor(Date.now() / 1000) + 60 });
+  await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic account cutoff wait exceeded/);
+  assert.deepEqual(f.state.waits, []);
+  assert.equal(f.state.signIns, 0);
+});
+
+test('preflight never retries failed or incomplete sign-in', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  for (const option of ['signInError', 'missingSession', 'missingCookies']) {
+    const f = adminSessionFixture({ cutoff: 0, [option]: true });
+    await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic sign-in failed/);
+    assert.equal(f.state.signIns, 1);
+    assert.equal(f.state.callerReads, 0);
+  }
+});
+
+test('preflight rejects stale or missing verified iat before querying as the caller', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const cutoff = Math.floor(Date.now() / 1000);
+  for (const issuedAt of [cutoff - 1, undefined]) {
+    const f = adminSessionFixture({ cutoff, issuedAt });
+    await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic session predates account cutoff/);
+    assert.equal(f.state.signIns, 1);
+    assert.equal(f.state.callerReads, 0);
+  }
+});
+
+test('preflight keeps caller RLS denial fatal after a current session', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  const f = adminSessionFixture({ cutoff: 0, denyCaller: true });
+  await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Caller JWT not accepted by PostgREST/);
+  assert.equal(f.state.signIns, 1);
+  assert.equal(f.state.callerReads, 1);
+});
+
+test('preflight stops on failed or mismatched profile promotion', async () => {
+  const { establishSyntheticAdminSession } = await import('../acceptance/environment-preflight.mjs');
+  for (const option of ['updateError', 'wrongProfile']) {
+    const f = adminSessionFixture({ [option]: true });
+    await assert.rejects(establishSyntheticAdminSession(f.input, f.clock), /Synthetic profile setup failed/);
+    assert.equal(f.state.signIns, 0);
+    assert.equal(f.state.callerReads, 0);
+    assert.deepEqual(f.state.waits, []);
+  }
+});
+
 test('preflight cannot run without the owned private launcher session', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-refusal-'));
   try {
