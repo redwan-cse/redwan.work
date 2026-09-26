@@ -115,6 +115,17 @@ test('Section 6: Staging replay safety and finalized object immutability', { tim
     console.log('PASS 6.1: Payload A uploaded via presigned PUT, finalized to UUIDv5, verified in immutable_uploads');
   });
 
+  await t.test('6.4 Conditional PUT refuses replacement of the actual application-finalized object', async () => {
+    await assert.rejects(
+      storage.send(new PutObjectCommand({
+        Bucket: ENV.PRIVATE_BUCKET, Key: finalKey, Body: bytesB,
+        ContentType: 'application/pdf', IfNoneMatch: '*',
+      })),
+      err => err.$metadata?.httpStatusCode === 412
+    );
+    assert.deepEqual(await readRecoveryBytes(finalKey), bytesA);
+  });
+
   await t.test('6.2 Presigned PUT replay of bytes B on still-valid staging URL; finalized key and backup retain bytes A', async () => {
     // Replay attack: An attacker or late network retransmission uses the STILL-VALID presigned staging PUT URL
     // to overwrite the staging key with bytes B (same byte length).
@@ -168,35 +179,4 @@ test('Section 6: Staging replay safety and finalized object immutability', { tim
     console.log('PASS 6.3: presigned PUT strictly refuses finalized keys and archive keys');
   });
 
-  await t.test('6.4 Conditional PUT prevents replacing finalized UUIDv5 storage bytes', async () => {
-    // Scope note: If-None-Match: * is a storage-level precondition check that prevents overwriting
-    // an existing object at the finalized destination during copy/restore (returns 412 Precondition Failed).
-    await storage.send(new PutObjectCommand({
-      Bucket: ENV.PRIVATE_BUCKET,
-      Key: finalKey,
-      Body: bytesA,
-      ContentType: 'application/pdf',
-    }));
-
-    // Attempting to overwrite existing finalKey with IfNoneMatch: '*' returns 412 Precondition Failed
-    await assert.rejects(
-      async () => {
-        await storage.send(new PutObjectCommand({
-          Bucket: ENV.PRIVATE_BUCKET,
-          Key: finalKey,
-          Body: bytesB,
-          ContentType: 'application/pdf',
-          IfNoneMatch: '*',
-        }));
-      },
-      (err) => {
-        return err.name === 'PreconditionFailed' || err.$metadata?.httpStatusCode === 412;
-      }
-    );
-
-    // Verify storage bytes still match bytes A
-    const finalBytesAfter = await readRecoveryBytes(finalKey);
-    assert.deepEqual(finalBytesAfter, bytesA);
-    console.log('PASS 6.4: Conditional PUT (If-None-Match: *) prevents replacing finalized object bytes');
-  });
 });

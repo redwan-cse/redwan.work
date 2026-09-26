@@ -105,13 +105,14 @@ test('Section 7: HTTP API boundaries and recovery interface protocol verificatio
     console.log('PASS 7.3: File size boundaries strictly enforced (22 B - 100 MB)');
   });
 
-  await t.test('7.4 Protocol limitation: in-flight import is unqueryable by ID via current HTTP GET endpoint', async () => {
+  await t.test('7.4 Saved-import protocol exposes unsealed status without private storage details', async () => {
     // Open an import
     const upRes = await safeFetch(`${ENV.APP_URL}/api/recovery`, {
       method: 'POST',
       headers: { cookie: adminCookie, origin: ENV.APP_URL, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'upload', size: 50 }),
     });
+    assert.equal(upRes.status, 200);
     const upData = await upRes.json();
     assert.ok(upData.id);
     tracker.trackImport(upData.id);
@@ -120,13 +121,17 @@ test('Section 7: HTTP API boundaries and recovery interface protocol verificatio
     const impRow = await admin.from('recovery_imports').select('id').eq('id', upData.id).single();
     assert.ok(!impRow.error && impRow.data);
 
-    // GET /api/recovery?importId=<id> does not support querying in-flight status; returns catalog
+    // Read-only status is actor-scoped and does not sign another upload.
     const queryRes = await safeFetch(`${ENV.APP_URL}/api/recovery?importId=${upData.id}`, {
       headers: { cookie: adminCookie, origin: ENV.APP_URL },
     });
     assert.equal(queryRes.status, 200);
     const body = await queryRes.json();
-    assert.ok(Array.isArray(body.files) && Array.isArray(body.projects), 'Returns standard catalog listing, not in-flight state');
-    console.log('PASS 7.4: Protocol verification confirms current API lacks in-flight import query route');
+    assert.equal(body.state, 'uploading');
+    assert.equal(body.id, upData.id);
+    assert.ok(Date.parse(body.expiresAt) > Date.now());
+    assert.deepEqual(Object.keys(body).sort(), ['expiresAt', 'id', 'state']);
+    assert.equal(queryRes.headers.get('cache-control'), 'no-store');
+    console.log('PASS 7.4: Unsealed import is queryable without exposing storage details');
   });
 });
