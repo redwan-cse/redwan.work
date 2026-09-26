@@ -102,7 +102,7 @@ test('database socket plan supports image initialization and explicit bootstrap 
 test('gateway never elevates absent, invalid or ambiguous API credentials',async()=>{
  const {createMaterial,translateHeaders}=await load();const m=createMaterial();
  for(const headers of [{},{apikey:'arbitrary'},{authorization:`Bearer ${m.secretKey}`},
-  {apikey:`${m.publishableKey}, ${m.secretKey}`},{apikey:m.publishableKey,authorization:`Bearer ${m.secretKey}`}]}){
+  {apikey:`${m.publishableKey}, ${m.secretKey}`},{apikey:m.publishableKey,authorization:`Bearer ${m.secretKey}`}]){
   assert.throws(()=>translateHeaders(headers,m));
  }
 });
