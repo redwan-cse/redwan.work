@@ -42,6 +42,16 @@ test('database bootstrap failure stops dependent services and retains exact IDs'
 });
 
 const load=()=>import('../acceptance/disposable-bootstrap.mjs');
+test('expiry control exists only in disposable bootstrap and does not grant table writes',async()=>{
+ const {acceptanceFixtureSql}=await load();
+ const sql=acceptanceFixtureSql();
+ assert.match(sql,/create function public\.acceptance_expire_recovery_import/);
+ assert.match(sql,/where id=p_id and actor=p_actor and result is null/);
+ assert.match(sql,/request\.jwt\.claims/);
+ assert.match(sql,/revoke all on function[\s\S]*from public,anon,authenticated/);
+ assert.match(sql,/grant execute on function[\s\S]*to service_role/);
+ assert.doesNotMatch(sql,/grant\s+update|grant\s+all|drop |truncate /i);
+});
 const images=()=>Object.fromEntries(['database','auth','rest','storage','runner','app'].map(role=>[role,`sha256:${'a'.repeat(64)}`]));
 test('generated material is fresh ES256 only with separate opaque API keys',async()=>{
  const {createMaterial}=await load();const a=createMaterial(),b=createMaterial();
@@ -57,6 +67,7 @@ test('generated plan has dependency order, isolated endpoints and no legacy cred
  const auth=p.services.find(s=>s.role==='auth'),rest=p.services.find(s=>s.role==='rest'),gateway=p.services.find(s=>s.role==='gateway');
  assert.equal(auth.env.GOTRUE_JWT_SECRET,'');assert.equal(JSON.parse(auth.env.GOTRUE_JWT_KEYS)[0].alg,'ES256');
  assert.equal(JSON.parse(rest.env.PGRST_JWT_SECRET).keys[0].d,undefined);
+ assert.deepEqual(rest.command,[],'Use the pinned image default executable, not a PATH guess');
  assert.equal(gateway.env.BOOTSTRAP_SECRET_KEY,m.secretKey);
  assert.equal(p.services.find(s=>s.role==='app').env.HOSTNAME,'app');
  assert.equal(p.services.find(s=>s.role==='app').env.SUPABASE_SECRET_KEY,m.secretKey);
