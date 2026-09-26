@@ -4,6 +4,8 @@ import test from 'node:test';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { registerHooks } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import {
   assertDisposableTarget,
   createAdminClient,
@@ -35,7 +37,9 @@ const { archiveProject } = await import('../../lib/crm/projects.ts');
 const { purgeArchivedProject } = await import('../../lib/crm/retention.ts');
 const { readRecoveryBytes } = await import('../../lib/crm/recovery-storage.ts');
 
-test('PROPOSED SLICE: Resuming in-flight recovery after page reload / fresh session', { timeout: 120000 }, async (t) => {
+// Shared real-service fixture for protocol and browser acceptance. Importing does not
+// register a second suite. Application helpers and actual storage/SQL remain real.
+export async function prepareResumeFixture(t) {
   const tracker = new FixtureTracker(admin, storage);
   let adminUser, clientUser, adminCookie;
   const adminPassword = 'Password123!@#';
@@ -107,10 +111,12 @@ test('PROPOSED SLICE: Resuming in-flight recovery after page reload / fresh sess
     const c1 = await admin.rpc('confirm_project_deliverable', { p_actor: adminUser, p_project: seededProjectId, p_file: { r2_key: v1.key, filename: 'Deliverable-1.pdf', mime: 'application/pdf', size_bytes: f1Bytes.length } });
     const c2 = await admin.rpc('confirm_project_deliverable', { p_actor: adminUser, p_project: seededProjectId, p_file: { r2_key: v2.key, filename: 'Deliverable-2.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size_bytes: f2Bytes.length } });
     assert.ok(!c1.error && c1.data && !c2.error && c2.data);
-    tracker.trackFile(c1.data.id);
-    tracker.trackFile(c2.data.id);
+    assert.match(c1.data, /^[0-9a-f-]{36}$/);
+    assert.match(c2.data, /^[0-9a-f-]{36}$/);
+    tracker.trackFile(c1.data);
+    tracker.trackFile(c2.data);
 
-    await archiveProject(seededProjectId);
+    assert.equal((await archiveProject(seededProjectId)).ok, true);
     const purgeRes = await purgeArchivedProject(seededProjectId);
     assert.equal(purgeRes.ok, true);
 
@@ -159,13 +165,55 @@ test('PROPOSED SLICE: Resuming in-flight recovery after page reload / fresh sess
     console.log('Chunk 1 completed successfully (1 of 2). Simulating operator page reload / fresh session.');
   });
 
-  await t.test('FAILING ACCEPTANCE CRITERION: Operator queries and resumes in-flight recovery by ID after page reload', async () => {
-    // Defect reproduction:
-    // When the operator reloads the page, the React client state resets to null.
-    // The operator needs to resume the in-flight import by ID.
-    // In candidate 6f5a0abc4964bff3ea314bad474428d36f57fefb:
-    // GET /api/recovery does not support ?importId and ignores it, returning standard catalog listing.
-    // Therefore, the assertion below FAILS as expected, confirming the defect.
+  assert.ok(inFlightImportId && backupZipBytes, 'Fixture setup must complete');
+  const partial = await admin.from('recovery_imports').select('completed_files,result').eq('id', inFlightImportId).single();
+  assert.ok(!partial.error && partial.data);
+  assert.equal(partial.data.completed_files.length, 1, 'Partial fixture checkpoint required');
+  assert.equal(partial.data.result, null);
+  const post = async (action, fields = {}) => {
+    const response = await safeFetch('/api/recovery', {
+      method: 'POST', headers: { cookie: adminCookie, origin: ENV.APP_URL, 'content-type': 'application/json' },
+      body: JSON.stringify({ action, ...fields }),
+    });
+    assert.equal(response.status, 200, 'Recovery fixture request failed');
+    return response.json();
+  };
+  const openImport = async ({ preview = true } = {}) => {
+    const opened = await post('upload', { size: backupZipBytes.length });
+    tracker.trackImport(opened.id);
+    const put = await safeFetch(opened.url, { method: 'PUT', headers: { 'content-type': 'application/zip' }, body: backupZipBytes });
+    assert.ok([200, 204].includes(put.status));
+    await put.body?.cancel();
+    if (preview) await post('preview', { id: opened.id });
+    return opened.id;
+  };
+  const verifyCompleted = async (id) => {
+    const saved = await admin.from('recovery_imports').select('result,completed_files,object_plan').eq('id', id).single();
+    assert.ok(!saved.error && saved.data?.result?.projectId, 'Database commit required');
+    const result = saved.data.result;
+    assert.equal(result.fileIds.length, 2);
+    assert.equal(new Set(result.fileIds).size, 2);
+    const files = await admin.from('files').select('id,r2_key').eq('project_id', result.projectId);
+    assert.ok(!files.error);
+    assert.deepEqual(files.data.map(f => f.id).sort(), [...result.fileIds].sort());
+    const restoredContents = [];
+    for (const f of files.data) {
+      tracker.trackKey(f.r2_key); tracker.trackFile(f.id);
+      const bytes = await readRecoveryBytes(f.r2_key);
+      restoredContents.push(bytes.toString('utf8'));
+    }
+    assert.deepEqual(restoredContents.sort(), ['Reload resume test file 1 content', 'Reload resume test file 2 content']);
+    assert.equal(saved.data.completed_files.length, 2);
+    tracker.trackProject(result.projectId);
+    return result;
+  };
+  return { admin, tracker, adminCookie, adminUser, clientUser, id: inFlightImportId, post, openImport, verifyCompleted };
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+test('Same-import partial restore status, completion and idempotent retry', { timeout: 180000 }, async (t) => {
+  const { id: inFlightImportId, adminCookie, post, verifyCompleted } = await prepareResumeFixture(t);
+  await t.test('Saved partial checkpoint is readable and resumable', async () => {
     const resumeQueryRes = await safeFetch(`${ENV.APP_URL}/api/recovery?importId=${inFlightImportId}`, {
       method: 'GET',
       headers: { cookie: adminCookie, origin: ENV.APP_URL },
@@ -173,9 +221,16 @@ test('PROPOSED SLICE: Resuming in-flight recovery after page reload / fresh sess
     assert.equal(resumeQueryRes.status, 200);
     const body = await resumeQueryRes.json();
 
-    assert.ok(
-      body.inFlight === true && body.id === inFlightImportId && body.completed === 1 && body.total === 2,
-      `DEFECT REPRODUCED: Server does not return in-flight recovery state for resumption. Received catalog response instead: ${JSON.stringify(body).slice(0, 120)}...`
-    );
+    assert.equal(body.state, 'ready');
+    assert.equal(body.id, inFlightImportId);
+    assert.equal(body.completed, 1);
+    assert.equal(body.files, 2);
+    assert.deepEqual(Object.keys(body).sort(), ['completed', 'expiresAt', 'files', 'id', 'kind', 'name', 'notice', 'state']);
+    const checkpoint = await post('restore', { id: inFlightImportId });
+    assert.deepEqual(checkpoint, { pending: true, id: inFlightImportId, completed: 2, total: 2 });
+    const completed = await post('restore', { id: inFlightImportId });
+    assert.deepEqual(completed.result, await verifyCompleted(inFlightImportId));
+    assert.deepEqual((await post('restore', { id: inFlightImportId })).result, completed.result);
   });
 });
+}
