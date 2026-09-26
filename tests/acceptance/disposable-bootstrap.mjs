@@ -149,7 +149,9 @@ export function createPlan({candidate,images,material:m}) {
  const plan={version:1,candidate,acceptance,services:[
   service('database',{POSTGRES_USER:'postgres',POSTGRES_DB:'postgres',POSTGRES_PASSWORD:m.databasePassword,
    PGDATA:'/var/lib/postgresql/data/pgdata',POSTGRES_INITDB_ARGS:'--auth-host=scram-sha-256'},
-   ['postgres','-c','listen_addresses=*','-c','unix_socket_directories=/tmp','-c','log_statement=none'],
+   // The Debian entrypoint clears PGHOST for initialization psql. Keep its default
+   // socket alongside /tmp, which the owned bootstrap SQL client uses explicitly.
+   ['postgres','-c','listen_addresses=*','-c','unix_socket_directories=/var/run/postgresql,/tmp','-c','log_statement=none'],
    '999:999',['/var/lib/postgresql/data:rw,nosuid,nodev,size=1024m,uid=999,gid=999,mode=0700',tmp(64,999)],2048),
   runner,
   service('auth',{GOTRUE_API_HOST:'0.0.0.0',GOTRUE_API_PORT:'9999',PORT:'9999',API_EXTERNAL_URL:ISSUER,

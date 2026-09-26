@@ -76,10 +76,33 @@ test('generated plan has dependency order, isolated endpoints and no legacy cred
  assert.throws(()=>createPlan({candidate,images:{...images(),auth:'gotrue:latest'},material:m}));
 });
 
+test('database socket plan supports image initialization and explicit bootstrap clients',async()=>{
+ const {createMaterial,createPlan}=await load();
+ const database=createPlan({candidate,images:images(),material:createMaterial()}).services.find(s=>s.role==='database');
+ const settings=database.command.flatMap((arg,i)=>arg==='-c'?[database.command[i+1]]:[]);
+ const socketSettings=settings.filter(value=>value.startsWith('unix_socket_directories='));
+ assert.equal(socketSettings.length,1,'Exactly one socket-directory override required');
+ // The pinned Debian entrypoint clears PGHOST for its own psql initialization.
+ // Later bootstrap SQL explicitly uses -h /tmp, so both socket paths are required.
+ assert.deepEqual(socketSettings[0].slice('unix_socket_directories='.length).split(','),
+  ['/var/run/postgresql','/tmp'],'Image-default and bootstrap Unix sockets must both be available');
+ assert.equal(database.command[0],'postgres');
+ assert.equal(database.user,'999:999');
+ assert.equal(database.env.POSTGRES_INITDB_ARGS,'--auth-host=scram-sha-256');
+ assert.equal(database.env.PGHOST,undefined,'PGHOST cannot repair the entrypoint client override');
+ assert.equal(database.env.PGHOSTADDR,undefined);
+ assert.ok(settings.includes('listen_addresses=*'));
+ assert.ok(settings.includes('log_statement=none'));
+ assert.deepEqual(database.tmpfs,[
+  '/var/lib/postgresql/data:rw,nosuid,nodev,size=1024m,uid=999,gid=999,mode=0700',
+  '/tmp:rw,nosuid,nodev,size=64m,uid=999,gid=999,mode=0700'
+ ]);
+});
+
 test('gateway never elevates absent, invalid or ambiguous API credentials',async()=>{
  const {createMaterial,translateHeaders}=await load();const m=createMaterial();
  for(const headers of [{},{apikey:'arbitrary'},{authorization:`Bearer ${m.secretKey}`},
-  {apikey:`${m.publishableKey}, ${m.secretKey}`},{apikey:m.publishableKey,authorization:`Bearer ${m.secretKey}`}]){
+  {apikey:`${m.publishableKey}, ${m.secretKey}`},{apikey:m.publishableKey,authorization:`Bearer ${m.secretKey}`}]}){
   assert.throws(()=>translateHeaders(headers,m));
  }
 });
