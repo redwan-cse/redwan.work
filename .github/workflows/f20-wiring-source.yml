@@ -23,10 +23,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_INPUT"
-          test "$(git rev-parse HEAD^)" = '75191f6f9d7b6ba9d9e0b1e1c40a17f2edb031f2'
+          test "$(git rev-parse HEAD^)" = '369c4ac125fb5966cd033844a4d9b0dcd8828940'
           test -z "$(git status --porcelain)"
           echo 'd032afc75faa6c0decc6c21359b7c2ad5724fbfd256bde5d5b93c64288c3efae  scripts/f20-wire-source.py' | sha256sum --check
           python3 -I scripts/f20-wire-source.py > "$RUNNER_TEMP/f20-source-blobs.json"
+          # CI configuration is published separately through the app connection.
+          git restore -- .github/workflows/contact-cleanup.yml
           git diff --check
           node tests/contact-cleanup.mjs source
           node --check tests/audit-claim-challenges.mjs
@@ -35,9 +37,11 @@ jobs:
           python3 - <<'PY'
           import json,os,pathlib,subprocess
           expected=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'f20-source-blobs.json').read_text())
+          assert len(expected)==14
+          del expected['.github/workflows/contact-cleanup.yml']
           actual=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
-          assert len(expected)==14 and set(actual)==set(expected)
-          print('Verified 14 exact-input source edits; no production operation.')
+          assert len(expected)==13 and set(actual)==set(expected)
+          print('Verified 13 exact-input source edits; CI configuration excluded; no production operation.')
           PY
       - name: Publish only the verified development source edits
         env:
@@ -51,7 +55,15 @@ jobs:
           test "$remote" = "$SOURCE_INPUT"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- components/enhanced-contact-form.tsx lib/contact/consent-policy.ts tests/reliability/consent-policy.test.mjs scripts/audit-manifests.mjs tests/reliability/contact.test.mjs tests/reliability/caller-inventory.test.mjs tests/reliability/intake-consent.test.mjs tests/acceptance/disposable-bootstrap.mjs tests/reliability/disposable-bootstrap.test.mjs tests/reliability/contact-pipeline.acceptance.mjs tests/wave-one-browser.mjs tests/audit-claim-challenges.mjs tests/contact-cleanup.mjs .github/workflows/contact-cleanup.yml
+          git add -- components/enhanced-contact-form.tsx lib/contact/consent-policy.ts tests/reliability/consent-policy.test.mjs scripts/audit-manifests.mjs tests/reliability/contact.test.mjs tests/reliability/caller-inventory.test.mjs tests/reliability/intake-consent.test.mjs tests/acceptance/disposable-bootstrap.mjs tests/reliability/disposable-bootstrap.test.mjs tests/reliability/contact-pipeline.acceptance.mjs tests/wave-one-browser.mjs tests/audit-claim-challenges.mjs tests/contact-cleanup.mjs
           git commit -m 'fix(contact): connect displayed consent version, stale recheck, and real intake acceptance'
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/fix/audit-followup-remediation
+          if ! git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/fix/audit-followup-remediation > "$RUNNER_TEMP/f20-push.log" 2>&1; then
+            python3 - <<'PY'
+          import os,pathlib
+          text=(pathlib.Path(os.environ['RUNNER_TEMP'])/'f20-push.log').read_text().lower()
+          category=next((x for x in ['workflow','protected branch','gh013','permission','authentication','non-fast-forward'] if x in text),'unclassified')
+          print('::error::F20 source push category='+category)
+          PY
+            exit 1
+          fi
           echo 'Source integration published. This is not a full acceptance result.'
