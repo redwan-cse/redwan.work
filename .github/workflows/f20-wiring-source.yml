@@ -23,9 +23,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_INPUT"
-          test "$(git rev-parse HEAD^)" = 'b0fee9a12caee8d4396b2c279a230e29652f22d4'
+          test "$(git rev-parse HEAD^)" = '75191f6f9d7b6ba9d9e0b1e1c40a17f2edb031f2'
           test -z "$(git status --porcelain)"
-          echo '2c2b8fe5b9a2d01edb57d9d89a5cfc759782f759d8a24500ec1d2726c49c6b55  scripts/f20-wire-source.py' | sha256sum --check
+          echo 'd032afc75faa6c0decc6c21359b7c2ad5724fbfd256bde5d5b93c64288c3efae  scripts/f20-wire-source.py' | sha256sum --check
           python3 -I scripts/f20-wire-source.py > "$RUNNER_TEMP/f20-source-blobs.json"
           git diff --check
           node tests/contact-cleanup.mjs source

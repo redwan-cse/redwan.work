@@ -9,7 +9,10 @@ export function parsePublicConsentPolicy(value: unknown): PolicyBundle | null {
   for (const key of ['checkbox', 'privacyNotice', 'attachmentNotice', 'policyText']) {
     const text = row[key];
     if (typeof text !== 'string' || !text || encoder.encode(text).length > 131072) return null;
-    if (/[-\u0009\u000b-\u001f\u007f]/.test(text)) return null;
+    for (let index = 0; index < text.length; index++) {
+      const code = text.charCodeAt(index);
+      if ((code < 32 && code !== 10) || code === 127) return null;
+    }
     if (new TextDecoder().decode(encoder.encode(text)) !== text) return null;
   }
   const policy = {
