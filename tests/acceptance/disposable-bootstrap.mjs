@@ -261,7 +261,7 @@ grant execute on function public.acceptance_expire_recovery_import(uuid,uuid) to
 }
 export function migrationManifest(entries) {
  const ordered=[...entries].sort((a,b)=>a.name.localeCompare(b.name));
- assert.equal(ordered.length,40,'Expected reviewed migrations 0001 through 0040');
+ assert.equal(ordered.length,41,'Expected reviewed migrations 0001 through 0041');
  return ordered.map((e,i)=>{
   assert.match(e.name,new RegExp(`^${String(i+1).padStart(4,'0')}_[a-z0-9_]+\\.sql$`));
   assert.ok(typeof e.sql==='string' && e.sql.trim(),'Empty migration');
@@ -388,7 +388,7 @@ export function bootstrapPrepared({planPath,statePath,materialPath,manifest,prov
      // Read from the exact git candidate. No source editing, no resets, no replay against existing schema.
      sql(state,`begin;\n${migration.sql}\ninsert into bootstrap_internal.migrations(name,sha256) values('${migration.name}','${migration.sha256}');\ncommit;`);
     }
-    assert.equal(sql(state,'select count(*) from bootstrap_internal.migrations;'),'40');
+    assert.equal(sql(state,'select count(*) from bootstrap_internal.migrations;'),'41');
     sql(state,acceptanceFixtureSql());
    }
    if(service.role==='storage') {

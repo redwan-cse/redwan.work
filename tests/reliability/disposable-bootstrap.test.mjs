@@ -155,8 +155,8 @@ test('gateway does not follow upstream redirects or leak provider diagnostics',a
 });
 test('migration manifest refuses gaps, unsafe names and schema replay',async()=>{
  const {migrationManifest,databaseBootstrapSql}=await load();
- const entries=Array.from({length:40},(_,i)=>({name:`${String(i+1).padStart(4,'0')}_fixture.sql`,sql:'select 1;'}));
- const result=migrationManifest(entries);assert.equal(result.length,40);assert.match(result[0].sha256,/^[a-f0-9]{64}$/);
+ const entries=Array.from({length:41},(_,i)=>({name:`${String(i+1).padStart(4,'0')}_fixture.sql`,sql:'select 1;'}));
+ const result=migrationManifest(entries);assert.equal(result.length,41);assert.match(result[0].sha256,/^[a-f0-9]{64}$/);
  assert.throws(()=>migrationManifest(entries.slice(1)));assert.throws(()=>migrationManifest([...entries,entries[0]]));
  assert.throws(()=>migrationManifest([{name:'../0001_fixture.sql',sql:'select 1;'},...entries.slice(1)]));
  const sql=databaseBootstrapSql('a'.repeat(64));
@@ -200,7 +200,7 @@ test('partial bucket failure retains data and is not reported as successful clea
 });
 test('migration manifest forbids scheduling and psql shell escapes without modifying SQL',async()=>{
  const {migrationManifest}=await load();
- const entries=Array.from({length:40},(_,i)=>({name:`${String(i+1).padStart(4,'0')}_fixture.sql`,sql:'-- exact source\nselect 1;\n'}));
+ const entries=Array.from({length:41},(_,i)=>({name:`${String(i+1).padStart(4,'0')}_fixture.sql`,sql:'-- exact source\nselect 1;\n'}));
  assert.equal(migrationManifest(entries)[0].sql,entries[0].sql);
  for(const sql of ['select cron.schedule(\'x\',\'x\',\'x\');','create extension pg_net;',"\\! echo unsafe"]){
   assert.throws(()=>migrationManifest([{...entries[0],sql},...entries.slice(1)]));

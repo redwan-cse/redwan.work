@@ -11,7 +11,7 @@ const EXPECTED_ACTIONS={
 };
 const EXPECTED_ROUTES=[
  ['app/api/auth/logout/route.ts','/api/auth/logout/route',['GET','POST']],
- ['app/api/contact/route.ts','/api/contact/route',['POST']],
+ ['app/api/contact/route.ts','/api/contact/route',['GET','POST']],
  ['app/api/cron/email-outbox/route.ts','/api/cron/email-outbox/route',['GET']],
  ['app/api/cron/r2-retention/route.ts','/api/cron/r2-retention/route',['GET']],
  ['app/api/files/[id]/download/route.ts','/api/files/[id]/download/route',['GET']],

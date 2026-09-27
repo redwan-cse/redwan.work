@@ -1,14 +1,15 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 
-/** I03 infrastructure only. No live route imports this module. No env switch,
- * published policy, migration activation, backfill or marketing permission.
- * Explicit future approval is required to wire a database-backed control into
- * intake. Synthetic registry/control inputs are supplied by isolated tests.
+/** I03/F20 development integration approved 2026-09-28. No environment switch,
+ * automatic activation, backfill or marketing permission. The runtime control
+ * comes from the database; schema installation leaves it disabled. Production
+ * migration, policy publication and activation require separate authorization.
  * Stale (409) consumers must retain draft/attachment metadata in memory, clear
  * the checkbox, display the new bundle and require explicit review/recheck.
  * This module never mutates a form or automatically retries a submission.
  */
+// Deployment default only; not an environment override of database authority.
 export const CONSENT_ACTIVATION_ENABLED = false;
 export type PolicyBundle = Readonly<{
   version: string;

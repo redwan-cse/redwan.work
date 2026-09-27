@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {installConsentFixture} from './consent-ci-fixture.mjs';
 import {registerHooks} from 'node:module';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {createClient} from '@supabase/supabase-js';
@@ -36,18 +37,20 @@ test('actual contact route with local persistence storage and concurrent rate co
  async function count(){const r=await admin.from('leads').select('id',{count:'exact',head:true}).eq('email',email);safe(r);return r.count;}
  function request(entries,token=randomUUID(),consent='true'){
   const ip='192.0.2.'+(++index);rateHashes.add(hash(salt+ip));rateHashes.add(hash(token));
-  const form=new FormData();form.set('name','Synthetic contact');form.set('email',email);form.set('projectSummary','Synthetic full-route acceptance request.');form.set('gdprConsent',consent);form.set('cf-turnstile-response',token);
+  const form=new FormData();form.set('name','Synthetic contact');form.set('email',email);form.set('projectSummary','Synthetic full-route acceptance request.');form.set('gdprConsent',consent);form.set('consentPolicyVersion',consentFixture.bundle.version);form.set('cf-turnstile-response',token);
   if(entries!==undefined)form.set('attachments',JSON.stringify(entries));
   if(consent==='duplicate'){form.set('gdprConsent','true');form.append('gdprConsent','true');}
   return new Request('http://localhost:3399/api/contact',{method:'POST',body:form,headers:{origin:'http://localhost:3399',host:'localhost:3399','cf-connecting-ip':ip,'user-agent':'Synthetic pipeline acceptance'}});
  }
+ let consentFixture;
  try{
+  consentFixture=installConsentFixture();
   await storage.send(new CreateBucketCommand({Bucket}));created=true;
   phase='contact stored bytes';const bytes=randomBytes(71);const signed=await presignContactUpload('fixture.pdf','application/pdf',bytes.length);keys.push(signed.key);
   assert.ok((await fetch(signed.uploadUrl,{method:'PUT',body:bytes,headers:{'Content-Type':'application/pdf'}})).ok);
   const entry={key:signed.key,filename:'fixture.pdf',mime:'application/pdf',size_bytes:71};
   phase='contact route persistence';const token=randomUUID();const response=await POST(request([entry],token));assert.equal(response.status,200);const body=await response.json();assert.match(body.ticketRef,/^TKT-\d+$/);assert.equal(await count(),1);
-  const row=safe(await admin.from('leads').select('ticket_number,attachments,consent_at,user_agent').eq('email',email).single());assert.equal(body.ticketRef,'TKT-'+row.ticket_number);assert.deepEqual(row.attachments,[entry]);assert.ok(Number.isFinite(Date.parse(row.consent_at)));assert.equal(row.user_agent,'Synthetic pipeline acceptance');
+  const row=safe(await admin.from('leads').select('ticket_number,attachments,consent_at,user_agent,consent_policy_version,consent_policy_hash,consent_capture_method').eq('email',email).single());assert.equal(body.ticketRef,'TKT-'+row.ticket_number);assert.deepEqual(row.attachments,[entry]);assert.ok(Number.isFinite(Date.parse(row.consent_at)));assert.equal(row.user_agent,'Synthetic pipeline acceptance');assert.equal(row.consent_policy_version,consentFixture.archive.version);assert.equal(row.consent_policy_hash,consentFixture.archive.hash);assert.equal(row.consent_capture_method,'explicit-checkbox-v1');
   phase='contact replay denial';assert.equal((await POST(request([entry],token))).status,400);assert.equal(await count(),1);
   phase='contact invalid attachments';
   const missing={...entry,key:`contact/${randomUUID()}/${randomUUID()}.pdf`};
@@ -62,6 +65,7 @@ test('actual contact route with local persistence storage and concurrent rate co
  }catch{failed='Contact pipeline acceptance failed at '+phase+'; sensitive details withheld';}
  finally{
   try{
+   if(consentFixture)consentFixture.dispose();
    safe(await admin.from('leads').delete().eq('email',email));assert.equal(await count(),0);
    if(rateHashes.size)safe(await admin.from('rate_limits').delete().in('key_hash',[...rateHashes]));
    if(created){for(const Key of keys)await storage.send(new DeleteObjectCommand({Bucket,Key}));const list=await storage.send(new ListObjectsV2Command({Bucket}));assert.equal(list.KeyCount,0);assert.equal(Boolean(list.IsTruncated),false);await storage.send(new DeleteBucketCommand({Bucket}));}

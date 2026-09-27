@@ -1,7 +1,8 @@
 // Executes real source with synthetic service adapters. No provider/network transport.
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
+import {consentBundle,consentArchive,consentSnapshot} from './reliability/consent-fixture.mjs';
 const marker='PRIVATE_SENTINEL_TOKEN_ADDRESS';
 const f={mode:'ok',calls:[],rpcError:null,existing:null,authRole:'client',profileRole:'client',active:true};
 globalThis.__auditChallenge=f;
@@ -16,7 +17,7 @@ const admin={
     }
     return q;
   },
-  async rpc(){f.calls.push('rpc');return f.rpcError?{data:null,error:{message:f.rpcError}}:{data:'fixture-ticket',error:null};},
+  async rpc(name){if(name==='contact_consent_control')return {data:consentSnapshot,error:null};f.calls.push('rpc');return f.rpcError?{data:null,error:{message:f.rpcError}}:{data:'fixture-ticket',error:null};},
   auth:{admin:{async getUserById(){return {data:{user:{id:'fixture-user',email:'fixture@example.test',app_metadata:{role:f.authRole}}},error:null};},async updateUserById(){f.calls.push('auth:update');return {error:null};},async inviteUserByEmail(){f.calls.push('auth:invite');return {data:{user:{id:'fixture-user'}},error:null};}}}
 };
 globalThis.__auditChallengeAdmin=admin;
@@ -28,10 +29,11 @@ const modules={
   '@/lib/email/recipients':['adminRecipients','emailOrigin','recipientEmail','recipientName','ticketEmailContext'].map(n=>`export async function ${n}(){throw Error("Unexpected recipient invocation");}`).join(''),
   '@/lib/r2':'export const CONTACT_MAX_FILES=5,CONTACT_MAX_SIZE_BYTES=10485760;export function isValidContactKey(){return true;}'
 };
-const hooks=registerHooks({resolve(s,c,n){if(['@/lib/crm/thread-pagination','@/lib/contact/intake-contract','@/lib/crm/result'].includes(s))return {url:new URL('../'+s.slice(2)+'.ts',import.meta.url).href,shortCircuit:true};if(Object.hasOwn(modules,s))return {url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true};return n(s,c);}});
+const hooks=registerHooks({resolve(s,c,n){if(['@/lib/crm/thread-pagination','@/lib/contact/intake-contract','@/lib/crm/result','@/lib/contact/consent-intake','@/lib/contact/consent-control','@/lib/contact/consent-policy','@/lib/contact/lead-schema'].includes(s))return {url:new URL('../'+s.slice(2)+'.ts',import.meta.url).href,shortCircuit:true};if(Object.hasOwn(modules,s))return {url:'data:text/javascript,'+encodeURIComponent(modules[s]),shortCircuit:true};return n(s,c);}});
 const tickets=await import('../lib/crm/tickets.ts');
 const clients=await import('../lib/crm/clients.ts');
 const {parseLeadPayload}=await import('../lib/contact/lead-schema.ts');
+const {parseConsentedLeadPayload}=await import('../lib/contact/consent-intake.ts');
 hooks.deregister();
 function reset(){Object.assign(f,{mode:'ok',calls:[],rpcError:null,existing:null,authRole:'client',profileRole:'client',active:true});}
 const results={};
@@ -66,10 +68,17 @@ await check('F20-explicit-consent-and-time',async()=>{
   const r=parseLeadPayload(form('true'),{ipHash:null,userAgent:null});assert.equal(r.ok,true);assert.ok(Number.isFinite(Date.parse(r.lead.consent_at)));
 });
 await check('F20-policy-version-recorded',async()=>{
-  const r=parseLeadPayload(form('true'),{ipHash:null,userAgent:null});assert.equal(r.ok,true);
-  // Issue45 explicitly asks for policy/version/time. A timestamp alone is not a version.
-  const key=Object.keys(r.lead).find(k=>/policy.*(?:version|hash)|consent.*(?:version|hash)/i.test(k));
-  assert.ok(key&&typeof r.lead[key]==='string'&&r.lead[key].length>0);
+  const meta={ipHash:null,userAgent:null},input=form('true');
+  assert.equal((await parseConsentedLeadPayload(input,meta)).ok,false);
+  input.set('consentPolicyVersion',consentBundle.version);
+  input.set('consent_at','2000-01-01');input.set('consent_policy_hash','forged');
+  const before=Date.now(),r=await parseConsentedLeadPayload(input,meta);assert.equal(r.ok,true);
+  assert.equal(r.lead.consent_policy_version,consentBundle.version);
+  assert.equal(r.lead.consent_policy_hash,consentArchive.hash);
+  assert.equal(r.lead.consent_capture_method,'explicit-checkbox-v1');
+  assert.ok(Date.parse(r.lead.consent_at)>=before&&Date.parse(r.lead.consent_at)<=Date.now());
+  assert.match(readFileSync('app/api/contact/route.ts','utf8'),/await parseConsentedLeadPayload\(form,/);
+  assert.match(readFileSync('components/enhanced-contact-form.tsx','utf8'),/formFields\.append\('consentPolicyVersion', displayedConsentVersion\)/);
 });
 writeFileSync(process.argv[2],JSON.stringify(results),{mode:0o600});
 process.exitCode=Object.values(results).includes('FAIL')?1:0;

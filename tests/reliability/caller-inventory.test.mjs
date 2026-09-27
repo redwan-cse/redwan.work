@@ -21,6 +21,8 @@ globalThis.__callerInventory = f;
 const stub = (names) => names.map((name) => `export async function ${name}(){return {ok:true};}`).join('\n');
 
 const modules = {
+  '@/lib/contact/consent-intake': 'export async function parseConsentedLeadPayload(){throw Error("Unexpected consent intake");}',
+  '@/lib/contact/consent-control': 'export async function readConsentControl(){throw Error("Unexpected policy read");}',
   'server-only': 'export {};',
   'next/cache': 'export function revalidatePath(){}',
   'next/navigation': 'export function redirect(dest){throw Object.assign(new Error("Synthetic redirect"),{destination:dest});}',
@@ -123,6 +125,7 @@ test('route inventory completeness: all 8 API routes export valid HTTP methods',
   assert.equal(typeof logoutRoute.GET, 'function');
   assert.equal(typeof logoutRoute.POST, 'function');
   assert.equal(typeof contactRoute.POST, 'function');
+  assert.equal(typeof contactRoute.GET, 'function');
   assert.equal(typeof uploadsPresignRoute.POST, 'function');
   assert.equal(typeof ticketPresignRoute.POST, 'function');
   assert.equal(typeof fileDownloadRoute.GET, 'function');

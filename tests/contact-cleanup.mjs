@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
+import {consentBundle} from './reliability/consent-fixture.mjs';
 
 const source=readFileSync('components/enhanced-contact-form.tsx','utf8');
-const fields=['gdprConsent','name','email','country','whatsAppNumber','preferredContactMethod','timeZone','preferredContactDate','bestTimeToContact','serviceType','company','projectUrlOrFiles','projectSummary','ndaConfidentiality','urgency','budgetMin','budgetMax','howDidYouFindMe','sourcePage','deviceType','attachments','cf-turnstile-response'];
+const fields=['gdprConsent','consentPolicyVersion','name','email','country','whatsAppNumber','preferredContactMethod','timeZone','preferredContactDate','bestTimeToContact','serviceType','company','projectUrlOrFiles','projectSummary','ndaConfidentiality','urgency','budgetMin','budgetMax','howDidYouFindMe','sourcePage','deviceType','attachments','cf-turnstile-response'];
 const dead=['budgetRange','ticketId','userAgent'];
 const mode=process.argv[2];
 if(mode==='red') {
@@ -17,18 +18,18 @@ if(mode==='red') {
   const start=source.indexOf('const formFields = new FormData();');
   const end=source.indexOf('const response = await fetch',start);
   assert.ok(start>0&&end>start);
-  const serialize=new Function('formData','submissionData','attachedFiles','submitToken',source.slice(start,end)+'return formFields;');
+  const serialize=new Function('formData','submissionData','attachedFiles','submitToken','displayedConsentVersion',source.slice(start,end)+'return formFields;');
   const input=Object.fromEntries(fields.map(k=>[k,'fixture-'+k]));
   const attachment={key:'contact/00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002.pdf',filename:'fixture.pdf',mime:'application/pdf',size_bytes:10};
   for(const consent of [true,false]) {
-    const data=serialize({...input,gdprConsent:consent},input,[attachment],'synthetic-token');
+    const data=serialize({...input,gdprConsent:consent},input,[attachment],'synthetic-token',input.consentPolicyVersion);
     assert.deepEqual([...data.keys()].sort(),[...fields].sort());
     assert.deepEqual(data.getAll('gdprConsent'),[String(consent)]);
     assert.deepEqual(JSON.parse(data.get('attachments')),[attachment]);
     for(const k of fields.filter(k=>!['gdprConsent','attachments','cf-turnstile-response'].includes(k)))assert.equal(data.get(k),input[k]);
     assert.equal(data.get('cf-turnstile-response'),'synthetic-token');
   }
-  const empty=serialize({...input,gdprConsent:true},input,[],null);
+  const empty=serialize({...input,gdprConsent:true},input,[],null,input.consentPolicyVersion);
   assert.equal(empty.has('attachments'),false);assert.equal(empty.has('cf-turnstile-response'),false);
   console.log('GREEN: exact live payload, consent variants, attachment metadata and token preserved');
 }else if(mode==='browser') {
@@ -45,7 +46,11 @@ if(mode==='red') {
       const page=await context.newPage();let requests=0;let reply='failure';let payload;
       await page.route('**/*',async route=>{
         const u=new URL(route.request().url());
+        if(u.href==='https://challenges.cloudflare.com/turnstile/v0/api.js')
+          return route.fulfill({contentType:'application/javascript',body:"window.turnstile={reset(){window.onTurnstileSuccess?.('synthetic-'+crypto.randomUUID())}};const timer=setInterval(()=>{if(window.onTurnstileSuccess){clearInterval(timer);window.turnstile.reset();}},25);"});
         if(u.origin!==base)return route.abort();
+        if(u.pathname==='/api/contact'&&route.request().method()==='GET')
+          return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({policy:consentBundle})});
         if(u.pathname==='/api/contact'&&route.request().method()==='POST') {
           requests++;
           payload=await new Response(route.request().postDataBuffer(),{headers:{'Content-Type':route.request().headers()['content-type']}}).formData();
@@ -68,6 +73,7 @@ if(mode==='red') {
       assert.equal(await page.locator('#name').inputValue(),'Synthetic Contact');
       assert.equal(await page.getByText('Your Ticket ID:',{exact:false}).count(),0);
       assert.deepEqual(payload.getAll('gdprConsent'),['true']);
+      assert.deepEqual(payload.getAll('consentPolicyVersion'),[consentBundle.version]);
       assert.equal(payload.get('budgetMin'),'100');assert.equal(payload.get('budgetMax'),'500');
       for(const key of payload.keys())assert.ok(fields.includes(key),'Only consumed payload names allowed');
       for(const key of dead)assert.equal(payload.has(key),false);

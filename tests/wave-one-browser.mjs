@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {installConsentFixture} from './reliability/consent-ci-fixture.mjs';
 import {readFileSync,writeFileSync,existsSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
@@ -32,7 +33,7 @@ if(process.argv[2]!=='child'){
   Object.assign(env,{NEXT_TELEMETRY_DISABLED:'1',NEXT_PUBLIC_SITE_URL:'http://localhost:3399',NEXT_PUBLIC_SUPABASE_URL:api.origin,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:status.PUBLISHABLE_KEY,SUPABASE_SECRET_KEY:status.SECRET_KEY,LEAD_IP_HASH_SALT:randomBytes(32).toString('hex'),TURNSTILE_SECRET_KEY:'synthetic',NEXT_PUBLIC_TURNSTILE_SITE_KEY:'synthetic',DISPOSABLE_AUTH_CI:'true'});
   for(const mode of ['baseline','candidate']){
    const resultPath=join(scratch,mode+'.json');
-   const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
+   const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_CANDIDATE:String(mode==='candidate'),WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
    if(existsSync(resultPath))report[mode]=JSON.parse(readFileSync(resultPath,'utf8'));
    if(child.status!==0)break;
   }
@@ -56,7 +57,7 @@ const report={A01:{pass:0,fail:0},I01:{pass:0,fail:0},I02:{pass:0,fail:0},infras
 const safe=r=>{if(r.error)throw Error('Synthetic service assertion failed');return r.data;};
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const email='wave-'+randomBytes(12).toString('hex')+'@example.test',password=randomBytes(24).toString('base64url'),rateHashes=new Set();
-let user,project,browser,server,ipIndex=0;
+let user,project,browser,server,consentFixture,ipIndex=0;
 const preload=join(mkdtempSync(join(tmpdir(),'wave-preload-')),'network.mjs');
 writeFileSync(preload,`const realFetch=globalThis.fetch;globalThis.fetch=(input,init)=>{const u=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);if(u.href==='https://challenges.cloudflare.com/turnstile/v0/siteverify')return Promise.resolve(new Response(JSON.stringify({success:true}),{status:200}));if(!['localhost','127.0.0.1'].includes(u.hostname)||!['54321','3399'].includes(u.port)||u.protocol!=='http:')throw Error('External fetch blocked in disposable acceptance');return realFetch(input,init);};`,{mode:0o600});
 async function check(group,fn){try{await fn();report[group].pass++;}catch{report[group].fail++;}}
@@ -84,10 +85,12 @@ async function fill(page){
 async function rows(){return safe(await admin.from('leads').select('id,nda_required,budget_min,budget_max,consent_at,attachments').eq('email',email));}
 async function post(entries){
  const f=new FormData();for(const [k,v] of [['name','Synthetic'],['email',email],['projectSummary','Synthetic HTTP contract acceptance.'],['gdprConsent','true'],...entries])f.append(k,v);
+ if(consentFixture)f.set('consentPolicyVersion',consentFixture.bundle.version);
  const token=randomUUID();f.set('cf-turnstile-response',token);rateHashes.add(hash(token));
  return fetch(origin+'/api/contact',{method:'POST',body:f,headers:{origin,host:'localhost:3399','cf-connecting-ip':ip()}});
 }
 try{
+ if(process.env.WAVE_CANDIDATE==='true')consentFixture=installConsentFixture();
  report.phase='fixtures';user=safe(await admin.auth.admin.createUser({email,password,email_confirm:true,app_metadata:{role:'client'}})).user.id;
  safe(await admin.from('profiles').update({role:'client',is_active:true}).eq('id',user));
  project=safe(await admin.from('projects').insert({client_id:user,name:'Synthetic wave project'}).select('id').single()).id;
@@ -121,6 +124,7 @@ finally{
  try{
   if(browser)await browser.close();
   if(server?.pid&&server.exitCode===null&&server.signalCode===null){const done=once(server,'exit');server.kill('SIGTERM');await Promise.race([done,delay(5000)]);if(server.exitCode===null&&server.signalCode===null){server.kill('SIGKILL');await done;}}
+  if(consentFixture)consentFixture.dispose();
   safe(await admin.from('leads').delete().eq('email',email));assert.equal((await rows()).length,0);
   if(rateHashes.size){safe(await admin.from('rate_limits').delete().in('key_hash',[...rateHashes]));const r=await admin.from('rate_limits').select('key_hash',{count:'exact',head:true}).in('key_hash',[...rateHashes]);safe(r);assert.equal(r.count,0);}
   if(project){safe(await admin.from('projects').delete().eq('id',project));assert.equal(safe(await admin.from('projects').select('id').eq('id',project)).length,0);}
