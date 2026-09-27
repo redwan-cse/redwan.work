@@ -7,15 +7,21 @@ import { createRequire } from 'node:module';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { prepareResumeFixture } from './failing-resume-after-reload.mjs';
 import { assertEnvironmentVerified, getSessionCookie, safeFetch, ENV } from './harness-env.mjs';
+import { createBrowserEvidence } from './browser-evidence.mjs';
 
 test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry and usability', { timeout: 300000 }, async t => {
   const session = assertEnvironmentVerified();
+  const evidence = createBrowserEvidence(session);
+  try {
+  evidence.phase('browser-runtime');
   process.env.PLAYWRIGHT_BROWSERS_PATH = '/opt/pw-browsers';
   const require = createRequire('/opt/browser/package.json');
   assert.equal(require('playwright-core/package.json').version, '1.58.2');
   const { chromium } = require('playwright-core');
   assert.ok(fs.existsSync(chromium.executablePath()), 'Prepared Chromium required');
+  evidence.phase('fixture-setup');
   const f = await prepareResumeFixture(t);
+  evidence.phase('browser-launch');
   const browser = await chromium.launch({ headless: true, args: ['--disable-dev-shm-usage'] });
   t.after(() => browser.close());
   const allowed = [ENV.APP_URL, ENV.SUPABASE_URL, ENV.R2_ENDPOINT].map(url => new URL(url).origin);
@@ -26,17 +32,26 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
   const contexts = [];
   t.after(async () => { for (const c of contexts) await c.close(); });
   async function newPage({ cookie = f.adminCookie, disabledStorage = false } = {}) {
+    evidence.phase('new-context');
     const context = await browser.newContext({ viewport: { width: 375, height: 812 }, serviceWorkers: 'block' });
     contexts.push(context);
     context.setDefaultTimeout(15000);
+    evidence.phase('route-boundary');
     await context.route('**/*', route => allowed.includes(new URL(route.request().url()).origin) ? route.continue() : route.abort('blockedbyclient'));
+    evidence.phase('add-cookies');
     await context.addCookies(cookies(cookie));
+    evidence.phase('disable-storage');
     if (disabledStorage) await context.addInitScript(() => {
       Object.defineProperty(window, 'sessionStorage', { get() { throw new DOMException('Synthetic storage disabled', 'SecurityError'); } });
     });
+    evidence.phase('new-page');
     const page = await context.newPage();
-    await page.goto(`${ENV.APP_URL}/admin/recovery`, { waitUntil: 'domcontentloaded' });
+    evidence.phase('page-navigation');
+    const navigation = await page.goto(`${ENV.APP_URL}/admin/recovery`, { waitUntil: 'domcontentloaded' });
+    if (navigation) evidence.http('page-navigation', navigation.status());
+    evidence.phase('recovery-heading');
     await page.getByRole('heading', { name: 'Backup recovery', exact: true }).waitFor();
+    evidence.phase('recovery-input-ready');
     await page.waitForFunction(() => {
       const el = document.getElementById('recovery-import-id');
       return el instanceof HTMLInputElement && !el.disabled;
@@ -44,46 +59,50 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     return page;
   }
   const status = async id => {
+    evidence.phase('read-status');
     const response = await safeFetch(`/api/recovery?importId=${id}`, { headers: { cookie: f.adminCookie } });
     assert.equal(response.status, 200);
     return response.json();
   };
-  const row = async id => {
+  const row = async (id, phase = 'read-checkpoint') => {
+    evidence.phase(phase);
     const read = await f.admin.from('recovery_imports').select('result,completed_files,created_at').eq('id', id).single();
     assert.ok(!read.error && read.data);
     return read.data;
   };
   async function load(page, id) {
+    evidence.phase('fill-import-id');
     await page.getByLabel('Import ID', { exact: true }).fill(id);
-    await Promise.all([
+    evidence.phase('load-import-response');
+    const [response] = await Promise.all([
       page.waitForResponse(response => new URL(response.url()).searchParams.get('importId') === id && response.request().method() === 'GET'),
       page.getByRole('button', { name: 'Load saved import', exact: true }).click(),
     ]);
+    evidence.http('saved-import', response.status());
+    evidence.phase('load-import-idle');
     await page.waitForFunction(() => {
       const el = document.getElementById('recovery-import-id');
       return el instanceof HTMLInputElement && !el.disabled;
     });
+    return response.status();
   }
   async function resume(page) {
+    evidence.phase('resume-confirmation');
     const check = page.getByRole('checkbox');
     assert.equal(await check.isChecked(), false, 'Fresh confirmation required');
     assert.equal(await page.getByRole('button', { name: 'Resume restore', exact: true }).isEnabled(), false);
     await check.check();
+    evidence.phase('resume-submit');
     await page.getByRole('button', { name: 'Resume restore', exact: true }).click();
   }
   async function completed(page) {
+    evidence.phase('completed-status');
     await page.getByRole('status').filter({ hasText: 'Restore completed.' }).waitFor();
   }
-  const passed = [];
   // Node subtests report failures without necessarily rejecting the awaited call.
   // A failing scenario must stop later mutations and never emit a green summary.
   async function scenario(name, work) {
-    let succeeded = false;
-    await t.test(name, async () => {
-      try { await work(); succeeded = true; passed.push(name); }
-      catch { throw Error(`Recovery browser scenario failed: ${name}. Inspect private local evidence; no secrets published.`); }
-    });
-    assert.ok(succeeded, 'Stop after failed browser scenario');
+    return evidence.scenario(t, name, work);
   }
   await scenario('A: partial checkpoint reload, confirmation, new-tab manual resume and keyboard/mobile', async () => {
     const page = await newPage();
@@ -108,11 +127,12 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     await load(anotherTab, f.id);
     await resume(anotherTab); await completed(anotherTab);
     const result = await f.verifyCompleted(f.id);
-    assert.deepEqual((await status(f.id)).result, result);
+    assert.deepEqual((await status(id)).result, result);
     await page.reload({ waitUntil: 'domcontentloaded' }); await completed(page);
     assert.equal(writes.length, 0, 'Completed result reload must not repeat POST');
   });
   await scenario('B: committed final response is dropped and recovered by read-only reload', async () => {
+    evidence.phase('open-import');
     const id = await f.openImport();
     const page = await newPage();
     let dropped = false, commits = 0;
@@ -148,28 +168,41 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     assert.equal(commits, 1, 'Reload did not resubmit final commit');
   });
   await scenario('C: cross-admin read refusal preserves the owner checkpoint', async () => {
+    evidence.phase('open-import');
     const id = await f.openImport();
     const email = `cross-admin-${randomUUID()}@example.test`;
     const password = `Synthetic!${randomBytes(24).toString('hex')}`;
+    evidence.phase('cross-admin-create');
     const user = await f.admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { role: 'admin' } });
     assert.ok(!user.error && user.data?.user?.id);
     f.tracker.trackUser(user.data.user.id);
+    evidence.phase('cross-admin-promote');
     const update = await f.admin.from('profiles').update({ role: 'admin', is_active: true }).eq('id', user.data.user.id).select('id').single();
     assert.ok(!update.error && update.data);
     // Profile promotion invalidates tokens issued before its next-second cutoff.
+    evidence.phase('cross-admin-cutoff');
     const cutoff = await f.admin.from('profiles').select('tokens_valid_after').eq('id', user.data.user.id).single();
     assert.ok(!cutoff.error && cutoff.data);
+    evidence.phase('cross-admin-cutoff-wait');
     const wait = Math.max(0, Number(cutoff.data.tokens_valid_after) * 1000 - Date.now() + 100);
     assert.ok(wait < 3000, 'Unexpected fixture clock skew');
     if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    evidence.phase('cross-admin-sign-in');
     const page = await newPage({ cookie: await getSessionCookie(email, password) });
-    const before = await row(id);
-    await load(page, id);
+    const before = await row(id, 'owner-checkpoint-before');
+    const deniedStatus = await load(page, id);
+    evidence.phase('cross-admin-denial-status');
+    assert.equal(deniedStatus, 400, 'Foreign import must be refused, not an unauthenticated session');
+    evidence.phase('cross-admin-denial-alert');
     await page.getByRole('alert').waitFor();
+    evidence.phase('cross-admin-resume-absent');
     assert.equal(await page.getByRole('button', { name: 'Resume restore', exact: true }).count(), 0);
-    assert.deepEqual(await row(id), before);
+    const after = await row(id, 'owner-checkpoint-after');
+    evidence.phase('owner-checkpoint-unchanged');
+    assert.deepEqual(after, before);
   });
   await scenario('D: unsealed validation and expired unfinished import refuse automatic restore', async () => {
+    evidence.phase('open-import');
     const id = await f.openImport({ preview: false });
     const page = await newPage();
     await load(page, id);
@@ -178,22 +211,28 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     await page.getByRole('status').filter({ hasText: '0 of 2 files checkpointed' }).waitFor();
     assert.equal((await status(id)).state, 'ready');
     assert.equal(await page.getByRole('checkbox').isChecked(), false);
+    evidence.phase('expiry-anonymous-denial');
     const denied = await safeFetch(`${ENV.SUPABASE_URL}/rest/v1/rpc/acceptance_expire_recovery_import`, {
       method: 'POST', headers: { apikey: session.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, 'content-type': 'application/json' },
       body: JSON.stringify({ p_actor: f.adminUser, p_id: id }),
     });
     assert.ok([401, 403].includes(denied.status), 'Anonymous caller must not age fixtures');
     await denied.body?.cancel();
+    evidence.phase('expiry-foreign-denial');
     const foreign = await f.admin.rpc('acceptance_expire_recovery_import', { p_actor: f.clientUser, p_id: id });
     assert.ok(!foreign.error && foreign.data === false, 'Actor mismatch must not mutate');
+    evidence.phase('expiry-direct-write-denial');
     const direct = await f.admin.from('recovery_imports').update({ created_at: new Date(Date.now() - 90000000).toISOString() }).eq('id', id);
     assert.ok(direct.error, 'Direct service-role table writes must remain denied');
     // Bootstrap-only RPC ages one owned synthetic import. Production migration
     // permissions remain unchanged; direct service-role UPDATE stays denied.
+    evidence.phase('expiry-transition');
     const expired = await f.admin.rpc('acceptance_expire_recovery_import', { p_actor: f.adminUser, p_id: id });
     assert.ok(!expired.error && expired.data === true);
+    evidence.phase('expiry-repeat-denial');
     const again = await f.admin.rpc('acceptance_expire_recovery_import', { p_actor: f.adminUser, p_id: id });
     assert.ok(!again.error && again.data === false, 'Expiry fixture control is single-transition');
+    evidence.phase('expired-page');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('status').filter({ hasText: 'unfinished import expired' }).waitFor();
     assert.equal((await status(id)).state, 'expired');
@@ -201,23 +240,24 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     assert.equal(await page.getByRole('button', { name: 'Resume restore', exact: true }).count(), 0);
   });
   await scenario('E: storage-disabled manual recovery and forget-reference semantics', async () => {
+    evidence.phase('open-import');
     const id = await f.openImport();
     const page = await newPage({ disabledStorage: true });
     await load(page, id);
+    evidence.phase('disabled-storage-warning');
     await page.getByRole('alert').filter({ hasText: 'Copy the ID below' }).waitFor();
     await resume(page); await completed(page);
     await f.verifyCompleted(id);
     const normal = await newPage();
     await load(normal, id); await completed(normal);
     const before = await row(id);
+    evidence.phase('forget-reference');
     await normal.getByRole('button', { name: 'Forget browser reference', exact: true }).click();
     assert.equal(await normal.evaluate(() => sessionStorage.getItem('recovery-import-id')), null);
     assert.deepEqual(await row(id), before);
     await load(normal, id); await completed(normal);
   });
-  fs.writeFileSync('/tmp/recovery-browser-evidence.json', JSON.stringify({
-    candidate: session.candidate, runId: session.runId, state: 'passed', scenarios: passed,
-    scope: 'disposable Chromium recovery assertions only; not release acceptance',
-    fixturePolicy: 'retained-in-owned-run-pending-explicit-disposal'
-  }, null, 2), { mode: 0o600 });
+  evidence.complete();
+  } catch (error) { throw evidence.fail(error); }
+  finally { evidence.close(); }
 });
