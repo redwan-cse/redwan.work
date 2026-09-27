@@ -1,0 +1,128 @@
+{
+  "candidate": "1df0f6aa6572093e5399aa20fcf043703037d96a",
+  "disposalReceipt": {
+    "approval": "approve_pr57_storage_failed_run_disposal:80180078016862",
+    "candidate": "25ac040a4d099cad6342aec44863d21aad00f947",
+    "runId": "test-run-8a396a5c-b211-4f11-aef1-b893afb7d00d",
+    "disposalExit": 0,
+    "containersAbsent": 7,
+    "networksAbsent": 1,
+    "previousImagesPreserved": 54,
+    "previousVolumesPreserved": 7,
+    "privateFilesUnchanged": 79,
+    "unrelatedResourceIdsPreserved": true,
+    "preflightEvidencePreserved": true,
+    "preflightSHA256": "6c1471c291f23f050afc7ba4119b662996c8e289fe77bcd28d2e86cd9c3f2273",
+    "replacementStartAuthorized": false
+  },
+  "blobs": {
+    "AGENTS.md": "06769bb6fbc9eb0c54e51866a4579a4ae9460518",
+    "tests/acceptance/phase-b.mjs": "84bdab4de3a22309d66ca62ee0909849a79bda4d",
+    "tests/acceptance/disposable-bootstrap.mjs": "7c81eaa29757d5ceef24aec7e8ea8d14085b470b",
+    "tests/acceptance/prepare-browser.mjs": "682d1e1c2cce1d5e3240d96acaefd60beae87a76",
+    "tests/acceptance/harness-env.mjs": "f58728f4a6b3cf62f9b84739d492d0e4661ff750",
+    "tests/acceptance/environment-preflight.mjs": "d5a9a99e9236749df6385ac0bd4d509c2ff9981e",
+    "tests/reliability/acceptance-environment.test.mjs": "3fab0708d964fb17aecddcadfbaaf754d4269c44",
+    "lib/r2.ts": "c483f3904c65ad35b7db554e28b8a432c8acfc5f",
+    "lib/crm/recovery-storage.ts": "680e173e69739b55c7b405fb546c0b0c8045c632",
+    "tests/reliability/storage-endpoint.test.mjs": "526445e4b7097091079ea6e6bebb654cd3f6a2f1",
+    "docs/security/ACCEPTANCE-CLAIM-RECHECK-2026-09-09.md": "04185ac7b4fe3684e239c3ca1131a200fa61259c",
+    "docs/security/DISPOSABLE-AUTH-STORAGE-BOOTSTRAP.md": "6cec921d92fd5471ff9c4bc3efa14c8f659296ca",
+    "docs/security/AUDIT-REMEDIATION-PLAN-2026-09-06.md": "2c299d0ef5920e2bc90a5a764e6271973614bd51"
+  },
+  "pins": {
+    "node": "node@sha256:175215a1f306ed5df592434b99cc2019f70624373fe49cb659240a618a846aed",
+    "database": "postgres@sha256:7bade6d532592ca8ce7ee32def7399dad2607c4ea5583839fc4352a095a11ea6",
+    "auth": "supabase/gotrue@sha256:7e813221b93fbf54b515036438550e483bfaf057b9db52fe9bc1ce91c47e817e",
+    "rest": "postgrest/postgrest@sha256:aa7e96af2d01219a09bc00c75de28171b1f9fda17ea455a931e4fb6d317089e0",
+    "storage": "cgr.dev/chainguard/minio@sha256:039800e64ec7247d2fde7cff3697e964f6fe20b6d7d2c46aa7d82cc63355d512"
+  },
+  "reported_disposal_source": "User-forwarded AGY receipt, 2026-09-27 12:40 Asia/Dhaka; not independently observed Docker execution by Brain",
+  "ci_checked": "Live GitHub PR head and all 31 check-run records retrieved in this turn",
+  "ci": {
+    "head": "1df0f6aa6572093e5399aa20fcf043703037d96a",
+    "regression_lint_types_build_manifests": {
+      "result": "success",
+      "url": "https://github.com/redwan-cse/redwan.work/actions/runs/36293454039/job/108547789333"
+    },
+    "disposable_database": {
+      "result": "success",
+      "url": "https://github.com/redwan-cse/redwan.work/actions/runs/36293454064/job/108547789558"
+    },
+    "auth_mailbox": {
+      "result": "success",
+      "completed_at": "2026-09-27T04:19:22Z",
+      "url": "https://github.com/redwan-cse/redwan.work/actions/runs/36293454036/job/108547922185"
+    },
+    "F20_policy_version": {
+      "result": "failed/deferred",
+      "url": "https://github.com/redwan-cse/redwan.work/actions/runs/36293454050/job/108547789401"
+    },
+    "pr": {
+      "url": "https://github.com/redwan-cse/redwan.work/pull/57",
+      "state": "open",
+      "draft": true,
+      "merged": false,
+      "mergeable_state": "blocked",
+      "base": "31ff564d815b912bce3ab6d26a8ddc744ef1cad0"
+    }
+  },
+  "helper_tests": {
+    "executed_by": "Brain",
+    "node": "22.23.1",
+    "tests": 34,
+    "pass": 34,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "level": "isolated filesystem fixtures, real repository plan/recipe generators, simulated Git/Docker adapter"
+  },
+  "shell_tests": [
+    {
+      "case": "success",
+      "actual_exit": 0,
+      "expected_exit": 0,
+      "passed": true
+    },
+    {
+      "case": "failure",
+      "actual_exit": 7,
+      "expected_exit": 7,
+      "passed": true
+    },
+    {
+      "case": "no-clobber",
+      "actual_exit": 1,
+      "expected_exit": 1,
+      "passed": true
+    }
+  ],
+  "syntax": {
+    "JavaScript": "passed",
+    "Bash": "passed"
+  },
+  "review": "self-review; no independent reviewer",
+  "scope": "preparation only",
+  "runtime_start_authorized": false,
+  "not_executed_by_brain": [
+    "live Docker",
+    "new candidate local preparation",
+    "new candidate local eight-suite acceptance",
+    "production operation"
+  ],
+  "files": {
+    "prepare-review.mjs": {
+      "bytes": 17644,
+      "sha256": "1524d4753523f76ab3538b3f5eb9510eb8f849f42c214eb5b28d2bf80f84421c"
+    },
+    "run-preparation.sh": {
+      "bytes": 3294,
+      "sha256": "bafa4e37943ac23f39ed873f9df03600b4c42b3f6c16fdaa9e27a80ad19fae31"
+    },
+    "images.json": {
+      "bytes": 510,
+      "sha256": "a2bd96d7e5dca54ef759df16fd859e0b428f53e9a915721e0bea0b0190f7ea6e"
+    }
+  }
+}
