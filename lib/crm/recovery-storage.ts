@@ -5,7 +5,8 @@ const MAX=100*1024*1024;
 function client(){
  const endpoint=process.env.R2_ENDPOINT,accessKeyId=process.env.R2_PRIVATE_ACCESS_KEY_ID,secretAccessKey=process.env.R2_PRIVATE_SECRET_ACCESS_KEY;
  if(!endpoint||!accessKeyId||!secretAccessKey||!process.env.R2_PRIVATE_BUCKET)throw new Error('Recovery storage unavailable.');
- return new S3Client({region:'auto',endpoint,credentials:{accessKeyId,secretAccessKey}});
+ // Archive and finalization requests must use the configured service origin too.
+ return new S3Client({region:'auto',endpoint,forcePathStyle:true,credentials:{accessKeyId,secretAccessKey}});
 }
 function valid(key:string){return typeof key==='string'&&!key.includes('..')&&!key.includes('\\')&&(/^(archive\/project_[0-9a-f-]{36}\/[a-z]+_[0-9a-f-]{36}\.zip)$/.test(key)||/^private\/[0-9a-f-]{36}\/(pending|ticket_[0-9a-f-]{36}|project_[0-9a-f-]{36})\/[0-9a-f-]{36}\.(pdf|docx|doc|xlsx|png|jpg|zip)$/.test(key));}
 export async function readRecoveryBytes(key:string,maxBytes=MAX):Promise<Buffer>{

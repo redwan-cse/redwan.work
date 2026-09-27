@@ -18,7 +18,8 @@ function privateClient(): S3Client {
   const accessKeyId = process.env.R2_PRIVATE_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PRIVATE_SECRET_ACCESS_KEY;
   if (!endpoint || !accessKeyId || !secretAccessKey || !process.env.R2_PRIVATE_BUCKET) throw new Error('Private storage is not configured.');
-  return new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+  // Keep requests and presigned URLs on the configured storage origin.
+  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
 }
 export function validateContactFile(f: { filename: string; mime: string; size: number }): { ok: true; ext: string } | { ok: false; error: string } {
   if (!f || typeof f.filename !== 'string' || !f.filename.trim() || f.filename.length > 255 || typeof f.mime !== 'string' || f.mime.length > 128) return { ok: false, error: 'Invalid file metadata.' };
@@ -161,7 +162,7 @@ function publicClient(): S3Client {
   const accessKeyId = process.env.R2_PUBLIC_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
   if (!endpoint || !process.env.R2_PUBLIC_BUCKET || !accessKeyId || !secretAccessKey) throw new Error('Public storage is not configured.');
-  return new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
 }
 function assertValidAssetKey(key: string): void {
   if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..')) throw new Error('Invalid asset key.');
