@@ -167,7 +167,7 @@ Each row preserves an obligation from the original issue, not an edited acceptan
 | [46](https://github.com/redwan-cse/redwan.work/issues/46) | Categories/safe context before storage/output | Partial Q/R; presign/email-log/Blogger/revalidate remain Source findings |
 |46|Recipient/filename/message/financial sentinels absent|Untested across all sinks; named Q ticket sentinel cases only|
 |46|Useful correlation, no truncation-as-redaction|Source finding email-log truncation; R01 deferred, no actual production disclosure claimed|
-| [47](https://github.com/redwan-cse/redwan.work/issues/47) | Upload/local-remove/cancel/reload/thread visibility match copy | Untested complete real browser matrix T02 |
+| [47](https://github.com/redwan-cse/redwan.work/issues/47) | Upload/local-remove/cancel/reload/thread visibility match copy | Untested complete real browser matrix T02; backend/source coverage is not UI acceptance |
 |47|Existing sharing model clear or separately approved undo|Decision required for changed undo semantics; no broader deletion permitted|
 
 ## Initial entry-point and test inventory (discovery explicitly incomplete)
@@ -201,6 +201,5 @@ M00 status: all20 original issues accounted for at criterion level; inventory an
 - **Audit Follow-up Remediation** (Branch `fix/audit-followup-remediation`):
   1. **Blogger Pagination, Cache Bounds & Cap Disclosure**: Up to 300 posts fetched honestly into shared snapshot; Page 1 pagination controls rendered correctly; non-overlapping window slices eliminate duplicates; cache bounded to 50 entries with expired-key sweep, LRU eviction, and in-flight request deduplication; explicit UI disclosure of 300-post cap in badge (`300+ Articles`), note, and pagination summary (`Showing 1-9 of 300+`). Verified by 11 unit tests in `tests/reliability/blogger-pagination.test.mjs`.
   2. **Server-Authenticated HMAC Retry Authority & Replay Prevention**: In `lib/auth/actions.ts`, password update retry after single-use token consumption uses server-authenticated HMAC-SHA256 signed authority tokens (`recovery_proof` / `invite_proof`) with 300s TTL, binding purpose, authenticated user ID (`sub`), and OTP token hash. Cryptographic nonces are tracked and consumed immediately on password update, preventing replay attacks. Rejects unrelated sessions, expired sessions, wrong users, tampered payloads, forged cookies, and replay attempts fail-closed. Verified by stateful and security tests in `tests/reliability/recovery-controls.test.mjs`.
-  3. **Build Manifest Verification**: Dedicated post-build manifest audit `scripts/audit-manifests.mjs` verifying all 41 Server Actions and 8 API routes match built `.next/server` manifests.
+  3. **Build Manifest Verification**: Dedicated post-build manifest audit `scripts/audit-manifests.mjs` verifying all 41 Server Actions and 8 API routes; caller inventory tests assert against real public asset actions.
   4. **Consent Deferral Status**: F20 (I03) explicitly documented as deferred (`CONSENT_ACTIVATION_ENABLED = false`), separating isolated contract tests from production activation claims.
-
