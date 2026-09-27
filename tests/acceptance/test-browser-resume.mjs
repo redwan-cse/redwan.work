@@ -127,7 +127,7 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     await load(anotherTab, f.id);
     await resume(anotherTab); await completed(anotherTab);
     const result = await f.verifyCompleted(f.id);
-    assert.deepEqual((await status(id)).result, result);
+    assert.deepEqual((await status(f.id)).result, result);
     await page.reload({ waitUntil: 'domcontentloaded' }); await completed(page);
     assert.equal(writes.length, 0, 'Completed result reload must not repeat POST');
   });
