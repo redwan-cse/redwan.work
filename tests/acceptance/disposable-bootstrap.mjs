@@ -96,7 +96,10 @@ export function createGateway(m,transport=fetch) {
    }
    if(req.method==='OPTIONS') {res.writeHead(204);return res.end();}
    if(!['GET','HEAD','POST','PUT','PATCH','DELETE'].includes(req.method))return refuse(405);
-   if(!req.url?.startsWith('/') || req.url.startsWith('//') || /\\|%5c|%2f|%2e/i.test(req.url))return refuse(400);
+   // Route safety applies to the raw path, before URL normalization. PostgREST
+   // filter values legitimately encode object-key slashes in the query string.
+   const rawPath=req.url?.split('?',1)[0];
+   if(!rawPath?.startsWith('/') || rawPath.startsWith('//') || /\\|%5c|%2f|%2e/i.test(rawPath))return refuse(400);
    const url=new URL(req.url,'http://gateway:8000');
    // No duplicate credential headers, even two identical ones.
    for(const name of ['apikey','authorization','cookie']) {
