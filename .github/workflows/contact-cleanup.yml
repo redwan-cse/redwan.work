@@ -17,6 +17,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_SITE_URL: https://example.test
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: synthetic
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -39,7 +40,9 @@ jobs:
       - name: Real desktop/mobile payload, consent, retry and reference verification
         env:
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
-        run: node tests/contact-cleanup.mjs browser
+        run: |
+          node tests/contact-cleanup.mjs browser
+          node tests/consent-browser.mjs
   reconciliation:
     runs-on: ubuntu-latest
     timeout-minutes: 3
