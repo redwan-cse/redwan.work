@@ -242,7 +242,8 @@ test('cross admin assertions preserve denial UI and checkpoint equality while re
     assert.ok(scenario.includes(`'${phase}'`), `Missing fixed phase ${phase}`);
   }
   assert.ok(scenario.includes('assert.equal(deniedStatus, 400'));
-  assert.ok(scenario.includes("page.getByRole('alert').waitFor()"));
+  assert.ok(scenario.includes("page.getByRole('alert').filter({ hasText: /^Recovery operation refused"));
+  assert.doesNotMatch(scenario, /\.(?:first|last|nth)\s*\(/);
   assert.ok(scenario.includes("name: 'Resume restore', exact: true }).count(), 0"));
   assert.ok(scenario.includes('assert.deepEqual(after, before)'));
   assert.doesNotMatch(scenario, /tokens_valid_after:\s*0|route\.fulfill|setExtraHTTPHeaders/);

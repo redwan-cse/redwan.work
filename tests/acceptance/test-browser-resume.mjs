@@ -155,7 +155,8 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     // the server checkpoint until the third request commits, bounded by 2 files.
     for (let attempt = 0; attempt < 3; attempt++) {
       await resume(page);
-      await page.getByRole('alert').waitFor();
+      // A framework live region is not evidence that the transport error rendered.
+      await page.getByRole('alert').filter({ hasText: /^Failed to fetch$/ }).waitFor();
       await page.reload({ waitUntil: 'domcontentloaded' });
       if (dropped) break;
       await page.getByRole('status').filter({ hasText: 'files checkpointed' }).waitFor();
@@ -194,7 +195,8 @@ test('Recovery browser A-E: saved checkpoint, lost response, authority, expiry a
     evidence.phase('cross-admin-denial-status');
     assert.equal(deniedStatus, 400, 'Foreign import must be refused, not an unauthenticated session');
     evidence.phase('cross-admin-denial-alert');
-    await page.getByRole('alert').waitFor();
+    // Other live regions may also be alerts; require this exact refusal and keep strictness.
+    await page.getByRole('alert').filter({ hasText: /^Recovery operation refused\. Check the registered backup, current parent and permissions; no backup was discarded\.$/ }).waitFor();
     evidence.phase('cross-admin-resume-absent');
     assert.equal(await page.getByRole('button', { name: 'Resume restore', exact: true }).count(), 0);
     const after = await row(id, 'owner-checkpoint-after');

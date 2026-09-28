@@ -37,6 +37,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/contact-browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
           node "$RUNNER_TEMP/contact-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Recovery alert locators with real Chromium and negative controls
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
+        run: node --test tests/recovery-alert-locators.mjs
       - name: Real desktop/mobile payload, consent, retry and reference verification
         env:
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
