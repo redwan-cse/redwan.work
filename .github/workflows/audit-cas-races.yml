@@ -18,13 +18,18 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22.23.1'
+      - name: Regression for temporary PostgreSQL readiness
+        run: node --test tests/reliability/audit-cas-readiness.test.mjs
       - name: Start network-isolated disposable PostgreSQL
         run: |
           set -euo pipefail
           docker pull postgres:17
           docker run -d --name "audit-cas-$GITHUB_RUN_ID" --network none -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=audit_cas postgres:17 > /dev/null
+          # The init server accepts Unix sockets, then shuts down. Only the
+          # final server accepts TCP; prove the target database can run SQL.
+          # Retry this read-only probe only, never fixture writes or CAS tests.
           for i in $(seq 1 60); do
-            if docker exec "audit-cas-$GITHUB_RUN_ID" pg_isready -U postgres -d audit_cas > /dev/null 2>&1; then exit 0; fi
+            if ready="$(timeout --kill-after=1s 3s docker exec -e PGCONNECT_TIMEOUT=2 "audit-cas-$GITHUB_RUN_ID" psql -X -q -A -t -w -h 127.0.0.1 -U postgres -d audit_cas -v ON_ERROR_STOP=1 -c 'SELECT 1' 2>/dev/null)" && [ "$ready" = 1 ]; then exit 0; fi
             sleep 1
           done
           echo '::error::Disposable PostgreSQL did not become ready.'; exit 1
