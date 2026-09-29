@@ -16,7 +16,10 @@ const fixture = () => {
   const root = path.join(home, 'history'), privateRoot = path.join(root, 'private');
   fs.mkdirSync(root, {mode: 0o700}); fs.mkdirSync(privateRoot, {mode: 0o700});
   const file = path.join(root, 'first'), alias = path.join(root, 'second'), privateFile = path.join(privateRoot, 'state');
-  fs.writeFileSync(file, secret, {mode: 0o644}); fs.linkSync(file, alias);
+  fs.writeFileSync(file, secret, {mode: 0o600});
+  // Only this synthetic file needs 0644; creation modes are filtered by umask.
+  // Its parent remains private. Never relax the operator's umask or evidence modes.
+  fs.chmodSync(file, 0o644); fs.linkSync(file, alias);
   fs.writeFileSync(privateFile, secret, {mode: 0o600});
   return {
     home, root, file, alias, privateRoot, privateFile,
@@ -38,6 +41,9 @@ test('regular hardlinks are preserved with exact bytes and inode relationships',
     assert.equal(fs.readFileSync(f.file, 'utf8'), secret);
     assert.equal(fs.lstatSync(f.file).nlink, 2);
     assert.equal(fs.lstatSync(f.file).mode & 0o777, 0o644);
+    assert.equal(fs.lstatSync(f.root).mode & 0o777, 0o700);
+    assert.equal(fs.lstatSync(f.privateRoot).mode & 0o777, 0o700);
+    assert.equal(fs.lstatSync(f.privateFile).mode & 0o777, 0o600);
   } finally { f.close(); }
 });
 for (const [name, change] of [
