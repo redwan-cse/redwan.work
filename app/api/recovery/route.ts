@@ -29,6 +29,7 @@ function importStatus(row:ImportRow){
   return {id:row.id,state:'completed',result:{projectId:r.projectId,fileIds:r.fileIds},expiresAt};
  }
  if(created<Date.now()-86400000)return {id:row.id,state:'expired',expiresAt};
+ if(row.sha256===null)return {id:row.id,state:'uploading',expiresAt};
  if(!/^[a-f0-9]{64}$/.test(row.sha256)||!['individual','project'].includes(row.kind??''))throw new Error();
  const files=fileRows(row),ids=new Set(files.map(f=>f.id));
  if(ids.size!==files.length||!Array.isArray(row.completed_files)||new Set(row.completed_files).size!==row.completed_files.length||!row.completed_files.every(id=>ids.has(id)))throw new Error();
