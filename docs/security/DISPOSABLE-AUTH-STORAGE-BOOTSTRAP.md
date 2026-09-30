@@ -1,5 +1,17 @@
 # PR57: disposable Auth and storage bootstrap
 
+## Superseding checkpoint: 29 September 2026
+
+The [canonical PR57 readiness record](PR57-READINESS-2026-09-29.md) supersedes the historical checkpoint and commands below. For exact candidate `b4430c187cb3b46c953cd6660b59146fa5d2204e`, AGY reported 143/143 preparation tests and 61/61 runtime tests across eight ordered suites, all browser A/B/C/D/E scenarios passed, and 41 migration hashes matched through `0041_contact_consent_evidence.sql`. The receipt passed 127 consistency checks; this is operator-reported execution, not direct host observation or hosted/production parity.
+
+The current browser evidence artifact records running/failed/passed state and preserves the first bounded failure. Its existence alone is not success: require its candidate/run binding, complete scenario outcomes and the actual zero-failure/zero-skip suite exit. Earlier success-only descriptions below are historical.
+
+The consolidated attempt is complete and its execution authority consumed. Historical packets and their hashes remain unchanged. Do not reuse their commands, approvals, images or private state for a new candidate; no restart, retry, disposal or cleanup is authorized here. Retain resources and evidence. Verify retained evidence with the owner before any separately scoped host operation.
+
+F20 route/form/migration0041 development integration passed its named exact-head CI checks; real policy publication, activation and production remain unverified and separately gated. The two source repairs accompanying the canonical record have their own local regression evidence, not a relabeled b4430c1 runtime pass. All implementation-time claims below retain their original date and scope.
+
+---
+
 ## Current checkpoint: 26 September 2026
 
 Owner approved the remaining 11-file recovery-development batch. The old guard suite is replaced with immutable-session tests; saved-import tests assert ready/completed states; Chromium A-E replaces skipped placeholders. It covers checkpoint reload without writes, fresh confirmation, new-tab manual resume, dropped responses including final commit, read-only completed results, cross-admin denial, unsealed/expired states, disabled storage, forgetting the browser reference, mobile geometry and keyboard focus. This is not a full accessibility audit.

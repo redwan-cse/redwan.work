@@ -1,5 +1,15 @@
 # Approved backup and local restore delivery
 
+## Current verification checkpoint: 29 September 2026
+
+See the [canonical PR57 readiness record](../security/PR57-READINESS-2026-09-29.md). The scaffold-only checkpoint below is historical: the development branch now implements the backup catalog, local import preview, explicit no-overwrite restore, immutable upload proofs and resumable checkpoints.
+
+At exact candidate `b4430c187cb3b46c953cd6660b59146fa5d2204e`, AGY reported all eight ordered suites passing (61/61 runtime tests), including real-backup-restore, interruptions, session authorization, staging replay and browser A-E. This is accepted operator-reported non-production evidence, not direct host observation or production recovery proof.
+
+Independent review subsequently found that completed POST replay needed the same current unbanned-Auth gate as GET/layout. The accompanying bounded repair and 19 actual-route/helper regressions address that gap; the old runtime result does not certify the changed source. Existing backup-hold policy, no-overwrite semantics, retained resources and migration bytes are unchanged. No purge, policy change, production operation or new host execution is authorized.
+
+---
+
 Owner approved the backup/restore contract on 2026-09-17 through ClickUp. Starting head ff8b627f864d1f11d7b59056bcf3d037252cd250, shared tracker PR57 with existing issues30/36/43/47. Merge, production, scheduler changes and consent activation remain separately gated.
 
 Scope: verified private R2 backup before individual application deletion of ticket attachments/project deliverables; admin direct signed backup download; admin local-backup upload, preview and explicit confirmed restore without overwrite; reuse project recovery packages. Backup copies held with no automatic expiry until owner approves disposal. Automatic contact/pending expiry and public assets excluded.

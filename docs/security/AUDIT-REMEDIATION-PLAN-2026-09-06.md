@@ -1,5 +1,15 @@
 # Audit remediation and production-readiness plan
 
+## Current scope and evidence: 29 September 2026
+
+Use the [canonical PR57 readiness record](PR57-READINESS-2026-09-29.md) for current version-bound verification and release gates. PR57 on `fix/audit-followup-remediation` and the original issues28-47 are the current development trackers; PR56 is merged history. The original finding-to-issue mapping below remains authoritative, not the formerly misaligned PR57 description.
+
+The dated approvals, broad completion assertions, branch-retirement statements and F20 deferral sections below are preserved history, not new execution authority or proof that every original criterion is complete. F20 development integration through migration0041 was separately approved and tested; real policy publication/activation and production remain separate.
+
+The current bounded publication contains two source repairs, their regressions and documentation reconciliation. Review covered 137 changed files plus affected dependencies, not every repository file. b4430c1 acceptance must not be transferred to changed executable source. No main push, merge, deployment, production operation, migration-byte change, packet rewrite or issue closure is authorized by this checkpoint.
+
+---
+
 Date: 2026-09-06. Audited baseline: `d4b2b3fa2037dd493051564abe070a17900856b3` on main. PR #27 was reviewed separately at `9ec956e826dda07ae6852bc00be586f0840d989c` and remains unmerged.
 
 ## Purpose and authority

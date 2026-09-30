@@ -1,5 +1,19 @@
 # Release readiness: 2026-09-09
 
+## Historical procedure superseded: 29 September 2026
+
+This September9 procedure is retained for history, not current runnable production guidance. Use the [canonical PR57 readiness record](PR57-READINESS-2026-09-29.md) for the current PR57 gates, exact-version tests, independent-review findings and conditional signed-merge investigation. The instruction below to stop production writes is not a standing instruction or an action authorized by this publication.
+
+Development source now includes migration0041; neither that fact nor the historical September17 rollout claim verifies the current production ledger. Reconcile actual applied history/content and rehearse only reviewed missing migrations against a protected restricted restore before separately authorized rollout. Do not replay/reset production or silently transfer old PR56 approvals.
+
+Current consent code intentionally refuses intake against missing/disabled control. Resolve exact policy wording and coordinated schema/application/publication/activation ordering separately; do not deploy the app alone. Backup plus successful isolated restoration/upgrade, hosted settings, actual scheduler, monitoring and a real rollback artifact remain evidence gates.
+
+`queueEmail()` can dispatch after requests when configured. Absence of an email-outbox entry in `vercel.json` does not prove mail cannot send or that no external scheduler exists. GET email-outbox sends mail and GET retention deletes objects; neither is a read-only probe.
+
+Required signatures are confirmed, while complete classic requirements and enabled merge methods remain unknown. Owner-authored GitHub web squash is only a conditional path to verify, not permission to bypass protections. An unsigned head does not prove every compliant method impossible. Main auto-deploys; release remains separately blocked.
+
+---
+
 ## Implemented this continuation
 
 Individual file deletion now prepares an authorized database transaction before any R2 deletion. The durable storage_deletions queue records file snapshot/actor identity and removes the visible file row atomically. Failure before commit preserves bytes; physical or acknowledgement failure retains retry tracking. Current profile/Auth/ban, client ownership/uploader/24-hour window and unarchived project checks apply. Existing storage worker drains individual jobs. The exact storage-first regression is tested against old commit afe82188a0e4ae7d5936ce9a448be7ea492f6551 and current implementation. See ../r2/INDIVIDUAL-FILE-DELETION.md.

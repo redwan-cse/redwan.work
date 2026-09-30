@@ -35,6 +35,7 @@ interface CacheEntry {
 
 const blogCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<BlogPostsPage>>();
+let cacheGeneration = 0;
 
 let rawPostsSnapshot: { items: BloggerPostItem[]; totalItems: number; isCapped: boolean; expiresAt: number } | null = null;
 let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> | null = null;
@@ -60,6 +61,7 @@ function setCacheEntry(key: string, data: BlogPostsPage, now: number) {
 
 /** Drop all cached blog pages (called after on-demand revalidation). */
 export function clearBlogCache() {
+  cacheGeneration++;
   blogCache.clear();
   inFlightRequests.clear();
   rawPostsSnapshot = null;
@@ -180,16 +182,19 @@ async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalI
   if (rawPostsInFlight) {
     return rawPostsInFlight;
   }
-  rawPostsInFlight = (async () => {
-    try {
-      const result = await fetchAllBloggerPosts();
+  const generation = cacheGeneration;
+  const request = fetchAllBloggerPosts().then(result => {
+    if (generation === cacheGeneration) {
       rawPostsSnapshot = { ...result, expiresAt: Date.now() + BLOGGER_CACHE_TTL_MS };
-      return result;
-    } finally {
-      rawPostsInFlight = null;
     }
-  })();
-  return rawPostsInFlight;
+    return result;
+  });
+  rawPostsInFlight = request;
+  try {
+    return await request;
+  } finally {
+    if (rawPostsInFlight === request) rawPostsInFlight = null;
+  }
 }
 
 async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
@@ -216,7 +221,7 @@ async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPo
  * Fetch one page of blog posts, backed by the module TTL cache and in-flight deduplication.
  *
  * Each (page, perPage) combination is cached for BLOGGER_CACHE_TTL_MS,
- * bounded by MAX_CACHE_ENTRIES with LRU eviction and in-flight request coalescing.
+ * bounded by MAX_CACHE_ENTRIES with insertion-order eviction and in-flight request coalescing.
  */
 export async function getBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
@@ -236,18 +241,20 @@ export async function getBlogPostsPage(page: number, perPage: number): Promise<B
     return inFlight;
   }
 
-  const promise = (async () => {
-    try {
-      const data = await fetchBlogPostsPage(safePage, safePerPage);
+  const generation = cacheGeneration;
+  const promise = fetchBlogPostsPage(safePage, safePerPage).then(data => {
+    if (generation === cacheGeneration) {
       setCacheEntry(key, data, Date.now());
-      return data;
-    } finally {
-      inFlightRequests.delete(key);
     }
-  })();
+    return data;
+  });
 
   inFlightRequests.set(key, promise);
-  return promise;
+  try {
+    return await promise;
+  } finally {
+    if (inFlightRequests.get(key) === promise) inFlightRequests.delete(key);
+  }
 }
 
 /**

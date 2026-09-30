@@ -57,7 +57,9 @@ The desktop/mobile built-form suite covers unavailable-policy refusal, explicit 
 
 The strengthened F20 challenge checks the actual wrapper called by the route, exact version/hash/method/server time, missing-version refusal, spoof resistance and form serialization. It does not substitute a dummy field or suppress failures. CI also covers real local route/storage/database persistence and candidate browser-to-database behavior. The source publisher is retired with read-only permissions; its historical success is not an acceptance result.
 
-Exact final-head CI remains required; do not infer it from earlier helper-only commits or source publication. Self-review only, no independent review or production validation. AGY remains on hold; its old candidate-bound preparation package is not reusable. Original browserC/D/E acceptance is a separate unresolved workstream.
+Superseding checkpoint, 29 September 2026: see the [canonical PR57 readiness record](../security/PR57-READINESS-2026-09-29.md). At exact candidate `b4430c187cb3b46c953cd6660b59146fa5d2204e`, named F20 development CI passed, including the policy-version challenge and actual browser/database integrations; earlier helper-only or failed results are not relabeled. AGY separately reported 143/143 preparation tests and 61/61 runtime tests, with all recovery browser A-E scenarios completed. These recovery scenarios are not themselves consent browser coverage.
+
+Independent AI review of all 137 PR-changed files and affected dependencies subsequently completed; it is not native GitHub approval or production validation. Its two bounded recovery/cache repairs have separate local tests and focused re-review, not an inherited b4430c1 host pass. The consolidated AGY attempt is complete and its authority consumed. All older candidate-bound packets remain historical and cannot be reused. No current production ledger, hosted configuration, real policy publication or activation is certified by these development results.
 
 ## Existing email diagnostic boundary
 
