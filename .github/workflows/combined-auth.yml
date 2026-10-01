@@ -23,6 +23,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch PR56 baseline commit history
+        run: git fetch origin refs/pull/56/head
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: 4e9ca493fd6cdd11a82be742670455b752ca4c95

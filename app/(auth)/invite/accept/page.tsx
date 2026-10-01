@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +33,10 @@ export default function InviteAcceptPage() {
         <CardHeader>
           <CardTitle className="text-xl">Invalid invitation</CardTitle>
           <CardDescription>
-            This invite link is missing its token. Ask the administrator to resend it.
+            This invite link is missing its token.{' '}
+            <Link href="/login" className="underline underline-offset-4 hover:text-primary">
+              Back to sign in.
+            </Link>
           </CardDescription>
         </CardHeader>
       </Card>
@@ -76,6 +80,11 @@ export default function InviteAcceptPage() {
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? 'Activating…' : 'Activate account'}
           </Button>
+          <div className="text-center text-xs">
+            <Link href="/login" className="text-muted-foreground underline-offset-4 hover:underline">
+              Back to sign in
+            </Link>
+          </div>
         </form>
       </CardContent>
     </Card>

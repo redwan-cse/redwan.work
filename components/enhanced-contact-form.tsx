@@ -44,6 +44,8 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatBytes } from '@/lib/format';
 import { parseBudgetRange } from '@/lib/contact/intake-contract';
+import { useContactConsentPolicy } from '@/hooks/use-contact-consent-policy';
+import { CONSENT_STALE_MESSAGE, CONSENT_UNAVAILABLE_MESSAGE } from '@/lib/contact/consent-client';
 
 /**
  * Contact intake: /api/contact validates consent, Turnstile and rate limits,
@@ -288,6 +290,8 @@ export default function EnhancedContactForm() {
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = React.useRef(false);
+  const { policy: consentPolicy, loading: policyLoading, error: policyError, refresh: refreshPolicy, replacePolicy } = useContactConsentPolicy();
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState('');
   const [selectedWhatsAppCountryCode, setSelectedWhatsAppCountryCode] = useState('');
@@ -665,7 +669,10 @@ export default function EnhancedContactForm() {
     }
 
     // GDPR consent is required
-    if (!formData.gdprConsent) {
+    if (!consentPolicy) {
+      newErrors.gdprConsent = CONSENT_UNAVAILABLE_MESSAGE;
+      missingFields.push('Current Data & Privacy policy');
+    } else if (!formData.gdprConsent) {
       newErrors.gdprConsent = 'You must agree to the data and privacy policy to submit';
       missingFields.push('Data & Privacy consent');
     }
@@ -728,6 +735,7 @@ export default function EnhancedContactForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || uploading || policyLoading) return;
 
     const validation = validateForm();
     
@@ -738,6 +746,9 @@ export default function EnhancedContactForm() {
       return;
     }
 
+    if (!consentPolicy) return;
+    const displayedConsentVersion = consentPolicy.version;
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -790,7 +801,8 @@ export default function EnhancedContactForm() {
       // Send only the live API contract, including explicit consent.
       const formFields = new FormData();
       
-            formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
+      formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
+      formFields.append('consentPolicyVersion', displayedConsentVersion);
       formFields.append('name', submissionData.name);
       formFields.append('email', submissionData.email);
       formFields.append('country', submissionData.country);
@@ -829,6 +841,20 @@ export default function EnhancedContactForm() {
 
       const result = await response.json();
 
+      if (response.status === 409 && result?.code === 'consent_stale') {
+        // Keep all draft fields and uploaded metadata; never retry or recheck.
+        setFormData(previous => ({ ...previous, gdprConsent: false }));
+        replacePolicy(result.policy);
+        setErrors({ gdprConsent: CONSENT_STALE_MESSAGE });
+        requestAnimationFrame(() => gdprConsentRef.current?.focus());
+        return;
+      }
+      if (result?.code === 'consent_unavailable') {
+        setFormData(previous => ({ ...previous, gdprConsent: false }));
+        replacePolicy(null);
+        setErrors({ gdprConsent: CONSENT_UNAVAILABLE_MESSAGE });
+        return;
+      }
       if (!response.ok) {
         throw new Error('Contact submission rejected.');
       }
@@ -891,6 +917,7 @@ export default function EnhancedContactForm() {
       setErrors({ submit: 'Failed to submit form. Please try again or contact us directly.' });
       setSubmittedTicketId(null);
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -1499,9 +1526,9 @@ export default function EnhancedContactForm() {
                 ))}
               </ul>
             )}
-            {!uploading && attachedFiles.length === 0 && !uploadError && (
+            {!uploading && !uploadError && (
               <p className="text-xs text-muted-foreground">
-                Accepted: PDF, Word, Excel, PNG, JPG, ZIP. Files are stored privately and deleted after 90 days.
+                {consentPolicy?.attachmentNotice ?? 'Accepted: PDF, Word, Excel, PNG, JPG, ZIP. Files are stored privately and deleted after 90 days.'}
               </p>
             )}
           </div>
@@ -1666,13 +1693,25 @@ export default function EnhancedContactForm() {
           </div>
         </div>
 
+        {policyLoading && <p role="status" className="text-sm text-muted-foreground">Loading the current Data & Privacy policy...</p>}
+        {policyError && (
+          <div className="space-y-2">
+            <p role="alert" className="text-sm text-destructive">{policyError}</p>
+            <Button type="button" variant="outline" disabled={policyLoading || isSubmitting} onClick={() => {
+              setFormData(previous => ({ ...previous, gdprConsent: false }));
+              void refreshPolicy();
+            }}>Load privacy policy again</Button>
+          </div>
+        )}
         {/* GDPR Consent */}
         <div className="flex items-start space-x-3 p-4 border-2 rounded-lg bg-muted/30">
           <Checkbox
             id="gdprConsent"
             ref={gdprConsentRef}
             checked={formData.gdprConsent}
-            onCheckedChange={(checked) => handleInputChange('gdprConsent', !!checked)}
+            onCheckedChange={(checked) => handleInputChange('gdprConsent', checked === true)}
+            disabled={!consentPolicy || policyLoading || isSubmitting}
+            aria-describedby={errors.gdprConsent ? 'gdprConsent-error consent-policy-text' : 'consent-policy-text'}
             aria-invalid={!!errors.gdprConsent}
             className={`mt-0.5 ${errors.gdprConsent ? "border-destructive" : ""}`}
           />
@@ -1682,22 +1721,29 @@ export default function EnhancedContactForm() {
               className="text-sm font-medium cursor-pointer leading-normal inline"
             >
               <span className="text-destructive">*</span>{" "}
-              I agree that my data will be used to review and respond to my request, as described on the{" "}
-              <Link href="/privacy" className="text-primary hover:underline" target="_blank">
+              {consentPolicy ? consentPolicy.checkbox : <>I agree that my data will be used to review and respond to my request, as described on the{" "}
+              <Link href="/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
                 Data & Privacy page
-              </Link>.
+              </Link>.</>}
             </Label>
             {errors.gdprConsent && (
-              <p className="text-xs text-destructive mt-2" role="alert">
+              <p id="gdprConsent-error" className="text-xs text-destructive mt-2" role="alert">
                 {errors.gdprConsent}
               </p>
             )}
           </div>
         </div>
 
+        {consentPolicy && (
+          <details id="consent-policy-text" open={!!errors.gdprConsent} className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Data & Privacy policy for this request ({consentPolicy.version})</summary>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{consentPolicy.policyText}</p>
+          </details>
+        )}
         {/* Privacy Notice */}
         <Card className="bg-muted/50 border-primary/20">
           <CardContent className="p-4">
+            {consentPolicy ? <p className="whitespace-pre-wrap text-sm text-muted-foreground">{consentPolicy.privacyNotice}</p> : <>
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">Privacy & Data Usage:</span> We only use your details to respond to your inquiry and provide the services you request. 
               Your information is stored securely and never shared with third parties.
@@ -1705,6 +1751,7 @@ export default function EnhancedContactForm() {
             <p className="text-xs text-muted-foreground mt-2">
               Note: Technical data (device type, browser info) is collected automatically for security and spam prevention purposes only.
             </p>
+            </>}
           </CardContent>
         </Card>
 
@@ -1800,7 +1847,7 @@ export default function EnhancedContactForm() {
           <Button
             type="submit"
             size="lg"
-            disabled={isSubmitting || uploading || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
+            disabled={isSubmitting || uploading || policyLoading || !consentPolicy || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
             className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
             title={
               TURNSTILE_SITE_KEY && !isTurnstileVerified 

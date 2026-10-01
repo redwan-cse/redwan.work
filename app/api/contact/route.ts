@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sha256Hex, parseLeadPayload } from '@/lib/contact/lead-schema';
+import { sha256Hex } from '@/lib/contact/lead-schema';
+import { parseConsentedLeadPayload } from '@/lib/contact/consent-intake';
+import { readConsentControl } from '@/lib/contact/consent-control';
+import type { PolicyBundle } from '@/lib/contact/consent-policy';
 import { insertLead } from '@/lib/contact/lead-store';
 import { verifyStoredObjectSize } from '@/lib/r2';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
+export const dynamic = 'force-dynamic';
 const WINDOW_SECONDS = 3600;
 const MAX_REQUESTS = 5;
 const memoryRateMap = new Map<string, number[]>();
@@ -47,6 +51,23 @@ const unavailable = () => NextResponse.json(
   { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } },
 );
 
+const consentUnavailable = () => NextResponse.json(
+  { code: 'consent_unavailable', error: 'The Data & Privacy policy is unavailable. Please try again later.' },
+  { status: 503, headers: { 'Cache-Control': 'no-store', 'Retry-After': '60' } },
+);
+const consentStale = (policy: PolicyBundle) => NextResponse.json(
+  { code: 'consent_stale', error: 'Review the current Data & Privacy policy and check the consent box again.', policy },
+  { status: 409, headers: { 'Cache-Control': 'no-store' } },
+);
+
+/** Public policy text only. No lead reads, consent writes or activation. */
+export async function GET() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) return consentUnavailable();
+  const current = await readConsentControl();
+  if (!current.ok) return consentUnavailable();
+  return NextResponse.json({ policy: current.bundle }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!isSameOrigin(request)) {
@@ -69,8 +90,12 @@ export async function POST(request: NextRequest) {
     }
     const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
     const ipHash = await sha256Hex(salt + ip);
-    const parsed = parseLeadPayload(form, { ipHash, userAgent: request.headers.get('user-agent') });
-    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    const parsed = await parseConsentedLeadPayload(form, { ipHash, userAgent: request.headers.get('user-agent') });
+    if (!parsed.ok) {
+      if (parsed.status === 409) return consentStale(parsed.policy);
+      if (parsed.status === 503) return consentUnavailable();
+      return NextResponse.json({ error: parsed.error }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    }
     if (!memoryAllowed(ipHash)) return NextResponse.json({ error: 'Too many submissions. Please try again later.' }, { status: 429 });
     const allowed = await consume('ip', ipHash, WINDOW_SECONDS, MAX_REQUESTS);
     if (allowed === null) { console.error('Contact rate control unavailable.'); return unavailable(); }
@@ -100,6 +125,13 @@ export async function POST(request: NextRequest) {
       }
     }
     const stored = await insertLead(parsed.lead);
+    if (!stored.ok && stored.code === 'consent_stale') {
+      // Database activation may have changed after validation. Refresh only the
+      // public bundle; never retry the insert or restamp without a new checkbox.
+      const current = await readConsentControl();
+      return current.ok ? consentStale(current.bundle) : consentUnavailable();
+    }
+    if (!stored.ok && stored.code === 'consent_unavailable') return consentUnavailable();
     if (!stored.ok) return NextResponse.json({ error: 'We could not process your message right now. Please try again or email us directly.' }, { status: 502 });
     return NextResponse.json({ success: true, message: 'Your message has been sent successfully!', ticketRef: stored.ticketRef });
   } catch {

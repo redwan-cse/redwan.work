@@ -41,7 +41,51 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Verify full locked dependency audit
-        run: npm audit --audit-level=low
+        run: |
+          # dependency-audit-report:start
+          node <<'NODE'
+          const {spawnSync} = require('node:child_process');
+          const {readFileSync} = require('node:fs');
+          const emit = (level, message) => console.log(`::${level} title=Locked dependency audit::${message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}`);
+          const fail = category => {emit('error', category);process.exit(1);};
+          const pkg = value => typeof value === 'string' && /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/.test(value) && value.length <= 214 ? value : 'unknown';
+          const version = value => typeof value === 'string' && /^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value) && value.length <= 80 ? value : 'unknown';
+          const range = value => typeof value === 'string' && /^[0-9A-Za-z.*<>=~^|+ -]{1,160}$/.test(value) ? value : 'unknown';
+          let lock;
+          try {lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));if (!lock?.packages) throw new Error();}
+          catch {fail('invalid-lockfile');}
+          const result = spawnSync('npm', ['audit', '--json', '--audit-level=low'], {encoding: 'utf8', timeout: 120000, maxBuffer: 10 * 1024 * 1024});
+          if (result.error || result.signal || !Number.isInteger(result.status)) fail('execution-failed');
+          let report;
+          try {report = JSON.parse(result.stdout);} catch {fail('invalid-report');}
+          if (report?.error) {
+            const code = typeof report.error.code === 'string' && /^E[A-Z_0-9]{1,30}$/.test(report.error.code) ? report.error.code : 'unknown';
+            fail(`registry-or-audit-error code=${code}`);
+          }
+          const counts = report?.metadata?.vulnerabilities;
+          const severities = ['info', 'low', 'moderate', 'high', 'critical'];
+          if (report?.auditReportVersion !== 2 || !report.vulnerabilities || Array.isArray(report.vulnerabilities) || !counts ||
+              ![...severities, 'total'].every(key => Number.isSafeInteger(counts[key]) && counts[key] >= 0)) fail('invalid-report');
+          const entries = Object.entries(report.vulnerabilities);
+          if (severities.reduce((sum, key) => sum + counts[key], 0) !== counts.total || entries.length !== counts.total ||
+              entries.some(([, item]) => !item || !severities.includes(item.severity))) fail('invalid-report');
+          const blocking = severities.slice(1).some(key => counts[key] > 0);
+          emit(blocking || result.status !== 0 ? 'error' : 'notice', `total=${counts.total} ${severities.map(key => `${key}=${counts[key]}`).join(' ')} npmExit=${result.status}`);
+          for (const [name, item] of entries.slice(0, 40)) {
+            const nodes = Array.isArray(item.nodes) ? item.nodes : [];
+            const installed = [...new Set(nodes.slice(0, 20).map(node => version(lock.packages[node]?.version)))].join(',') || 'unknown';
+            const via = Array.isArray(item.via) ? item.via : [];
+            const advisories = via.slice(0, 20).map(value => typeof value === 'object' && value !== null ?
+              (typeof value.url === 'string' && /^https:\/\/github\.com\/advisories\/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/.test(value.url) ? value.url.split('/').pop() : 'unknown') : pkg(value)).join(',') || 'unknown';
+            const fix = item.fixAvailable;
+            const recommendation = fix && typeof fix === 'object' ? `${pkg(fix.name)}@${version(fix.version)} major=${fix.isSemVerMajor === true}` : fix === true ? 'available' : 'unavailable';
+            const effects = Array.isArray(item.effects) ? item.effects.slice(0, 20).map(pkg).join(',') : 'unknown';
+            emit(item.severity === 'info' ? 'notice' : 'error', `package=${pkg(name)} severity=${item.severity} direct=${item.isDirect === true} installed=${installed} range=${range(item.range)} via=${advisories} fix=${recommendation} effects=${effects}`);
+          }
+          if (entries.length > 40) emit('notice', `additional-findings-omitted=${entries.length - 40}`);
+          process.exit(result.status !== 0 ? result.status : blocking ? 1 : 0);
+          NODE
+          # dependency-audit-report:end
       - name: Exact bearer contract
         run: node --experimental-strip-types --test tests/bearer.test.mjs
       - name: Build integrated app without provider credentials

@@ -1,0 +1,21 @@
+{
+  "isolated_tests": 24,
+  "pass": 24,
+  "fail": 0,
+  "skipped": 0,
+  "cancelled": 0,
+  "node": "22.23.1",
+  "javascript_syntax": "passed",
+  "bash_syntax": "passed",
+  "docker_execution_by_brain": false,
+  "review": "self-review",
+  "script_sha256": "a0363c383118283d44083c3a14eb72d403e7ac3e7bf4609799c8308fbfc96b68",
+  "disposer_git_blob": "84bdab4de3a22309d66ca62ee0909849a79bda4d",
+  "authorization": "approve_pr57_storage_failed_run_disposal:80180078016862",
+  "run_id": "test-run-8a396a5c-b211-4f11-aef1-b893afb7d00d",
+  "scope": {
+    "containers": 7,
+    "networks": 1
+  },
+  "replacement_start_authorized": false
+}

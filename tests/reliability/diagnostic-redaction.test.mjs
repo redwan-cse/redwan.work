@@ -318,7 +318,7 @@ test('blogger service: upstream API error falls back cleanly without leaking gax
     f.mode = 'blog';
     const r = await blog.getBlogPostsPage(1, 9);
     assert.equal(f.blogCalls, 1);
-    assert.deepEqual(r, { posts: [], totalItems: 0 });
+    assert.deepEqual(r, { posts: [], totalItems: 0, isCapped: false });
     clean(r);
     assert.ok(logs.some((l) => l.includes('Blogger fetch unavailable.')));
   } finally {
@@ -333,7 +333,7 @@ test('blogger service: malformed credentials returns empty posts safely without 
     process.env.GOOGLE_CREDENTIALS_B64 = Buffer.from(sentinel).toString('base64');
     const r = await blog.getBlogPostsPage(1, 9);
     assert.equal(f.blogCalls, 0);
-    assert.deepEqual(r, { posts: [], totalItems: 0 });
+    assert.deepEqual(r, { posts: [], totalItems: 0, isCapped: false });
     clean(r);
   } finally {
     restoreConsole();

@@ -17,6 +17,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       NEXT_PUBLIC_SITE_URL: https://example.test
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: synthetic
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -36,10 +37,16 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/contact-browser" --ignore-scripts --no-audit --no-fund --save-exact playwright@1.58.2
           node "$RUNNER_TEMP/contact-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Recovery alert locators with real Chromium and negative controls
+        env:
+          BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
+        run: node --test tests/recovery-alert-locators.mjs
       - name: Real desktop/mobile payload, consent, retry and reference verification
         env:
           BROWSER_TOOLS_DIR: ${{ runner.temp }}/contact-browser
-        run: node tests/contact-cleanup.mjs browser
+        run: |
+          node tests/contact-cleanup.mjs browser
+          node tests/consent-browser.mjs
   reconciliation:
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -53,16 +60,34 @@ jobs:
           python3 - <<'PY'
           import json,re,subprocess
           from pathlib import Path
+          try:
+              subprocess.run(['git','cat-file','-e','19e25b15e0ce7c95cae7044cfea20e86d0ec5a38^{commit}'],check=True,stderr=subprocess.DEVNULL)
+          except subprocess.CalledProcessError:
+              subprocess.run(['git','fetch','origin','refs/pull/56/head'],check=True)
           heads={49:'b2919343d146adfdff92ed4471436aabe495fdd9',50:'7f1de0f3cfeaa31658f9fdcd574a40050f3c232a',51:'b06e8637741e5067a8908138feea96ebc1d9253a',52:'b86ce1ab93f5ea3501389f3d1c34d85332d4d826',54:'71193183dd974040769f4f32ccb9a2c7fdec9adb',55:'d4fcd550fed53bfe56119a91488822ea51e59b4d'}
+          pr56='19e25b15e0ce7c95cae7044cfea20e86d0ec5a38'
+          squash_main='432c7d1d25d85a74d90d0b8e4dc09b11ec6513fc'
           for pr,head in heads.items():
-              subprocess.run(['git','merge-base','--is-ancestor',head,'HEAD'],check=True)
-              print(f'PR{pr}: exact head included')
+              subprocess.run(['git','merge-base','--is-ancestor',head,pr56],check=True)
+              print(f'PR{pr}: exact head included in PR56')
+          subprocess.run(['git','merge-base','--is-ancestor',squash_main,'HEAD'],check=True)
+          print('PR56 squash commit 432c7d1d25d85a74d90d0b8e4dc09b11ec6513fc included in HEAD')
+          tree_pr56=subprocess.check_output(['git','cat-file','-p',pr56]).splitlines()[0].split()[1].decode()
+          tree_squash=subprocess.check_output(['git','cat-file','-p',squash_main]).splitlines()[0].split()[1].decode()
+          assert tree_pr56==tree_squash, 'PR56 tree matches squash commit tree'
           main='27ab3e3f1895b0d81231ddf1b83174fc24ad1f8a'
           for label,data in [('frozen-main',subprocess.check_output(['git','show',main+':package-lock.json'])),('candidate',Path('package-lock.json').read_bytes())]:
               packages=json.loads(data)['packages']
               versions=lambda name: sorted({v['version'] for k,v in packages.items() if k.endswith('node_modules/'+name)})
               assert versions('lodash')==[], 'Do not reintroduce removed lodash'
-              assert versions('next')==['16.3.4']
+              if label=='frozen-main':
+                  assert versions('next')==['16.3.4'], 'Frozen historical Next evidence changed'
+              else:
+                  pinned=json.loads(Path('package.json').read_text())['dependencies']['next']
+                  assert re.fullmatch(r'16\.(0|[1-9]\d*)\.(0|[1-9]\d*)',pinned), 'Candidate Next must be a stable exact reviewed-major pin'
+                  assert tuple(map(int,pinned.split('.'))) >= (16,3,6), 'Candidate Next is below the reviewed security floor'
+                  assert versions('next')==[pinned], 'Candidate installed Next does not match its manifest pin'
+                  assert packages['']['dependencies']['next']==pinned, 'Candidate manifest and lockfile pins disagree'
               assert versions('ajv')==['6.15.0']
               assert versions('minimatch')==['10.2.6','3.1.5','9.0.9']
               print(label+': PR11/12/14/16 dependency objectives superseded')

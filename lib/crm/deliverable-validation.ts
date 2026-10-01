@@ -16,6 +16,11 @@ export async function validateDeliverable(projectId:unknown,raw:unknown):Promise
   const name=meta.key.slice(prefix.length),dot=name.lastIndexOf('.');
   if(dot<0||!UUID.test(name.slice(0,dot))||name.slice(dot+1)!==check.ext)return null;
   if(!await verifyStoredObjectSize(meta.key,meta.size_bytes))return null;
-  return {key:meta.key,filename:meta.filename,mime:meta.mime.trim().toLowerCase().split(';')[0].trim(),size_bytes:meta.size_bytes};
+  const {finalizeUpload,isImmutableUploadKey,verifyImmutableUpload}=await import('@/lib/crm/immutable-upload');
+  const mime=meta.mime.trim().toLowerCase().split(';')[0].trim();
+  let key=meta.key;
+  if(isImmutableUploadKey(key))await verifyImmutableUpload(key,meta.size_bytes);
+  else key=(await finalizeUpload(key,meta.size_bytes,mime)).key;
+  return {key,filename:meta.filename,mime,size_bytes:meta.size_bytes};
  }catch{return null;}
 }

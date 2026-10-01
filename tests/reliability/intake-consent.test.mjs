@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
 import test from 'node:test';
+import {consentBundle,consentSnapshot} from './consent-fixture.mjs';
 import {NextRequest} from 'next/server.js';
 import {BUDGET_ERROR, NDA_ERROR, parseBudgetRange, parseNdaValues} from '../../lib/contact/intake-contract.ts';
 
 // State store for contact test harness
 const state = {
+  consentSnapshot,
   rateLimits: new Map(), // hash -> count
   leads: [],
   storedObjects: new Map(), // key -> size
@@ -23,6 +25,7 @@ const modules = {
     return {
       rpc: async (name, args) => {
         if (s.rpcFailures) return { data: null, error: { message: 'synthetic RPC error' } };
+        if (name === 'contact_consent_control') return {data:s.consentSnapshot,error:null};
         if (name === 'consume_rate_limit') {
           const key = args.p_kind + ':' + args.p_key_hash;
           const current = s.rateLimits.get(key) ?? 0;
@@ -68,6 +71,9 @@ const hooks = registerHooks({
         url: 'data:text/javascript,' + encodeURIComponent(modules[specifier]),
         shortCircuit: true,
       };
+    }
+    if (specifier.startsWith('@/lib/contact/consent-')) {
+      return {url:new URL('../../'+specifier.slice(2)+'.ts',import.meta.url).href,shortCircuit:true};
     }
     if (specifier === '@/lib/contact/intake-contract') {
       return {
@@ -134,6 +140,7 @@ function baseLeadForm(entries = []) {
   f.set('email', 'sarah@example.test');
   f.set('projectSummary', 'Need full stack Next.js and Supabase development.');
   f.set('gdprConsent', 'true');
+  f.set('consentPolicyVersion', consentBundle.version);
   f.set('cf-turnstile-response', 'synthetic-token-1234');
   for (const [k, v] of entries) {
     if (v === null) f.delete(k);

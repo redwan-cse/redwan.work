@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {installConsentFixture} from './reliability/consent-ci-fixture.mjs';
 import {readFileSync,writeFileSync,existsSync,mkdtempSync,mkdirSync,rmSync} from 'node:fs';
 import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
@@ -17,22 +18,52 @@ if(process.argv[2]!=='child'){
  assert.ok(status.PUBLISHABLE_KEY.startsWith('sb_publishable_')&&status.SECRET_KEY.startsWith('sb_secret_'));
  const workspace=process.cwd(),scratch=mkdtempSync(join(tmpdir(),'wave-browser-')),baseline=join(scratch,'baseline');
  const report={baseline:null,candidate:null,complete:false};
+ let phase='archive';
  try{
   mkdirSync(baseline);
+  try{
+   execFileSync('git',['cat-file','-e','8d0bd70f5f155ea1791265507274ecb8a2c56f0b^{commit}'],{stdio:'ignore'});
+  }catch{
+   execFileSync('git',['fetch','origin','refs/pull/56/head'],{stdio:'ignore'});
+  }
   execFileSync('git',['archive','--output='+join(scratch,'baseline.tar'),'8d0bd70f5f155ea1791265507274ecb8a2c56f0b'],{stdio:'ignore'});
   execFileSync('tar',['-xf',join(scratch,'baseline.tar'),'-C',baseline],{stdio:'ignore'});
-  assert.equal(createHash('sha256').update(readFileSync(join(baseline,'package-lock.json'))).digest('hex'),createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'));
-  execFileSync('cp',['-al',join(workspace,'node_modules'),join(baseline,'node_modules')],{stdio:'ignore'});
+  phase='dependencies';
+  const fingerprint=root=>['package.json','package-lock.json'].map(file=>createHash('sha256').update(readFileSync(join(root,file))).digest('hex'));
+  const frozen=fingerprint(baseline),candidate=fingerprint(workspace);
+  if(frozen.every((value,index)=>value===candidate[index])){
+   execFileSync('cp',['-al',join(workspace,'node_modules'),join(baseline,'node_modules')],{stdio:'ignore'});
+  }else{
+   // Preserve the historical source/lockfile. Never give it the patched tree's dependencies.
+   // Only this frozen regression fixture omits audit; the candidate's full audit is unchanged.
+   assert.equal(existsSync(join(baseline,'.npmrc')),false);
+   const home=join(scratch,'npm-home');mkdirSync(home,{mode:0o700});
+   const userconfig=join(home,'user.npmrc'),globalconfig=join(home,'global.npmrc');
+   writeFileSync(userconfig,'',{mode:0o600});writeFileSync(globalconfig,'',{mode:0o600});
+   execFileSync('npm',['ci','--ignore-scripts','--no-audit','--no-fund','--registry=https://registry.npmjs.org/'],{
+    cwd:baseline,env:{PATH:process.env.PATH,HOME:home,TMPDIR:scratch,CI:'true',NEXT_TELEMETRY_DISABLED:'1',npm_config_userconfig:userconfig,npm_config_globalconfig:globalconfig,npm_config_cache:join(scratch,'npm-cache')},
+    timeout:300000,maxBuffer:10*1024*1024,stdio:'pipe'
+   });
+  }
+  assert.deepEqual(fingerprint(baseline),frozen,'Frozen dependency inputs changed');
+  assert.deepEqual(fingerprint(workspace),candidate,'Candidate dependency inputs changed');
+  for(const root of [baseline,workspace]){
+   const installed=JSON.parse(readFileSync(join(root,'node_modules/next/package.json'),'utf8')).version;
+   const locked=JSON.parse(readFileSync(join(root,'package-lock.json'),'utf8')).packages['node_modules/next'].version;
+   assert.equal(installed,locked,'Each source tree must use its own locked Next');
+  }
   const env=Object.fromEntries(['PATH','HOME','TMPDIR','BROWSER_TOOLS_DIR','CI'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   Object.assign(env,{NEXT_TELEMETRY_DISABLED:'1',NEXT_PUBLIC_SITE_URL:'http://localhost:3399',NEXT_PUBLIC_SUPABASE_URL:api.origin,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:status.PUBLISHABLE_KEY,SUPABASE_SECRET_KEY:status.SECRET_KEY,LEAD_IP_HASH_SALT:randomBytes(32).toString('hex'),TURNSTILE_SECRET_KEY:'synthetic',NEXT_PUBLIC_TURNSTILE_SITE_KEY:'synthetic',DISPOSABLE_AUTH_CI:'true'});
   for(const mode of ['baseline','candidate']){
+   phase=mode;
    const resultPath=join(scratch,mode+'.json');
-   const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
+   const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_CANDIDATE:String(mode==='candidate'),WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
    if(existsSync(resultPath))report[mode]=JSON.parse(readFileSync(resultPath,'utf8'));
-   if(child.status!==0)break;
+   // A completed result file does not override a failed or interrupted child.
+   if(child.error||child.signal||child.status!==0)throw Error('Wave browser child failed');
   }
   report.complete=Boolean(report.baseline?.infrastructure&&report.candidate?.infrastructure&&report.baseline?.cleanup&&report.candidate?.cleanup);
- }catch{report.complete=false;}
+ }catch{report.complete=false;console.error('::error::Wave browser preparation failed at '+phase);}
  finally{writeFileSync(join(process.env.RUNNER_TEMP,'wave-browser-result.json'),JSON.stringify(report),{mode:0o600});rmSync(scratch,{recursive:true,force:true});}
  const groups=['A01','I01','I02'];
  const red=report.complete&&groups.every(k=>report.baseline[k].pass>0&&report.baseline[k].fail>0);
@@ -51,7 +82,7 @@ const report={A01:{pass:0,fail:0},I01:{pass:0,fail:0},I02:{pass:0,fail:0},infras
 const safe=r=>{if(r.error)throw Error('Synthetic service assertion failed');return r.data;};
 const hash=s=>createHash('sha256').update(s).digest('hex');
 const email='wave-'+randomBytes(12).toString('hex')+'@example.test',password=randomBytes(24).toString('base64url'),rateHashes=new Set();
-let user,project,browser,server,ipIndex=0;
+let user,project,browser,server,consentFixture,ipIndex=0;
 const preload=join(mkdtempSync(join(tmpdir(),'wave-preload-')),'network.mjs');
 writeFileSync(preload,`const realFetch=globalThis.fetch;globalThis.fetch=(input,init)=>{const u=new URL(typeof input==='string'?input:input instanceof URL?input.href:input.url);if(u.href==='https://challenges.cloudflare.com/turnstile/v0/siteverify')return Promise.resolve(new Response(JSON.stringify({success:true}),{status:200}));if(!['localhost','127.0.0.1'].includes(u.hostname)||!['54321','3399'].includes(u.port)||u.protocol!=='http:')throw Error('External fetch blocked in disposable acceptance');return realFetch(input,init);};`,{mode:0o600});
 async function check(group,fn){try{await fn();report[group].pass++;}catch{report[group].fail++;}}
@@ -79,10 +110,12 @@ async function fill(page){
 async function rows(){return safe(await admin.from('leads').select('id,nda_required,budget_min,budget_max,consent_at,attachments').eq('email',email));}
 async function post(entries){
  const f=new FormData();for(const [k,v] of [['name','Synthetic'],['email',email],['projectSummary','Synthetic HTTP contract acceptance.'],['gdprConsent','true'],...entries])f.append(k,v);
+ if(consentFixture)f.set('consentPolicyVersion',consentFixture.bundle.version);
  const token=randomUUID();f.set('cf-turnstile-response',token);rateHashes.add(hash(token));
  return fetch(origin+'/api/contact',{method:'POST',body:f,headers:{origin,host:'localhost:3399','cf-connecting-ip':ip()}});
 }
 try{
+ if(process.env.WAVE_CANDIDATE==='true')consentFixture=installConsentFixture();
  report.phase='fixtures';user=safe(await admin.auth.admin.createUser({email,password,email_confirm:true,app_metadata:{role:'client'}})).user.id;
  safe(await admin.from('profiles').update({role:'client',is_active:true}).eq('id',user));
  project=safe(await admin.from('projects').insert({client_id:user,name:'Synthetic wave project'}).select('id').single()).id;
@@ -116,6 +149,7 @@ finally{
  try{
   if(browser)await browser.close();
   if(server?.pid&&server.exitCode===null&&server.signalCode===null){const done=once(server,'exit');server.kill('SIGTERM');await Promise.race([done,delay(5000)]);if(server.exitCode===null&&server.signalCode===null){server.kill('SIGKILL');await done;}}
+  if(consentFixture)consentFixture.dispose();
   safe(await admin.from('leads').delete().eq('email',email));assert.equal((await rows()).length,0);
   if(rateHashes.size){safe(await admin.from('rate_limits').delete().in('key_hash',[...rateHashes]));const r=await admin.from('rate_limits').select('key_hash',{count:'exact',head:true}).in('key_hash',[...rateHashes]);safe(r);assert.equal(r.count,0);}
   if(project){safe(await admin.from('projects').delete().eq('id',project));assert.equal(safe(await admin.from('projects').select('id').eq('id',project)).length,0);}

@@ -1,0 +1,13 @@
+name: Bounded F20 source integration
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Source publisher retired
+        run: echo 'The bounded source edit completed at 36a623ef5ca065220ee64f0446f7fc05be533f41. Write permission and publication are retired. This is not an acceptance check.'

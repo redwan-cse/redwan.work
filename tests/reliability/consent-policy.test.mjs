@@ -69,9 +69,9 @@ test('recorded evidence is tied to archived version not the currently active one
  for(const row of [{consent_policy_version:first.version},{...evidence,consent_policy_hash:'0'.repeat(64)},{...evidence,consent_capture_method:'import'},{...evidence,consent_at:'invalid'}])assert.equal(consentEvidenceView(row,policies),'invalid');
  assert.equal(consentEvidenceView(evidence,[]),'invalid');
 });
-test('existing intake remains unwired and policy text is not published by infrastructure',()=>{
+test('intake never publishes synthetic policy wording or enables capture by environment',()=>{
  for(const path of ['lib/contact/lead-schema.ts','app/api/contact/route.ts','components/enhanced-contact-form.tsx','app/privacy/page.tsx']){
-  const source=readFileSync(path,'utf8');assert.doesNotMatch(source,/from ['"][^'"]*consent-policy/);assert.doesNotMatch(source,/SYNTHETIC TEST ONLY/);
+  const source=readFileSync(path,'utf8');assert.doesNotMatch(source,/SYNTHETIC TEST ONLY/);
  }
 });
 test('PostgreSQL UTC timestamps retain recorded meaning without rewriting microseconds',()=>{

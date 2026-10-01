@@ -18,7 +18,8 @@ function privateClient(): S3Client {
   const accessKeyId = process.env.R2_PRIVATE_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PRIVATE_SECRET_ACCESS_KEY;
   if (!endpoint || !accessKeyId || !secretAccessKey || !process.env.R2_PRIVATE_BUCKET) throw new Error('Private storage is not configured.');
-  return new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+  // Keep requests and presigned URLs on the configured storage origin.
+  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
 }
 export function validateContactFile(f: { filename: string; mime: string; size: number }): { ok: true; ext: string } | { ok: false; error: string } {
   if (!f || typeof f.filename !== 'string' || !f.filename.trim() || f.filename.length > 255 || typeof f.mime !== 'string' || f.mime.length > 128) return { ok: false, error: 'Invalid file metadata.' };
@@ -104,8 +105,11 @@ export function isPortalKey(key: string): boolean {
   if (key.startsWith('archive/')) return key.startsWith('archive/project_') && key.endsWith('.zip');
   return /^private\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\//.test(key);
 }
+function reservedFinalKey(key:string):boolean {
+  return /^private\/.*\/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.[a-z]+$/.test(key);
+}
 export async function presignPrivatePut(key: string, mime: string, size: number, expiresIn = 600): Promise<string> {
-  if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  if (!isPortalKey(key)||reservedFinalKey(key)||(key.startsWith('archive/')&&!/^archive\/project_[0-9a-f-]{36}\/upload_[0-9a-f-]{36}\.zip$/.test(key))) throw new Error('Invalid upload destination.');
   if (!Number.isSafeInteger(size) || size < 1) throw new Error('Invalid file size.');
   return getSignedUrl(privateClient(), new PutObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, ContentType: mime, ContentLength: size }), { expiresIn });
 }
@@ -136,7 +140,7 @@ export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
   return Buffer.from(await response.Body?.transformToByteArray() ?? []);
 }
 export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
-  if (!isPortalKey(key)) throw new Error('Invalid portal key.');
+  if (!isPortalKey(key)||reservedFinalKey(key)) throw new Error('Invalid mutable portal key.');
   const { Upload } = await import('@aws-sdk/lib-storage');
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }
@@ -158,7 +162,7 @@ function publicClient(): S3Client {
   const accessKeyId = process.env.R2_PUBLIC_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
   if (!endpoint || !process.env.R2_PUBLIC_BUCKET || !accessKeyId || !secretAccessKey) throw new Error('Public storage is not configured.');
-  return new S3Client({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } });
+  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
 }
 function assertValidAssetKey(key: string): void {
   if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..')) throw new Error('Invalid asset key.');

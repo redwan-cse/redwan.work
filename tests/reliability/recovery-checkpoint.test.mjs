@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+test('restore checkpoint table is private and plan cannot be silently retargeted',()=>{const s=readFileSync('supabase/migrations/0040_recovery_checkpoints.sql','utf8');assert.match(s,/object_plan is distinct from p_plan/);assert.match(s,/require_recovery_admin/);assert.match(s,/for update/);assert.match(s,/immutable_uploads where r2_key=k/);assert.match(s,/from public,anon,authenticated/);assert.doesNotMatch(s,/delete from|truncate/i);});

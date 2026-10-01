@@ -7,7 +7,7 @@ globalThis.__waveAuth={auth:{signInWithPassword:async()=>({error:null}),getClaim
 const inline=source=>({url:'data:text/javascript,'+encodeURIComponent(source),shortCircuit:true});
 registerHooks({resolve(s,c,n){
  if(s==='next/navigation')return inline('export function redirect(destination){throw Object.assign(new Error("Synthetic redirect"),{destination});}');
- if(s==='next/headers')return inline('export async function headers(){throw new Error("Unexpected headers read");}');
+ if(s==='next/headers')return inline('export async function headers(){throw new Error("Unexpected headers read");} export async function cookies(){throw new Error("Unexpected cookies read");}');
  if(s==='@/lib/supabase/server')return inline('export async function createSupabaseServerClient(){return globalThis.__waveAuth;}');
  if(s==='@/lib/supabase/admin')return inline('export function getSupabaseAdmin(){throw new Error("Unexpected service call");}');
  if(s==='@/lib/r2')return inline('export const CONTACT_MAX_FILES=5,CONTACT_MAX_SIZE_BYTES=10485760;export function isValidContactKey(){return false;}');

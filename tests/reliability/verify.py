@@ -1,6 +1,6 @@
 import json, os, pathlib, re, subprocess
 report=pathlib.Path(os.environ['RUNNER_TEMP'])/'reliability-result.json'
-stages=[('dependencies',['npm','ci']),('tests',['bash','-c','node --experimental-strip-types --test tests/reliability/*.test.mjs tests/invoice-quantity.test.mjs']),('lint',['npm','run','lint']),('typegen',['npx','next','typegen']),('types',['npx','tsc','--noEmit']),('build',['npm','run','build'])]
+stages=[('dependencies',['npm','ci']),('tests',['bash','-c','node --experimental-strip-types --test tests/reliability/*.test.mjs tests/invoice-quantity.test.mjs']),('lint',['npm','run','lint']),('typegen',['npx','next','typegen']),('types',['npx','tsc','--noEmit']),('build',['npm','run','build']),('manifests',['node','scripts/audit-manifests.mjs'])]
 for name,command in stages:
     result=subprocess.run(command,text=True,capture_output=True)
     output=result.stdout+result.stderr

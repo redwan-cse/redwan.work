@@ -22,9 +22,17 @@ export async function validateAttachments(entries: unknown, ownerId: string, tic
     seen.add(key);
     result.push({ key, filename, mime: mime.trim().toLowerCase().split(';')[0].trim(), size_bytes });
   }
-  // All structural validation precedes all HEAD requests; no writes occur here.
+  // Callers establish current actor and parent authority before this boundary.
+  // Structural validation and all HEAD checks precede finalization writes.
   try {
     for (const entry of result) if (!await verifyStoredObjectSize(entry.key, entry.size_bytes)) return null;
+    if(result.length){
+      const {finalizeUpload,isImmutableUploadKey,verifyImmutableUpload}=await import('@/lib/crm/immutable-upload');
+      for(const entry of result){
+        if(isImmutableUploadKey(entry.key))await verifyImmutableUpload(entry.key,entry.size_bytes);
+        else entry.key=(await finalizeUpload(entry.key,entry.size_bytes,entry.mime)).key;
+      }
+    }
   } catch { return null; }
   return result;
 }

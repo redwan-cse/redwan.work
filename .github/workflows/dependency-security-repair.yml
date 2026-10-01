@@ -1,0 +1,13 @@
+name: Retired dependency security repair
+on:
+  push:
+    branches: [fix/audit-followup-remediation]
+    paths: [.github/workflows/dependency-security-repair.yml]
+permissions:
+  contents: read
+jobs:
+  retired:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Consumed one-shot dependency repair. No credentials, source writes or reruns.'

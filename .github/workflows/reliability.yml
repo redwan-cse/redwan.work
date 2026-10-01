@@ -28,6 +28,21 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
+      - name: Verify exact preparation guards before dependency installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export GIT_OPTIONAL_LOCKS=0 GIT_PAGER=cat
+          node --test \
+            tests/acceptance/phase-b.test.mjs \
+            tests/acceptance/test-guard.mjs \
+            tests/reliability/acceptance-environment.test.mjs \
+            tests/reliability/disposable-bootstrap.test.mjs \
+            tests/reliability/recovery-acceptance-contracts.test.mjs \
+            tests/reliability/gateway-query.test.mjs \
+            tests/reliability/browser-evidence.test.mjs \
+            tests/reliability/operator-preservation.test.mjs
       - name: Verify dependencies, tests, lint, types and build
         run: python3 tests/reliability/verify.py
       - name: Publish safe diagnostic summary
