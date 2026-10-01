@@ -1,0 +1,260 @@
+name: One-shot reviewed dependency security repair
+on:
+  push:
+    branches: [fix/audit-followup-remediation]
+    paths: [.github/workflows/dependency-security-repair.yml]
+permissions:
+  contents: read
+concurrency:
+  group: pr57-reviewed-dependency-repair
+  cancel-in-progress: false
+env:
+  CI: 'true'
+  REPAIR_PROGRAM: |
+    const assert = require('node:assert/strict');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const crypto = require('node:crypto');
+    const cp = require('node:child_process');
+    const BASE = '28ad56260ab65bd31e579eedb8d35e1c04a94380';
+    const REPO = 'redwan-cse/redwan.work';
+    const BRANCH = 'fix/audit-followup-remediation';
+    const files = ['package.json', 'package-lock.json'];
+    let phase = 'provenance';
+    const originalBlobs = ['6c3c60324645ad2a1c83f992dc1a4ef05ec6ed77', 'b920045c14d666c939d3f918e711b3e9ffe75e1c'];
+    const braceTargets = {'1.1.18': '1.1.21', '2.1.4': '2.1.7', '5.0.9': '5.0.12'};
+    const reviewedIntegrity = {
+      next: 'sha512-L+otWM/aQbYTx98aZhgEoMb4bZAXx1YVW4UMA/vuCyCoWG5HJyZUili8QAkqzrcC+5///tsz3s0M+SlyB5bLMw==',
+      '1.1.21': 'sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==',
+      '2.1.7': 'sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==',
+      '5.0.12': 'sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==',
+    };
+    const clone = value => JSON.parse(JSON.stringify(value));
+    const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+    const blob = value => crypto.createHash('sha1').update(`blob ${Buffer.byteLength(value)}\0`).update(value).digest('hex');
+    const git = (...args) => cp.execFileSync('git', args, {encoding: 'utf8', timeout: 30000, maxBuffer: 2 * 1024 * 1024}).trim();
+    const isBrace = key => /(?:^|\/)node_modules\/brace-expansion$/.test(key);
+    const family = key => key === 'node_modules/next' || /^node_modules\/@next\/(?:env|swc-(?:darwin-(?:x64|arm64)|linux-(?:x64|arm64)-(?:gnu|musl)|win32-(?:x64|arm64)-msvc))$/.test(key);
+    const notice = message => {
+      assert.match(message, /^[A-Za-z0-9_./@ =,:+-]+$/);
+      console.log(`::notice title=Dependency security repair::${message}`);
+    };
+    function validate(before, after) {
+      const [oldManifest, oldLock] = before.map(JSON.parse);
+      const [manifest, lock] = after.map(JSON.parse);
+      assert.equal(oldLock.lockfileVersion, 3, 'unexpected lockfile format');
+      const expectedManifest = clone(oldManifest);
+      expectedManifest.dependencies.next = '16.3.6';
+      assert.deepEqual(manifest, expectedManifest, 'unrelated manifest change');
+      const oldMetadata = clone(oldLock), newMetadata = clone(lock);
+      delete oldMetadata.packages;delete newMetadata.packages;
+      assert.deepEqual(newMetadata, oldMetadata, 'unrelated lockfile metadata change');
+      assert.deepEqual(Object.keys(lock.packages).sort(), Object.keys(oldLock.packages).sort(), 'package topology changed');
+      const changes = [];
+      let braceCount = 0, familyCount = 0;
+      for (const [key, original] of Object.entries(oldLock.packages)) {
+        const actual = lock.packages[key];
+        const expected = clone(original);
+        if (key === '') expected.dependencies.next = '16.3.6';
+        else if (family(key) || isBrace(key)) {
+          const name = key.slice(key.lastIndexOf('node_modules/') + 'node_modules/'.length);
+          const nextFamily = family(key);
+          const target = nextFamily ? '16.3.6' : braceTargets[original.version];
+          assert.ok(target, 'unreviewed installed brace version');
+          if (nextFamily) {assert.equal(original.version, '16.3.4');familyCount++;}
+          else braceCount++;
+          assert.equal(actual.version, target, 'required patch missing');
+          assert.equal(actual.resolved, `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-${target}.tgz`, 'nonregistry package');
+          assert.match(actual.integrity, /^sha512-[A-Za-z0-9+/]{86}==$/, 'invalid package integrity');
+          const reviewed = name === 'next' ? reviewedIntegrity.next : isBrace(key) ? reviewedIntegrity[target] : undefined;
+          if (reviewed) assert.equal(actual.integrity, reviewed, 'reviewed integrity mismatch');
+          expected.version = target;expected.resolved = actual.resolved;expected.integrity = actual.integrity;
+          if (name === 'next') {
+            expected.dependencies['@next/env'] = target;
+            for (const dependency of Object.keys(expected.optionalDependencies)) {
+              if (dependency.startsWith('@next/swc-')) expected.optionalDependencies[dependency] = target;
+            }
+          }
+          if (isBrace(key)) {
+            expected.dependencies = target.startsWith('1.') ? {'balanced-match': '^1.0.0', 'concat-map': '0.0.1'} :
+              target.startsWith('2.') ? {'balanced-match': '^1.0.0'} : {'balanced-match': '^4.0.2'};
+          }
+          changes.push({path: key, from: original.version, to: target});
+        }
+        assert.deepEqual(actual, expected, `unreviewed node change: ${key}`);
+      }
+      assert.equal(familyCount, 10, 'Next package family incomplete');
+      assert.ok(braceCount >= 3, 'brace population incomplete');
+      return changes;
+    }
+    function guard() {
+      assert.equal(process.env.GITHUB_REPOSITORY, REPO);
+      assert.equal(process.env.GITHUB_REF, `refs/heads/${BRANCH}`);
+      assert.equal(process.env.GITHUB_EVENT_NAME, 'push');
+      assert.equal(process.env.GITHUB_RUN_ATTEMPT, '1');
+      assert.equal(process.env.GITHUB_ACTOR, 'redwan-cse');
+      assert.match(process.env.GITHUB_SHA || '', /^[a-f0-9]{40}$/);
+      const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+      assert.equal(event.before, BASE);
+      assert.equal(event.after, process.env.GITHUB_SHA);
+      assert.equal(git('rev-parse', 'HEAD'), process.env.GITHUB_SHA);
+      assert.equal(git('rev-parse', 'HEAD^'), BASE);
+      assert.equal(git('status', '--porcelain'), '', 'checkout is not clean');
+      const before = files.map(file => fs.readFileSync(file, 'utf8'));
+      before.forEach((content, index) => assert.equal(blob(content), originalBlobs[index], 'dependency baseline drift'));
+      return before;
+    }
+    function npm(args) {
+      const result = cp.spawnSync('npm', args, {
+        encoding: 'utf8', timeout: 180000, maxBuffer: 10 * 1024 * 1024,
+        env: {...process.env, NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/', NPM_CONFIG_IGNORE_SCRIPTS: 'true'},
+      });
+      assert.ok(!result.error && !result.signal && result.status === 0, 'npm operation failed');
+      return result.stdout;
+    }
+    async function generate() {
+      const before = guard();
+      assert.equal(process.env.REPAIR_TOKEN, undefined, 'writer token exposed to resolver');
+      phase = 'resolve-next';
+      npm(['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact', 'next@16.3.6']);
+      phase = 'resolve-brace';
+      npm(['update', 'brace-expansion', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund']);
+      const after = files.map(file => fs.readFileSync(file, 'utf8'));
+      phase = 'verify-delta';
+      const changes = validate(before, after);
+      phase = 'audit';
+      const report = JSON.parse(npm(['audit', '--json', '--audit-level=low']));
+      assert.equal(report.auditReportVersion, 2, 'invalid audit report');
+      assert.equal(report.error, undefined, 'audit registry error');
+      assert.deepEqual(report.vulnerabilities, {}, 'audit findings remain');
+      assert.deepEqual(report.metadata.vulnerabilities, {info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0}, 'nonzero audit');
+      for (const change of changes) notice(`path=${change.path} from=${change.from} to=${change.to}`);
+      notice(`audit=clean changedNodes=${changes.length}`);
+      const output = path.join(process.env.RUNNER_TEMP, 'dependency-repair-output');
+      fs.mkdirSync(output, {recursive: true, mode: 0o700});
+      files.forEach((file, index) => fs.writeFileSync(path.join(output, file), after[index], {mode: 0o600, flag: 'wx'}));
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `manifest_sha256=${sha256(after[0])}\nlock_sha256=${sha256(after[1])}\n`);
+    }
+    async function publish() {
+      const before = guard();
+      phase = 'verify-artifact';
+      const token = process.env.REPAIR_TOKEN;
+      assert.ok(typeof token === 'string' && token.length > 0, 'missing short-lived writer token');
+      const after = files.map((file, index) => {
+        const filename = path.join(process.env.RUNNER_TEMP, 'dependency-repair-received', file);
+        const stat = fs.lstatSync(filename);
+        assert.ok(stat.isFile() && !stat.isSymbolicLink() && stat.size > 0 && stat.size < 1024 * 1024);
+        const data = fs.readFileSync(filename, 'utf8');
+        const expected = index ? process.env.LOCK_SHA256 : process.env.MANIFEST_SHA256;
+        assert.match(expected || '', /^[a-f0-9]{64}$/);
+        assert.equal(sha256(data), expected, 'artifact binding mismatch');
+        return data;
+      });
+      assert.deepEqual(fs.readdirSync(path.join(process.env.RUNNER_TEMP, 'dependency-repair-received')).sort(), [...files].sort());
+      validate(before, after);
+      async function api(suffix, method = 'GET', body) {
+        const result = await fetch(`https://api.github.com/repos/${REPO}/${suffix}`, {
+          method, headers: {Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28'},
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(30000), redirect: 'error',
+        });
+        assert.ok(result.ok, 'GitHub request refused');
+        return result.json();
+      }
+      const head = process.env.GITHUB_SHA;
+      phase = 'publish-pair';
+      const ref = await api(`git/ref/heads/${BRANCH}`);
+      assert.equal(ref.object.sha, head, 'branch advanced; refusing stale publication');
+      const commit = await api(`git/commits/${head}`);
+      assert.deepEqual(commit.parents.map(parent => parent.sha), [BASE]);
+      const tree = [];
+      for (let index = 0; index < files.length; index++) {
+        const result = await api('git/blobs', 'POST', {content: after[index], encoding: 'utf-8'});
+        assert.equal(result.sha, blob(after[index]), 'published blob mismatch');
+        tree.push({path: files[index], mode: '100644', type: 'blob', sha: result.sha});
+      }
+      const nextTree = await api('git/trees', 'POST', {base_tree: commit.tree.sha, tree});
+      const nextCommit = await api('git/commits', 'POST', {
+        message: 'fix(deps): patch Next and brace-expansion audit findings\n\nRefs #39. Targeted npm lockfile resolution; full low-threshold audit passed. No production or merge action.',
+        tree: nextTree.sha, parents: [head],
+      });
+      assert.match(nextCommit.sha, /^[a-f0-9]{40}$/);
+      const updated = await api(`git/refs/heads/${BRANCH}`, 'PATCH', {sha: nextCommit.sha, force: false});
+      assert.equal(updated.object.sha, nextCommit.sha);
+      notice(`published=${nextCommit.sha} parent=${head} files=2`);
+    }
+    if (process.argv[1] === 'generate' || process.argv[1] === 'publish') {
+      const operation = process.argv[1] === 'generate' ? generate : publish;
+      operation().catch(error => {
+        const category = error?.code === 'ERR_ASSERTION' ? 'guard-or-verification-failed' : 'execution-failed';
+        const detail = String(error?.message || '').split('\n')[0];
+        const safeDetail = /^(?:unreviewed node change: node_modules\/[A-Za-z0-9@/._-]+|unrelated manifest change|unrelated lockfile metadata change|package topology changed|npm operation failed|dependency baseline drift|branch advanced; refusing stale publication)$/.test(detail) ? detail : category;
+        console.log(`::error title=Dependency security repair::phase=${phase} ${safeDetail}`);
+        process.exitCode = 1;
+      });
+    }
+    module.exports = {validate, guard, generate, publish, braceTargets, reviewedIntegrity};
+
+jobs:
+  resolve:
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '28ad56260ab65bd31e579eedb8d35e1c04a94380' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      manifest: ${{ steps.resolve.outputs.manifest_sha256 }}
+      lock: ${{ steps.resolve.outputs.lock_sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - name: Resolve reviewed patches and reject unrelated lockfile drift
+        id: resolve
+        shell: bash
+        run: |
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '8b0f3aa59a58b90385e2db8e8223fef33ff5bdb9c743a1b7307041bdb5d33cc8') process.exit(1)"
+          node -e "$REPAIR_PROGRAM" -- generate
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: upload
+        with:
+          name: reviewed-dependency-repair-${{ github.sha }}
+          path: ${{ runner.temp }}/dependency-repair-output/
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: resolve
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '28ad56260ab65bd31e579eedb8d35e1c04a94380' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.resolve.outputs.artifact }}
+          path: ${{ runner.temp }}/dependency-repair-received
+          merge-multiple: true
+      - name: Publish only the validated dependency pair with stale-head refusal
+        shell: bash
+        env:
+          REPAIR_TOKEN: ${{ github.token }}
+          MANIFEST_SHA256: ${{ needs.resolve.outputs.manifest }}
+          LOCK_SHA256: ${{ needs.resolve.outputs.lock }}
+        run: |
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '8b0f3aa59a58b90385e2db8e8223fef33ff5bdb9c743a1b7307041bdb5d33cc8') process.exit(1)"
+          node -e "$REPAIR_PROGRAM" -- publish
