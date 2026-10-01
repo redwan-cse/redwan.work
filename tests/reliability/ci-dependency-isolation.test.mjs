@@ -98,6 +98,7 @@ function runWave(options = {}) {
           if (options.cleanupFailure && mode === 'candidate') row.cleanup = false;
           if (options.infrastructureFailure && mode === 'baseline') row.infrastructure = false;
           if (!options.missingResult) put(settings.env.WAVE_RESULT, row);
+          if (options.childOutcome?.mode === mode) return options.childOutcome.result;
           return {status: row.infrastructure && row.cleanup ? 0 : 1};
         },
         console: {log: text => messages.push(text), error: text => messages.push(text)},
@@ -203,6 +204,28 @@ for (const failure of ['baselineGreen', 'candidateFailure', 'missingCounts', 'cl
 test('production service origins are still rejected before dependency work', () => {
   assert.throws(() => runWave({api: 'https://production.invalid'}));
 });
+
+
+for (const mode of ['baseline', 'candidate']) {
+  for (const [label, outcome] of [
+    ['nonzero exit', {status: 1}],
+    ['terminated process', {status: null, signal: 'SIGTERM'}],
+    ['missing exit status', {status: null}],
+    ['spawn error', {status: null, error: {message: 'PRIVATE_CHILD_CANARY'}}],
+  ]) {
+    test(`${mode} ${label} cannot pass with otherwise valid result JSON`, () => {
+      const result = runWave({childOutcome: {mode, result: outcome}});
+      assert.equal(result.exit, 1, 'a failed child must never turn acceptance green');
+      assert.equal(result.report.complete, false);
+      assert.equal(result.children.length, mode === 'baseline' ? 1 : 2);
+      assert.equal(result.report[mode].infrastructure, true, 'retain results without treating them as process success');
+      assert.equal(result.report[mode].cleanup, true);
+      assert.equal(result.scratchRemoved, true);
+      assert.deepEqual(result.candidateAfter, result.originalCandidate);
+      assert.doesNotMatch(result.messages.join('\n'), /PRIVATE_/);
+    });
+  }
+}
 
 test('reconciliation accepts the security-patched candidate while preserving frozen evidence', () => {
   const result = runReconciliation();assert.equal(result.status, 0, result.output);

@@ -59,7 +59,8 @@ if(process.argv[2]!=='child'){
    const resultPath=join(scratch,mode+'.json');
    const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_CANDIDATE:String(mode==='candidate'),WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
    if(existsSync(resultPath))report[mode]=JSON.parse(readFileSync(resultPath,'utf8'));
-   if(child.status!==0)break;
+   // A completed result file does not override a failed or interrupted child.
+   if(child.error||child.signal||child.status!==0)throw Error('Wave browser child failed');
   }
   report.complete=Boolean(report.baseline?.infrastructure&&report.candidate?.infrastructure&&report.baseline?.cleanup&&report.candidate?.cleanup);
  }catch{report.complete=false;console.error('::error::Wave browser preparation failed at '+phase);}
@@ -129,7 +130,7 @@ try{
  });
  report.phase='I01';
  for(const width of [1280,390])for(const checked of [false,true])await check('I01',async()=>{
-  const before=await rows(),c=await context(width);try{const p=await c.newPage();p.setDefaultTimeout(10000);await fill(p);if(checked)await p.locator('#ndaConfidentiality').click();await p.getByRole('button',{name:'Send Request',exact:true}).click();await p.getByText('Your Ticket ID:',{exact:false}).waitFor();const after=await rows();assert.equal(after.length,before.length+1);const row=after.find(r=>!before.some(b=>b.id===r.id));assert.equal(row.nda_required,checked);assert.equal(row.budget_min,null);assert.equal(row.budget_max,null);assert.deepEqual(row.attachments,[]);assert.ok(Number.isFinite(Date.parse(row.consent_at)));assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}finally{await c.close();}
+  const before=await rows(),c=await context(width);try{const p=await c.newPage();await fill(p);if(checked)await p.locator('#ndaConfidentiality').click();await p.getByRole('button',{name:'Send Request',exact:true}).click();await p.getByText('Your Ticket ID:',{exact:false}).waitFor();const after=await rows();assert.equal(after.length,before.length+1);const row=after.find(r=>!before.some(b=>b.id===r.id));assert.equal(row.nda_required,checked);assert.equal(row.budget_min,null);assert.equal(row.budget_max,null);assert.deepEqual(row.attachments,[]);assert.ok(Number.isFinite(Date.parse(row.consent_at)));assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}finally{await c.close();}
  });
  for(const values of [['Yes - NDA or strict confidentiality required'],['true'],['false'],[''],[],['unknown'],['true','true'],['','']])await check('I01',async()=>{
   const before=await rows(),r=await post(values.map(v=>['ndaConfidentiality',v]));const accepted=values.length<=1&&(values.length===0||['Yes - NDA or strict confidentiality required','true','false',''].includes(values[0]));assert.equal(r.status,accepted?200:400);const after=await rows();assert.equal(after.length,before.length+(accepted?1:0));if(accepted)assert.equal(after.find(r=>!before.some(b=>b.id===r.id)).nda_required,['Yes - NDA or strict confidentiality required','true'].includes(values[0]));
