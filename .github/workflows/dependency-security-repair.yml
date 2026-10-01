@@ -16,7 +16,7 @@ env:
     const path = require('node:path');
     const crypto = require('node:crypto');
     const cp = require('node:child_process');
-    const BASE = '320b3f1e6897c23b78b059fc5de5959bf857ed8a';
+    const BASE = '65d22fc43d81f41bfb59c63ee9783fb0bc3f791f';
     const REPO = 'redwan-cse/redwan.work';
     const BRANCH = 'fix/audit-followup-remediation';
     const files = ['package.json', 'package-lock.json'];
@@ -69,6 +69,11 @@ env:
           const reviewed = name === 'next' ? reviewedIntegrity.next : isBrace(key) ? reviewedIntegrity[target] : undefined;
           if (reviewed) assert.equal(actual.integrity, reviewed, 'reviewed integrity mismatch');
           expected.version = target;expected.resolved = actual.resolved;expected.integrity = actual.integrity;
+          if (name.startsWith('@next/swc-linux-') && original.libc === undefined && actual.libc !== undefined) {
+            const libc = name.endsWith('-gnu') ? 'glibc' : 'musl';
+            assert.deepEqual(actual.libc, [libc], 'compiler libc must match package platform');
+            expected.libc = [libc];
+          }
           if (name === 'next') {
             expected.dependencies['@next/env'] = target;
             for (const dependency of Object.keys(expected.optionalDependencies)) {
@@ -81,7 +86,14 @@ env:
           }
           changes.push({path: key, from: original.version, to: target});
         }
-        assert.deepEqual(actual, expected, `unreviewed node change: ${key}`);
+        try {assert.deepEqual(actual, expected, `unreviewed node change: ${key}`);}
+        catch (error) {
+          const fields = [...new Set([...Object.keys(actual), ...Object.keys(expected)])]
+            .filter(field => JSON.stringify(actual[field]) !== JSON.stringify(expected[field]))
+            .map(field => /^[A-Za-z][A-Za-z0-9_-]{0,50}$/.test(field) ? field : 'unknown');
+          notice(`mismatchPath=${key || 'root'} fields=${fields.slice(0,20).join(',')}`);
+          throw error;
+        }
       }
       assert.equal(familyCount, 10, 'Next package family incomplete');
       assert.ok(braceCount >= 3, 'brace population incomplete');
@@ -216,7 +228,7 @@ env:
 
 jobs:
   resolve:
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '320b3f1e6897c23b78b059fc5de5959bf857ed8a' && github.run_attempt == 1
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '65d22fc43d81f41bfb59c63ee9783fb0bc3f791f' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -238,7 +250,7 @@ jobs:
         id: resolve
         shell: bash
         run: |
-          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== 'f262095f7c1547cb061f75c85bce3633d4e6622effd9f0ccdb87f994950e0a51') process.exit(1)"
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '848cbf2d988830b67b24d48162e2403cf0bb61096d3b48276ea0ed7bfb5614cd') process.exit(1)"
           node -e "$REPAIR_PROGRAM" -- generate
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         id: upload
@@ -249,7 +261,7 @@ jobs:
           if-no-files-found: error
   publish:
     needs: resolve
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '320b3f1e6897c23b78b059fc5de5959bf857ed8a' && github.run_attempt == 1
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '65d22fc43d81f41bfb59c63ee9783fb0bc3f791f' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -275,5 +287,5 @@ jobs:
           MANIFEST_SHA256: ${{ needs.resolve.outputs.manifest }}
           LOCK_SHA256: ${{ needs.resolve.outputs.lock }}
         run: |
-          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== 'f262095f7c1547cb061f75c85bce3633d4e6622effd9f0ccdb87f994950e0a51') process.exit(1)"
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '848cbf2d988830b67b24d48162e2403cf0bb61096d3b48276ea0ed7bfb5614cd') process.exit(1)"
           node -e "$REPAIR_PROGRAM" -- publish
