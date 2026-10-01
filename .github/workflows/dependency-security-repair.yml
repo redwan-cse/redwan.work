@@ -16,7 +16,7 @@ env:
     const path = require('node:path');
     const crypto = require('node:crypto');
     const cp = require('node:child_process');
-    const BASE = '28ad56260ab65bd31e579eedb8d35e1c04a94380';
+    const BASE = '320b3f1e6897c23b78b059fc5de5959bf857ed8a';
     const REPO = 'redwan-cse/redwan.work';
     const BRANCH = 'fix/audit-followup-remediation';
     const files = ['package.json', 'package-lock.json'];
@@ -87,6 +87,20 @@ env:
       assert.ok(braceCount >= 3, 'brace population incomplete');
       return changes;
     }
+    function selectReviewedNodes(before, resolved) {
+      const original = JSON.parse(before[1]);
+      const refreshed = JSON.parse(resolved[1]);
+      assert.deepEqual(Object.keys(refreshed.packages).sort(), Object.keys(original.packages).sort(), 'package topology changed');
+      const selected = clone(original);
+      selected.packages[''].dependencies.next = '16.3.6';
+      let preserved = 0;
+      for (const key of Object.keys(original.packages)) {
+        if (family(key) || isBrace(key)) selected.packages[key] = refreshed.packages[key];
+        else if (key && JSON.stringify(original.packages[key]) !== JSON.stringify(refreshed.packages[key])) preserved++;
+      }
+      notice(`unrelatedRefreshedNodesPreserved=${preserved}`);
+      return [resolved[0], JSON.stringify(selected, null, 2) + '\n'];
+    }
     function guard() {
       assert.equal(process.env.GITHUB_REPOSITORY, REPO);
       assert.equal(process.env.GITHUB_REF, `refs/heads/${BRANCH}`);
@@ -119,9 +133,14 @@ env:
       npm(['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund', '--save-exact', 'next@16.3.6']);
       phase = 'resolve-brace';
       npm(['update', 'brace-expansion', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund']);
-      const after = files.map(file => fs.readFileSync(file, 'utf8'));
+      const resolved = files.map(file => fs.readFileSync(file, 'utf8'));
+      const after = selectReviewedNodes(before, resolved);
       phase = 'verify-delta';
       const changes = validate(before, after);
+      files.forEach((file, index) => fs.writeFileSync(file, after[index]));
+      phase = 'locked-install';
+      npm(['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
+      files.forEach((file, index) => assert.equal(fs.readFileSync(file, 'utf8'), after[index], 'locked install changed dependency files'));
       phase = 'audit';
       const report = JSON.parse(npm(['audit', '--json', '--audit-level=low']));
       assert.equal(report.auditReportVersion, 2, 'invalid audit report');
@@ -193,11 +212,11 @@ env:
         process.exitCode = 1;
       });
     }
-    module.exports = {validate, guard, generate, publish, braceTargets, reviewedIntegrity};
+    module.exports = {validate, selectReviewedNodes, guard, generate, publish, braceTargets, reviewedIntegrity};
 
 jobs:
   resolve:
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '28ad56260ab65bd31e579eedb8d35e1c04a94380' && github.run_attempt == 1
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '320b3f1e6897c23b78b059fc5de5959bf857ed8a' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -219,7 +238,7 @@ jobs:
         id: resolve
         shell: bash
         run: |
-          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '8b0f3aa59a58b90385e2db8e8223fef33ff5bdb9c743a1b7307041bdb5d33cc8') process.exit(1)"
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== 'f262095f7c1547cb061f75c85bce3633d4e6622effd9f0ccdb87f994950e0a51') process.exit(1)"
           node -e "$REPAIR_PROGRAM" -- generate
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         id: upload
@@ -230,7 +249,7 @@ jobs:
           if-no-files-found: error
   publish:
     needs: resolve
-    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '28ad56260ab65bd31e579eedb8d35e1c04a94380' && github.run_attempt == 1
+    if: github.repository == 'redwan-cse/redwan.work' && github.ref == 'refs/heads/fix/audit-followup-remediation' && github.actor == 'redwan-cse' && github.event.before == '320b3f1e6897c23b78b059fc5de5959bf857ed8a' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -256,5 +275,5 @@ jobs:
           MANIFEST_SHA256: ${{ needs.resolve.outputs.manifest }}
           LOCK_SHA256: ${{ needs.resolve.outputs.lock }}
         run: |
-          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== '8b0f3aa59a58b90385e2db8e8223fef33ff5bdb9c743a1b7307041bdb5d33cc8') process.exit(1)"
+          node -e "if(require('node:crypto').createHash('sha256').update(process.env.REPAIR_PROGRAM).digest('hex') !== 'f262095f7c1547cb061f75c85bce3633d4e6622effd9f0ccdb87f994950e0a51') process.exit(1)"
           node -e "$REPAIR_PROGRAM" -- publish
