@@ -18,6 +18,7 @@ if(process.argv[2]!=='child'){
  assert.ok(status.PUBLISHABLE_KEY.startsWith('sb_publishable_')&&status.SECRET_KEY.startsWith('sb_secret_'));
  const workspace=process.cwd(),scratch=mkdtempSync(join(tmpdir(),'wave-browser-')),baseline=join(scratch,'baseline');
  const report={baseline:null,candidate:null,complete:false};
+ let phase='archive';
  try{
   mkdirSync(baseline);
   try{
@@ -27,18 +28,41 @@ if(process.argv[2]!=='child'){
   }
   execFileSync('git',['archive','--output='+join(scratch,'baseline.tar'),'8d0bd70f5f155ea1791265507274ecb8a2c56f0b'],{stdio:'ignore'});
   execFileSync('tar',['-xf',join(scratch,'baseline.tar'),'-C',baseline],{stdio:'ignore'});
-  assert.equal(createHash('sha256').update(readFileSync(join(baseline,'package-lock.json'))).digest('hex'),createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'));
-  execFileSync('cp',['-al',join(workspace,'node_modules'),join(baseline,'node_modules')],{stdio:'ignore'});
+  phase='dependencies';
+  const fingerprint=root=>['package.json','package-lock.json'].map(file=>createHash('sha256').update(readFileSync(join(root,file))).digest('hex'));
+  const frozen=fingerprint(baseline),candidate=fingerprint(workspace);
+  if(frozen.every((value,index)=>value===candidate[index])){
+   execFileSync('cp',['-al',join(workspace,'node_modules'),join(baseline,'node_modules')],{stdio:'ignore'});
+  }else{
+   // Preserve the historical source/lockfile. Never give it the patched tree's dependencies.
+   // Only this frozen regression fixture omits audit; the candidate's full audit is unchanged.
+   assert.equal(existsSync(join(baseline,'.npmrc')),false);
+   const home=join(scratch,'npm-home');mkdirSync(home,{mode:0o700});
+   const userconfig=join(home,'user.npmrc'),globalconfig=join(home,'global.npmrc');
+   writeFileSync(userconfig,'',{mode:0o600});writeFileSync(globalconfig,'',{mode:0o600});
+   execFileSync('npm',['ci','--ignore-scripts','--no-audit','--no-fund','--registry=https://registry.npmjs.org/'],{
+    cwd:baseline,env:{PATH:process.env.PATH,HOME:home,TMPDIR:scratch,CI:'true',NEXT_TELEMETRY_DISABLED:'1',npm_config_userconfig:userconfig,npm_config_globalconfig:globalconfig,npm_config_cache:join(scratch,'npm-cache')},
+    timeout:300000,maxBuffer:10*1024*1024,stdio:'pipe'
+   });
+  }
+  assert.deepEqual(fingerprint(baseline),frozen,'Frozen dependency inputs changed');
+  assert.deepEqual(fingerprint(workspace),candidate,'Candidate dependency inputs changed');
+  for(const root of [baseline,workspace]){
+   const installed=JSON.parse(readFileSync(join(root,'node_modules/next/package.json'),'utf8')).version;
+   const locked=JSON.parse(readFileSync(join(root,'package-lock.json'),'utf8')).packages['node_modules/next'].version;
+   assert.equal(installed,locked,'Each source tree must use its own locked Next');
+  }
   const env=Object.fromEntries(['PATH','HOME','TMPDIR','BROWSER_TOOLS_DIR','CI'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   Object.assign(env,{NEXT_TELEMETRY_DISABLED:'1',NEXT_PUBLIC_SITE_URL:'http://localhost:3399',NEXT_PUBLIC_SUPABASE_URL:api.origin,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:status.PUBLISHABLE_KEY,SUPABASE_SECRET_KEY:status.SECRET_KEY,LEAD_IP_HASH_SALT:randomBytes(32).toString('hex'),TURNSTILE_SECRET_KEY:'synthetic',NEXT_PUBLIC_TURNSTILE_SITE_KEY:'synthetic',DISPOSABLE_AUTH_CI:'true'});
   for(const mode of ['baseline','candidate']){
+   phase=mode;
    const resultPath=join(scratch,mode+'.json');
    const child=spawnSync(process.execPath,[resolve('tests/wave-one-browser.mjs'),'child'],{env:{...env,WAVE_CANDIDATE:String(mode==='candidate'),WAVE_ROOT:mode==='baseline'?baseline:workspace,WAVE_RESULT:resultPath},encoding:'utf8',maxBuffer:1024*1024});
    if(existsSync(resultPath))report[mode]=JSON.parse(readFileSync(resultPath,'utf8'));
    if(child.status!==0)break;
   }
   report.complete=Boolean(report.baseline?.infrastructure&&report.candidate?.infrastructure&&report.baseline?.cleanup&&report.candidate?.cleanup);
- }catch{report.complete=false;}
+ }catch{report.complete=false;console.error('::error::Wave browser preparation failed at '+phase);}
  finally{writeFileSync(join(process.env.RUNNER_TEMP,'wave-browser-result.json'),JSON.stringify(report),{mode:0o600});rmSync(scratch,{recursive:true,force:true});}
  const groups=['A01','I01','I02'];
  const red=report.complete&&groups.every(k=>report.baseline[k].pass>0&&report.baseline[k].fail>0);

@@ -80,7 +80,14 @@ jobs:
               packages=json.loads(data)['packages']
               versions=lambda name: sorted({v['version'] for k,v in packages.items() if k.endswith('node_modules/'+name)})
               assert versions('lodash')==[], 'Do not reintroduce removed lodash'
-              assert versions('next')==['16.3.4']
+              if label=='frozen-main':
+                  assert versions('next')==['16.3.4'], 'Frozen historical Next evidence changed'
+              else:
+                  pinned=json.loads(Path('package.json').read_text())['dependencies']['next']
+                  assert re.fullmatch(r'16\.(0|[1-9]\d*)\.(0|[1-9]\d*)',pinned), 'Candidate Next must be a stable exact reviewed-major pin'
+                  assert tuple(map(int,pinned.split('.'))) >= (16,3,6), 'Candidate Next is below the reviewed security floor'
+                  assert versions('next')==[pinned], 'Candidate installed Next does not match its manifest pin'
+                  assert packages['']['dependencies']['next']==pinned, 'Candidate manifest and lockfile pins disagree'
               assert versions('ajv')==['6.15.0']
               assert versions('minimatch')==['10.2.6','3.1.5','9.0.9']
               print(label+': PR11/12/14/16 dependency objectives superseded')
