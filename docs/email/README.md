@@ -182,6 +182,7 @@ Run against the live Supabase project and the live Resend account. Live sends we
 | Viewer | status/template/recipient filters; bogus and duplicated params ignored | ✅ |
 | Viewer | `%`, `_`, `*` escaped; literal substring still matches | ✅ |
 | Viewer | page 0 / NaN / unsafe-integer → 1; past-the-end returns empty, not 500 | ✅ |
+| Viewer | filtered counts agree with the filtered page | ✅ |
 | Viewer | a failed count query renders `—`, never `0` | ✅ |
 | Unsent | resolution failure writes a `failed` row with its reason | ✅ |
 | No-op | re-selecting the current ticket status sends nothing | ✅ |
