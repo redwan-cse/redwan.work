@@ -58,7 +58,10 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
+ const origin=credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
+ // Preserve the documented token-hash flow; /login does not exchange PKCE codes.
+ // Supabase's Site URL and Magic Link template must also match docs/auth/README.md.
+ const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:origin+'/login'}});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
  return {notice:'If that address has an account, a sign-in link is on its way.'};
 }

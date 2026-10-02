@@ -154,6 +154,7 @@ test('missing or credential-bearing configured origins never send', async () => 
 
 test('magic link action validates inputs, rate-limits, and enforces shouldCreateUser false', async () => {
   process.env.LEAD_IP_HASH_SALT = 'synthetic';
+  process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test';
   f.rate = {data: true, error: null};
   f.magicOtpResult = {error: null};
 
@@ -178,7 +179,7 @@ test('magic link action validates inputs, rate-limits, and enforces shouldCreate
   f.magicOtpResult = {error: null};
   f.magicOtpCalls = [];
   assert.deepEqual(await requestMagicLinkAction({}, makeForm({email: 'synthetic@example.test'})), {notice: 'If that address has an account, a sign-in link is on its way.'});
-  assert.deepEqual(f.magicOtpCalls, [{email: 'synthetic@example.test', options: {shouldCreateUser: false}}]);
+  assert.deepEqual(f.magicOtpCalls, [{email: 'synthetic@example.test', options: {shouldCreateUser: false, emailRedirectTo: 'https://example.test/login'}}]);
 });
 
 test('recovery password update validates password before token consumption and handles failures cleanly', async () => {
