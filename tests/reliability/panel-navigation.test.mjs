@@ -15,8 +15,8 @@ function render(pathname, rootHref = '/admin', extra = []) {
   const cache = new Map();
   function load(file) {
     if (cache.has(file)) return cache.get(file).exports;
-    const module = {exports: {}};
-    cache.set(file, module);
+    const loadedModule = {exports: {}};
+    cache.set(file, loadedModule);
     const nativeRequire = createRequire(file);
     function require(specifier) {
       if (specifier === 'next/navigation') return {usePathname: () => pathname};
@@ -34,8 +34,8 @@ function render(pathname, rootHref = '/admin', extra = []) {
       module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
       jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
     }, fileName: file}).outputText;
-    runInThisContext('(function(require,module,exports){' + source + '\n})', {filename: file})(require, module, module.exports);
-    return module.exports;
+    runInThisContext('(function(require,module,exports){' + source + '\n})', {filename: file})(require, loadedModule, loadedModule.exports);
+    return loadedModule.exports;
   }
   const {PanelShell} = load(resolve(root, 'components/panel/panel-shell.tsx'));
   const navItems = [
