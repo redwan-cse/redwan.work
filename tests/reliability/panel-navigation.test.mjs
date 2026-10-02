@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {readFileSync} from 'node:fs';
+import {readFileSync, existsSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {resolve, dirname} from 'node:path';
 import {runInThisContext} from 'node:vm';
@@ -25,7 +25,8 @@ function render(pathname, rootHref = '/admin', extra = []) {
       })};
       if (specifier.startsWith('@/') || specifier.startsWith('.')) {
         const target = specifier.startsWith('@/') ? resolve(root, specifier.slice(2)) : resolve(dirname(file), specifier);
-        return load(nativeRequire.resolve(target));
+        const resolved = [target + '.tsx', target + '.ts', target + '.js'].find(existsSync) ?? nativeRequire.resolve(target);
+        return load(resolved);
       }
       return nativeRequire(specifier);
     }
