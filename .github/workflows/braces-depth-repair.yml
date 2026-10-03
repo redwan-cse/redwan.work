@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
       - name: Require approved ancestry and unchanged dependency baseline
         run: |
-          test "$(git rev-parse HEAD^)" = 4c6f10829e584aefc4a824b3adb8048f589f8fad
+          test "$(git rev-parse HEAD^)" = 9e88b49ee50a347aed314589978d855dfd04aff9
           test "$(git hash-object package.json)" = 93e02a05263c577798f6ab7bba68f28105f700f0
           test "$(git hash-object package-lock.json)" = 5ac86d0aa52574e466cee38e00fa85edd325cb01
           test "$(git hash-object tests/reliability/dependency-audit.test.mjs)" = 62c596b3a0db53f911db962a117ee2a8c96a3e9c
@@ -98,16 +98,35 @@ jobs:
           manifest.overrides.braces='npm:@dieub/braces-depth-guard@3.0.3-pn.1';
           fs.writeFileSync('package.json',JSON.stringify(manifest,null,2)+'\n');
           NODE
-          npm install --package-lock-only --ignore-scripts --no-audit --fund=false
+          node <<'NODE'
+          const {spawnSync}=require('node:child_process');
+          const result=spawnSync('npm',['install','--package-lock-only','--ignore-scripts','--no-audit','--fund=false','--json'],{encoding:'utf8',timeout:120000});
+          if(result.status!==0){
+            let code='unclassified';
+            try {const report=JSON.parse(result.stdout);if(/^E[A-Z0-9_]+$/.test(report.error?.code))code=report.error.code;}catch {}
+            const codes=(result.stderr||'').match(/\bE[A-Z0-9_]{2,30}\b/g)||[];
+            console.log('::error::lock-generation-failed code='+code+' stderrCodes='+[...new Set(codes)].join(','));
+            process.exit(1);
+          }
+          NODE
           node <<'NODE'
           const fs=require('node:fs'),assert=require('node:assert/strict');
           const original=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/original-lock.json'));
           const candidate=JSON.parse(fs.readFileSync('package-lock.json'));
-          assert.deepEqual(Object.keys(candidate.packages).sort(),Object.keys(original.packages).sort(),'unexpected dependency population change');
+          const added=Object.keys(candidate.packages).filter(k=>!Object.hasOwn(original.packages,k));
+          const removed=Object.keys(original.packages).filter(k=>!Object.hasOwn(candidate.packages,k));
+          if(added.length||removed.length){console.log('::error::lock-population-change added='+added.length+' removed='+removed.length);process.exit(1);}
           let copies=0;
           for(const [path,item] of Object.entries(original.packages)) {
             if(/(?:^|\/)node_modules\/braces$/.test(path)) {copies++;assert.equal(item.version,'3.0.3');}
-            else assert.deepEqual(candidate.packages[path],item,'unrelated lock entry changed: '+path);
+            else {
+              try {assert.deepEqual(candidate.packages[path],item);}
+              catch {
+                const safe=/^[A-Za-z0-9_@./-]{0,240}$/.test(path)?path:'unknown';
+                const keys=[...new Set([...Object.keys(item),...Object.keys(candidate.packages[path])])].filter(k=>JSON.stringify(item[k])!==JSON.stringify(candidate.packages[path][k])).filter(k=>/^[A-Za-z0-9]+$/.test(k));
+                console.log('::error::unrelated-lock-entry='+safe+' fields='+keys.join(','));process.exit(1);
+              }
+            }
           }
           assert.ok(copies>0);
           console.log('No unrelated dependency changes; braces copies='+copies);
@@ -152,7 +171,7 @@ jobs:
             assert.equal(pr.head.repo.full_name,owner+'/'+repo);assert.equal(pr.base.ref,'main');
             assert.equal(pr.base.sha,'a86b2934556af04c74279d00ad1b0dbde3d81ec6');
             const parent=(await github.rest.git.getCommit({owner,repo,commit_sha:head})).data;
-            assert.equal(parent.parents.length,1);assert.equal(parent.parents[0].sha,'4c6f10829e584aefc4a824b3adb8048f589f8fad');
+            assert.equal(parent.parents.length,1);assert.equal(parent.parents[0].sha,'9e88b49ee50a347aed314589978d855dfd04aff9');
             assert.deepEqual(fs.readdirSync('payload').sort(),['package-lock.json','package.json']);
             const read=path=>{
               const info=fs.lstatSync('payload/'+path);
