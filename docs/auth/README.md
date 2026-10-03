@@ -60,11 +60,11 @@ Both exist because neither alone suffices: the claim travels with every request 
 
 ## Probe matrix
 
-Executed on `feat/auth-foundation` against a local dev server (all rows pass). Browser rows ran through a scripted Playwright (chromium headless shell); header-level rows via curl; row 10 via a REST-level equivalent of the SQL-editor cross-client check (see note below).
+Executed on `feat/auth-foundation` against a local dev server (all rows pass). Browser rows ran through a scripted Playwright (chromium headless shell); header-level rows via curl; row 10 via a REST-level equivalent of the SQL-editor anon check (see note below).
 
 | # | Probe | Expected | Observed |
 |---|---|---|---|
-| 1 | Logged out visits `/admin` and `/portal` | `307` → `/login?next=…` | Both returned `HTTP/1.1 307 Temporary Redirect`, `location: /login?next=%2Fadmin` / `%2Fportal`; browser landed on `/login?next=%2Fadmin` / `%2Fportal` |
+| 1 | Logged out visits `/admin` and `/portal` | `307` → `/login?next=…` | Both returned `HTTP/1.1 307 Temporary Redirect`, `location: /login?next=%2Fadmin` / `/login?next=%2Fportal`; browser landed on `/login` |
 | 2 | Admin session visits `/portal` | bounced to `/admin` | Final URL `http://localhost:3000/admin` |
 | 3 | Client session visits `/admin` | bounced to `/portal` | Final URL `http://localhost:3000/portal` |
 | 4 | Admin session visits `/login` | bounced to `/admin` | Final URL `http://localhost:3000/admin` |
@@ -116,3 +116,28 @@ The initial PR63 baseline `e1b07a84d54e6829162f9a3a6123c63d12eefa86` proved inst
 The combined workflow publishes `p1c/password-provider` with finite counts, phase and cleanup status, plus safe version/configuration evidence in the job summary. A published checkpoint is not a passing proof: inspect the exact head's receipt. Initial runtime result is pending. Unexpected provider/configuration/version or additional-file needs stop the proof; do not weaken guards or change settings. Existing recovery/invite suites and unconditional disposable teardown remain intact.
 
 Even a successful proof is not UI/server-action acceptance or hosted parity. Single-session policy, CAPTCHA, MFA/nonce requirements, concurrency, account suspension and hosted drift remain implementation/release concerns. No claim of immediate JWT invalidation, universal endpoint acceptance of revoked-session tokens or production readiness is made.
+
+### Application implementation checkpoint (2026-10-03)
+
+This section supersedes the earlier pending proof status, without rewriting historical foundation evidence. [Provider candidate fb026a9](https://github.com/redwan-cse/redwan.work/commit/fb026a927909d13c4fc8f2b5c9797527623ed961) passed all ten groups, exact fixture cleanup and the existing combined suites in [run 37089357381](https://github.com/redwan-cse/redwan.work/actions/runs/37089357381). Token-hash recovery uses the signed `otp` AMR; pinned Auth classifies OTP, MagicLink and Recovery as recovery-capable. The correction changed a test assumption, not provider settings.
+
+The expanded action regression at `2468683f1747d6d0aa42315fc5dcaa82f92b453a` failed the intended missing-action assertion in [run 37094718932](https://github.com/redwan-cse/redwan.work/actions/runs/37094718932). Application code was published at `6847aeb6b3817a9882e3b7557bbb34a779e7f8d0`; disposable lifecycle coverage followed at `389486b4cdb4122ea0c577b0333a2c5cfa0e48de`. Thirty-two mocked action/component checks passed locally, excluding installed-SDK checks unavailable in the sandbox. Component checks were added with implementation, not claimed as a separately observed red phase. Exact installed-dependency lint/types/build and browser acceptance are pending at this documentation checkpoint.
+
+`changePasswordAction` is client-role, own-account only. It checks current active/unbanned authority before verification and again before mutation. Email comes from the original client's current provider user, never a posted identity or stale email claim. Independent salted account and IP budgets use the existing `otp-ip` RPC kind, each allowing five attempts per 300 seconds with separate keys; this does not modify existing OTP counters. Missing configuration or rate-control failure denies the operation. Current password is required; replacement is 12 to 4096 characters, confirmed and different, without trimming password bytes.
+
+The temporary publishable client has no cookie adapter, persistence, refresh timer or URL detection. Its requests have a ten-second timeout and reject redirects. Verified subject and session ID must bind to the original account but a distinct session. Cleanup uses only temporary `scope: 'local'`; unexpected aliasing of the original session stops without signing it out. After cleanup and renewed authority/email/session checks, only the original cookie-bound client updates the password. Explicit `scope: 'others'` and original-session-ID checks complete the sequence. No privileged password update, raw provider diagnostic or automatic mutation retry is used.
+
+Outcome handling:
+- `denied`: validation, account, rate or known credential rejection; no password mutation by this request.
+- `verification-unconfirmed`: no password update attempted, but verification/temporary cleanup could not be established. Stop and contact support rather than repeatedly creating sessions.
+- `update-unconfirmed`: mutation response is uncertain or rejected; never assume unchanged state or automatically resubmit. Sign out and check the new password or use recovery.
+- `changed-unconfirmed`: the password update was acknowledged, but revocation or retained-session confirmation failed. Do not repeat the password change; sign out and contact support.
+- `complete`: password update, explicit other-session revocation and original-session identity confirmed. Already-issued access tokens may remain usable until expiry; no immediate JWT-revocation claim.
+
+Profile retains name/company editing and adds labeled password inputs, password-manager autocomplete, pending/duplicate-submission guards and persistent alert/status feedback. Password fields clear after every attempt; passwords are not kept in React state or browser storage. Uncertain/partial outcomes disable repeat submission. For forgotten or unset credentials, sign out first and use the existing Forgot password option on `/login`; no new recovery route or provider flow is introduced.
+
+The extended disposable lifecycle tests the real Profile action, wrong-current-password denial, exact 12-character replacement, keyboard submission, form overflow at 320/390/720/1440 widths, unchanged original session ID, rejected other refresh sessions, old/new credentials and original-browser refresh after real token expiry. It retains invitation preview/activation/replay, account deactivation/reactivation, partial-ban behavior, protected-admin assertions and exact fixture cleanup. These checks are not a WCAG certification or hosted-setting acceptance. Provider proof sources/configuration remain unchanged.
+
+The UI guard is not a distributed transaction lock: simultaneous requests from different tabs/devices and hosted single-session/MFA/CAPTCHA/nonce/version behavior still require applicable release review. No claim of globally serialized password changes is made. Provider error outcomes fail safely instead of weakening settings.
+
+**Release remains blocked:** shared `braces` advisory [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), no established safe patched upgrade. The owner approved continuing this nine-file implementation at 09:49 Asia/Dhaka while preserving that blocker. No dependency change, audit suppression, additional file, fourth PR, merge, deployment, production access or AGY operation is authorized. PR61/62 remain separate; combined integration, hosted parity, independent/native review and release approval are not established.
