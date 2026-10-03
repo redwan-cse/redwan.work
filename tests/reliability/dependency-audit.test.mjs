@@ -113,10 +113,10 @@ test('info-only findings retain the audit low threshold', () => {
 function dependencyFixture() {
   const platforms = ['darwin-x64', 'darwin-arm64', 'linux-x64-gnu', 'linux-x64-musl', 'win32-x64-msvc', 'linux-arm64-gnu', 'linux-arm64-musl', 'win32-arm64-msvc'];
   const manifest = {dependencies: {next: '16.3.6'}};
-  const packages = {'': {dependencies: {next: '16.3.6'}}, 'node_modules/next': {version: '16.3.6', dependencies: {'@next/env': '16.3.6'}, optionalDependencies: {}}, 'node_modules/@next/env': {version: '16.3.6'}}};
+  const packages = {'': {dependencies: {next: '16.3.6'}}, 'node_modules/next': {version: '16.3.6', dependencies: {'@next/env': '16.3.6'}, optionalDependencies: {}}, 'node_modules/@next/env': {version: '16.3.6'}};
   for (const platform of platforms) {
     packages['node_modules/next'].optionalDependencies[`@next/swc-${platform}`] = '16.3.6';
-    packages[`node_modules/@next/swc-${platform}`] = {version: '16.3.6'};
+    packages[`node_modules/${name}`] = {version: '16.3.6'};
   }
   for (const [index, version] of ['1.1.21', '2.1.7', '5.0.12'].entries()) packages[`node_modules/parent-${index}/node_modules/brace-expansion`] = {version};
   const candidate = [manifest, {lockfileVersion: 3, packages}];
