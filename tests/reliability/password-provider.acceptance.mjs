@@ -225,7 +225,9 @@ try {
   });
   await group('recovery_exception', async () => {
     const f = await fixture(), c = await linkedSession(f, 'recovery'), original = await session(c);
-    assert.ok(claims(original.access_token).amr?.some(a => a.method === 'recovery'));
+    // Pinned verifyPost issues OTP; factor.go classifies OTP as recovery-capable.
+    // The request type proves recovery origin, not a literal "recovery" AMR value.
+    assert.ok(claims(original.access_token).amr?.some(a => a.method === 'otp'));
     assert.equal(await candidate(c, f, 'deliberately-wrong-password', randomBytes(24).toString('base64url')), 'denied');
     const next = randomBytes(24).toString('base64url');
     data(await c.auth.updateUser({password: next}));
