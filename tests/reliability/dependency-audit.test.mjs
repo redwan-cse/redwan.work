@@ -76,7 +76,7 @@ test('registry errors report an allowlisted code without raw messages or URLs', 
   assert.doesNotMatch(run.output, /PRIVATE_HOST|SECRET_TOKEN/);
 });
 test('timeouts and spawn failures remain failures without error-message disclosure', () => {
-  const run = execute(clean(), {status: null, signal: 'SIGTERM', error: {code: 'ETIMEDOUT', message: 'PRIVATE_PATH'}});
+  const run = execute(clean(), {status: null, signal: 'SIGTERM', error: {code: 'ETIMEDOUT', message: 'PRIVATE_PATH'}}});
   assert.equal(run.exit, 1);
   assert.match(run.output, /execution-failed/);
   assert.doesNotMatch(run.output, /PRIVATE_PATH/);
@@ -116,7 +116,7 @@ function dependencyFixture() {
   const packages = {'': {dependencies: {next: '16.3.6'}}, 'node_modules/next': {version: '16.3.6', dependencies: {'@next/env': '16.3.6'}, optionalDependencies: {}}, 'node_modules/@next/env': {version: '16.3.6'}};
   for (const platform of platforms) {
     packages['node_modules/next'].optionalDependencies[`@next/swc-${platform}`] = '16.3.6';
-    packages[`node_modules/${name}`] = {version: '16.3.6'};
+    packages[`node_modules/@next/swc-${platform}`] = {version: '16.3.6'};
   }
   for (const [index, version] of ['1.1.21', '2.1.7', '5.0.12'].entries()) packages[`node_modules/parent-${index}/node_modules/brace-expansion`] = {version};
   const candidate = [manifest, {lockfileVersion: 3, packages}];
