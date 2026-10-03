@@ -2,23 +2,105 @@ import assert from 'node:assert/strict';import test from 'node:test';import {spa
 assert.equal(process.env.DISPOSABLE_AUTH_CI,'true');const api=new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);assert.ok(['localhost','127.0.0.1'].includes(api.hostname)&&api.port==='54321'&&api.protocol==='http:');
 const origin='http://localhost:3399';const {chromium}=createRequire(resolve(process.env.BROWSER_TOOLS_DIR,'package.json'))('playwright');const admin=createClient(api.origin,process.env.SUPABASE_SECRET_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 function safe(result){if(result.error)throw new Error('Synthetic operation failed');return result.data;}
-test('new product workflows through the real built application',{timeout:240000},async()=>{
+
+async function verifyPortalFrame(page){
+ assert.equal(await page.locator('main').count(),1);
+ assert.equal(await page.locator('main').getAttribute('id'),'portal-content');
+ assert.equal(await page.locator('[data-marketing-frame]').count(),0);
+ assert.equal(await page.getByRole('link',{name:'Contact on WhatsApp',exact:true}).count(),0);
+ assert.equal(await page.getByRole('link',{name:'Hire Me',exact:true}).count(),0);
+ assert.equal(await page.locator('footer').count(),0);
+ assert.match(await page.locator('meta[name="robots"]').first().getAttribute('content'),/noindex/);
+}
+async function verifyPublicRoutes(page){
+ for(const route of ['/','/services','/portfolio','/blogs','/contact','/privacy','/resume','/login']){
+  const response=await page.goto(origin+route);assert.equal(response.status(),200);
+  assert.equal(new URL(page.url()).pathname,route);
+  assert.equal(await page.locator('[data-marketing-frame]').count(),1);
+  assert.equal(await page.locator('main').count(),1);
+  assert.equal(await page.getByRole('link',{name:'Contact on WhatsApp',exact:true}).count(),1);
+  assert.equal(await page.locator('footer').count(),1);
+  assert.ok(await page.title());
+  const canonical=await page.locator('link[rel="canonical"]').getAttribute('href');
+  assert.equal(new URL(canonical).pathname,route==='/login'?'/':route);
+ }
+ assert.match(await page.locator('meta[name="robots"]').first().getAttribute('content'),/noindex/);
+ const missing=await page.goto(origin+'/synthetic-missing-public-page');assert.equal(missing.status(),404);
+ assert.equal(await page.locator('[data-marketing-frame]').count(),1);
+ assert.equal(await page.locator('main').count(),1);
+}
+async function verifyWorkspaceNavigation(page,root,deepPath,rootLabel,labels){
+ await page.setViewportSize({width:1440,height:1000});
+ await page.goto(origin+deepPath+'?navigation=fixture');await verifyPortalFrame(page);
+ const desktop=page.getByRole('navigation',{name:'Workspace',exact:true});
+ assert.deepEqual(await desktop.getByRole('link').allTextContents(),labels);
+ assert.equal(await desktop.locator('[aria-current="page"]').count(),1);
+ assert.equal(await desktop.locator('[aria-current="page"]').getAttribute('href'),root+'/projects');
+ assert.equal(await desktop.getByRole('link',{name:rootLabel,exact:true}).getAttribute('aria-current'),null);
+ for(const width of [320,390,720]){
+  await page.setViewportSize({width,height:844});
+  const trigger=page.getByRole('button',{name:'Open workspace navigation',exact:true});
+  await trigger.focus();await page.keyboard.press('Enter');
+  const dialog=page.getByRole('dialog',{name:'Workspace navigation',exact:true});await dialog.waitFor();
+  assert.deepEqual(await dialog.getByRole('navigation',{name:'Workspace',exact:true}).getByRole('link').allTextContents(),labels);
+  assert.equal(await dialog.locator('[aria-current="page"]').getAttribute('href'),root+'/projects');
+  for(const key of ['Tab','Shift+Tab'])for(let step=0;step<labels.length+4;step++){
+   await page.keyboard.press(key);
+   assert.equal(await dialog.evaluate(element=>element.contains(document.activeElement)),true);
+  }
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+  assert.equal(await dialog.getByRole('button',{name:'Sign out',exact:true}).evaluate(element=>element.closest('form').getAttribute('method')),'post');
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Open workspace navigation');
+ }
+ const trigger=page.getByRole('button',{name:'Open workspace navigation',exact:true});
+ await trigger.click();
+ await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).getByRole('link',{name:rootLabel,exact:true}).click();
+ await page.waitForURL(origin+root);
+ await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor({state:'hidden'});await verifyPortalFrame(page);
+ await trigger.click();
+ assert.equal(await page.getByRole('dialog').locator('[aria-current="page"]').getAttribute('href'),root);
+ await page.getByRole('dialog').getByRole('link',{name:'Projects',exact:true}).click();
+ await page.waitForURL(origin+root+'/projects');
+ await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor({state:'hidden'});
+ await trigger.click();await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor();
+ await page.goBack();await page.waitForURL(origin+root);
+ await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor({state:'hidden'});
+ await trigger.click();await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor();
+ await page.setViewportSize({width:1440,height:1000});
+ await page.getByRole('dialog',{name:'Workspace navigation',exact:true}).waitFor({state:'hidden'});
+ await page.waitForFunction(()=>document.activeElement?.id==='portal-content');
+ assert.equal(await desktop.locator('[aria-current="page"]').getAttribute('href'),root);
+ await page.goto(origin+deepPath);
+}
+
+test('new product workflows through the real built application',{timeout:360000},async()=>{
  let phase='fixtures',failure=null,server,browser,project;const users=[],contexts=[],invoiceIds=[];
  async function user(role){const email=`product-${randomBytes(8).toString('hex')}@example.test`;const password=randomBytes(24).toString('base64url');const data=safe(await admin.auth.admin.createUser({email,password,email_confirm:true,app_metadata:{role}}));const result={id:data.user.id,email,password,role};users.push(result);safe(await admin.from('profiles').update({role,is_active:true}).eq('id',result.id));return result;}
- async function login(fixture){const context=await browser.newContext({serviceWorkers:'block'});contexts.push(context);await context.route('**/*',route=>[origin,api.origin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());const page=await context.newPage();page.setDefaultTimeout(15000);await page.goto(origin+'/login');await page.locator('#email').fill(fixture.email);await page.locator('#password').fill(fixture.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.waitForURL(url=>url.pathname===(fixture.role==='admin'?'/admin':'/portal'));return page;}
+ async function isolatedPage(){const context=await browser.newContext({serviceWorkers:'block'});contexts.push(context);await context.route('**/*',route=>[origin,api.origin].includes(new URL(route.request().url()).origin)?route.continue():route.abort());const page=await context.newPage();page.setDefaultTimeout(15000);return page;}
+ async function login(fixture){const page=await isolatedPage();await page.goto(origin+'/login');assert.equal(await page.locator('[data-marketing-frame]').count(),1);assert.equal(await page.locator('main').count(),1);await page.locator('#email').fill(fixture.email);await page.locator('#password').fill(fixture.password);await page.getByRole('button',{name:'Sign in',exact:true}).click();await page.waitForURL(url=>url.pathname===(fixture.role==='admin'?'/admin':'/portal'));await verifyPortalFrame(page);return page;}
  try{
   const owner=await user('admin'),client=await user('client'),foreign=await user('client');
   project=safe(await admin.from('projects').insert({client_id:client.id,name:'Synthetic acceptance project'}).select('id').single()).id;
   safe(await admin.from('milestones').insert([{project_id:project,title:'Synthetic billable milestone',amount_cents:12345,currency:'USD',status:'done',position:0},{project_id:project,title:'Synthetic future milestone',amount_cents:0,currency:'USD',status:'pending',position:1}]));
   phase='startup';server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3399'],{env:{...process.env,NODE_ENV:'production'},stdio:'ignore'});let launchFailed=false;server.on('error',()=>launchFailed=true);let ready=false;const until=Date.now()+45000;
   while(Date.now()<until){if(launchFailed||server.exitCode!==null)throw new Error('Startup failed');try{const response=await fetch(origin+'/login');await response.text();if(response.status===200){ready=true;break;}}catch{}await delay(200);}assert.ok(ready);browser=await chromium.launch({headless:true});
+  phase='mobile layout';const publicPage=await isolatedPage();await verifyPublicRoutes(publicPage);
+  await publicPage.goto(origin+'/portal');await publicPage.waitForURL(url=>url.pathname==='/login');
+  await publicPage.goto(origin+'/admin');await publicPage.waitForURL(url=>url.pathname==='/login');
   phase='client projects';const page=await login(client);await page.goto(origin+'/portal/projects');await page.getByRole('link',{name:'Synthetic acceptance project',exact:true}).click();await page.getByRole('heading',{name:'Synthetic acceptance project',exact:true}).waitFor();await page.getByText('1 of 2 milestones complete',{exact:true}).waitFor();
+  phase='mobile layout';await verifyWorkspaceNavigation(page,'/portal',`/portal/projects/${project}`,'Dashboard',['Dashboard','Tickets','Projects','Files','Invoices','Profile']);
   phase='profile edit';await page.goto(origin+'/portal/profile');await page.getByLabel('Name',{exact:true}).fill('Synthetic updated name');await page.getByLabel('Company',{exact:true}).fill('Synthetic company');await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.getByText('Profile updated.',{exact:true}).waitFor();assert.equal(safe(await admin.from('profiles').select('full_name').eq('id',client.id).single()).full_name,'Synthetic updated name');
   phase='mobile layout';await page.setViewportSize({width:390,height:844});await page.goto(origin+`/portal/projects/${project}`);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),true);
-  phase='foreign project denial';const denied=await login(foreign);const deniedResponse=await denied.goto(origin+`/portal/projects/${project}`);assert.equal(deniedResponse.status(),404);
-  phase='milestone invoice';const staff=await login(owner);await staff.goto(origin+`/admin/projects/${project}/invoices`);await staff.getByRole('listitem').filter({hasText:'Synthetic billable milestone'}).getByRole('button',{name:'Create or open milestone draft',exact:true}).click();await staff.waitForURL(url=>/^\/admin\/invoices\/[0-9a-f-]{36}$/.test(url.pathname));const invoice=staff.url().split('/').pop();invoiceIds.push(invoice);assert.equal(safe(await admin.from('invoice_items').select('unit_price_cents').eq('invoice_id',invoice).single()).unit_price_cents,12345);
+  phase='foreign project denial';const denied=await login(foreign);const deniedResponse=await denied.goto(origin+`/portal/projects/${project}`);assert.equal(deniedResponse.status(),404);await verifyPortalFrame(denied);await denied.getByRole('heading',{name:'Workspace item unavailable',exact:true}).waitFor();assert.equal(await denied.getByText('Synthetic acceptance project',{exact:true}).count(),0);
+  phase='milestone invoice';const staff=await login(owner);
+  phase='mobile layout';await verifyWorkspaceNavigation(staff,'/admin',`/admin/projects/${project}/invoices`,'Overview',['Overview','Clients','Tickets','Projects','Invoices','Emails','Assets']);
+  await staff.goto(origin+'/admin/projects/00000000-0000-4000-8000-000000000000');await staff.getByRole('heading',{name:'Workspace item unavailable',exact:true}).waitFor();await verifyPortalFrame(staff);
+  await staff.goto(origin+'/admin/recovery');await staff.getByRole('heading',{name:'Backup recovery',exact:true}).waitFor();await verifyPortalFrame(staff);await staff.getByLabel('Import ID',{exact:true}).waitFor();assert.equal(await staff.getByRole('button',{name:'Upload and preview',exact:true}).isDisabled(),true);
+  phase='milestone invoice';await staff.goto(origin+`/admin/projects/${project}/invoices`);await staff.getByRole('listitem').filter({hasText:'Synthetic billable milestone'}).getByRole('button',{name:'Create or open milestone draft',exact:true}).click();await staff.waitForURL(url=>/^\/admin\/invoices\/[0-9a-f-]{36}$/.test(url.pathname));const invoice=staff.url().split('/').pop();invoiceIds.push(invoice);assert.equal(safe(await admin.from('invoice_items').select('unit_price_cents').eq('invoice_id',invoice).single()).unit_price_cents,12345);await verifyPortalFrame(staff);
+  await staff.emulateMedia({media:'print'});assert.equal(await staff.getByRole('navigation',{name:'Workspace',exact:true}).count(),0);assert.equal(await staff.locator('main').isVisible(),true);await staff.emulateMedia({media:'screen'});
   await staff.goto(origin+`/admin/projects/${project}/invoices`);await staff.getByRole('listitem').filter({hasText:'Synthetic billable milestone'}).getByRole('button',{name:'Create or open milestone draft',exact:true}).click();await staff.waitForURL(origin+`/admin/invoices/${invoice}`);
-  phase='draft isolation';assert.equal((await page.goto(origin+`/portal/invoices/${invoice}`)).status(),404);
+  phase='draft isolation';assert.equal((await page.goto(origin+`/portal/invoices/${invoice}`)).status(),404);await verifyPortalFrame(page);
   phase='decimal invoice';await staff.goto(origin+`/admin/projects/${project}/invoices/new`);await staff.locator('#invoice-project').selectOption(project);await staff.locator('#new-description-0').fill('Synthetic decimal line');await staff.locator('#new-qty-0').fill('1.001');await staff.locator('#new-price-0').fill('1.00');await staff.getByRole('button',{name:'Save draft',exact:true}).click();await staff.waitForURL(url=>/^\/admin\/invoices\/[0-9a-f-]{36}$/.test(url.pathname));const decimal=staff.url().split('/').pop();invoiceIds.push(decimal);assert.equal(Number(safe(await admin.from('invoice_items').select('qty').eq('invoice_id',decimal).single()).qty),1.001);
  }catch{failure='Product acceptance failed at '+phase+'; sensitive details withheld';}
  finally{
