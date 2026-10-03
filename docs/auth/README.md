@@ -56,7 +56,7 @@ Roles are stored in **two places**, deliberately:
 1. **`app_metadata.role`** (the "claim") — set server-side only; users cannot tamper with app metadata. Read at session issue time so JWTs carry the role for cheap checks.
 2. **`public.profiles.role`** — queryable column enforcing RLS policies (admins can read all rows, clients only their own) and supporting joins/reporting.
 
-Both exist because neither alone is enough: the claim travels with every request without a DB hit but can go stale relative to the table; the column is authoritative and policy-enforceable but requires a lookup. The bootstrap script writes both together so they never diverge.
+Both exist because neither alone suffices: the claim travels with every request without a DB hit but can go stale relative to the table; the column is authoritative and policy-enforceable but requires a lookup. The bootstrap script writes both together so they never diverge.
 
 ## Probe matrix
 
@@ -64,15 +64,15 @@ Executed on `feat/auth-foundation` against a local dev server (all rows pass). B
 
 | # | Probe | Expected | Observed |
 |---|---|---|---|
-| 1 | Logged out visits `/admin` and `/portal` | `307` → `/login?next=…` | Both returned `HTTP/1.1 307 Temporary Redirect`, `location: /login?next=%2Fadmin` / `%2Fportal`; browser landed on `/login?next=…` |
+| 1 | Logged out visits `/admin` and `/portal` | `307` → `/login?next=…` | Both returned `HTTP/1.1 307 Temporary Redirect`, `location: /login?next=%2Fadmin` / `%2Fportal`; browser landed on `/login?next=%2Fadmin` / `%2Fportal` |
 | 2 | Admin session visits `/portal` | bounced to `/admin` | Final URL `http://localhost:3000/admin` |
 | 3 | Client session visits `/admin` | bounced to `/portal` | Final URL `http://localhost:3000/portal` |
 | 4 | Admin session visits `/login` | bounced to `/admin` | Final URL `http://localhost:3000/admin` |
 | 5 | Active client opens `/portal` | dashboard renders, sidebar shows email | `h1` = "Dashboard"; sidebar contains client email; 3 inert nav items (`aria-disabled`, Tickets/Files/Invoices); 1 `sb-*` session cookie present |
-| 6 | Client deactivated (`profiles.is_active=false`), then reloads `/portal` with live cookies | forced logout → `/login?reason=deactivated` + notice; cookies cleared | Landed on `/login?reason=deactivated`; "Your account has been deactivated…" notice rendered; 0 `sb-*` session cookies remaining; reloading `/portal` again behaved as logged out (`→ /login?next=%2Fportal`); `/login` rendered signed-out form. Deactivation was applied via service-key REST `PATCH /rest/v1/profiles?id=eq.<client-id>` (`is_active=false`, re-read to confirm) — equivalent of the brief's SQL update |
+| 6 | Client deactivated (`profiles.is_active=false`), then reloads `/portal` with live cookies | forced logout → `/login?reason=deactivated` + notice; cookies cleared | Landed on `/login?reason=deactivated`; "Your account has been deactivated…" notice rendered; 0 `sb-*` cookies after logout; reloading `/portal` again behaved as logged out (`→ /login?next=%2Fportal`); `/login` rendered signed-out form. Deactivation was applied via service-key REST `PATCH /rest/v1/profiles?id=eq.<client-id>` (`is_active=false`, re-read to confirm) — equivalent of the brief's SQL update |
 | 7 | Restore `is_active=true`, client signs in again | works | Service-key PATCH restored `is_active=true` (re-read confirmed); fresh sign-in landed on `/portal`, `h1` = "Dashboard" |
-| 8 | Any session presses Sign out | cookies cleared, `/login` renders signed-out | Clicked sidebar Sign out → final URL `/login`, sign-in form rendered, 0 `sb-*` session cookies remaining |
-| 9 | `curl -X POST /api/auth/logout -H "Origin: https://evil.example"` | `403` | HTTP `403` |
+| 8 | Any session presses Sign out | cookies cleared, `/login` renders signed-out | Clicked sidebar Sign out → final URL `/login`, sign-in form rendered, 0 `sb-*` cookies remaining |
+| 9 | `curl -X POST /api/auth/logout -H "Origin: https://evil.example"` | `403` | `HTTP/1.1 403 Forbidden` |
 | 10 | RLS: anon reads `public.profiles` (REST equivalent of the SQL-editor anon check; real-admin account did not exist yet so the impersonation variant was skipped by ruling) | 0 rows for anon | `GET <supabase>/rest/v1/profiles` with publishable key as `apikey` only (no `Authorization`) → `200`, body exactly `[]` — RLS denies anon, no rows leak |
 
 Notes:
@@ -95,7 +95,7 @@ Merging `feat/auth-foundation` to `main` auto-deploys to Vercel. Before merging:
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - (`SUPABASE_SECRET_KEY` is already set from Phase 1 and stays untouched.)
    Without the two public vars the proxy fail-closes every protected route to `/login` and sign-in submission throws at the client factory — the site stays up but auth is dead on arrival.
-2. **Supabase URL configuration** — Site URL must be `https://redwan.work`; configure it before the first deployment (see dashboard checklist above).
+2. **Supabase URL configuration** — Site URL must be `https://redwan.work` at merge time so the token-hash links in email templates resolve against production (see dashboard checklist above).
 
 ## P1-C: approved development, provider proof first (2026-10-03)
 
