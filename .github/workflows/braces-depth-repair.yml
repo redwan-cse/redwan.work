@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
       - name: Require approved ancestry and unchanged dependency baseline
         run: |
-          test "$(git rev-parse HEAD^)" = 9e88b49ee50a347aed314589978d855dfd04aff9
+          test "$(git rev-parse HEAD^)" = 2e9dc40700ec65fda0718f9fd291efb89887d658
           test "$(git hash-object package.json)" = 93e02a05263c577798f6ab7bba68f28105f700f0
           test "$(git hash-object package-lock.json)" = 5ac86d0aa52574e466cee38e00fa85edd325cb01
           test "$(git hash-object tests/reliability/dependency-audit.test.mjs)" = 62c596b3a0db53f911db962a117ee2a8c96a3e9c
@@ -97,17 +97,20 @@ jobs:
           const manifest=JSON.parse(fs.readFileSync('package.json'));
           manifest.overrides.braces='npm:@dieub/braces-depth-guard@3.0.3-pn.1';
           fs.writeFileSync('package.json',JSON.stringify(manifest,null,2)+'\n');
-          NODE
-          node <<'NODE'
-          const {spawnSync}=require('node:child_process');
-          const result=spawnSync('npm',['install','--package-lock-only','--ignore-scripts','--no-audit','--fund=false','--json'],{encoding:'utf8',timeout:120000});
-          if(result.status!==0){
-            let code='unclassified';
-            try {const report=JSON.parse(result.stdout);if(/^E[A-Z0-9_]+$/.test(report.error?.code))code=report.error.code;}catch {}
-            const codes=(result.stderr||'').match(/\bE[A-Z0-9_]{2,30}\b/g)||[];
-            console.log('::error::lock-generation-failed code='+code+' stderrCodes='+[...new Set(codes)].join(','));
-            process.exit(1);
+          const assert=require('node:assert/strict');
+          const lock=JSON.parse(fs.readFileSync('package-lock.json'));
+          const isolated=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/braces-signatures/package-lock.json'));
+          const verified=isolated.packages['node_modules/@dieub/braces-depth-guard'];
+          assert.equal(verified.version,'3.0.3-pn.1');
+          for(const [path,old] of Object.entries(lock.packages)){
+            if(!/(?:^|\/)node_modules\/braces$/.test(path))continue;
+            assert.equal(old.version,'3.0.3');
+            assert.deepEqual(old.dependencies,verified.dependencies);
+            const replacement={name:'@dieub/braces-depth-guard',...verified};
+            for(const flag of ['dev','optional','devOptional'])if(Object.hasOwn(old,flag))replacement[flag]=old[flag];
+            lock.packages[path]=replacement;
           }
+          fs.writeFileSync('package-lock.json',JSON.stringify(lock,null,2)+'\n');
           NODE
           node <<'NODE'
           const fs=require('node:fs'),assert=require('node:assert/strict');
@@ -134,7 +137,16 @@ jobs:
       - name: Validate locked installation regressions and full audit
         run: |
           npm ci --ignore-scripts --no-audit --fund=false
-          node --test tests/reliability/dependency-audit.test.mjs
+          node <<'NODE'
+          const {spawnSync}=require('node:child_process');
+          const result=spawnSync(process.execPath,['--test','tests/reliability/dependency-audit.test.mjs'],{encoding:'utf8',timeout:60000});
+          if(result.status!==0){
+            const names=[...result.stdout.matchAll(/^not ok \d+ - ([A-Za-z0-9 .-]+)$/gm)].map(m=>m[1]).slice(0,5);
+            console.log('::error::dependency-regression-failed cases='+names.join(';'));
+            process.exit(1);
+          }
+          console.log('::notice::Dependency audit and depth-guard regressions passed.');
+          NODE
           npm audit --audit-level=low
           mkdir "$RUNNER_TEMP/braces-payload"
           cp package.json package-lock.json "$RUNNER_TEMP/braces-payload/"
@@ -171,7 +183,7 @@ jobs:
             assert.equal(pr.head.repo.full_name,owner+'/'+repo);assert.equal(pr.base.ref,'main');
             assert.equal(pr.base.sha,'a86b2934556af04c74279d00ad1b0dbde3d81ec6');
             const parent=(await github.rest.git.getCommit({owner,repo,commit_sha:head})).data;
-            assert.equal(parent.parents.length,1);assert.equal(parent.parents[0].sha,'9e88b49ee50a347aed314589978d855dfd04aff9');
+            assert.equal(parent.parents.length,1);assert.equal(parent.parents[0].sha,'2e9dc40700ec65fda0718f9fd291efb89887d658');
             assert.deepEqual(fs.readdirSync('payload').sort(),['package-lock.json','package.json']);
             const read=path=>{
               const info=fs.lstatSync('payload/'+path);
