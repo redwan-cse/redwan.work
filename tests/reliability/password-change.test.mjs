@@ -104,3 +104,32 @@ test('password form labels, autofill, policy and recovery remain accessible',asy
 test('password form guards synchronous duplicate submissions and clears credentials',async t=>{await setupUI(t);let release;ui.hold=new Promise(r=>{release=r;});const tree=renderUI();const first=submitUI(tree);await submitUI(tree);assert.equal(ui.calls,1);const pending=nodes(renderUI());assert.equal(pending.find(n=>n.type==='form').props['aria-busy'],true);assert.ok(pending.filter(n=>n.type==='input'||n.type==='button').every(n=>n.props.disabled));release();await first;assert.equal(ui.resets,1);assert.equal([...ui.data.keys()].length,0);assert.ok(nodes(renderUI()).some(n=>n.props.role==='status'));});
 test('password form announces rejection and allows a deliberate retry',async t=>{await setupUI(t);ui.result={status:'denied',error:'Synthetic rejection'};await submitUI(renderUI());const all=nodes(renderUI());assert.ok(all.some(n=>n.props.role==='alert'));assert.equal(all.find(n=>n.type==='button').props.disabled,false);assert.equal(ui.resets,1);});
 for(const result of ['update-unconfirmed','changed-unconfirmed','verification-unconfirmed','transport'])test(`password form stops blind retry after ${result}`,async t=>{await setupUI(t);if(result==='transport')ui.reject=true;else ui.result={status:result,error:'Synthetic uncertainty'};await submitUI(renderUI());await submitUI(renderUI());const all=nodes(renderUI());assert.equal(ui.calls,1);assert.equal(all.find(n=>n.type==='button').props.disabled,true);assert.ok(all.some(n=>n.props.role==='alert'));assert.equal(JSON.stringify(ui.slots).includes('private-sentinel'),false);});
+
+// Execute the actual manifest auditor against synthetic build output, without building or network.
+const {runInNewContext}=await import('node:vm');
+const auditSource=readFileSync(new URL('scripts/audit-manifests.mjs',root),'utf8').replace(/^import .+;\r?\n/gm,'');
+const inventory=JSON.parse(runInNewContext(auditSource.slice(0,auditSource.indexOf('const refPath='))+'JSON.stringify({actions:EXPECTED_ACTIONS,routes:EXPECTED_ROUTES});'));
+const passwordAction={filename:'lib/auth/password-change.ts',exportedName:'changePasswordAction'};
+function manifestFixture(){
+ const entries=Object.entries(inventory.actions).flatMap(([filename,names])=>names.map(exportedName=>({filename,exportedName})));
+ if(!entries.some(e=>e.filename===passwordAction.filename&&e.exportedName===passwordAction.exportedName))entries.push({...passwordAction});
+ return {entries,paths:Object.fromEntries(inventory.routes.map(([,key])=>[key,'synthetic-route.js']))};
+}
+function auditFixture({entries,paths}){
+ const files=new Map([
+  ['.next/server/server-reference-manifest.json',JSON.stringify({node:Object.fromEntries(entries.map((entry,i)=>['synthetic-'+i,entry]))})],
+  ['.next/server/app-paths-manifest.json',JSON.stringify(paths)],
+  ...inventory.routes.map(([file,,methods])=>[file,methods.map(method=>`export async function ${method}(){}`).join('\n')]),
+ ]);
+ return runInNewContext(auditSource,{assert,resolve:p=>p,existsSync:p=>files.has(p),readFileSync:p=>{assert.ok(files.has(p));return files.get(p);},console:{log(){}}},{timeout:1000});
+}
+test('manifest accepts the approved password action and existing population',()=>{assert.doesNotThrow(()=>auditFixture(manifestFixture()));});
+test('manifest requires the password action by file and export',()=>{
+ assert.deepEqual(inventory.actions[passwordAction.filename],['changePasswordAction']);
+ const fixture=manifestFixture();fixture.entries=fixture.entries.filter(e=>e.filename!==passwordAction.filename);
+ assert.throws(()=>auditFixture(fixture),/Missing action file lib\/auth\/password-change\.ts/);
+});
+test('manifest still rejects an unexpected action',()=>{const fixture=manifestFixture();fixture.entries.push({filename:'lib/auth/unapproved.ts',exportedName:'unapprovedAction'});assert.throws(()=>auditFixture(fixture),/Unexpected server action population/);});
+test('manifest rejects a wrong password export with unchanged entry count',()=>{const fixture=manifestFixture();fixture.entries.find(e=>e.filename===passwordAction.filename).exportedName='wrongAction';assert.throws(()=>auditFixture(fixture),/Missing action lib\/auth\/password-change\.ts:changePasswordAction/);});
+test('manifest still requires existing actions',()=>{const fixture=manifestFixture();fixture.entries=fixture.entries.filter(e=>e.exportedName!=='acceptInviteAction');assert.throws(()=>auditFixture(fixture),/Missing action lib\/auth\/actions\.ts:acceptInviteAction/);});
+test('manifest route population remains strict',()=>{const fixture=manifestFixture();fixture.paths['/api/unapproved/route']='synthetic.js';assert.throws(()=>auditFixture(fixture),/Unexpected API route population/);});

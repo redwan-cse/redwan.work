@@ -7,6 +7,7 @@ const EXPECTED_ACTIONS={
  'lib/crm/workflow-actions.ts':['editClientProfileAction','invoiceMilestoneAction'],
  'lib/crm/ticket-upload-actions.ts':['shareTicketFilesAction'],
  'lib/auth/actions.ts':['acceptInviteAction','signInWithPasswordAction','requestMagicLinkAction','requestPasswordResetAction','consumeMagicLinkTokenAction','setNewPasswordFromRecoveryAction'],
+ 'lib/auth/password-change.ts':['changePasswordAction'],
  'lib/crm/client-actions.ts':['submitPaymentAction','createTicketWithAttachmentsAction','clientReplyAction'],
 };
 const EXPECTED_ROUTES=[
