@@ -1,0 +1,200 @@
+name: One-use PR63 braces depth repair
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/braces-depth-repair.yml]
+permissions:
+  contents: read
+concurrency:
+  group: pr63-braces-depth-repair
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'redwan-cse/redwan.work' && github.event.pull_request.number == 63 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/profile-password-change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require approved ancestry and unchanged dependency baseline
+        run: |
+          test "$(git rev-parse HEAD^)" = 4c6f10829e584aefc4a824b3adb8048f589f8fad
+          test "$(git hash-object package.json)" = 93e02a05263c577798f6ab7bba68f28105f700f0
+          test "$(git hash-object package-lock.json)" = 5ac86d0aa52574e466cee38e00fa85edd325cb01
+          test "$(git hash-object tests/reliability/dependency-audit.test.mjs)" = 62c596b3a0db53f911db962a117ee2a8c96a3e9c
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - name: Confirm intended red against unchanged installed braces
+        run: |
+          npm ci --ignore-scripts --no-audit --fund=false
+          node --check tests/reliability/dependency-audit.test.mjs
+          node <<'NODE'
+          const {spawnSync}=require('node:child_process');
+          const assert=require('node:assert/strict');
+          const run=spawnSync(process.execPath,['--test','--test-name-pattern=^braces rejects excessive','tests/reliability/dependency-audit.test.mjs'],{encoding:'utf8',timeout:30000});
+          assert.equal(run.status,1);
+          assert.match(run.stdout,/parse must reject depth 101/);
+          assert.match(run.stdout,/ERR_ASSERTION/);
+          console.log('Verified intended red: installed upstream accepts excessive depth.');
+          NODE
+      - name: Verify exact published tarball and source correspondence
+        run: |
+          python3 <<'PY'
+          import urllib.request, hashlib, base64, io, tarfile, json
+          def get(url):
+            with urllib.request.urlopen(url,timeout=30) as r:
+              assert r.status==200
+              data=r.read(1000001)
+              assert len(data)<=1000000
+              return data
+          name='@dieub/braces-depth-guard'
+          version='3.0.3-pn.1'
+          sha='2a95d57076c2c8a2ae0b75b05b7e2369ffbb137e'
+          integrity='sha512-Y45K9cPXRCVrbXMenyNgKrzd+rl4jyto+BvvzVkVSsxHZ0ETQsYArTX/ZQjjCEpEmZsTzjUzHcHR6ygRtDjxQg=='
+          url=f'https://registry.npmjs.org/{name}/-/braces-depth-guard-{version}.tgz'
+          meta=json.loads(get(f'https://registry.npmjs.org/@dieub%2fbraces-depth-guard/{version}'))
+          assert meta['gitHead']==sha and meta['dist']['integrity']==integrity and meta['dist']['tarball']==url
+          assert meta['_npmUser']['trustedPublisher']['id']=='github'
+          raw=get(url)
+          assert 'sha512-'+base64.b64encode(hashlib.sha512(raw).digest()).decode()==integrity
+          expected={'package/'+p for p in ['package.json','README.md','LICENSE','index.js','lib/compile.js','lib/constants.js','lib/expand.js','lib/parse.js','lib/stringify.js','lib/utils.js']}
+          with tarfile.open(fileobj=io.BytesIO(raw),mode='r:gz') as archive:
+            members=archive.getmembers()
+            assert len(members)==10 and {m.name for m in members}==expected
+            for member in members:
+              assert member.isfile() and member.size<100000
+              payload=archive.extractfile(member).read()
+              source=get(f'https://raw.githubusercontent.com/dieub/braces-depth-guard/{sha}/'+member.name[8:])
+              assert payload==source, member.name
+          attest=json.loads(get('https://registry.npmjs.org/-/npm/v1/attestations/@dieub%2fbraces-depth-guard@3.0.3-pn.1'))
+          matches=[a for a in attest['attestations'] if a['predicateType']=='https://slsa.dev/provenance/v1']
+          assert len(matches)==1
+          statement=json.loads(base64.b64decode(matches[0]['bundle']['dsseEnvelope']['payload']))
+          assert statement['subject'][0]['digest']['sha512']==hashlib.sha512(raw).hexdigest()
+          definition=statement['predicate']['buildDefinition']
+          assert definition['resolvedDependencies'][0]['digest']['gitCommit']==sha
+          workflow=definition['externalParameters']['workflow']
+          assert workflow=={'ref':'refs/tags/3.0.3-pn.1','repository':'https://github.com/dieub/braces-depth-guard','path':'.github/workflows/publish.yml'}
+          print('Exact tarball, all 10 source files and provenance subject/source binding verified.')
+          PY
+      - name: Cryptographically verify registry signatures and provenance
+        run: |
+          mkdir "$RUNNER_TEMP/braces-signatures"
+          cd "$RUNNER_TEMP/braces-signatures"
+          printf '{"name":"isolated-braces-proof","version":"1.0.0","private":true,"dependencies":{"@dieub/braces-depth-guard":"3.0.3-pn.1"}}\n' > package.json
+          npm install --ignore-scripts --no-audit --fund=false
+          npm audit signatures
+      - name: Generate only the approved alias and lockfile
+        run: |
+          cp package.json "$RUNNER_TEMP/original-package.json"
+          cp package-lock.json "$RUNNER_TEMP/original-lock.json"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const manifest=JSON.parse(fs.readFileSync('package.json'));
+          manifest.overrides.braces='npm:@dieub/braces-depth-guard@3.0.3-pn.1';
+          fs.writeFileSync('package.json',JSON.stringify(manifest,null,2)+'\n');
+          NODE
+          npm install --package-lock-only --ignore-scripts --no-audit --fund=false
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const original=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/original-lock.json'));
+          const candidate=JSON.parse(fs.readFileSync('package-lock.json'));
+          assert.deepEqual(Object.keys(candidate.packages).sort(),Object.keys(original.packages).sort(),'unexpected dependency population change');
+          let copies=0;
+          for(const [path,item] of Object.entries(original.packages)) {
+            if(/(?:^|\/)node_modules\/braces$/.test(path)) {copies++;assert.equal(item.version,'3.0.3');}
+            else assert.deepEqual(candidate.packages[path],item,'unrelated lock entry changed: '+path);
+          }
+          assert.ok(copies>0);
+          console.log('No unrelated dependency changes; braces copies='+copies);
+          NODE
+      - name: Validate locked installation regressions and full audit
+        run: |
+          npm ci --ignore-scripts --no-audit --fund=false
+          node --test tests/reliability/dependency-audit.test.mjs
+          npm audit --audit-level=low
+          mkdir "$RUNNER_TEMP/braces-payload"
+          cp package.json package-lock.json "$RUNNER_TEMP/braces-payload/"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr63-braces-payload
+          path: ${{ runner.temp }}/braces-payload/
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: prepare
+    if: github.repository == 'redwan-cse/redwan.work' && github.event.pull_request.number == 63 && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/profile-password-change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: pr63-braces-payload
+          path: payload
+      - name: Validate inert JSON and commit only two dependency files
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs=require('node:fs'),assert=require('node:assert/strict');
+            const owner='redwan-cse',repo='redwan.work',branch='feat/profile-password-change';
+            const head=context.payload.pull_request.head.sha;
+            assert.equal(Number(process.env.GITHUB_RUN_ATTEMPT),1);
+            const pr=(await github.rest.pulls.get({owner,repo,pull_number:63})).data;
+            assert.equal(pr.state,'open');assert.equal(pr.head.sha,head);assert.equal(pr.head.ref,branch);
+            assert.equal(pr.head.repo.full_name,owner+'/'+repo);assert.equal(pr.base.ref,'main');
+            assert.equal(pr.base.sha,'a86b2934556af04c74279d00ad1b0dbde3d81ec6');
+            const parent=(await github.rest.git.getCommit({owner,repo,commit_sha:head})).data;
+            assert.equal(parent.parents.length,1);assert.equal(parent.parents[0].sha,'4c6f10829e584aefc4a824b3adb8048f589f8fad');
+            assert.deepEqual(fs.readdirSync('payload').sort(),['package-lock.json','package.json']);
+            const read=path=>{
+              const info=fs.lstatSync('payload/'+path);
+              assert.ok(info.isFile()&&!info.isSymbolicLink()&&info.size<1000000);
+              return fs.readFileSync('payload/'+path,'utf8');
+            };
+            const texts={'package.json':read('package.json'),'package-lock.json':read('package-lock.json')};
+            const baseline={};
+            for(const path of Object.keys(texts)) {
+              const file=(await github.rest.repos.getContent({owner,repo,path,ref:head})).data;
+              assert.equal(file.type,'file');
+              baseline[path]=JSON.parse(Buffer.from(file.content,'base64').toString('utf8'));
+            }
+            const manifest=JSON.parse(texts['package.json']),lock=JSON.parse(texts['package-lock.json']);
+            const expected=structuredClone(baseline['package.json']);
+            expected.overrides.braces='npm:@dieub/braces-depth-guard@3.0.3-pn.1';
+            assert.deepEqual(manifest,expected);
+            const before=baseline['package-lock.json'];
+            assert.deepEqual(Object.keys(lock).sort(),Object.keys(before).sort());
+            for(const key of Object.keys(before)) if(key!=='packages') assert.deepEqual(lock[key],before[key]);
+            assert.deepEqual(Object.keys(lock.packages).sort(),Object.keys(before.packages).sort());
+            let copies=0;
+            for(const [path,item] of Object.entries(before.packages)) {
+              if(!/(?:^|\/)node_modules\/braces$/.test(path)) {assert.deepEqual(lock.packages[path],item);continue;}
+              copies++;assert.equal(item.version,'3.0.3');
+              const replacement=lock.packages[path];
+              assert.equal(replacement.name,'@dieub/braces-depth-guard');assert.equal(replacement.version,'3.0.3-pn.1');
+              assert.equal(replacement.resolved,'https://registry.npmjs.org/@dieub/braces-depth-guard/-/braces-depth-guard-3.0.3-pn.1.tgz');
+              assert.equal(replacement.integrity,'sha512-Y45K9cPXRCVrbXMenyNgKrzd+rl4jyto+BvvzVkVSsxHZ0ETQsYArTX/ZQjjCEpEmZsTzjUzHcHR6ygRtDjxQg==');
+              assert.deepEqual(replacement.dependencies,{'fill-range':'^7.1.1'});
+              assert.ok(!replacement.hasInstallScript);
+              assert.ok(Object.keys(replacement).every(key=>['name','version','resolved','integrity','license','engines','dependencies','dev','optional','devOptional'].includes(key)));
+            }
+            assert.ok(copies>0);
+            const tree=[];
+            for(const [path,content] of Object.entries(texts)) {
+              const blob=(await github.rest.git.createBlob({owner,repo,content,encoding:'utf-8'})).data;
+              tree.push({path,mode:'100644',type:'blob',sha:blob.sha});
+            }
+            const created=(await github.rest.git.createTree({owner,repo,base_tree:parent.tree.sha,tree})).data;
+            const commit=(await github.rest.git.createCommit({owner,repo,message:'fix(security): pin verified braces depth guard without unrelated upgrades',tree:created.sha,parents:[head]})).data;
+            const current=(await github.rest.git.getRef({owner,repo,ref:'heads/'+branch})).data;
+            assert.equal(current.object.sha,head,'branch advanced; refusing publication');
+            await github.rest.git.updateRef({owner,repo,ref:'heads/'+branch,sha:commit.sha,force:false});
+            core.notice('Published verified two-file repair at '+commit.sha);
