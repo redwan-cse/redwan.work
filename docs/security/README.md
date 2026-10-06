@@ -71,3 +71,48 @@ Production database is live with irreplaceable data. Never reset, destructively 
 The [pre-M00 security README](https://github.com/redwan-cse/redwan.work/blob/351b9dbb1a8e3aa5f91cf1b3dd72b0c3e89a3647/docs/security/README.md) preserves earlier probe tables and shipped-phase claims for provenance only. They are not new execution, current production proof, or permission to repeat live probes. The original sign-out API, all-shipped, raw-error logging and routine live-fixture statements are superseded by this document and the M00 ledger.
 
 Use the [safe audit runbook](AUDIT-PLAN.md). Full semantic review of every feature/privacy document remains incomplete; preserve unknown historical consent/retention evidence rather than inventing policy or deleting production data to match old prose.
+
+## October 6, 2026: official CSS dependency repair in PR63
+
+This dated section supersedes earlier dependency-readiness claims for the current candidate without rewriting the historical records above. The owner approved exactly five development files, isolated proof/publication and final ordinary PR CI. No main merge, deployment, provider/production access, AGY or retained-host operation was included.
+
+The [Foundation failure at 3e5d4bb](https://github.com/redwan-cse/redwan.work/actions/runs/37406543596/job/112085262082) reported five affected graph entries arising from two root advisories, not five independent vulnerabilities: [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q), indexed source-map resource exhaustion, and [GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf), quadratic flat-selector parsing. Request-path exploitability in this application was not established; trusted build-time use and untrusted synchronous parsing are different exposure paths. The full audit was not waived.
+
+### Selected official artifacts and compatibility
+
+Exact overrides now select `source-map-js: 1.2.2` and `postcss-selector-parser: 7.1.6`. Tailwind 3.4.18, postcss-nested 6.2.0, tailwindcss-animate 1.0.7, the prior braces override and every unrelated lock entry remain unchanged. Parser 7 is outside Tailwind 3's declared 6.x range, so this choice required real consumer and generated-CSS proof rather than relying on npm's suggested remediation.
+
+- `source-map-js@1.2.2`: official tarball `https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.2.tgz`, integrity `sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==`. BSD-3-Clause, no runtime dependencies or inspected install hooks.
+- `postcss-selector-parser@7.1.6`: official tarball `https://registry.npmjs.org/postcss-selector-parser/-/postcss-selector-parser-7.1.6.tgz`, integrity `sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==`. MIT, unchanged `cssesc:^3.0.0` and `util-deprecate:^1.0.2` runtime dependencies, no inspected install hooks.
+
+Source review examined the [source-map security patch](https://github.com/7rulnik/source-map-js/commit/cf7658058ceeaa8619d5ae0ec90be6905209d016) and release tag at `0a1d334fd1e55a47df97fcd60a7915d46df3b08a`, plus the [parser complexity patch](https://github.com/postcss/postcss-selector-parser/commit/62b191792df0a0bc56062e5a875bc74aae2a51cd) and release tag at `556def3c707d81e9c3b3fb434b3e6c0b709be274`. Parser 7's insertion-during-iteration change and later Tailwind-compatible non-node serialization fix were explicitly considered.
+
+### Observed test-first and package proof
+
+[Preparation job 112130696241](https://github.com/redwan-cse/redwan.work/actions/runs/37421193193/job/112130696241), attempt 1 at test-first head `588e1cede34438c4234dc05fa5c6560e18906ae6`, completed successfully at 05:58:49 UTC on October 6. It verified the approved starting manifest/lock blobs and all 689 lockfile entries (including the root), installed the unchanged baseline with lifecycle scripts disabled, and observed both intended failures: `ERR_SOURCE_OFFSET_REJECT` and `ERR_SELECTOR_QUADRATIC`. The latter counts numeric-array search work on bounded class/ID/interpolation fixtures, not a flaky elapsed-time threshold. Each probe uses a time/memory-bounded child process.
+
+The job verified exact tarball SHA512 against registry metadata, inspected bounded archive paths/types and package lifecycle/dependency metadata, and passed `npm audit signatures` in an isolated package fixture. This establishes the observed artifact and registry-signature checks; it is not a claim that every distributed file was independently rebuilt from upstream source or that provenance was available for every package.
+
+Only two existing lock entries were replaced using npm-generated metadata. The package population and all unrelated entries were deep-equal to baseline. Fresh frozen installation preserved manifest/lock hashes. The complete dependency regression file and unchanged full `npm audit --audit-level=low` passed before publication. Existing fail-closed/redaction, Next/compiler, brace-expansion and braces source/consumer protections remain.
+
+New regression coverage exercises invalid/excessive and cumulative indexed offsets, nested-source getter amplification, normal mapping/SourceNode behavior, flat-selector complexity, selector round trips and safe mutation, Tailwind's unescape import, PostCSS nesting/source maps, and exact patched-version resolution for every locked consumer. No audit omission, severity change, unrelated package upgrade, Tailwind 4 migration or application/CSS configuration edit was used.
+
+### Generated-CSS equivalence and guarded publication
+
+Baseline and candidate generated output was compared as complete CSS and source-map objects, without normalization: actual `app/globals.css` using the existing Tailwind configuration, representative responsive/dark/focus/group/peer/arbitrary/data-state/animation utilities, and a nested-selector/media fixture. All were byte-identical. CSS SHA256 receipts:
+
+- App: `98d05e4eb6324dc173203bb4933b97f7d169aadcda85ffa5502c88c55ba58dfc`.
+- Utility fixture: `faa7f0914bb2bf305575aa1c29a0f6edcf26fa774b3c037f4f64467ecfd9473a`.
+- Nesting fixture: `be2a98bf06377d4eb88541c9486c4992a283bcdfdcb39b975d440303502a0093`.
+
+[Publisher job 112130902386](https://github.com/redwan-cse/redwan.work/actions/runs/37421193193/job/112130902386) completed successfully at 05:59:02 UTC. Only that clean job held job-scoped `contents:write`; it performed no checkout, dependency installation or project/artifact-code execution. It validated inert payload bytes, two exact paths, expected parent/base, unchanged unrelated data and the fixed package contract before a non-force branch update and blob readback. Both jobs' exact temporary-file cleanup steps succeeded.
+
+Published dependency commit [`a8469df75851faf145d72345bb8597c6d67b12b9`](https://github.com/redwan-cse/redwan.work/commit/a8469df75851faf145d72345bb8597c6d67b12b9), tree `6ec8fc7d95e111094fa053859a8a0745686aa890`, has parent `588e1cede34438c4234dc05fa5c6560e18906ae6`. Its directly reviewed diff changes only the two manifest overrides and version/resolved/integrity fields of the two locked packages. Main remains `a86b2934556af04c74279d00ad1b0dbde3d81ec6`.
+
+The one-use CSS workflow is retired in this documentation commit to an inert read-only marker with no executable publisher, artifact consumer or credential binding. Both older consumed publishers remain untouched. This final ordinary development commit triggers the existing PR acceptance workflows.
+
+### Final-candidate and release boundaries
+
+Preparation success and conditional publication are established, not automatically final whole-candidate acceptance. Inspect Foundation's audit/build/browser smoke, Reliability tests/lint/types/build/manifests, security checks and Combined Auth/provider/lifecycle/wave acceptance plus cleanup at the exact retirement/documentation head before claiming all required development verification passed. Old head checks do not transfer to changed executable dependencies.
+
+SEC-02 was independently closed on the prior candidate, and its implementation bytes remain unchanged. This dependency repair has engineering self-review, not native approval or a new independent G1 disposition. Applicable hosted/manual/operational gates, consolidated AGY acceptance, backup/isolated-restore and rollback readiness, current protection requirements and separate exact-head release authorization remain. No merge or production-readiness claim follows from this dependency repair alone.
