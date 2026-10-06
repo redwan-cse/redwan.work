@@ -16,13 +16,15 @@ function client():S3Client {
  const endpoint=process.env.R2_ENDPOINT;const accessKeyId=process.env.R2_PUBLIC_ACCESS_KEY_ID;const secretAccessKey=process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
  if(!endpoint||!accessKeyId||!secretAccessKey||!process.env.R2_PUBLIC_BUCKET)throw new Error('Public storage unavailable.');
  // Path-style signing uses the existing endpoint CSP origin, not a new bucket hostname.
- return new S3Client({region:'auto',endpoint,forcePathStyle:true,credentials:{accessKeyId,secretAccessKey}});
+ // The browser supplies the bytes later. Do not checksum the absent signing body.
+ return new S3Client({region:'auto',endpoint,forcePathStyle:true,requestChecksumCalculation:'WHEN_REQUIRED',credentials:{accessKeyId,secretAccessKey}});
 }
 export async function preparePublicAsset(input:AssetMetadata):Promise<{key:string;uploadUrl:string}> {
  const meta=validateAssetMetadata(input);if(!meta)throw new Error('Invalid asset metadata.');
  const key=makeAssetKey(extFromFilename(meta.filename));assetUrl(key);
  const storage=client();
- try{return {key,uploadUrl:await getSignedUrl(storage,new PutObjectCommand({Bucket:process.env.R2_PUBLIC_BUCKET,Key:key,ContentType:meta.mime,ContentLength:meta.size}),{expiresIn:600})};}
+ // Content-Type is excluded by the SDK unless explicitly made signable.
+ try{return {key,uploadUrl:await getSignedUrl(storage,new PutObjectCommand({Bucket:process.env.R2_PUBLIC_BUCKET,Key:key,ContentType:meta.mime,ContentLength:meta.size}),{expiresIn:600,signableHeaders:new Set(['content-type'])})};}
  finally{storage.destroy();}
 }
 export async function confirmPublicAsset(key:string,input:AssetMetadata):Promise<string|null> {
