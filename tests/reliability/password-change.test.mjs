@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test, {after, afterEach, beforeEach} from 'node:test';
 import {existsSync,readFileSync} from 'node:fs';
 import {registerHooks} from 'node:module';
+import {generateKeyPairSync,randomUUID,sign} from 'node:crypto';
+// Resolve the real locked SDK before installing the action's verifier/module stubs.
+import {createClient as createRealClient} from '@supabase/supabase-js';
 
 const root=new URL('../../',import.meta.url);
 const lock=JSON.parse(readFileSync(new URL('package-lock.json',root),'utf8'));
@@ -67,6 +70,137 @@ test('posted actor/email cannot select the account',async()=>{await invoke(form(
 test('legacy or missing publishable key fails before verification',async()=>{process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='legacy-key';assert.equal((await invoke()).status,'denied');assert.equal(f.created,0);});
 test('verification response loss is uncertain, with no update',async()=>{f.verifier.signInWithPassword=async()=>{throw Error('private-sentinel');};assert.equal((await invoke()).status,'verification-unconfirmed');assert.equal(f.events.includes('update'),false);});
 test('claim-verification failure still cleans the temporary session',async()=>{f.verifier.getClaims=async()=>{throw Error('private-sentinel');};assert.equal((await invoke()).status,'denied');assert.deepEqual(f.events,['verify','cleanup']);});
+
+// SEC-02: real SDK methods and error normalization, synthetic HTTP only.
+// This supplies the lost-session postcondition, not a provider transaction race.
+const ignoredLogoutErrors=[
+ {label:'session_not_found',status:403,code:'session_not_found'},
+ ...[401,403,404].map(status=>({label:`HTTP ${status}`,status,code:'bad_jwt'})),
+];
+async function sdkOriginal({logout=ignoredLogoutErrors[0],continuity='lost'}={}){
+ const origin='https://fixture.example.test',id=randomUUID(),sid=randomUUID(),kid=randomUUID();
+ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+ const now=Math.floor(Date.now()/1000);
+ const payload={sub:id,session_id:sid,iss:origin+'/auth/v1',aud:'authenticated',role:'authenticated',iat:now,exp:now+600};
+ const encoded=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+ const unsigned=encoded({alg:'ES256',typ:'JWT',kid})+'.'+encoded(payload);
+ const token=unsigned+'.'+sign('sha256',Buffer.from(unsigned),{key:privateKey,dsaEncoding:'ieee-p1363'}).toString('base64url');
+ const jwks={keys:[{...publicKey.export({format:'jwk'}),alg:'ES256',use:'sig',kid}]};
+ const user={id,email:'current@example.test',aud:'authenticated',role:'authenticated',app_metadata:{},user_metadata:{},created_at:new Date(now*1000).toISOString()};
+ const trace={events:[],updates:0,logouts:0,unexpected:0};
+ const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','X-Supabase-Api-Version':'2024-01-01'}});
+ const fail=(status,code)=>json({code,msg:'private-sentinel'},status);
+ const c=createRealClient(origin,'sb_publishable_fixture',{
+  auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,debug:false,storageKey:'sec02-'+kid},
+  global:{fetch:async(input,init={})=>{
+   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);
+   const method=(init.method??'GET').toUpperCase();
+   if(url.origin!==origin){trace.unexpected++;throw Error('Unexpected synthetic destination');}
+   if(method==='POST'&&url.pathname==='/auth/v1/token'&&url.searchParams.get('grant_type')==='password'&&!trace.events.includes('signin')){
+    trace.events.push('signin');
+    return json({access_token:token,refresh_token:'synthetic-refresh',token_type:'bearer',expires_in:600,expires_at:payload.exp,user});
+   }
+   if(method==='GET'&&url.pathname==='/auth/v1/.well-known/jwks.json'){
+    trace.events.push('jwks');return json(jwks);
+   }
+   if(url.pathname==='/auth/v1/user'||url.pathname==='/auth/v1/logout'){
+    assert.ok(new Headers(init.headers).get('Authorization')==='Bearer '+token,'Original bearer binding');
+   }
+   if(method==='GET'&&url.pathname==='/auth/v1/user'){
+    trace.events.push(trace.updates?'user-after':'user-before');
+    if(!trace.updates||continuity==='live')return json(user);
+    if(continuity==='missing-user')return json({user:null});
+    if(continuity==='foreign-user')return json({...user,id:randomUUID()});
+    if(continuity==='service-error')return fail(503,'unexpected_failure');
+    if(continuity==='transport')throw new TypeError('private-sentinel');
+    return fail(403,'session_not_found');
+   }
+   if(method==='PUT'&&url.pathname==='/auth/v1/user'){
+    trace.events.push('update');trace.updates++;
+    assert.equal(trace.updates,1,'Password mutation must not retry');
+    assert.deepEqual(JSON.parse(init.body),{password:'replacement-password',current_password:'original-password'});
+    return json(user);
+   }
+   if(method==='POST'&&url.pathname==='/auth/v1/logout'&&url.searchParams.get('scope')==='others'){
+    trace.events.push('others');trace.logouts++;
+    return continuity==='lost'?fail(logout.status,logout.code):new Response(null,{status:204});
+   }
+   trace.unexpected++;throw Error('Unexpected synthetic request');
+  }},
+ });
+ await c.auth.initialize();
+ const signed=await c.auth.signInWithPassword({email:user.email,password:'original-password'});
+ assert.equal(signed.error,null);assert.ok(signed.data.session);
+ f.actor.userId=id;f.verifierId=id;f.verifierSid=randomUUID();f.original=c.auth;
+ return {auth:c.auth,id,sid,trace};
+}
+for(const logout of ignoredLogoutErrors){
+ test(`SEC-02 real SDK ignores ${logout.label} logout while local JWT remains valid`,async()=>{
+  const {auth,id,sid,trace}=await sdkOriginal({logout});
+  assert.equal((await auth.updateUser({password:'replacement-password',current_password:'original-password'})).error,null);
+  assert.equal((await auth.signOut({scope:'others'})).error,null);
+  const retained=await auth.getClaims();
+  assert.equal(retained.error,null);assert.equal(retained.data?.claims?.sub,id);assert.equal(retained.data?.claims?.session_id,sid);
+  assert.equal(trace.events.filter(e=>e==='user-after').length,0,'Local claims must not substitute a provider read');
+  const missing=await auth.getUser();
+  assert.equal(missing.error?.name,'AuthSessionMissingError');assert.equal(missing.data.user,null);
+  assert.equal(trace.updates,1);assert.equal(trace.logouts,1);assert.equal(trace.unexpected,0);
+ });
+ test(`SEC-02 action refuses false complete after ignored ${logout.label}`,async()=>{
+  const {trace}=await sdkOriginal({logout});
+  const result=await invoke();
+  assert.equal(trace.unexpected,0);assert.equal(trace.updates,1);assert.equal(trace.logouts,1);
+  assert.equal(result.status,'changed-unconfirmed','SEC-02: a valid local JWT is not provider session continuity');
+  assert.deepEqual(trace.events.filter(e=>e!=='signin'&&e!=='jwks'),['user-before','user-before','update','others','user-after']);
+  assert.equal(JSON.stringify(result).includes('private-sentinel'),false);
+ });
+}
+for(const continuity of ['missing-user','foreign-user','service-error','transport']){
+ test(`SEC-02 post-mutation provider ${continuity} remains changed-unconfirmed`,async()=>{
+  const {trace}=await sdkOriginal({continuity});
+  const result=await invoke();
+  assert.equal(trace.unexpected,0);assert.equal(trace.updates,1);assert.equal(trace.logouts,1);
+  assert.equal(result.status,'changed-unconfirmed');assert.equal(trace.events.filter(e=>e==='user-after').length,1);
+  assert.equal(JSON.stringify(result).includes('private-sentinel'),false);
+ });
+}
+test('SEC-02 real SDK confirms a live original only after revocation',async()=>{
+ const {trace}=await sdkOriginal({continuity:'live'});
+ assert.equal((await invoke()).status,'complete');
+ assert.deepEqual(trace.events.filter(e=>e!=='signin'&&e!=='jwks'),['user-before','user-before','update','others','user-after']);
+ assert.equal(trace.updates,1);assert.equal(trace.logouts,1);assert.equal(trace.unexpected,0);
+});
+test('SEC-02 thrown continuity check keeps acknowledged mutation state',async()=>{
+ const getUser=f.original.getUser;
+ f.original.getUser=async()=>{if(f.events.includes('others'))throw Error('private-sentinel');return getUser();};
+ assert.equal((await invoke()).status,'changed-unconfirmed');
+ assert.equal(f.events.filter(e=>e==='update').length,1);
+});
+for(const mode of ['error','throw','missing-subject','foreign-subject','missing-session','changed-session']){
+ test(`SEC-02 final verified claims still reject ${mode}`,async()=>{
+  const getClaims=f.original.getClaims;
+  f.original.getClaims=async()=>{
+   if(!f.events.includes('others'))return getClaims();
+   if(mode==='throw')throw Error('private-sentinel');
+   if(mode==='error')return {data:null,error:{message:'private-sentinel'}};
+   const claims={sub:'actor',session_id:'original'};
+   if(mode==='missing-subject')delete claims.sub;
+   if(mode==='foreign-subject')claims.sub='other';
+   if(mode==='missing-session')delete claims.session_id;
+   if(mode==='changed-session')claims.session_id='other';
+   return response(claims);
+  };
+  assert.equal((await invoke()).status,'changed-unconfirmed');
+  assert.equal(f.events.filter(e=>e==='update').length,1);
+ });
+}
+test('SEC-02 continuity read precedes the final original-claims binding',async()=>{
+ const getUser=f.original.getUser,getClaims=f.original.getClaims;
+ f.original.getUser=async()=>{if(f.events.includes('others'))f.events.push('provider-continuity');return getUser();};
+ f.original.getClaims=async()=>{if(f.events.includes('others'))f.events.push('retained-claims');return getClaims();};
+ assert.equal((await invoke()).status,'complete');
+ assert.deepEqual(f.events,['verify','cleanup','update','others','provider-continuity','retained-claims']);
+});
 
 // Component execution with synthetic hooks/DOM, separate from real browser acceptance.
 let Component;
