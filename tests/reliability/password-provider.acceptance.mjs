@@ -202,6 +202,10 @@ try {
       const original = await session(c), next = randomBytes(24).toString('base64url'), control = {};
       assert.equal(await candidate(c, f, f.password, next, control), 'complete');
       await rejectedRefresh(control.verifierSession.refresh_token);
+      assert.equal(data(await c.auth.getUser()).user.id, f.id);
+      const retained = data(await c.auth.getClaims()).claims;
+      assert.equal(retained.sub, f.id);
+      assert.equal(retained.session_id, claims(original.access_token).session_id);
       assert.equal(claims((await session(c)).access_token).session_id, claims(original.access_token).session_id);
       await refresh(c, claims(original.access_token).session_id);
       assert.ok((await client().auth.signInWithPassword({email: f.email, password: f.password})).error);
@@ -260,6 +264,26 @@ try {
     assert.equal(await candidate(e, h, h.password, unknown), 'update_unconfirmed');
     assert.equal(lost.updates, 1);
     await sameCredentials(h, unknown); // Observational oracle, not an action retry.
+    // SEC-02 equivalent postcondition, explicitly ordered with no timing sleeps.
+    // Not a reproduction of two already-authenticated password-update transactions.
+    const removedFixture = await fixture(), removedCalls = {}, original = client(removedCalls), revoker = client();
+    const originalSession = await signIn(original, removedFixture);
+    const originalSid = claims(originalSession.access_token).session_id;
+    const replacement = randomBytes(24).toString('base64url');
+    data(await original.auth.updateUser({password: replacement, current_password: removedFixture.password}));
+    await signIn(revoker, removedFixture, replacement);
+    data(await revoker.auth.signOut({scope: 'others'})); // Deletes the original session first.
+    data(await original.auth.signOut({scope: 'others'})); // SDK ignores the missing-session error.
+    const retained = data(await original.auth.getClaims()).claims;
+    assert.equal(retained.sub, removedFixture.id);
+    assert.equal(retained.session_id, originalSid);
+    claims(originalSession.access_token); // Still cryptographically valid and unexpired.
+    const missing = await original.auth.getUser(); // Provider acceptance is different evidence.
+    assert.equal(missing.error?.name, 'AuthSessionMissingError');
+    assert.equal(missing.data.user, null);
+    await rejectedRefresh(originalSession.refresh_token);
+    assert.equal(removedCalls.updates, 1);
+    assert.equal(data(await revoker.auth.getUser()).user.id, removedFixture.id);
   });
   await group('residual_jwt', async () => {
     const value = claims(residual);

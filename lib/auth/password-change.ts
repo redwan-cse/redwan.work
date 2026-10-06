@@ -108,6 +108,10 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
     phase='changed';
     const revoked=await original.auth.signOut({scope:'others'});
     if(revoked.error)return changedUnknown;
+    // Scope others can suppress missing-session errors; local JWT claims are not liveness.
+    // Require point-in-time Auth acceptance before the final original-session binding.
+    const retainedUser=await original.auth.getUser();
+    if(retainedUser.error||retainedUser.data.user?.id!==actor.userId)return changedUnknown;
     const retained=await original.auth.getClaims();
     if(retained.error||retained.data?.claims?.sub!==actor.userId||retained.data?.claims?.session_id!==sid)return changedUnknown;
     return {status:'complete',notice:'Password changed. This session is retained; other sessions cannot refresh. Existing access tokens may work until they expire.'};
