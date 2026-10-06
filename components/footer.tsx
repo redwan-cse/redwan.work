@@ -12,11 +12,22 @@ export function Footer() {
           </p>
         </div>
         <SocialLinks />
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center space-y-2">
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Md Redwan Ahmed. All rights reserved.
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
+            Cybersecurity Research Publication:{' '}
+            <a
+              href="https://blogs.redwan.work/"
+              className="hover:underline text-primary font-medium inline-flex items-center gap-1.5"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              blogs.redwan.work
+            </a>
+          </p>
+          <p className="text-sm text-muted-foreground">
             Founder &amp; CEO -{' '}
             <a href="https://fastcyberdefense.com/" className="hover:underline inline-flex items-center gap-2">
               Fast Cyber Defense
