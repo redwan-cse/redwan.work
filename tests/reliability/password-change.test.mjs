@@ -118,7 +118,12 @@ async function sdkOriginal({logout=ignoredLogoutErrors[0],continuity='lost'}={})
    if(method==='PUT'&&url.pathname==='/auth/v1/user'){
     trace.events.push('update');trace.updates++;
     assert.equal(trace.updates,1,'Password mutation must not retry');
-    assert.deepEqual(JSON.parse(init.body),{password:'replacement-password',current_password:'original-password'});
+    const {password,current_password,...metadata}=JSON.parse(init.body);
+    assert.deepEqual({password,current_password},{password:'replacement-password',current_password:'original-password'});
+    for(const [key,value]of Object.entries(metadata)){
+     assert.ok(['code_challenge','code_challenge_method'].includes(key),'ERR_SEC02_UPDATE_METADATA');
+     assert.equal(value,null,'ERR_SEC02_UPDATE_METADATA');
+    }
     return json(user);
    }
    if(method==='POST'&&url.pathname==='/auth/v1/logout'&&url.searchParams.get('scope')==='others'){
@@ -137,14 +142,14 @@ async function sdkOriginal({logout=ignoredLogoutErrors[0],continuity='lost'}={})
 for(const logout of ignoredLogoutErrors){
  test(`SEC-02 real SDK ignores ${logout.label} logout while local JWT remains valid`,async()=>{
   const {auth,id,sid,trace}=await sdkOriginal({logout});
-  assert.equal((await auth.updateUser({password:'replacement-password',current_password:'original-password'})).error,null);
-  assert.equal((await auth.signOut({scope:'others'})).error,null);
+  assert.equal((await auth.updateUser({password:'replacement-password',current_password:'original-password'})).error,null,'ERR_SEC02_UPDATE');
+  assert.equal((await auth.signOut({scope:'others'})).error,null,'ERR_SEC02_LOGOUT');
   const retained=await auth.getClaims();
-  assert.equal(retained.error,null);assert.equal(retained.data?.claims?.sub,id);assert.equal(retained.data?.claims?.session_id,sid);
-  assert.equal(trace.events.filter(e=>e==='user-after').length,0,'Local claims must not substitute a provider read');
+  assert.equal(retained.error,null,'ERR_SEC02_CLAIMS');assert.equal(retained.data?.claims?.sub,id,'ERR_SEC02_SUBJECT');assert.equal(retained.data?.claims?.session_id,sid,'ERR_SEC02_SESSION');
+  assert.equal(trace.events.filter(e=>e==='user-after').length,0,'ERR_SEC02_CLAIMS_NETWORK');
   const missing=await auth.getUser();
-  assert.equal(missing.error?.name,'AuthSessionMissingError');assert.equal(missing.data.user,null);
-  assert.equal(trace.updates,1);assert.equal(trace.logouts,1);assert.equal(trace.unexpected,0);
+  assert.equal(missing.error?.name,'AuthSessionMissingError','ERR_SEC02_MISSING_ERROR');assert.equal(missing.data.user,null,'ERR_SEC02_MISSING_USER');
+  assert.equal(trace.updates,1,'ERR_SEC02_UPDATE_COUNT');assert.equal(trace.logouts,1,'ERR_SEC02_LOGOUT_COUNT');assert.equal(trace.unexpected,0,'ERR_SEC02_UNEXPECTED_REQUEST');
  });
  test(`SEC-02 action refuses false complete after ignored ${logout.label}`,async()=>{
   const {trace}=await sdkOriginal({logout});
