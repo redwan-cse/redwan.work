@@ -232,3 +232,116 @@ test('braces preserves ranges escaping glob and watch consumers',async()=>{
     assert.deepEqual(seen.sort(),['src/a.ts','src/b.tsx']);
   } finally {if(watcher) await watcher.close();rmSync(root,{recursive:true,force:true});}
 });
+
+// Official CSS dependency repairs: GHSA-68fv-2mgg-jv7q / GHSA-rj75-hqrm-r3gf.
+// Run resource-exhaustion regressions in bounded children, never the test runner.
+import {spawnSync} from 'node:child_process';
+function cssProbe(fn, marker) {
+  const script=`const assert=require('node:assert/strict');try {(${fn.toString()})();process.stdout.write('PASS');}
+    catch(error){process.stdout.write(String(error.message).includes(${JSON.stringify(marker)})?${JSON.stringify(marker)}:'ERR_CSS_PROBE_SETUP');process.exitCode=1;}`;
+  const result=spawnSync(process.execPath,['--max-old-space-size=192','-e',script],{
+    cwd:new URL('../../',import.meta.url),encoding:'utf8',timeout:10000,maxBuffer:16384,
+    env:{PATH:process.env.PATH,HOME:process.env.HOME},
+  });
+  assert.ok(!result.error&&!result.signal,'ERR_CSS_PROBE_EXECUTION');
+  assert.equal(result.status,0,result.stdout);
+  assert.equal(result.stdout,'PASS');
+}
+test('CSS security rejects excessive indexed source-map offsets',()=>{
+  cssProbe(()=>{
+    const {SourceMapConsumer}=require('source-map-js');
+    const map={version:3,sources:['fixture.js'],names:[],mappings:'AAAA'};
+    const indexed=(line,column=0,child=map)=>({version:3,sections:[{offset:{line,column},map:child}]});
+    assert.throws(()=>new SourceMapConsumer(indexed(10000001)),/must not exceed/,'ERR_SOURCE_OFFSET_REJECT');
+    for(const value of [-1,1.5,NaN,Infinity,'1',null,Number.MAX_SAFE_INTEGER+1]){
+      assert.throws(()=>new SourceMapConsumer(indexed(value)),/non-negative integers/);
+      assert.throws(()=>new SourceMapConsumer(indexed(0,value)),/non-negative integers/);
+    }
+    assert.doesNotThrow(()=>new SourceMapConsumer(indexed(10000000)));
+    assert.throws(()=>new SourceMapConsumer(indexed(6000000,0,indexed(6000000))),/including offsets/);
+  },'ERR_SOURCE_OFFSET_REJECT');
+});
+test('CSS security bounds flat-selector membership work',()=>{
+  cssProbe(()=>{
+    const parser=require('postcss-selector-parser'), original=Array.prototype.indexOf;
+    // Count numeric-array search capacity, not wall-clock time; no timing retries.
+    for(const atom of ['.a','#a','#{a}']){
+      let work=0,tree;const count=1024;
+      try {
+        Array.prototype.indexOf=function(...args){
+          if(this.length&&typeof this[0]==='number') work+=this.length;
+          return Reflect.apply(original,this,args);
+        };
+        tree=parser().astSync(atom.repeat(count));
+      } finally {Array.prototype.indexOf=original;}
+      assert.ok(work<100*count,'ERR_SELECTOR_QUADRATIC');
+      assert.equal(tree.toString(),atom.repeat(count));
+      if(atom!=='#{a}') assert.equal(tree.first.nodes.length,count);
+    }
+  },'ERR_SELECTOR_QUADRATIC');
+});
+test('CSS source maps preserve mapping and bounded nested-source reads',()=>{
+  cssProbe(()=>{
+    const {SourceMapConsumer,SourceMapGenerator,SourceNode}=require('source-map-js');
+    let map={version:3,sources:['fixture.js'],sourcesContent:['x'],names:[],mappings:'AAAA'};
+    for(let n=0;n<8;n++) map={version:3,sections:[{offset:{line:1,column:0},map}]};
+    const consumer=new SourceMapConsumer(map);let leaf=consumer;
+    for(let n=0;n<8;n++) leaf=leaf._sections[0].consumer;
+    let reads=0;const sources=leaf.sources;
+    Object.defineProperty(leaf,'sources',{get(){reads++;return sources;}});
+    assert.deepEqual(consumer.sources,['fixture.js']);assert.equal(reads,1,'ERR_SOURCE_READ_AMPLIFICATION');
+    const generator=new SourceMapGenerator({file:'out.js'});
+    generator.addMapping({generated:{line:3,column:0},original:{line:1,column:0},source:'fixture.js'});
+    const ordinary=new SourceMapConsumer(generator.toJSON());
+    assert.equal(ordinary.originalPositionFor({line:3,column:0}).source,'fixture.js');
+    const distant=new SourceMapConsumer({version:3,sections:[{offset:{line:10000,column:0},map:{
+      version:3,sources:['fixture.js'],sourcesContent:['x'],names:[],mappings:'AAAA',
+    }}]});
+    const node=SourceNode.fromStringWithSourceMap('x;\n',distant);
+    assert.equal(node.toString(),'x;\n');assert.ok(node.children.length<10);
+  },'ERR_SOURCE_READ_AMPLIFICATION');
+});
+test('CSS installed graph uses exact official patched packages for every consumer',()=>{
+  const manifest=require('../../package.json'), lock=require('../../package-lock.json');
+  const versions={'source-map-js':'1.2.2','postcss-selector-parser':'7.1.6'};
+  for(const [name,version] of Object.entries(versions)){
+    assert.equal(manifest.overrides[name],version);
+    const copies=Object.entries(lock.packages).filter(([path])=>path.endsWith(`/node_modules/${name}`)||path===`node_modules/${name}`);
+    assert.ok(copies.length>0);
+    for(const [path,item] of copies){
+      assert.equal(item.version,version);assert.equal(item.resolved,`https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`);
+      assert.match(item.integrity,/^sha512-[A-Za-z0-9+/]+=*$/);assert.ok(!item.hasInstallScript);
+      const installed=require(`../../${path}/package.json`);
+      assert.equal(installed.name,name);assert.equal(installed.version,version);
+      assert.deepEqual(installed.dependencies||{},item.dependencies||{});
+      for(const hook of ['preinstall','install','postinstall']) assert.ok(!installed.scripts?.[hook]);
+    }
+    let consumers=0;
+    for(const [path,item] of Object.entries(lock.packages)){
+      if(!path||!item.dependencies?.[name]) continue;
+      const from=createRequire(new URL(`../../${path}/package.json`,import.meta.url));
+      assert.equal(from(`${name}/package.json`).version,version,`${path}: vulnerable consumer resolution`);
+      consumers++;
+    }
+    assert.ok(consumers>0);
+  }
+  assert.equal(lock.packages['node_modules/tailwindcss'].version,'3.4.18');
+  assert.equal(lock.packages['node_modules/postcss-nested'].version,'6.2.0');
+  assert.equal(lock.packages['node_modules/tailwindcss-animate'].version,'1.0.7');
+});
+test('CSS parser preserves selector mutation escaping and nesting consumers',async()=>{
+  const parser=require('postcss-selector-parser'),postcss=require('postcss');
+  for(const selector of ['.a.b','#x.y',':is(.a, .b) > [data-state="open"]','.sm\\:hover\\:block:hover','svg|a','&:focus-visible']){
+    assert.equal(parser().processSync(selector),selector);
+  }
+  const unesc=require('postcss-selector-parser/dist/util/unesc');
+  assert.equal((unesc.default||unesc)('sm\\:block'),'sm:block');
+  const ast=parser().astSync('.a.b'),seen=[];
+  ast.walkClasses(node=>{seen.push(node.value);if(node.value==='a')node.parent.insertBefore(node,parser.className({value:'prefix'}));});
+  assert.deepEqual(seen,['a','b']);assert.equal(ast.toString(),'.prefix.a.b');
+  const result=await postcss([require('postcss-nested')]).process('.a { &:hover { color: red } .b { color: blue } }',{
+    from:'fixture.css',to:'fixture.out.css',map:{inline:false},
+  });
+  assert.match(result.css,/\.a:hover/);assert.match(result.css,/\.a \.b/);
+  assert.ok(result.map.toJSON().mappings);
+});
