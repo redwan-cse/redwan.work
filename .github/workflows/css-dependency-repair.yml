@@ -1,0 +1,12 @@
+name: Bounded CSS dependency repair (retired)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  retired:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "One-use CSS dependency repair completed; execution authority consumed."

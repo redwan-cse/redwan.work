@@ -6,6 +6,7 @@ import type { Metadata } from "next"
 import { TestimonialCarousel } from "@/components/testimonial-carousel"
 import { ProjectCarousel } from "@/components/project-carousel"
 import { ServicesGrid } from "@/components/services-grid"
+import { MarketingFrame } from "@/components/marketing-frame"
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 
 export default function Home() {
   return (
+    <MarketingFrame>
     <div className="flex flex-col">
       {/* Hero Section */}
       <section className="container min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-7rem)]">
@@ -86,7 +88,7 @@ export default function Home() {
       {/* Featured Projects Section */}
       <section className="container py-20">
         <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold md:text-4xl">Featured Projects</h2>
+          <h2 className="text-3xl font-bold md:text-4xl mb-4">Featured Projects</h2>
           <p className="text-lg text-muted-foreground">
             Explore our recent cybersecurity work and success stories
           </p>
@@ -137,5 +139,6 @@ export default function Home() {
         </div>
       </section>
     </div>
+    </MarketingFrame>
   )
 }

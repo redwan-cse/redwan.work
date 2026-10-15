@@ -1,0 +1,16 @@
+name: Retired PR63 braces depth repair
+# The one-use publisher completed in run 37137981670.
+# Published dependency commit: 87006ffb816b08436806303411615af9f952fd75.
+# Historical generation and verification remain in Git history; never reactivate
+# this workflow as a general dependency publisher.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retired:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retired without checkout, artifacts, credentials or writes
+        run: echo 'One-use repair retired; use ordinary read-only CI verification.'

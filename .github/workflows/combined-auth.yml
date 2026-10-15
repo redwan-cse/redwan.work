@@ -87,6 +87,37 @@ jobs:
           set -euo pipefail
           python3 tests/auth/check-template.py
           node tests/auth/run-local.mjs
+      - name: Verify approved P1-C provider compatibility
+        env:
+          AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json
+          PASSWORD_PROOF_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node tests/reliability/run-password-provider.mjs
+      - name: Publish bounded P1-C provider receipt
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          STATUS_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,re,urllib.request
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'password-provider-result.json'
+          r=json.loads(p.read_text()) if p.exists() else {}
+          passed=r.get('passed',0)
+          assert type(passed) is int and 0<=passed<=10
+          phases=['startup','environment','dependencies','fixture_config','container','provider_version','jwks','native_field','credential_denial','identity_binding','verifier_isolation','original_continuity','other_revocation','recovery_exception','failure_outcomes','residual_jwt','cleanup']
+          phase=r.get('phase','unavailable')
+          if phase not in phases: phase='unavailable'
+          cleanup=r.get('cleanup') is True
+          ok=r.get('complete') is True and cleanup and passed==10
+          desc='P1-C provider '+str(passed)+'/10; phase='+phase+'; cleanup='+str(cleanup)
+          sha=os.environ['STATUS_SHA'];assert re.fullmatch('[0-9a-f]{40}',sha)
+          payload={'context':'p1c/password-provider','state':'success' if ok else 'failure','description':desc,'target_url':'https://github.com/redwan-cse/redwan.work/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+          req=urllib.request.Request('https://api.github.com/repos/redwan-cse/redwan.work/statuses/'+sha,data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+os.environ['STATUS_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=15) as response: assert response.status==201
+          except Exception: raise SystemExit('Safe provider status publication failed')
+          print(desc)
+          PY
       - name: Verify product and full account lifecycle
         env:
           AUTH_STATUS_FILE: ${{ runner.temp }}/auth-status.json

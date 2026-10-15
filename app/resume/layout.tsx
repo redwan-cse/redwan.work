@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/lib/content/site';
+import { MarketingFrame } from '@/components/marketing-frame';
 
 // The resume page is a client component (react-to-print), so it cannot
 // export metadata itself — this server layout provides it.
@@ -19,5 +20,5 @@ export default function ResumeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <MarketingFrame>{children}</MarketingFrame>;
 }
