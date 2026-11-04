@@ -1,0 +1,80 @@
+name: Required Quality
+on:
+  push:
+    branches: [main, 'audit/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contract:
+    name: Quality contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Fail if required tests/scripts or immutable migrations are missing
+        env:
+          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha || (github.ref == 'refs/heads/main' && github.event.before) || 'ab3db841dda38f991b8ca02a8b6cb300081cf64a' }}
+        run: node scripts/verify-quality-contract.mjs
+  behavior:
+    name: Behavior (${{ matrix.suite }})
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [unit, db, e2e, a11y, seo]
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      TEST_ENVIRONMENT: isolated-ci
+      E2E_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_a_real_key
+      SUPABASE_SECRET_KEY: sb_secret_ci_placeholder_not_a_real_key
+      LEAD_IP_HASH_SALT: ci-only-placeholder-salt-not-used-for-real-people
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run the real suite in its disposable fixtures
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: npm run "test:${SUITE}"
+      - name: Require non-empty exact-checkout test evidence
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: node scripts/verify-quality-contract.mjs --receipt "$SUITE"
+  required:
+    name: Required quality
+    if: ${{ always() }}
+    needs: [contract, behavior]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Fail closed when a required job failed or was skipped
+        env:
+          CONTRACT_RESULT: ${{ needs.contract.result }}
+          BEHAVIOR_RESULT: ${{ needs.behavior.result }}
+        run: |
+          test "$CONTRACT_RESULT" = success
+          test "$BEHAVIOR_RESULT" = success

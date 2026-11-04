@@ -43,3 +43,14 @@ next-env.d.ts
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Keep all dotenv variants private; templates contain placeholders only.
+.env*
+!.env.example
+!.env.*.example
+
+# Disposable test output must not be committed.
+/artifacts/
+/playwright-report/
+/test-results/
+/coverage/

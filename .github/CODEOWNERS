@@ -1,0 +1,8 @@
+# Ownership is advisory unless a ruleset requires code-owner review.
+# A sole author cannot provide their own independent PR approval.
+* @redwan-cse
+/.github/ @redwan-cse
+/scripts/ @redwan-cse
+/supabase/ @redwan-cse
+/docs/QUALITY_GATES.md @redwan-cse
+/AGENTS.md @redwan-cse

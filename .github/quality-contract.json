@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "baselineCommit": "ab3db841dda38f991b8ca02a8b6cb300081cf64a",
+  "baselineMigrations": {
+    "supabase/migrations/0001_extensions_sequences_and_enums.sql": "69e3cd696fd233196c1ed65e45955549f5c2c8eba6a248266f92d4447469b411",
+    "supabase/migrations/0002_identity_and_client_relationship_crm.sql": "adc7a3adbf516ecea376a67e1136d5ad6dec366a6aa0985b9ba16b2870381510",
+    "supabase/migrations/0003_service_catalog_and_tiered_packages.sql": "af9096408d79cf0cfbc2ac644d3d7f54bcebec90425509d84a2ef6ec9d41bdb3",
+    "supabase/migrations/0004_inquiries_consent_and_proposals.sql": "a13dda8ba60ff867daf8de86c02faf2f153950d6e532024130829ae0cd565269",
+    "supabase/migrations/0005_orders_roe_execution_and_deliverables.sql": "0f406d544ee36ed13aaa5cfaae5d401da01190d4da52312086dd1dd02d7c00d4",
+    "supabase/migrations/0006_order_chat_and_support_tickets.sql": "a4845dfab257da9495b8f2f6e7e6106fc5bd3275eee2f561084330f0841a64ea",
+    "supabase/migrations/0007_invoicing_payments_and_retention.sql": "91ac6d39ba94d95397a823e8adaacde8663ab07a350b47bc8efd1aef0be166b6",
+    "supabase/migrations/0008_audit_notifications_outbox_and_rpcs.sql": "8b5fdbb1c7b3f82bb778b4a079c11116d690fc01225dc6ac28ee3a52376ea124",
+    "supabase/migrations/0009_performance_and_rls_hardening.sql": "fb70bd156f555d72d2e68bb763a8b572bd6c7a1f5a2f25b14af6ef0bfa8e888b",
+    "supabase/migrations/0010_cms_portfolio_resume_and_custom_deals.sql": "0c824a51a1bc86f5c085846f15224f57c41b81341f660004b1abc9f6130b5964"
+  },
+  "suites": [
+    {
+      "id": "unit",
+      "script": "test:unit",
+      "directory": "tests/unit",
+      "requirements": [
+        "CONSENT-CONTRACT",
+        "RATE-LIMIT-KINDS",
+        "MONEY-INVARIANTS",
+        "PUBLISHING-BOOLEAN"
+      ]
+    },
+    {
+      "id": "db",
+      "script": "test:db",
+      "directory": "tests/db",
+      "requirements": [
+        "RPC-ACTOR-BINDING",
+        "FUNCTION-ACLS",
+        "TENANT-ISOLATION",
+        "ADMIN-AAL2",
+        "PAYMENT-IDEMPOTENCY",
+        "MIGRATION-BOOTSTRAP"
+      ]
+    },
+    {
+      "id": "e2e",
+      "script": "test:e2e",
+      "directory": "tests/e2e",
+      "requirements": [
+        "R1-ORDER-DELIVER-PAY",
+        "AUTH-RECOVERY",
+        "UPLOAD-FINALIZE-DOWNLOAD",
+        "OUTBOX-RETRY"
+      ]
+    },
+    {
+      "id": "a11y",
+      "script": "test:a11y",
+      "directory": "tests/a11y",
+      "requirements": [
+        "RESPONSIVE-320-1920",
+        "KEYBOARD-FOCUS",
+        "WCAG-AUTOMATED",
+        "REDUCED-MOTION"
+      ]
+    },
+    {
+      "id": "seo",
+      "script": "test:seo",
+      "directory": "tests/seo",
+      "requirements": [
+        "PUBLIC-METADATA",
+        "PAGINATION-CANONICAL",
+        "PRIVATE-NOINDEX",
+        "SITEMAP-STABILITY",
+        "IDENTITY-CONSISTENCY"
+      ]
+    }
+  ]
+}

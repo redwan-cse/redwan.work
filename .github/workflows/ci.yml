@@ -1,41 +1,49 @@
 name: CI
-
 on:
   push:
-    branches: [main]
+    branches: [main, 'audit/**']
   pull_request:
     branches: [main]
-
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  verify:
-    name: Typecheck, Lint & Build
-    runs-on: ubuntu-latest
-
+  static:
+    name: Static build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     env:
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL || 'https://redwan.work' }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_placeholder' }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || 'sb_secret_placeholder' }}
-      LEAD_IP_HASH_SALT: ${{ secrets.LEAD_IP_HASH_SALT || 'placeholder-salt-minimum-32-chars-long' }}
-
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder_not_a_real_key
+      SUPABASE_SECRET_KEY: sb_secret_ci_placeholder_not_a_real_key
+      LEAD_IP_HASH_SALT: ci-only-placeholder-salt-not-used-for-real-people
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
+          persist-credentials: false
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Record runtime
+        run: node --version && npm --version
+      - name: Install locked dependencies
         run: npm ci
-
-      - name: Type check (TypeScript)
-        run: npx tsc --noEmit
-
-      - name: Lint check (ESLint)
-        run: npm run lint
-
-      - name: Production Build
+      - name: Test the quality gate itself (not the application)
+        run: node --test scripts/verify-quality-contract.test.mjs
+      - name: Generate Next route types
+        run: ./node_modules/.bin/next typegen
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint with no warnings
+        run: npm run lint -- --max-warnings=0
+      - name: Production build with synthetic configuration
         run: npm run build

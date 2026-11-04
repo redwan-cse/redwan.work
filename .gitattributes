@@ -1,0 +1,5 @@
+# Preserve byte-identical migration and CI scripts across Windows/Linux checkouts.
+/supabase/migrations/*.sql text eol=lf
+/scripts/*.mjs text eol=lf
+/.github/**/*.yml text eol=lf
+/.github/*.json text eol=lf
