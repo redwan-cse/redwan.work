@@ -1,0 +1,2062 @@
+"use client"
+
+import React, { useState, useEffect } from 'react';
+import Script from 'next/script';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react";
+import Link from "next/link";
+import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Country } from "@/lib/countries-data";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { formatBytes } from '@/lib/format';
+import { parseBudgetRange } from '@/lib/contact/intake-contract';
+import { useContactConsentPolicy } from '@/hooks/use-contact-consent-policy';
+import { CONSENT_STALE_MESSAGE, CONSENT_UNAVAILABLE_MESSAGE } from '@/lib/contact/consent-client';
+import { SERVICE_CATALOG, SERVICE_PILLARS, type ServiceCatalogItem } from '@/lib/content/site';
+import { Badge } from '@/components/ui/badge';
+
+/**
+ * Contact intake: /api/contact validates consent, Turnstile and rate limits,
+ * then persists to Supabase. The server supplies the ticket reference.
+ * See docs/contact/README.md for required configuration.
+ */
+
+/**
+ * Turnstile Configuration
+ * 
+ * The Turnstile site key is used to render the security widget.
+ * The secret key is stored server-side in the API route.
+ */
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+/**
+ * Attachment limits — client-side mirror of the server-only lib/r2.ts constants
+ * (CONTACT_MAX_FILES, CONTACT_MAX_SIZE_BYTES, CONTACT_ALLOWED_EXT) and the
+ * shared lib/mime.ts CONTACT_ALLOWED cross-check map. lib/r2.ts is marked
+ * 'server-only' so it cannot be imported here; keep these values in sync.
+ */
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_ATTACHMENT_EXTS = ['pdf', 'docx', 'doc', 'xlsx', 'png', 'jpg', 'zip'];
+const ATTACHMENT_ACCEPT_ATTR = '.pdf,.docx,.doc,.xlsx,.png,.jpg,.zip';
+// Canonical mime per extension — the presign endpoint rejects mismatches
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  zip: 'application/zip',
+};
+
+interface AttachedFile {
+  key: string;
+  filename: string;
+  mime: string;
+  size_bytes: number;
+}
+
+function attachmentExtension(filename: string): string {
+  const parts = filename.toLowerCase().split('.');
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
+function attachmentMime(filename: string, browserType?: string): string {
+  return EXT_TO_MIME[attachmentExtension(filename)] ?? browserType ?? 'application/octet-stream';
+}
+
+/**
+ * WhatsApp Number Validation Helper
+ * 
+ * Validates a WhatsApp number using libphonenumber-js.
+ * 
+ * @param countryIso - ISO 3166-1 alpha-2 country code (e.g., "BD")
+ * @param callingCode - Country calling code with + (e.g., "+880")
+ * @param local - Local phone number digits only
+ * @returns true if valid, error message string if invalid
+ */
+function validateWhatsappNumber(
+  countryIso: string,
+  callingCode: string,
+  local: string
+): string | true {
+  // If empty, it's valid (field is optional)
+  if (!local.trim()) {
+    return true;
+  }
+
+  // Strip any non-digit characters from local input
+  const cleanLocal = local.replace(/\D/g, '');
+
+  // Build full E.164 number
+  const fullNumber = `${callingCode}${cleanLocal}`;
+
+  try {
+    // Validate using libphonenumber-js
+    if (!isValidPhoneNumber(fullNumber, countryIso as any)) {
+      // Get country name for better error message
+      const country = countries.find(c => c.code === countryIso);
+      const countryName = country?.name || countryIso;
+      return `Invalid phone number format for ${countryName}`;
+    }
+    return true;
+  } catch (error) {
+    // If parsing fails, return generic error
+    const country = countries.find(c => c.code === countryIso);
+    const countryName = country?.name || countryIso;
+    return `Invalid phone number format for ${countryName}`;
+  }
+}
+
+// How did you find me options
+const referralSources = [
+  "Referral",
+  "Upwork",
+  "Fiverr",
+  "LinkedIn",
+  "Google",
+  "GitHub",
+  "YouTube",
+  "Other"
+];
+
+const packageTierOptions = [
+  { value: "Offer a Custom Deal (Custom Budget & Scope)", label: "Offer a Custom Deal (Propose Your Own Budget & Scope)" },
+  { value: "Starter Package (Focused Scope)", label: "Starter Package (Focused Scope)" },
+  { value: "Standard Package (Most Popular)", label: "Standard Package (Most Popular)" },
+  { value: "Enterprise Package (Multi-Target / Full Production)", label: "Enterprise Package (Multi-Target / Full Production)" },
+  { value: "Monthly Advisory & Support Retainer", label: "Monthly Advisory & Support Retainer" },
+];
+
+// Urgency options
+const urgencyOptions = [
+  { value: "immediately", label: "Immediately", priority: "High" },
+  { value: "within_1_week", label: "Within 1 week", priority: "High" },
+  { value: "within_1_month", label: "Within 1 month", priority: "Medium" },
+  { value: "flexible", label: "Flexible", priority: "Low" }
+];
+
+/**
+ * Convert 24-hour time (HH:MM) to 12-hour format (hh:mm AM/PM)
+ * @param time24 - Time in 24-hour format, e.g., "13:30"
+ * @returns Time in 12-hour format, e.g., "01:30 PM"
+ */
+function convertTo12Hour(time24: string): string {
+  if (!time24) return '';
+  
+  const [hourStr, minuteStr] = time24.split(':');
+  let hour = parseInt(hourStr, 10);
+  const minute = minuteStr;
+  
+  const period = hour >= 12 ? 'PM' : 'AM';
+  
+  // Convert to 12-hour format
+  if (hour === 0) {
+    hour = 12;
+  } else if (hour > 12) {
+    hour = hour - 12;
+  }
+  
+  // Format with leading zero for minutes, but not for hours
+  return `${hour}:${minute} ${period}`;
+}
+
+/**
+ * Convert 12-hour time (hh:mm AM/PM) to 24-hour format (HH:MM)
+ * @param time12 - Time in 12-hour format, e.g., "01:30 PM"
+ * @returns Time in 24-hour format, e.g., "13:30"
+ */
+function convertTo24Hour(time12: string): string {
+  if (!time12) return '';
+  
+  const match = time12.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return '';
+  
+  let hour = parseInt(match[1], 10);
+  const minute = match[2];
+  const period = match[3].toUpperCase();
+  
+  // Convert to 24-hour format
+  if (period === 'PM' && hour !== 12) {
+    hour += 12;
+  } else if (period === 'AM' && hour === 12) {
+    hour = 0;
+  }
+  
+  // Format with leading zeros
+  const hourStr = hour.toString().padStart(2, '0');
+  return `${hourStr}:${minute}`;
+}
+
+interface FormData {
+  // Visible fields
+  name: string;
+  email: string;
+  country: string;
+  whatsAppCountryCode: string; // Country code for WhatsApp
+  whatsAppNumber: string;      // Local WhatsApp number (combined with code on submit)
+  preferredContactMethod: 'Email' | 'WhatsApp' | 'Both' | '';
+  timeZone: string;
+  preferredContactDate: string; // Optional ISO date
+  bestTimeToContact: string;    // Time string in 12-hour format ("10:00 AM") or empty
+  serviceType: string[];
+  serviceTypeOther: string;     // Additional input when "Other" is selected
+  packageTier: string;          // Optional preferred package tier or engagement model
+  company: string;
+  projectUrlOrFiles: string;
+  projectSummary: string;
+  ndaConfidentiality: boolean;  // Explicit intent; serialized as true/false
+  urgency: string;
+  budgetMin: string;
+  budgetMax: string;
+  howDidYouFindMe: string;
+  howDidYouFindMeOther: string;    // Additional input when "Other" is selected
+  howDidYouFindMeReferral: string; // Additional input when "Referral" is selected
+  gdprConsent: boolean;         // Required checkbox, validated again by the server
+}
+
+interface FormErrors {
+  [key: string]: string;
+}
+
+interface HiddenFields {
+  sourcePage: string;
+  deviceType: 'Mobile' | 'Desktop' | 'Tablet';
+}
+
+export default function EnhancedContactForm({
+  initialServices = SERVICE_CATALOG,
+}: {
+  initialServices?: ServiceCatalogItem[];
+}) {
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    email: '',
+    country: '',
+    whatsAppCountryCode: '+880',
+    whatsAppNumber: '',
+    preferredContactMethod: '',
+    timeZone: '',
+    preferredContactDate: '',
+    bestTimeToContact: '',
+    serviceType: [],
+    serviceTypeOther: '',
+    packageTier: '',
+    company: '',
+    projectUrlOrFiles: '',
+    projectSummary: '',
+    ndaConfidentiality: false,
+    urgency: '',
+    budgetMin: '',
+    budgetMax: '',
+    howDidYouFindMe: '',
+    howDidYouFindMeOther: '',
+    howDidYouFindMeReferral: '',
+    gdprConsent: false,
+  });
+  const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = React.useRef(false);
+  const { policy: consentPolicy, loading: policyLoading, error: policyError, refresh: refreshPolicy, replacePolicy } = useContactConsentPolicy();
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [selectedCountryCode, setSelectedCountryCode] = useState('');
+  const [selectedWhatsAppCountryCode, setSelectedWhatsAppCountryCode] = useState('');
+  const [countryPopoverOpen, setCountryPopoverOpen] = useState(false);
+  const [isPreferredDateOpen, setIsPreferredDateOpen] = useState(false);
+  
+  // Validation dialog state
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  
+  // Turnstile verification state
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [isTurnstileVerified, setIsTurnstileVerified] = useState(false);
+
+  // Attachment upload state (metadata stored server-side on submit)
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Mirror of turnstileToken for non-reactive polling in getFreshTurnstileToken();
+  // the generation counter increments on every widget solve, identifying the
+  // freshest execution even if the issued token string were ever reused.
+  const turnstileTokenRef = React.useRef<string | null>(null);
+  const turnstileGenerationRef = React.useRef(0);
+  
+  // Refs for form fields to enable scrolling and focusing
+  const nameRef = React.useRef<HTMLInputElement>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
+  const countryRef = React.useRef<HTMLButtonElement>(null);
+  const whatsAppNumberRef = React.useRef<HTMLInputElement>(null);
+  const timeZoneRef = React.useRef<HTMLButtonElement>(null);
+  const serviceTypeRef = React.useRef<HTMLDivElement>(null);
+  const projectSummaryRef = React.useRef<HTMLTextAreaElement>(null);
+  const urgencyRef = React.useRef<HTMLButtonElement>(null);
+  const gdprConsentRef = React.useRef<HTMLButtonElement>(null);
+
+  // Auto-detect timezone, country, and WhatsApp dial code on mount
+  useEffect(() => {
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    // Try to find a country that uses this timezone
+    let detectedCountry: Country | undefined;
+    for (const country of countries) {
+      if (country.timezones.includes(detectedTimezone)) {
+        detectedCountry = country;
+        break;
+      }
+    }
+    
+    if (detectedCountry) {
+      setSelectedCountryCode(detectedCountry.code);
+      setSelectedWhatsAppCountryCode(detectedCountry.code);
+      setFormData(prev => ({
+        ...prev,
+        country: detectedCountry!.name,
+        whatsAppCountryCode: detectedCountry!.phoneCode,
+        timeZone: detectedTimezone
+      }));
+    } else {
+      // Fallback: just set timezone
+      setFormData(prev => ({
+        ...prev,
+        timeZone: detectedTimezone
+      }));
+    }
+
+    // Preselect service & package tier if passed via URL query params (?service=...&tier=...)
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const slugParam = sp.get('service');
+      const tierParam = sp.get('tier');
+      const matchedService = slugParam
+        ? initialServices.find((s) => s.slug === slugParam)
+        : undefined;
+      const tierLabelMap: Record<string, string> = {
+        custom: 'Offer a Custom Deal (Custom Budget & Scope)',
+        starter: 'Starter Package (Focused Scope)',
+        standard: 'Standard Package (Most Popular)',
+        enterprise: 'Enterprise Package (Multi-Target / Full Production)',
+        retainer: 'Monthly Advisory & Support Retainer',
+      };
+      if (matchedService || (tierParam && tierLabelMap[tierParam])) {
+        setFormData((prev) => ({
+          ...prev,
+          serviceType: matchedService
+            ? Array.from(new Set([...prev.serviceType, matchedService.title]))
+            : prev.serviceType,
+          packageTier: (tierParam && tierLabelMap[tierParam]) || prev.packageTier,
+        }));
+      }
+    }
+    // Run once on mount: prefill from query params.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Turnstile callback functions
+  // These are called by the Turnstile widget via data-callback attributes
+  useEffect(() => {
+    // Define global callback functions for Turnstile
+    (window as any).onTurnstileSuccess = (token: string) => {
+      console.log('✅ Turnstile verification successful');
+      turnstileGenerationRef.current += 1;
+      turnstileTokenRef.current = token;
+      setTurnstileToken(token);
+      setIsTurnstileVerified(true);
+      setTurnstileError(null);
+    };
+
+    (window as any).onTurnstileError = () => {
+      console.error('❌ Turnstile verification error');
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError('Security verification failed. Please refresh the page and try again.');
+    };
+
+    (window as any).onTurnstileExpired = () => {
+      console.warn('⚠️ Turnstile token expired');
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError('Security verification expired. The widget will automatically refresh.');
+    };
+
+    // Cleanup
+    return () => {
+      delete (window as any).onTurnstileSuccess;
+      delete (window as any).onTurnstileError;
+      delete (window as any).onTurnstileExpired;
+    };
+  }, []);
+
+  /**
+   * Resets the managed Turnstile widget and resolves with a token from the NEW
+   * execution it triggers (polled every 250 ms via the solve-generation
+   * counter). The server replay guard consumes one token per protected call,
+   * so every presign request and every submit needs its own fresh execution.
+   */
+  const getFreshTurnstileToken = (): Promise<string> =>
+    new Promise<string>((resolve, reject) => {
+      const turnstile = (window as any).turnstile;
+      if (!TURNSTILE_SITE_KEY || typeof turnstile === 'undefined') {
+        reject(new Error('Security verification failed. Please refresh the page and try again.'));
+        return;
+      }
+      const startGeneration = turnstileGenerationRef.current;
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      turnstile.reset();
+      const startedAt = Date.now();
+      const pollForToken = () => {
+        if (turnstileGenerationRef.current > startGeneration) {
+          const token = turnstileTokenRef.current;
+          if (token) {
+            resolve(token);
+            return;
+          }
+        }
+        if (Date.now() - startedAt >= 15000) {
+          reject(new Error('Security verification timed out. Please try again.'));
+          return;
+        }
+        setTimeout(pollForToken, 250);
+      };
+      pollForToken();
+    });
+
+  /**
+   * Uploads selected files: client-side pre-validation, presign via
+   * /api/uploads/presign, then direct PUT of each file to its signed URL.
+   * A failure here never blocks submitting the form without attachments.
+   */
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files ? Array.from(e.target.files) : [];
+    // Reset input so re-selecting the same file fires change again
+    e.target.value = '';
+    if (selected.length === 0) return;
+
+    setUploadError(null);
+
+    if (attachedFiles.length + selected.length > MAX_ATTACHMENTS) {
+      setUploadError(`You can attach up to ${MAX_ATTACHMENTS} files in total.`);
+      return;
+    }
+    for (const file of selected) {
+      if (!ACCEPTED_ATTACHMENT_EXTS.includes(attachmentExtension(file.name))) {
+        setUploadError(
+          `"${file.name}" has an unsupported file type. Accepted: ${ACCEPTED_ATTACHMENT_EXTS.map(ext => `.${ext}`).join(', ')}`
+        );
+        return;
+      }
+      if (file.size < 1 || file.size > MAX_ATTACHMENT_BYTES) {
+        setUploadError(
+          `"${file.name}" is too large. Each file can be up to ${formatBytes(MAX_ATTACHMENT_BYTES)}.`
+        );
+        return;
+      }
+    }
+
+    setUploading(true);
+    try {
+      const token = await getFreshTurnstileToken();
+
+      const presignResponse = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: selected.map((file) => ({
+            filename: file.name,
+            mime: attachmentMime(file.name, file.type),
+            size: file.size,
+          })),
+          turnstileToken: token,
+        }),
+      });
+      const presignData = await presignResponse.json().catch(() => null);
+      if (!presignResponse.ok) {
+        throw new Error(
+          presignData?.error || 'Could not prepare your files for upload. Please try again.'
+        );
+      }
+
+      const uploads: Array<{ key?: unknown; uploadUrl?: unknown; filename?: unknown }> =
+        Array.isArray(presignData?.uploads) ? presignData.uploads : [];
+      const uploaded: AttachedFile[] = [];
+
+      // The presign route maps the files array positionally, so uploads[i]
+      // corresponds to selected[i]. Never match by filename: duplicate names
+      // within one batch would silently cross-wire bytes and metadata.
+      if (uploads.length !== selected.length) {
+        throw new Error('Could not prepare your files for upload. Please try again.');
+      }
+      for (let i = 0; i < uploads.length; i += 1) {
+        const upload = uploads[i];
+        if (
+          typeof upload.key !== 'string' ||
+          typeof upload.uploadUrl !== 'string' ||
+          typeof upload.filename !== 'string'
+        ) {
+          throw new Error('Could not prepare your files for upload. Please try again.');
+        }
+        const file = selected[i];
+        if (!file || file.name !== upload.filename) {
+          throw new Error('Could not prepare your files for upload. Please try again.');
+        }
+        const mime = attachmentMime(file.name, file.type);
+        const putResponse = await fetch(upload.uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': mime },
+        });
+        if (!putResponse.ok) {
+          throw new Error(`"${upload.filename}" could not be uploaded. Please try again.`);
+        }
+        uploaded.push({ key: upload.key, filename: upload.filename, mime, size_bytes: file.size });
+      }
+
+      setAttachedFiles((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setUploadError(
+        err instanceof Error
+          ? err.message
+          : 'Your files could not be uploaded. You can still submit the form without them.'
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Removes only the local metadata — orphaned storage objects age out via cron
+  const removeAttachedFile = (key: string) => {
+    setAttachedFiles((prev) => prev.filter((file) => file.key !== key));
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleServiceTypeToggle = (service: string) => {
+    setFormData(prev => {
+      const currentServices = prev.serviceType;
+      const newServices = currentServices.includes(service)
+        ? currentServices.filter(s => s !== service)
+        : [...currentServices, service];
+      return { ...prev, serviceType: newServices };
+    });
+    if (errors.serviceType) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.serviceType;
+        return newErrors;
+      });
+    }
+  };
+
+  const handleCountryChange = (countryCode: string) => {
+    const country = getCountryByCode(countryCode);
+    setSelectedCountryCode(countryCode);
+    setSelectedWhatsAppCountryCode(country?.code || '');
+    setCountryPopoverOpen(false); // Close the popover after selection
+    
+    // Get timezones for this country
+    const countryTimezones = getTimezonesByCountry(country?.name || '');
+    
+    // Always set the first timezone if available, overriding any previous selection
+    const autoSelectedTimezone = countryTimezones.length > 0 ? countryTimezones[0] : '';
+
+    // Update all related fields in one state update
+    setFormData(prev => ({
+      ...prev,
+      country: country?.name || countryCode,
+      whatsAppCountryCode: country?.phoneCode || '', // Auto-set WhatsApp dial code
+      timeZone: autoSelectedTimezone // This will update both formData AND the Select component's value
+    }));
+
+    // Clear timezone error if we successfully set a timezone
+    if (autoSelectedTimezone && errors.timeZone) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.timeZone;
+        return newErrors;
+      });
+    }
+  };
+
+  /**
+   * Validates the form and returns validation results
+   * @returns Object with isValid flag and array of missing field labels
+   */
+  const validateForm = (): { isValid: boolean; errors: string[] } => {
+    const newErrors: FormErrors = {};
+    const missingFields: string[] = [];
+
+    // Required fields validation with user-friendly labels
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+      missingFields.push('Full Name');
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+      missingFields.push('Email Address');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Invalid email address';
+      missingFields.push('Valid Email Address');
+    }
+
+    if (!formData.country) {
+      newErrors.country = 'Country is required';
+      missingFields.push('Country');
+    }
+
+    if (!formData.timeZone) {
+      newErrors.timeZone = 'Time zone is required';
+      missingFields.push('Time Zone');
+    }
+
+    if (formData.serviceType.length === 0) {
+      newErrors.serviceType = 'Please select at least one service you need (or choose Other)';
+      missingFields.push('Service(s) Needed');
+    } else if (
+      formData.serviceType.includes('Other') &&
+      !formData.serviceTypeOther.trim()
+    ) {
+      newErrors.serviceType = 'Please specify the custom service you need under "Other"';
+      missingFields.push('Custom Service Description (for "Other")');
+    }
+
+    if (!formData.projectSummary.trim()) {
+      newErrors.projectSummary = 'Project summary is required';
+      missingFields.push('Project Summary / Message');
+    } else if (formData.projectSummary.trim().length < 30) {
+      newErrors.projectSummary = 'Please provide at least 30 characters describing your project';
+      missingFields.push('Project Summary / Message (minimum 30 characters)');
+    }
+
+    if (!formData.urgency) {
+      newErrors.urgency = 'Please select urgency level';
+      missingFields.push('Urgency');
+    }
+
+    // WhatsApp validation
+    // 1. If WhatsApp is selected as preferred contact method, it's required
+    if ((formData.preferredContactMethod === 'WhatsApp' || formData.preferredContactMethod === 'Both') && !formData.whatsAppNumber.trim()) {
+      newErrors.whatsAppNumber = 'WhatsApp number is required when WhatsApp is selected as a contact method';
+      missingFields.push('WhatsApp Number (required for selected contact method)');
+    }
+    // 2. If provided, validate using libphonenumber-js
+    else if (formData.whatsAppNumber.trim()) {
+      const validationResult = validateWhatsappNumber(
+        selectedWhatsAppCountryCode || 'BD',
+        formData.whatsAppCountryCode || '+880',
+        formData.whatsAppNumber
+      );
+      if (validationResult !== true) {
+        newErrors.whatsAppNumber = validationResult;
+        missingFields.push('Valid WhatsApp Number');
+      }
+    }
+
+    // GDPR consent is required
+    if (!consentPolicy) {
+      newErrors.gdprConsent = CONSENT_UNAVAILABLE_MESSAGE;
+      missingFields.push('Current Data & Privacy policy');
+    } else if (!formData.gdprConsent) {
+      newErrors.gdprConsent = 'You must agree to the data and privacy policy to submit';
+      missingFields.push('Data & Privacy consent');
+    }
+
+    // Same whole-dollar contract as the server; never coerce user input.
+    const budget = parseBudgetRange(formData.budgetMin, formData.budgetMax);
+    if (!budget.ok) {
+      newErrors.budgetMin = budget.error;
+      newErrors.budgetMax = budget.error;
+      missingFields.push(budget.error);
+    }
+
+    setErrors(newErrors);
+    return {
+      isValid: Object.keys(newErrors).length === 0,
+      errors: missingFields
+    };
+  };
+
+  const getDeviceType = (userAgent: string): 'Mobile' | 'Desktop' | 'Tablet' => {
+    if (/mobile/i.test(userAgent)) return 'Mobile';
+    if (/tablet|ipad/i.test(userAgent)) return 'Tablet';
+    return 'Desktop';
+  };
+
+  /**
+   * Scrolls to and focuses the first invalid field
+   */
+  const scrollToFirstError = () => {
+    const errorFieldMap: Record<string, React.RefObject<HTMLElement | null>> = {
+      name: nameRef as React.RefObject<HTMLElement | null>,
+      email: emailRef as React.RefObject<HTMLElement | null>,
+      country: countryRef as React.RefObject<HTMLElement | null>,
+      whatsAppNumber: whatsAppNumberRef as React.RefObject<HTMLElement | null>,
+      timeZone: timeZoneRef as React.RefObject<HTMLElement | null>,
+      serviceType: serviceTypeRef as React.RefObject<HTMLElement | null>,
+      projectSummary: projectSummaryRef as React.RefObject<HTMLElement | null>,
+      urgency: urgencyRef as React.RefObject<HTMLElement | null>,
+      gdprConsent: gdprConsentRef as React.RefObject<HTMLElement | null>,
+    };
+
+    // Find the first error field
+    for (const [field, ref] of Object.entries(errorFieldMap)) {
+      if (errors[field] && ref.current) {
+        // Scroll to the element with smooth behavior
+        ref.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center'
+        });
+        
+        // Focus the element after a short delay to ensure scroll completes
+        setTimeout(() => {
+          ref.current?.focus();
+        }, 300);
+        
+        break;
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submittingRef.current || uploading || policyLoading) return;
+
+    const validation = validateForm();
+    
+    if (!validation.isValid) {
+      // Show validation dialog with missing fields
+      setValidationErrors(validation.errors);
+      setShowValidationDialog(true);
+      return;
+    }
+
+    if (!consentPolicy) return;
+    const displayedConsentVersion = consentPolicy.version;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
+    try {
+      // Every submission carries an unconsumed Turnstile token: presign calls
+      // consumed earlier widget tokens, and /api/contact enforces single-use.
+      const submitToken = TURNSTILE_SITE_KEY ? await getFreshTurnstileToken() : null;
+
+      setSubmittedTicketId(null);
+
+      // Collect hidden/derived fields
+      const hiddenFields: HiddenFields = {
+        sourcePage: typeof window !== 'undefined' ? window.location.pathname : '/contact',
+        deviceType: typeof navigator !== 'undefined' ? getDeviceType(navigator.userAgent) : 'Desktop',
+      };
+
+      // Normalize fields consumed by the Supabase lead parser.
+      const submissionData = {
+        // Visible fields
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        country: formData.country,
+        whatsAppNumber: formData.whatsAppCountryCode && formData.whatsAppNumber 
+          ? `${formData.whatsAppCountryCode}${formData.whatsAppNumber.trim()}`
+          : formData.whatsAppNumber.trim(),
+        preferredContactMethod: formData.preferredContactMethod || '',
+        timeZone: formData.timeZone,
+        preferredContactDate: formData.preferredContactDate || '',
+        bestTimeToContact: formData.bestTimeToContact || '',
+        serviceType: (() => {
+          const baseServices = formData.serviceType.includes('Other') && formData.serviceTypeOther
+            ? formData.serviceType.filter(s => s !== 'Other').concat([`Other: ${formData.serviceTypeOther.trim()}`])
+            : formData.serviceType;
+          const joined = baseServices.join(', ');
+          return formData.packageTier ? `${joined} [${formData.packageTier}]` : joined;
+        })(),
+        company: formData.company.trim(),
+        projectUrlOrFiles: formData.projectUrlOrFiles.trim(),
+        projectSummary: formData.projectSummary.trim(),
+        ndaConfidentiality: formData.ndaConfidentiality ? 'true' : 'false',
+        urgency: formData.urgency,
+        howDidYouFindMe: formData.howDidYouFindMe === 'Referral' && formData.howDidYouFindMeReferral
+          ? `Referred by ${formData.howDidYouFindMeReferral.trim()}`
+          : formData.howDidYouFindMe === 'Other' && formData.howDidYouFindMeOther
+          ? `Other: ${formData.howDidYouFindMeOther.trim()}`
+          : formData.howDidYouFindMe,
+        
+        
+        // Request context consumed by the lead parser
+        sourcePage: hiddenFields.sourcePage,
+        deviceType: hiddenFields.deviceType,
+        
+      };
+
+      // Send only the live API contract, including explicit consent.
+      const formFields = new FormData();
+      
+      formFields.append('gdprConsent', formData.gdprConsent ? 'true' : 'false');
+      formFields.append('consentPolicyVersion', displayedConsentVersion);
+      formFields.append('name', submissionData.name);
+      formFields.append('email', submissionData.email);
+      formFields.append('country', submissionData.country);
+      formFields.append('whatsAppNumber', submissionData.whatsAppNumber);
+      formFields.append('preferredContactMethod', submissionData.preferredContactMethod);
+      formFields.append('timeZone', submissionData.timeZone);
+      formFields.append('preferredContactDate', submissionData.preferredContactDate);
+      formFields.append('bestTimeToContact', submissionData.bestTimeToContact);
+      formFields.append('serviceType', submissionData.serviceType);
+      formFields.append('company', submissionData.company);
+      formFields.append('projectUrlOrFiles', submissionData.projectUrlOrFiles);
+      formFields.append('projectSummary', submissionData.projectSummary);
+      formFields.append('ndaConfidentiality', submissionData.ndaConfidentiality);
+      formFields.append('urgency', submissionData.urgency);
+      formFields.append('budgetMin', formData.budgetMin || '');
+      formFields.append('budgetMax', formData.budgetMax || '');
+      formFields.append('howDidYouFindMe', submissionData.howDidYouFindMe);
+      formFields.append('sourcePage', submissionData.sourcePage);
+      formFields.append('deviceType', submissionData.deviceType);
+
+      // Attachment metadata for the Supabase sink (uploaded objects live in R2)
+      if (attachedFiles.length > 0) {
+        formFields.append('attachments', JSON.stringify(attachedFiles));
+      }
+
+      // Send the fresh token for server verification and single-use replay protection.
+      if (submitToken) {
+        formFields.append('cf-turnstile-response', submitToken);
+      }
+
+      // Submit to the sole Supabase-backed intake endpoint.
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        body: formFields,
+      });
+
+      const result = await response.json();
+
+      if (response.status === 409 && result?.code === 'consent_stale') {
+        // Keep all draft fields and uploaded metadata; never retry or recheck.
+        setFormData(previous => ({ ...previous, gdprConsent: false }));
+        replacePolicy(result.policy);
+        setErrors({ gdprConsent: CONSENT_STALE_MESSAGE });
+        requestAnimationFrame(() => gdprConsentRef.current?.focus());
+        return;
+      }
+      if (result?.code === 'consent_unavailable') {
+        setFormData(previous => ({ ...previous, gdprConsent: false }));
+        replacePolicy(null);
+        setErrors({ gdprConsent: CONSENT_UNAVAILABLE_MESSAGE });
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Contact submission rejected.');
+      }
+      if (typeof result.ticketRef !== 'string' || !result.ticketRef.trim()) {
+        throw new Error('Contact reference unavailable.');
+      }
+      setSubmittedTicketId(result.ticketRef);
+
+      // Show success message
+      setSubmitSuccess(true);
+      setFormData({
+        name: '',
+        email: '',
+        country: '',
+        whatsAppCountryCode: '+880',
+        whatsAppNumber: '',
+        preferredContactMethod: '',
+        timeZone: '',
+        preferredContactDate: '',
+        bestTimeToContact: '',
+        serviceType: [],
+        serviceTypeOther: '',
+        packageTier: '',
+        company: '',
+        projectUrlOrFiles: '',
+        projectSummary: '',
+        ndaConfidentiality: false,
+        urgency: '',
+        budgetMin: '',
+        budgetMax: '',
+        howDidYouFindMe: '',
+        howDidYouFindMeOther: '',
+        howDidYouFindMeReferral: '',
+            gdprConsent: false,
+      });
+      setSelectedCountryCode('+880');
+      setSelectedWhatsAppCountryCode('');
+
+      // Clear uploaded attachments (they were persisted with this lead)
+      setAttachedFiles([]);
+      setUploadError(null);
+
+      // Reset Turnstile widget and state
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      setIsTurnstileVerified(false);
+      setTurnstileError(null);
+      // Trigger Turnstile widget reset if available
+      if (typeof (window as any).turnstile !== 'undefined') {
+        (window as any).turnstile.reset();
+      }
+
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => {
+        setSubmitSuccess(false);
+        setSubmittedTicketId(null);
+      }, 5000);
+
+    } catch (error) {
+      console.error('❌ Form submission error:', error);
+      setErrors({ submit: 'Failed to submit form. Please try again or contact us directly.' });
+      setSubmittedTicketId(null);
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
+  const availableTimezones = formData.country 
+    ? getTimezonesByCountry(formData.country) 
+    : allTimezones;
+
+  const whatsAppSelectValue = selectedWhatsAppCountryCode 
+    || countries.find((c: Country) => c.phoneCode === formData.whatsAppCountryCode)?.code 
+    || '';
+
+  return (
+    <div className="w-full">
+      {/* Load Cloudflare Turnstile script - MUST use exact URL (no proxying/caching) */}
+      {/* https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/ */}
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        async
+        defer
+        strategy="afterInteractive"
+      />
+      
+      <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+        {/* Contact Details Section */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 pb-2 border-b border-primary/20">
+            <User className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Contact Details</h3>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="name" className="flex items-center gap-1">
+                Full Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="name"
+                ref={nameRef}
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                placeholder="John Doe"
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? "name-error" : undefined}
+                className={errors.name ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {errors.name && (
+                <p id="name-error" className="text-sm text-destructive" role="alert">
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center gap-1">
+                Email Address <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="email"
+                ref={emailRef}
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                placeholder="john@example.com"
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
+                className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {errors.email && (
+                <p id="email-error" className="text-sm text-destructive" role="alert">
+                  {errors.email}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="country" className="flex items-center gap-1">
+                Country <span className="text-destructive">*</span>
+              </Label>
+              {/* Searchable country selector with keyboard navigation */}
+              <Popover open={countryPopoverOpen} onOpenChange={setCountryPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="country"
+                    ref={countryRef}
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={countryPopoverOpen}
+                    aria-invalid={!!errors.country}
+                    aria-describedby={errors.country ? "country-error" : undefined}
+                    className={cn(
+                      "w-full justify-between",
+                      errors.country ? "border-destructive focus:ring-destructive" : "",
+                      !selectedCountryCode && "text-muted-foreground"
+                    )}
+                  >
+                    {selectedCountryCode ? (
+                      <span className="flex items-center gap-2">
+                        <span>{getCountryByCode(selectedCountryCode)?.flag}</span>
+                        <span>{getCountryByCode(selectedCountryCode)?.name}</span>
+                      </span>
+                    ) : (
+                      "Select your country"
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search country..." />
+                    <CommandList>
+                      <CommandEmpty>No country found.</CommandEmpty>
+                      <CommandGroup>
+                        {[...countries].sort((a, b) => a.name.localeCompare(b.name)).map((country: Country) => (
+                          <CommandItem
+                            key={country.code}
+                            value={country.name}
+                            onSelect={() => handleCountryChange(country.code)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedCountryCode === country.code ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="mr-2">{country.flag}</span>
+                            <span>{country.name}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {errors.country && (
+                <p id="country-error" className="text-sm text-destructive" role="alert">
+                  {errors.country}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="whatsApp" className="flex items-center gap-1">
+                <Phone className="h-4 w-4" />
+                WhatsApp Number <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <div className="flex gap-2">
+                <Select 
+                  value={whatsAppSelectValue}
+                  onValueChange={(value) => {
+                    // Find the country by code and get its phone code
+                    const selectedCountry = countries.find((c: Country) => c.code === value);
+                    if (selectedCountry) {
+                      handleInputChange('whatsAppCountryCode', selectedCountry.phoneCode);
+                      setSelectedWhatsAppCountryCode(selectedCountry.code);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Code" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {[...countries].sort((a, b) => a.name.localeCompare(b.name)).map((country: Country) => (
+                      <SelectItem key={country.code} value={country.code}>
+                        <span className="flex items-center gap-2">
+                          <span>{country.flag}</span>
+                          <span>{country.phoneCode}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  id="whatsApp"
+                  ref={whatsAppNumberRef}
+                  type="tel"
+                  inputMode="numeric"
+                  value={formData.whatsAppNumber}
+                  onChange={(e) => {
+                    // Strip non-digits and enforce max length based on E.164
+                    const digitsOnly = e.target.value.replace(/\D/g, '');
+                    const callingCodeDigits = (formData.whatsAppCountryCode || '+880').replace(/\D/g, '');
+                    const maxLocalLength = 15 - callingCodeDigits.length;
+                    const truncated = digitsOnly.slice(0, maxLocalLength);
+                    handleInputChange('whatsAppNumber', truncated);
+                  }}
+                  maxLength={15 - (formData.whatsAppCountryCode || '+880').replace(/\D/g, '').length}
+                  placeholder="1234567890"
+                  aria-invalid={!!errors.whatsAppNumber}
+                  aria-describedby={errors.whatsAppNumber ? "whatsApp-error" : undefined}
+                  className={`flex-1 ${errors.whatsAppNumber ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                />
+              </div>
+              {errors.whatsAppNumber && (
+                <p id="whatsApp-error" className="text-sm text-destructive" role="alert">
+                  {errors.whatsAppNumber}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Used for quick, cost-effective communication. Country code auto-selected from your country.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="timezone" className="flex items-center gap-1">
+              Time Zone <span className="text-destructive">*</span>
+            </Label>
+            <Select 
+              key={`timezone-${formData.country}`} 
+              value={formData.timeZone} 
+              onValueChange={(value) => handleInputChange('timeZone', value)}
+            >
+              <SelectTrigger
+                id="timezone"
+                ref={timeZoneRef}
+                className={errors.timeZone ? "border-destructive focus:ring-destructive" : ""}
+                aria-invalid={!!errors.timeZone}
+                aria-describedby={errors.timeZone ? "timezone-error" : undefined}
+              >
+                <SelectValue placeholder="Select your time zone" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {availableTimezones.map((tz: string) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz.replace(/_/g, ' ')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.timeZone && (
+              <p id="timezone-error" className="text-sm text-destructive" role="alert">
+                {errors.timeZone}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Auto-selected based on your country. Adjust if needed.
+            </p>
+          </div>
+
+          {/* Contact Preferences */}
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="preferredContactMethod">
+                Preferred Contact Method <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Select 
+                value={formData.preferredContactMethod} 
+                onValueChange={(value) => handleInputChange('preferredContactMethod', value as 'Email' | 'WhatsApp' | 'Both' | '')}
+              >
+                <SelectTrigger id="preferredContactMethod">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Email">Email</SelectItem>
+                  <SelectItem value="WhatsApp">WhatsApp</SelectItem>
+                  <SelectItem value="Both">Both</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                How would you prefer to be contacted?
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bestTimeToContact">
+                Best Time to Contact <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              
+              {/* Time Picker - Segmented Control */}
+              <div className="flex items-center gap-2">
+                {/* Clock icon (standalone) */}
+                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                
+                {/* Hour Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.split(':')[0] : ''}
+                  onValueChange={(hour) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const minute = parts ? parts[2] : '00';
+                    const period = parts ? parts[3] : 'AM';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.25rem]">
+                    <SelectValue placeholder="HH">
+                      {formData.bestTimeToContact 
+                        ? formData.bestTimeToContact.split(':')[0].padStart(2, '0')
+                        : 'HH'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.25rem] w-auto">
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const hour = (i + 1).toString();
+                      return (
+                        <SelectItem key={hour} value={hour}>
+                          {hour.padStart(2, '0')}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* Separator */}
+                <span className="text-muted-foreground font-medium">:</span>
+
+                {/* Minute Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.match(/:(\d{2})/)?.[1] : ''}
+                  onValueChange={(minute) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const hour = parts ? parts[1] : '10';
+                    const period = parts ? parts[3] : 'AM';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.25rem]">
+                    <SelectValue placeholder="MM">
+                      {formData.bestTimeToContact?.match(/:(\d{2})/)?.[1] || 'MM'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.25rem] w-auto max-h-[200px]">
+                    {Array.from({ length: 60 }, (_, i) => {
+                      const minute = i.toString().padStart(2, '0');
+                      return (
+                        <SelectItem key={minute} value={minute}>
+                          {minute}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* AM/PM Select */}
+                <Select 
+                  value={formData.bestTimeToContact ? formData.bestTimeToContact.match(/\s*(AM|PM)/i)?.[1] : ''}
+                  onValueChange={(period) => {
+                    const currentTime = formData.bestTimeToContact || '10:00 AM';
+                    const parts = currentTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+                    const hour = parts ? parts[1] : '10';
+                    const minute = parts ? parts[2] : '00';
+                    handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
+                  }}
+                >
+                  <SelectTrigger className="h-10 w-[4.5rem]">
+                    <SelectValue placeholder="AM">
+                      {formData.bestTimeToContact?.match(/\s*(AM|PM)/i)?.[1] || 'AM'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-[4.5rem] w-auto">
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Clear button */}
+                {formData.bestTimeToContact && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleInputChange('bestTimeToContact', '')}
+                    className="h-10 w-10 flex-shrink-0"
+                  >
+                    <span className="sr-only">Clear time</span>
+                    <span className="text-muted-foreground hover:text-foreground">✕</span>
+                  </Button>
+                )}
+              </div>
+              
+              {/* Conditional helper text and selected time display */}
+              {(() => {
+                // Check if we have a complete, valid time selected
+                const hasTimeSelected = formData.bestTimeToContact && 
+                  /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(formData.bestTimeToContact);
+                
+                return hasTimeSelected ? (
+                  // Show selected time when complete
+                  <p className="text-xs text-muted-foreground font-normal mt-1">
+                    Selected: {formData.bestTimeToContact}
+                  </p>
+                ) : (
+                  // Show helper text when empty or incomplete
+                  <p className="text-xs text-muted-foreground">
+                    Pick a specific time or leave blank for flexible scheduling
+                  </p>
+                );
+              })()}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="preferredContactDate">
+                Preferred Contact Date <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Popover open={isPreferredDateOpen} onOpenChange={setIsPreferredDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="preferredContactDate"
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !formData.preferredContactDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.preferredContactDate ? (
+                      formData.preferredContactDate
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={
+                      formData.preferredContactDate
+                        ? new Date(formData.preferredContactDate)
+                        : undefined
+                    }
+                    onSelect={(date) => {
+                      if (date) {
+                        const formattedContactDate = format(date, "MM/dd/yyyy");
+                        handleInputChange("preferredContactDate", formattedContactDate);
+                        setIsPreferredDateOpen(false);
+                      } else {
+                        handleInputChange("preferredContactDate", "");
+                      }
+                    }}
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const threeMonthsFromNow = new Date();
+                      threeMonthsFromNow.setDate(threeMonthsFromNow.getDate() + 90);
+                      threeMonthsFromNow.setHours(23, 59, 59, 999);
+                      return date < today || date > threeMonthsFromNow;
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">
+                Select a date within the next 3 months
+              </p>
+            </div>
+          </div>
+        </div>
+        {/* Project Details Section */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 pb-2 border-b border-primary/20">
+            <Briefcase className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Project Details</h3>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label className="flex items-center gap-1 text-base font-semibold">
+                Select Service(s) Needed <span className="text-destructive">*</span>
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                Choose one or more services from our 5 core pillars, or select &quot;Other&quot;
+              </span>
+            </div>
+
+            <div ref={serviceTypeRef} className="grid gap-3 sm:grid-cols-2">
+              {initialServices.map((service) => {
+                const isSelected = formData.serviceType.includes(service.title);
+                const pillarMeta = SERVICE_PILLARS[service.pillar];
+                return (
+                  <label
+                    key={service.slug}
+                    htmlFor={`service-${service.slug}`}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all",
+                      isSelected
+                        ? "border-primary bg-primary/8 shadow-2xs"
+                        : "border-border/80 bg-card/60 hover:border-primary/40 hover:bg-muted/30"
+                    )}
+                  >
+                    <Checkbox
+                      id={`service-${service.slug}`}
+                      checked={isSelected}
+                      onCheckedChange={() => handleServiceTypeToggle(service.title)}
+                      aria-invalid={!!errors.serviceType}
+                      className="mt-0.5"
+                    />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <Badge variant="secondary" className="font-mono text-[10px]">
+                          {pillarMeta?.shortLabel ?? service.pillarLabel}
+                        </Badge>
+                        <span className="font-mono text-[11px] font-semibold text-primary">
+                          From ${(service.startingPriceCents / 100).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold leading-snug text-foreground">
+                        {service.title}
+                      </div>
+                      <p className="line-clamp-2 text-xs text-muted-foreground">
+                        {service.tagline}
+                      </p>
+                      {service.packages && service.packages.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {service.packages.map((pkg) => (
+                            <span
+                              key={pkg.tier}
+                              className="rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                            >
+                              {pkg.tier.toUpperCase()}: ${(pkg.priceCents / 100).toLocaleString()}
+                            </span>
+                          ))}
+                          <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                            + Custom Deal
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+
+              {/* Other / Custom Service Option */}
+              <label
+                htmlFor="service-Other"
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all sm:col-span-2",
+                  formData.serviceType.includes('Other')
+                    ? "border-primary bg-primary/8 shadow-2xs"
+                    : "border-dashed border-border/80 bg-card/40 hover:border-primary/40 hover:bg-muted/30"
+                )}
+              >
+                <Checkbox
+                  id="service-Other"
+                  checked={formData.serviceType.includes('Other')}
+                  onCheckedChange={() => handleServiceTypeToggle('Other')}
+                  aria-invalid={!!errors.serviceType}
+                  className="mt-0.5"
+                />
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-sm font-semibold text-foreground">
+                    Other / Custom Service or Bespoke Consulting
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Need something not listed above (e.g., custom security training, architecture review, specialized development, or general tech support)? Select this option and describe below.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {errors.serviceType && (
+              <p className="text-sm text-destructive" role="alert">
+                {errors.serviceType}
+              </p>
+            )}
+
+            {/* Show additional text input when "Other" is selected */}
+            {formData.serviceType.includes('Other') && (
+              <div className="pt-1">
+                <Label htmlFor="serviceTypeOther" className="mb-1.5 block text-xs font-medium">
+                  Specify Custom Service Needed <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="serviceTypeOther"
+                  type="text"
+                  value={formData.serviceTypeOther}
+                  onChange={(e) => handleInputChange('serviceTypeOther', e.target.value)}
+                  placeholder="Describe the custom service, technical support, or consulting you need..."
+                  className="text-sm"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="packageTier">
+                Preferred Package / Engagement Tier <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Select
+                value={formData.packageTier}
+                onValueChange={(value) => handleInputChange('packageTier', value)}
+              >
+                <SelectTrigger id="packageTier">
+                  <SelectValue placeholder="Select tier or engagement model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packageTierOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company">
+                Company / Organization <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="company"
+                value={formData.company}
+                onChange={(e) => handleInputChange('company', e.target.value)}
+                placeholder="Acme Corporation"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="projectUrl">
+                Target Domain, Repo or Project URL <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="projectUrl"
+                value={formData.projectUrlOrFiles}
+                onChange={(e) => handleInputChange('projectUrlOrFiles', e.target.value)}
+                placeholder="https://app.example.com or GitHub URL"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="projectSummary" className="flex items-center gap-1">
+              Project Summary / Message <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="projectSummary"
+              ref={projectSummaryRef}
+              value={formData.projectSummary}
+              onChange={(e) => handleInputChange('projectSummary', e.target.value)}
+              placeholder="Please describe your security needs, challenges, or questions in detail..."
+              className={`min-h-[150px] ${errors.projectSummary ? "border-destructive focus-visible:ring-destructive" : ""}`}
+              aria-invalid={!!errors.projectSummary}
+              aria-describedby={errors.projectSummary ? "projectSummary-error" : undefined}
+            />
+            {errors.projectSummary && (
+              <p id="projectSummary-error" className="text-sm text-destructive" role="alert">
+                {errors.projectSummary}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Minimum 30 characters. Be specific about your requirements.
+            </p>
+          </div>
+
+          {/* Encrypted Attachment Vault */}
+          <div className="space-y-2">
+            <Label htmlFor="contactAttachments">
+              Encrypted Attachment Vault (optional, up to 5 files, max 10 MB each)
+            </Label>
+            <Input
+              id="contactAttachments"
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT_ATTR}
+              onChange={handleFilesSelected}
+              disabled={uploading || isSubmitting}
+              aria-invalid={!!uploadError}
+              aria-describedby={uploadError ? "attachments-error" : undefined}
+              className={uploadError ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
+            {uploading && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Uploading files…
+              </p>
+            )}
+            {uploadError && (
+              <p id="attachments-error" className="text-sm text-destructive" role="alert">
+                {uploadError}
+              </p>
+            )}
+            {attachedFiles.length > 0 && (
+              <ul className="space-y-2">
+                {attachedFiles.map((file) => (
+                  <li
+                    key={file.key}
+                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                  >
+                    <span className="truncate text-sm" title={file.filename}>
+                      {file.filename}
+                    </span>
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatBytes(file.size_bytes)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 flex-shrink-0"
+                      onClick={() => removeAttachedFile(file.key)}
+                      aria-label={`Remove ${file.filename}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!uploading && !uploadError && (
+              <p className="text-xs text-muted-foreground">
+                {consentPolicy?.attachmentNotice ?? 'Accepted: PDF, Word, Excel, PNG, JPG, ZIP. Files are stored privately and deleted after 90 days.'}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-3 p-4 border rounded-lg bg-muted/30">
+            <Checkbox
+              id="ndaConfidentiality"
+              checked={!!formData.ndaConfidentiality}
+              onCheckedChange={(checked) => 
+                handleInputChange('ndaConfidentiality', checked === true)
+              }
+              className="mt-0.5"
+            />
+            <Label
+              htmlFor="ndaConfidentiality"
+              className="text-sm font-normal cursor-pointer leading-normal"
+            >
+              This project may require an NDA or strict confidentiality agreement.
+            </Label>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="urgency" className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                Urgency <span className="text-destructive">*</span>
+              </Label>
+              <Select value={formData.urgency} onValueChange={(value) => handleInputChange('urgency', value)}>
+                <SelectTrigger
+                  id="urgency"
+                  ref={urgencyRef}
+                  className={errors.urgency ? "border-destructive focus:ring-destructive" : ""}
+                  aria-invalid={!!errors.urgency}
+                  aria-describedby={errors.urgency ? "urgency-error" : undefined}
+                >
+                  <SelectValue placeholder="Select urgency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {urgencyOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.urgency && (
+                <p id="urgency-error" className="text-sm text-destructive" role="alert">
+                  {errors.urgency}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="budgetMin" className="flex items-center gap-1">
+                <DollarSign className="h-4 w-4" />
+                Budget Min (USD) <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="budgetMin"
+                type="text"
+                inputMode="numeric"
+                value={formData.budgetMin}
+                onChange={(e) => handleInputChange('budgetMin', e.target.value)}
+                placeholder="1000"
+                aria-invalid={!!errors.budgetMin}
+                aria-describedby={errors.budgetMin ? "budgetMin-error" : undefined}
+                className={errors.budgetMin ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {errors.budgetMin && (
+                <p id="budgetMin-error" className="text-sm text-destructive" role="alert">
+                  {errors.budgetMin}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="budgetMax" className="flex items-center gap-1">
+                <DollarSign className="h-4 w-4" />
+                Budget Max (USD) <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="budgetMax"
+                type="text"
+                inputMode="numeric"
+                value={formData.budgetMax}
+                onChange={(e) => handleInputChange('budgetMax', e.target.value)}
+                placeholder="5000"
+                aria-invalid={!!errors.budgetMax}
+                aria-describedby={errors.budgetMax ? "budgetMax-error" : undefined}
+                className={errors.budgetMax ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {errors.budgetMax && (
+                <p id="budgetMax-error" className="text-sm text-destructive" role="alert">
+                  {errors.budgetMax}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* Additional Information Section */}
+          <div className="flex items-center gap-2 pb-2 border-b border-primary/20">
+            <Info className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Additional Information</h3>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="howDidYouFindMe">
+              How did you find me? <span className="text-muted-foreground text-xs">(optional)</span>
+            </Label>
+            <Select value={formData.howDidYouFindMe} onValueChange={(value) => {
+              handleInputChange('howDidYouFindMe', value);
+              // Clear the "Other" field if user changes selection away from "Other"
+              if (value !== 'Other') {
+                handleInputChange('howDidYouFindMeOther', '');
+              }
+              // Clear the "Referral" field if user changes selection away from "Referral"
+              if (value !== 'Referral') {
+                handleInputChange('howDidYouFindMeReferral', '');
+              }
+            }}>
+              <SelectTrigger id="howDidYouFindMe">
+                <SelectValue placeholder="Select an option" />
+              </SelectTrigger>
+              <SelectContent>
+                {referralSources.map((source) => (
+                  <SelectItem key={source} value={source}>
+                    {source}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Show additional text input when "Referral" is selected */}
+            {formData.howDidYouFindMe === 'Referral' && (
+              <div className="pt-2">
+                <Input
+                  id="howDidYouFindMeReferral"
+                  type="text"
+                  value={formData.howDidYouFindMeReferral}
+                  onChange={(e) => handleInputChange('howDidYouFindMeReferral', e.target.value)}
+                  placeholder="Who referred you? (optional but appreciated)"
+                  className="text-sm"
+                />
+              </div>
+            )}
+            
+            {/* Show additional text input when "Other" is selected */}
+            {formData.howDidYouFindMe === 'Other' && (
+              <div className="pt-2">
+                <Input
+                  id="howDidYouFindMeOther"
+                  type="text"
+                  value={formData.howDidYouFindMeOther}
+                  onChange={(e) => handleInputChange('howDidYouFindMeOther', e.target.value)}
+                  placeholder="Please specify (e.g., Twitter, Conference, etc.)"
+                  className="text-sm"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {policyLoading && <p role="status" className="text-sm text-muted-foreground">Loading the current Data & Privacy policy...</p>}
+        {policyError && (
+          <div className="space-y-2">
+            <p role="alert" className="text-sm text-destructive">{policyError}</p>
+            <Button type="button" variant="outline" disabled={policyLoading || isSubmitting} onClick={() => {
+              setFormData(previous => ({ ...previous, gdprConsent: false }));
+              void refreshPolicy();
+            }}>Load privacy policy again</Button>
+          </div>
+        )}
+        {/* GDPR Consent */}
+        <div className="flex items-start space-x-3 p-4 border-2 rounded-lg bg-muted/30">
+          <Checkbox
+            id="gdprConsent"
+            ref={gdprConsentRef}
+            checked={formData.gdprConsent}
+            onCheckedChange={(checked) => handleInputChange('gdprConsent', checked === true)}
+            disabled={!consentPolicy || policyLoading || isSubmitting}
+            aria-describedby={errors.gdprConsent ? 'gdprConsent-error consent-policy-text' : 'consent-policy-text'}
+            aria-invalid={!!errors.gdprConsent}
+            className={`mt-0.5 ${errors.gdprConsent ? "border-destructive" : ""}`}
+          />
+          <div className="space-y-1 flex-1">
+            <Label
+              htmlFor="gdprConsent"
+              className="text-sm font-medium cursor-pointer leading-normal inline"
+            >
+              <span className="text-destructive">*</span>{" "}
+              {consentPolicy ? consentPolicy.checkbox : <>I agree that my data will be used to review and respond to my request, as described on the{" "}
+              <Link href="/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                Data & Privacy page
+              </Link>.</>}
+            </Label>
+            {errors.gdprConsent && (
+              <p id="gdprConsent-error" className="text-xs text-destructive mt-2" role="alert">
+                {errors.gdprConsent}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {consentPolicy && (
+          <details id="consent-policy-text" open={!!errors.gdprConsent} className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Data & Privacy policy for this request ({consentPolicy.version})</summary>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{consentPolicy.policyText}</p>
+          </details>
+        )}
+        {/* Privacy Notice */}
+        <Card className="bg-muted/50 border-primary/20">
+          <CardContent className="p-4">
+            {consentPolicy ? <p className="whitespace-pre-wrap text-sm text-muted-foreground">{consentPolicy.privacyNotice}</p> : <>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">Privacy & Data Usage:</span> We only use your details to respond to your inquiry and provide the services you request. 
+              Your information is stored securely and never shared with third parties.
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Note: Technical data (device type, browser info) is collected automatically for security and spam prevention purposes only.
+            </p>
+            </>}
+          </CardContent>
+        </Card>
+
+        {/* Submission Status Messages */}
+        {submitSuccess && submittedTicketId && (
+          <Card className="border-green-500 bg-green-500/10">
+            <CardContent className="flex items-center gap-3 p-4">
+              <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-green-500">Thank you! Your request has been received.</p>
+                <p className="text-sm text-muted-foreground">
+                  I&apos;ll review your inquiry and get back to you within 24 hours.
+                </p>
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium text-foreground">
+                    Your Ticket ID: <span className="font-mono font-bold text-green-600 dark:text-green-400">{submittedTicketId}</span>
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 gap-1"
+                    onClick={() => {
+                      navigator.clipboard.writeText(submittedTicketId);
+                      // Optional: Show a toast notification
+                      const button = document.activeElement as HTMLButtonElement;
+                      if (button) {
+                        const originalText = button.innerHTML;
+                        button.innerHTML = 'Copied!';
+                        setTimeout(() => {
+                          button.innerHTML = originalText;
+                        }, 2000);
+                      }
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {errors.submit && (
+          <Card className="border-destructive bg-destructive/10">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold text-destructive">{errors.submit}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please try again or contact us directly via WhatsApp or email.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bottom Row: Required fields text + Turnstile widget + Submit button */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-4">
+          {/* Left: Required fields text */}
+          <p className="text-sm text-muted-foreground">
+            <span className="text-destructive">*</span> Required fields
+          </p>
+
+          {/* Center: Cloudflare Turnstile Widget */}
+          {TURNSTILE_SITE_KEY ? (
+            <div className="flex items-center justify-center min-h-[65px]">
+              <div
+                className="cf-turnstile"
+                data-sitekey={TURNSTILE_SITE_KEY}
+                data-theme="auto"
+                data-size="normal"
+                data-action="contact-form"
+                data-retry="auto"
+                data-retry-interval="8000"
+                data-refresh-expired="auto"
+                data-callback="onTurnstileSuccess"
+                data-error-callback="onTurnstileError"
+                data-expired-callback="onTurnstileExpired"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center min-h-[65px]">
+              <Card className="border-amber-500/50 bg-amber-500/10">
+                <CardContent className="p-2">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    <strong>⚠️ Dev:</strong> Turnstile not configured
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Right: Submit button */}
+          <Button
+            type="submit"
+            size="lg"
+            disabled={isSubmitting || uploading || policyLoading || !consentPolicy || (TURNSTILE_SITE_KEY ? !isTurnstileVerified : false)}
+            className="w-full sm:w-auto min-w-[200px] bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+            title={
+              TURNSTILE_SITE_KEY && !isTurnstileVerified 
+                ? "Please complete the security verification" 
+                : undefined
+            }
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-5 w-5" />
+                Send Request
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Turnstile Error Message - Below the form row */}
+        {turnstileError && (
+          <Card className="border-destructive/50 bg-destructive/10 -mt-2">
+            <CardContent className="p-3">
+              <p className="text-xs text-destructive text-center">
+                {turnstileError}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </form>
+
+      {/* Validation Dialog */}
+      <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+        <DialogContent hideCloseButton className="w-[90vw] max-w-sm md:max-w-md my-6 rounded-2xl shadow-xl p-0 gap-0 animate-in fade-in-0 zoom-in-95 duration-150">
+          <DialogHeader className="px-6 pt-5 pb-3 space-y-3">
+            <DialogTitle className="text-base md:text-lg font-semibold flex items-center justify-center gap-2 leading-tight">
+              <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
+              <span>Please complete the required fields</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed text-center">
+              Before sending your request, please fill in the following:
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="px-6 pb-6">
+            <ul className="space-y-1.5 mb-6 pl-2">
+              {validationErrors.map((error, index) => (
+                <li key={index} className="flex items-start gap-2.5 text-sm group">
+                  <span className="flex-shrink-0 w-1 h-1 rounded-full bg-destructive mt-2" />
+                  <span className="text-foreground leading-relaxed">{error}</span>
+                </li>
+              ))}
+            </ul>
+            
+            <div className="mt-6 flex justify-center">
+              <Button
+                onClick={() => {
+                  setShowValidationDialog(false);
+                  // Scroll to first error after dialog closes
+                  setTimeout(() => {
+                    scrollToFirstError();
+                  }, 100);
+                }}
+                className="w-full md:w-auto min-w-[140px] h-11 text-base font-medium bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-md"
+              >
+                Got it
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

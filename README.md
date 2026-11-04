@@ -14,6 +14,7 @@ The complete previous codebase, history, and documentation have been archived an
 - **GitHub Repository:** [`redwan-cse/redwan.work_old`](https://github.com/redwan-cse/redwan.work_old)
 
 For full architectural details, schema summaries, environment configurations, and feature specifications, consult:
+- [`docs/MASTER_PLAN.md`](./docs/MASTER_PLAN.md) (authoritative v2 architecture & phased implementation roadmap)
 - [`docs/LEGACY_ARCHITECTURE.md`](./docs/LEGACY_ARCHITECTURE.md)
 - [`AGENTS.md`](./AGENTS.md) (guidance for AI assistants working in this repository)
 
