@@ -247,7 +247,11 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
 
     const presignReq = new NextRequest('http://127.0.0.1:3000/api/uploads/portal-presign', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'http://127.0.0.1:3000',
+        Host: '127.0.0.1:3000',
+      },
       body: JSON.stringify({
         filename: 'report.pdf',
         mime: 'application/pdf',
@@ -257,5 +261,108 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
     });
     const presignRes = await postPortalPresign(presignReq);
     expect(presignRes.status).toBe(403);
+  });
+
+  it('aborts orphan contact sweep on DB error without deleting retained R2 objects and fails closed on portal-presign quota error', async () => {
+    mockIsR2Configured.mockReturnValue(true);
+    mockDeletePrivateObjects.mockResolvedValue(0);
+    const oldDate = new Date(Date.now() - 120 * 86_400_000);
+    mockListPrivateContactObjects.mockResolvedValue([
+      { key: 'contact/2026/05/retained-doc.pdf', lastModified: oldDate },
+    ]);
+
+    mockGetSupabaseAdmin.mockReturnValue({
+      rpc: vi.fn(async () => ({ data: 0, error: null })),
+      from: (table: string) => {
+        if (table === 'vault_files') {
+          return {
+            select: () => ({
+              is: () => ({
+                not: () => ({
+                  lt: () => ({
+                    limit: async () => ({ data: [], error: null }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'inquiry_attachments') {
+          return {
+            select: () => ({
+              eq: () => ({
+                lt: () => ({
+                  limit: async () => ({ data: [], error: null }),
+                }),
+              }),
+              in: async () => ({ data: null, error: { message: 'DB unavailable' } }),
+            }),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      },
+    });
+
+    const cronReq = new NextRequest('http://127.0.0.1:3000/api/cron/r2-retention', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer test-cron-secret-value' },
+    });
+    const cronRes = await getR2RetentionCron(cronReq);
+    expect(cronRes.status).toBe(503);
+    expect(mockDeletePrivateObjects).not.toHaveBeenCalled();
+
+    // Cross-origin portal-presign must return 403
+    mockGetCurrentSession.mockResolvedValue({
+      userId: '00000000-0000-0000-0000-000000000001',
+      email: 'client@disposable.test',
+      fullName: 'Client',
+      role: 'client',
+      aal: 'aal1',
+    });
+    mockConsumeRateLimit.mockResolvedValue(true);
+
+    const crossOriginReq = new NextRequest('http://127.0.0.1:3000/api/uploads/portal-presign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+        Host: '127.0.0.1:3000',
+      },
+      body: JSON.stringify({
+        filename: 'proof.pdf',
+        mime: 'application/pdf',
+        size: 1024,
+        category: 'payment_proof',
+      }),
+    });
+    const crossOriginRes = await postPortalPresign(crossOriginReq);
+    expect(crossOriginRes.status).toBe(403);
+
+    // Same-origin portal-presign with DB error on vault_files quota query must return 503 (fail closed)
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            is: async () => ({ data: null, error: { message: 'DB timeout' } }),
+          }),
+        }),
+      }),
+    });
+    const dbFailReq = new NextRequest('http://127.0.0.1:3000/api/uploads/portal-presign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'http://127.0.0.1:3000',
+        Host: '127.0.0.1:3000',
+      },
+      body: JSON.stringify({
+        filename: 'proof.pdf',
+        mime: 'application/pdf',
+        size: 1024,
+        category: 'payment_proof',
+      }),
+    });
+    const dbFailRes = await postPortalPresign(dbFailReq);
+    expect(dbFailRes.status).toBe(503);
   });
 });

@@ -147,7 +147,10 @@ export default function Privacy() {
                     <div className="w-1 shrink-0 rounded-full bg-primary" />
                     <p>
                       You can request access, correction, or deletion at any time by emailing{' '}
-                      <Link href="mailto:contact@redwan.work" className="font-medium text-primary hover:underline">
+                      <Link
+                        href="mailto:contact@redwan.work"
+                        className="font-medium text-primary underline underline-offset-4"
+                      >
                         contact@redwan.work
                       </Link>
                       .
@@ -176,11 +179,11 @@ export default function Privacy() {
                       </p>
                       <p>
                         This notice covers <strong className="text-foreground">redwan.work</strong>, the project intake form at{' '}
-                        <Link href="/contact" className="text-primary hover:underline">
+                        <Link href="/contact" className="text-primary underline underline-offset-4">
                           /contact
                         </Link>
                         , and the authenticated Client Portal at{' '}
-                        <Link href="/portal" className="text-primary hover:underline">
+                        <Link href="/portal" className="text-primary underline underline-offset-4">
                           /portal
                         </Link>
                         .
@@ -194,7 +197,7 @@ export default function Privacy() {
                               For all data protection inquiries or to exercise your rights, email{' '}
                               <Link
                                 href="mailto:contact@redwan.work"
-                                className="font-medium text-primary hover:underline"
+                                className="font-medium text-primary underline underline-offset-4"
                               >
                                 contact@redwan.work
                               </Link>
@@ -505,7 +508,10 @@ export default function Privacy() {
                         <strong className="text-foreground">erasure</strong>,{' '}
                         <strong className="text-foreground">restriction</strong>, or{' '}
                         <strong className="text-foreground">portability</strong> of your personal data. To exercise any right, email{' '}
-                        <Link href="mailto:contact@redwan.work" className="font-medium text-primary hover:underline">
+                        <Link
+                          href="mailto:contact@redwan.work"
+                          className="font-medium text-primary underline underline-offset-4"
+                        >
                           contact@redwan.work
                         </Link>{' '}
                         from the address associated with your inquiry or portal account.

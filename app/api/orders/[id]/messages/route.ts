@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createInAppNotification, notifyAllAdmins } from '@/lib/crm/audit';
+import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 
 export async function GET(
   _request: NextRequest,
@@ -43,6 +44,10 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  if (!isSameOriginRequest(request.headers)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const session = await getCurrentSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

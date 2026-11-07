@@ -3,6 +3,8 @@ const ALLOWED_BUCKETS = new Set([
   'disposable-test-bucket',
   'test-vault-bucket',
   'isolated-ci-bucket',
+  'loopback-private-vault',
+  'loopback-public-assets',
 ]);
 
 export function assertLoopbackUrl(rawUrl: string, label: string): URL {

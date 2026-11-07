@@ -1,5 +1,6 @@
 import { createServerClient, parseCookieHeader } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { shouldUseSecureCookies } from '@/lib/security/safe-redirect';
 
 const AUTH_PAGES = new Set(['/login', '/reset-password']);
 
@@ -25,6 +26,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return withNoIndex(NextResponse.redirect(login));
   }
 
+  const useSecureCookies = shouldUseSecureCookies();
+
   let response = withNoIndex(NextResponse.next({ request: { headers: request.headers } }));
   const supabase = createServerClient(url, key, {
     cookies: {
@@ -39,8 +42,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
         cookies.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, {
             ...options,
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: useSecureCookies,
             sameSite: 'lax',
           })
         );

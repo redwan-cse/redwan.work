@@ -141,7 +141,10 @@ export function BlogBrowser({
                 imageUrl={featuredItem.imageUrl}
                 excerpt={featuredItem.excerpt}
               >
-                <div className="relative min-h-[260px] cursor-pointer overflow-hidden bg-muted lg:col-span-6 lg:min-h-[340px]">
+                <button
+                  type="button"
+                  className="relative block min-h-[260px] w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:col-span-6 lg:min-h-[340px]"
+                >
                   <Image
                     src={featuredItem.imageUrl}
                     alt={featuredItem.post.title}
@@ -156,7 +159,7 @@ export function BlogBrowser({
                       Featured Dispatch
                     </Badge>
                   </div>
-                </div>
+                </button>
               </BlogPreviewModal>
 
               <div className="flex flex-col justify-between p-6 sm:p-8 lg:col-span-6">
@@ -177,15 +180,20 @@ export function BlogBrowser({
                     </span>
                   </div>
 
-                  <BlogPreviewModal
-                    post={featuredItem.post}
-                    imageUrl={featuredItem.imageUrl}
-                    excerpt={featuredItem.excerpt}
-                  >
-                    <h2 className="cursor-pointer text-2xl font-bold tracking-tight transition-colors hover:text-primary sm:text-3xl">
-                      {featuredItem.post.title}
-                    </h2>
-                  </BlogPreviewModal>
+                  <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    <BlogPreviewModal
+                      post={featuredItem.post}
+                      imageUrl={featuredItem.imageUrl}
+                      excerpt={featuredItem.excerpt}
+                    >
+                      <button
+                        type="button"
+                        className="cursor-pointer text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                      >
+                        {featuredItem.post.title}
+                      </button>
+                    </BlogPreviewModal>
+                  </h2>
 
                   <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
                     {featuredItem.excerpt}
@@ -242,7 +250,10 @@ export function BlogBrowser({
               <InteractiveCard className="flex h-full flex-col justify-between overflow-hidden p-0">
                 <div>
                   <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
-                    <div className="relative h-52 cursor-pointer overflow-hidden bg-muted">
+                    <button
+                      type="button"
+                      className="relative block h-52 w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
                       <Image
                         src={imageUrl}
                         alt={post.title}
@@ -261,7 +272,7 @@ export function BlogBrowser({
                           </Badge>
                         </div>
                       )}
-                    </div>
+                    </button>
                   </BlogPreviewModal>
 
                   <div className="p-6 pb-4">
@@ -280,11 +291,16 @@ export function BlogBrowser({
                       </span>
                     </div>
 
-                    <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
-                      <h3 className="line-clamp-2 cursor-pointer text-lg font-bold leading-snug transition-colors hover:text-primary">
-                        {post.title}
-                      </h3>
-                    </BlogPreviewModal>
+                    <h3 className="line-clamp-2 text-lg font-bold leading-snug">
+                      <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
+                        <button
+                          type="button"
+                          className="cursor-pointer text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                        >
+                          {post.title}
+                        </button>
+                      </BlogPreviewModal>
+                    </h3>
 
                     <p className="mt-2.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                       {excerpt}

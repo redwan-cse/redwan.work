@@ -4,11 +4,15 @@ import { NextRequest } from 'next/server';
 const mockGetClaims = vi.fn();
 const mockMaybeSingle = vi.fn();
 const mockRpc = vi.fn();
+const mockSignInWithPassword = vi.fn();
+const mockSignOut = vi.fn();
 
 vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: {
       getClaims: mockGetClaims,
+      signInWithPassword: mockSignInWithPassword,
+      signOut: mockSignOut,
     },
     from: () => ({
       select: () => ({
@@ -17,6 +21,7 @@ vi.mock('@/lib/supabase/server', () => ({
         }),
       }),
     }),
+    rpc: mockRpc,
   }),
 }));
 
@@ -38,7 +43,13 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 import { getCurrentSession } from '@/lib/auth/session';
+import { signInWithPasswordAction } from '@/lib/auth/actions';
 import { proxy } from '@/proxy';
+import {
+  sanitizeAdminMfaNextPath,
+  sanitizeRelativeRedirectPath,
+  shouldUseSecureCookies,
+} from '@/lib/security/safe-redirect';
 
 describe('Session & Proxy MFA AAL2 and Active-Account Enforcement', () => {
   beforeEach(() => {
@@ -184,5 +195,71 @@ describe('Session & Proxy MFA AAL2 and Active-Account Enforcement', () => {
     expect(deactRes.headers.get('location')).toBe(
       'http://localhost:3000/api/auth/logout?reason=deactivated'
     );
+  });
+
+  it('signs out and returns deactivation error in signInWithPasswordAction when caller_account_state is inactive', async () => {
+    mockSignInWithPassword.mockResolvedValue({ data: { session: {} }, error: null });
+    mockGetClaims.mockResolvedValue({
+      data: {
+        claims: {
+          sub: '44444444-4444-4444-4444-444444444444',
+          email: 'disabled@disposable.test',
+          aal: 'aal1',
+          app_metadata: { role: 'client' },
+        },
+      },
+      error: null,
+    });
+    // Under RLS, inactive user cannot read own profile row (returns null)
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null });
+    mockRpc.mockResolvedValue({ data: 'inactive', error: null });
+    mockSignOut.mockResolvedValue({ error: null });
+
+    const fd = new FormData();
+    fd.set('email', 'disabled@disposable.test');
+    fd.set('password', 'ValidPassword!1234');
+
+    const result = await signInWithPasswordAction({}, fd);
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      error: 'Your account has been deactivated. Contact the administrator.',
+    });
+  });
+
+  it('blocks WHATWG control-char open redirects and never downgrades Secure cookies in production', () => {
+    expect(sanitizeRelativeRedirectPath('/\t/evil.example')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('/%09/evil.example')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('/\n/evil.example')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('//evil.example')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('/\\evil.example')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('https://evil.example/admin')).toBeNull();
+    expect(sanitizeRelativeRedirectPath('/portal/orders?tab=1')).toBe('/portal/orders?tab=1');
+
+    expect(sanitizeAdminMfaNextPath('/\t/evil.example')).toBe('/admin');
+    expect(sanitizeAdminMfaNextPath('/admin\t/../../evil')).toBe('/admin');
+    expect(sanitizeAdminMfaNextPath('/portal/orders')).toBe('/admin');
+    expect(sanitizeAdminMfaNextPath('/admin/orders?page=2')).toBe('/admin/orders?page=2');
+
+    expect(
+      shouldUseSecureCookies({
+        nodeEnv: 'production',
+        testEnvironment: undefined,
+        siteUrl: 'https://redwan.work',
+      })
+    ).toBe(true);
+    expect(
+      shouldUseSecureCookies({
+        nodeEnv: 'production',
+        testEnvironment: undefined,
+        siteUrl: 'http://127.0.0.1:3000',
+      })
+    ).toBe(true);
+    expect(
+      shouldUseSecureCookies({
+        nodeEnv: 'production',
+        testEnvironment: 'isolated-ci',
+        siteUrl: 'http://127.0.0.1:24390',
+      })
+    ).toBe(false);
   });
 });

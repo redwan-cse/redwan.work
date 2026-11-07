@@ -158,7 +158,7 @@ function LoginPageContent() {
 
         <p className="text-center text-xs text-muted-foreground">
           Need an account?{' '}
-          <Link href="/contact" className="underline-offset-4 hover:underline">
+          <Link href="/contact" className="text-foreground underline underline-offset-4">
             Become a client
           </Link>
         </p>

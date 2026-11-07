@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { consumeRateLimit } from '@/lib/security/rate-limit';
+import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 import {
   ARCHIVE_MAX_BYTES,
   CLIENT_VAULT_QUOTA_BYTES,
@@ -33,6 +34,10 @@ const ALLOWED_EXT = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginRequest(request.headers)) {
+    return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
+  }
+
   const session = await getCurrentSession();
   if (!session) {
     return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
@@ -101,13 +106,20 @@ export async function POST(request: NextRequest) {
         : session.userId;
 
     const admin = getSupabaseAdmin();
-    const { data: activeFiles } = await admin
+    const { data: activeFiles, error: quotaErr } = await admin
       .from('vault_files')
       .select('size_bytes')
       .eq('owner_client_id', ownerClientId)
       .is('archived_at', null);
 
-    const usedBytes = (activeFiles ?? []).reduce(
+    if (quotaErr || !activeFiles) {
+      return NextResponse.json(
+        { error: 'Vault storage quota verification is temporarily unavailable.' },
+        { status: 503 }
+      );
+    }
+
+    const usedBytes = activeFiles.reduce(
       (acc, row) => acc + Number(row.size_bytes ?? 0),
       0
     );

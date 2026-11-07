@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShieldAlert, KeyRound } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { sanitizeAdminMfaNextPath } from '@/lib/security/safe-redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,14 +23,8 @@ interface TotpEnrollmentState {
   secret?: string;
 }
 
-function safeNextAdminPath(raw: string | null): string {
-  if (!raw || !raw.startsWith('/admin') || raw.startsWith('//') || raw.includes('\\')) {
-    return '/admin';
-  }
-  return raw;
-}
-
 export default function AdminMfaPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [factorId, setFactorId] = useState<string | null>(null);
@@ -53,6 +49,10 @@ export default function AdminMfaPage() {
           setFactorId(verifiedTotp.id);
           setLoading(false);
           return;
+        }
+        const staleUnverified = (data?.totp ?? []).filter((f) => f.status !== 'verified');
+        for (const stale of staleUnverified) {
+          await supabase.auth.mfa.unenroll({ factorId: stale.id }).catch(() => undefined);
         }
         const { data: enrolled, error: enrollErr } = await supabase.auth.mfa.enroll({
           factorType: 'totp',
@@ -104,7 +104,9 @@ export default function AdminMfaPage() {
         return;
       }
       const params = new URLSearchParams(window.location.search);
-      window.location.assign(safeNextAdminPath(params.get('next')));
+      const targetAdminPath = sanitizeAdminMfaNextPath(params.get('next'));
+      router.replace(targetAdminPath);
+      router.refresh();
     } catch {
       setError('Unable to complete MFA verification. Please try again.');
       setSubmitting(false);

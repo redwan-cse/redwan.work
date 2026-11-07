@@ -4,31 +4,70 @@ import {headers, cookies} from 'next/headers';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
+import {sanitizeRelativeRedirectPath,shouldUseSecureCookies} from '@/lib/security/safe-redirect';
 export type ActionState={error?:string;notice?:string;linkHref?:string;linkText?:string};
 function safeRelativePath(raw:FormDataEntryValue|null):string|null {
- const hasControl=(value:string)=>Array.from(value).some(character=>{const code=character.charCodeAt(0);return code<32||code===127;});
- if(typeof raw!=='string'||!raw.startsWith('/')||raw.startsWith('//')||raw.includes('\\')||hasControl(raw))return null;
- try {
-  // Fixed validation-only origin: never trust a posted Host/Origin as authority.
-  const base='https://return-path.invalid';
-  const url=new URL(raw,base);
-  const pathname=decodeURIComponent(url.pathname);
-  if(url.origin!==base||url.pathname.startsWith('//')||pathname.startsWith('//')||pathname.includes('\\')||hasControl(pathname))return null;
-  return url.pathname+url.search+url.hash;
- }catch{return null;}
+ return sanitizeRelativeRedirectPath(raw);
 }
-async function panelHomeForCurrentUser():Promise<string> {
- const supabase=await createSupabaseServerClient();
- const {data}=await supabase.auth.getClaims();
- const claims=data?.claims as {sub?:string;aal?:string}|undefined;
- const sub=typeof claims?.sub==='string'?claims.sub:null;
- if(!sub)return '/portal';
- const {data:profile}=await supabase.from('profiles').select('role, mfa_enforced').eq('id',sub).maybeSingle();
- if(profile?.role==='admin'){
-  if(profile.mfa_enforced===true&&claims?.aal!=='aal2')return '/mfa';
-  return '/admin';
- }
- return '/portal';
+const DEACTIVATED_ACCOUNT_MESSAGE =
+  'Your account has been deactivated. Contact the administrator.';
+const UNAVAILABLE_ACCOUNT_MESSAGE =
+  'Your account cannot be accessed right now. Contact the administrator.';
+
+async function resolveCurrentPanelDestination(): Promise<
+  { ok: true; home: '/admin' | '/portal' | '/mfa' } | { ok: false; error: string }
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims as
+    | { sub?: string; aal?: string; app_metadata?: Record<string, unknown> }
+    | undefined;
+  const sub = typeof claims?.sub === 'string' ? claims.sub : null;
+  if (!sub) {
+    await supabase.auth.signOut();
+    return { ok: false, error: UNAVAILABLE_ACCOUNT_MESSAGE };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, is_active, mfa_enforced')
+    .eq('id', sub)
+    .maybeSingle();
+
+  if (profileError) {
+    await supabase.auth.signOut();
+    return { ok: false, error: UNAVAILABLE_ACCOUNT_MESSAGE };
+  }
+
+  const role = profile?.role;
+  const validAdminClaim = role !== 'admin' || claims?.app_metadata?.role === 'admin';
+
+  if (
+    !profile ||
+    profile.is_active !== true ||
+    (role !== 'admin' && role !== 'client') ||
+    !validAdminClaim
+  ) {
+    let inactive = profile?.is_active === false;
+    if (!profile) {
+      const state = await supabase.rpc('caller_account_state');
+      inactive = state.data === 'inactive';
+    }
+    await supabase.auth.signOut();
+    return {
+      ok: false,
+      error: inactive ? DEACTIVATED_ACCOUNT_MESSAGE : UNAVAILABLE_ACCOUNT_MESSAGE,
+    };
+  }
+
+  if (role === 'admin') {
+    if (profile.mfa_enforced === true && claims?.aal !== 'aal2') {
+      return { ok: true, home: '/mfa' };
+    }
+    return { ok: true, home: '/admin' };
+  }
+
+  return { ok: true, home: '/portal' };
 }
 const MIN_PASSWORD=12;
 const INVALID_LINK='This link is invalid or has expired. Ask for a new one.';
@@ -55,7 +94,9 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  const email=String(formData.get('email')??'').trim().toLowerCase(),password=String(formData.get('password')??''),next=safeRelativePath(formData.get('next'));
  if(!email||!password)return {error:'Email and password are required.'};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return {error:'Invalid email or password.'};
- const home=await panelHomeForCurrentUser();
+ const destination=await resolveCurrentPanelDestination();
+ if(!destination.ok)return {error:destination.error};
+ const home=destination.home;
  if(home==='/mfa'){
   redirect(next?`/mfa?next=${encodeURIComponent(next)}`:'/mfa');
  }
@@ -248,7 +289,7 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
           const authorityToken=createRetryAuthorityToken('recovery',otpData.user.id,sessionId,tokenHash);
           cookieStore.set(retryCookieName,authorityToken,{
             httpOnly:true,
-            secure:process.env.NODE_ENV==='production',
+            secure:shouldUseSecureCookies(),
             maxAge:RETRY_TTL_SECONDS,
             sameSite:'lax',
             path:'/',
@@ -258,7 +299,9 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
       return {error:'Could not update your password. Try again.'};
     }
     cookieStore.delete(retryCookieName);
-    redirect(await panelHomeForCurrentUser());
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok)return {error:destination.error};
+    redirect(destination.home);
   }
 
   // Retry path: verifyOtp already consumed
@@ -280,7 +323,9 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
     return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
   }
 
-  redirect(await panelHomeForCurrentUser());
+  const destination=await resolveCurrentPanelDestination();
+  if(!destination.ok)return {error:destination.error};
+  redirect(destination.home);
 }
 
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
@@ -302,7 +347,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
           const authorityToken=createRetryAuthorityToken('invite',otpData.user.id,sessionId,tokenHash);
           cookieStore.set(retryCookieName,authorityToken,{
             httpOnly:true,
-            secure:process.env.NODE_ENV==='production',
+            secure:shouldUseSecureCookies(),
             maxAge:RETRY_TTL_SECONDS,
             sameSite:'lax',
             path:'/',
@@ -312,7 +357,9 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
       return {error:'Could not save your password. Try again.'};
     }
     cookieStore.delete(retryCookieName);
-    redirect(await panelHomeForCurrentUser());
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok)return {error:destination.error};
+    redirect(destination.home);
   }
 
   const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
@@ -333,8 +380,10 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
   }
 
-  redirect(await panelHomeForCurrentUser());
+  const destination=await resolveCurrentPanelDestination();
+  if(!destination.ok)return {error:destination.error};
+  redirect(destination.home);
 }
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
- if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};return {ok:true,home:await panelHomeForCurrentUser()};
+ if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};const destination=await resolveCurrentPanelDestination();if(!destination.ok)return {ok:false,error:destination.error};return {ok:true,home:destination.home};
 }

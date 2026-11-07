@@ -196,6 +196,21 @@ describe('Database Trust Boundaries, Function ACLs, AAL2 & Tenant Isolation', ()
     );
     expect(aal1Orders.rows.length).toBe(0);
 
+    // Admin at AAL1 cannot self-disable mfa_enforced on their own profile row
+    await expect(
+      pg.queryAs(
+        { userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal1' },
+        `update public.profiles set mfa_enforced = false where id = $1`,
+        [adminUser.id]
+      )
+    ).rejects.toThrow();
+    const stillEnforced = await pg.queryAs<{ mfa_enforced: boolean }>(
+      { pgRole: 'service_role' },
+      `select mfa_enforced from public.profiles where id = $1`,
+      [adminUser.id]
+    );
+    expect(stillEnforced.rows[0].mfa_enforced).toBe(true);
+
     // Admin at AAL2 passes public.is_admin() and sees client orders
     const aal2Check = await pg.queryAs<{ ok: boolean }>(
       { userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
@@ -322,5 +337,18 @@ describe('Database Trust Boundaries, Function ACLs, AAL2 & Tenant Isolation', ()
         [`private/${clientB.id}/payment_proof/secret.pdf`, clientA.id]
       )
     ).rejects.toThrow(/r2_key prefix/);
+
+    // 6. Vault file 500 MiB quota is enforced even when owner_client_id is omitted (inferred via order_id)
+    await expect(
+      pg.queryAs(
+        { pgRole: 'service_role' },
+        `insert into public.vault_files (
+           bucket, r2_key, category, owner_client_id, order_id, uploaded_by, filename, mime_type, size_bytes
+         ) values (
+           'private', $1, 'deliverable', null, $2, $3, 'oversize.zip', 'application/zip', 530000000
+         )`,
+        [`private/${clientB.id}/deliverable/oversize.zip`, orderBId, adminUser.id]
+      )
+    ).rejects.toThrow(/quota/i);
   });
 });

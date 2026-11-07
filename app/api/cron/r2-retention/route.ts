@@ -49,7 +49,14 @@ async function handleStorageRetentionCron(request: NextRequest) {
 
     if (expiredFiles && expiredFiles.length > 0) {
       const keys = expiredFiles.map((f) => f.r2_key);
-      deletedVaultFiles = await deletePrivateObjects(keys);
+      try {
+        deletedVaultFiles = await deletePrivateObjects(keys);
+      } catch {
+        return NextResponse.json(
+          { error: 'Failed to delete expired vault objects from storage.' },
+          { status: 503 }
+        );
+      }
       const { error: archiveErr } = await admin
         .from('vault_files')
         .update({ archived_at: nowIso })
@@ -86,28 +93,75 @@ async function handleStorageRetentionCron(request: NextRequest) {
     }
 
     if (expiredInquiryAtts && expiredInquiryAtts.length > 0) {
-      deletedInquiryAttachments = await deletePrivateObjects(
-        expiredInquiryAtts.map((a) => a.r2_key)
-      );
-      await admin
+      try {
+        deletedInquiryAttachments = await deletePrivateObjects(
+          expiredInquiryAtts.map((a) => a.r2_key)
+        );
+      } catch {
+        return NextResponse.json(
+          { error: 'Failed to delete expired inquiry attachments from storage.' },
+          { status: 503 }
+        );
+      }
+      const { error: delAttErr } = await admin
         .from('inquiry_attachments')
         .delete()
         .in(
           'id',
           expiredInquiryAtts.map((a) => a.id)
         );
+      if (delAttErr) {
+        return NextResponse.json({ error: delAttErr.message }, { status: 500 });
+      }
     }
 
     // Sweep stale orphan contact/* objects older than 90 days not tracked in inquiry_attachments
-    const contactObjects = await listPrivateContactObjects();
-    if (contactObjects.length > 0) {
-      const { data: trackedAtts } = await admin
+    let contactObjects: Awaited<ReturnType<typeof listPrivateContactObjects>> = [];
+    try {
+      contactObjects = await listPrivateContactObjects();
+    } catch {
+      return NextResponse.json(
+        { error: 'Failed to list contact storage objects.' },
+        { status: 503 }
+      );
+    }
+
+    // Filter candidate stale objects first (capped at 100 per batch) so we query only those keys
+    // and never truncate retained attachments at PostgREST's 1,000-row limit.
+    const candidateStaleObjects = contactObjects
+      .filter(
+        (obj) =>
+          obj.key.startsWith('contact/') &&
+          obj.lastModified instanceof Date &&
+          obj.lastModified.getTime() < cutoffDate.getTime()
+      )
+      .slice(0, 100);
+
+    if (candidateStaleObjects.length > 0) {
+      const candidateKeys = candidateStaleObjects.map((obj) => obj.key);
+      const { data: trackedAtts, error: trackedErr } = await admin
         .from('inquiry_attachments')
-        .select('r2_key');
-      const retainedSet = new Set((trackedAtts ?? []).map((row) => row.r2_key));
-      const staleKeys = staleObjectKeys(contactObjects, cutoffDate, retainedSet);
+        .select('r2_key')
+        .in('r2_key', candidateKeys);
+
+      if (trackedErr || !trackedAtts) {
+        return NextResponse.json(
+          { error: trackedErr?.message ?? 'Could not verify retained contact attachments.' },
+          { status: 503 }
+        );
+      }
+
+      const retainedSet = new Set(trackedAtts.map((row) => row.r2_key));
+      const staleKeys = staleObjectKeys(candidateStaleObjects, cutoffDate, retainedSet);
       if (staleKeys.length > 0) {
-        deletedOrphanContactObjects = await deletePrivateObjects(staleKeys.slice(0, 100));
+        try {
+          deletedOrphanContactObjects = await deletePrivateObjects(staleKeys.slice(0, 100));
+        } catch {
+          return NextResponse.json(
+            { error: 'Failed to delete orphan contact objects.' },
+            { status: 503 }
+          );
+        }
       }
     }
   }

@@ -1120,7 +1120,7 @@ export default function EnhancedContactForm({
                     }
                   }}
                 >
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger aria-label="WhatsApp country calling code" className="w-[140px]">
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
@@ -1247,7 +1247,11 @@ export default function EnhancedContactForm({
                     handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
                   }}
                 >
-                  <SelectTrigger className="h-10 w-[4.25rem]">
+                  <SelectTrigger
+                    id="bestTimeToContact"
+                    aria-label="Best time to contact hour"
+                    className="h-10 w-[4.25rem]"
+                  >
                     <SelectValue placeholder="HH">
                       {formData.bestTimeToContact 
                         ? formData.bestTimeToContact.split(':')[0].padStart(2, '0')
@@ -1280,7 +1284,10 @@ export default function EnhancedContactForm({
                     handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
                   }}
                 >
-                  <SelectTrigger className="h-10 w-[4.25rem]">
+                  <SelectTrigger
+                    aria-label="Best time to contact minute"
+                    className="h-10 w-[4.25rem]"
+                  >
                     <SelectValue placeholder="MM">
                       {formData.bestTimeToContact?.match(/:(\d{2})/)?.[1] || 'MM'}
                     </SelectValue>
@@ -1308,7 +1315,10 @@ export default function EnhancedContactForm({
                     handleInputChange('bestTimeToContact', `${hour}:${minute} ${period}`);
                   }}
                 >
-                  <SelectTrigger className="h-10 w-[4.5rem]">
+                  <SelectTrigger
+                    aria-label="Best time to contact AM or PM"
+                    className="h-10 w-[4.5rem]"
+                  >
                     <SelectValue placeholder="AM">
                       {formData.bestTimeToContact?.match(/\s*(AM|PM)/i)?.[1] || 'AM'}
                     </SelectValue>
@@ -1858,7 +1868,7 @@ export default function EnhancedContactForm({
             >
               <span className="text-destructive">*</span>{" "}
               {consentPolicy ? consentPolicy.checkbox : <>I agree that my data will be used to review and respond to my request, as described on the{" "}
-              <Link href="/privacy" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+              <Link href="/privacy" className="text-primary underline underline-offset-4" target="_blank" rel="noopener noreferrer">
                 Data & Privacy page
               </Link>.</>}
             </Label>
