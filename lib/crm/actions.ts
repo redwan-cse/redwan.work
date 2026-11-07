@@ -13,6 +13,11 @@ import {
 import { type ServicePillarKey } from '@/lib/content/site';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
 import { parseFormBoolean } from '@/lib/forms/boolean';
+import {
+  computeDepositSplit,
+  computeInvoiceTotals,
+  validatePaymentSubmission,
+} from '@/lib/finance/invariants';
 import type { Database } from '@/lib/supabase/database.types';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -247,8 +252,8 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   }
 
   // Default 2 milestones (Kickoff & Final Delivery)
-  const depositCents = Math.round((totalCents * depositPercent) / 100);
-  const balanceCents = Math.max(0, totalCents - depositCents);
+  const boundedDepositPercent = Math.min(100, Math.max(0, Math.round(depositPercent)));
+  const { depositCents, balanceCents } = computeDepositSplit(totalCents, boundedDepositPercent);
   const { error: msErr } = await admin.from('proposal_milestones').insert([
     {
       proposal_id: proposal.id,
@@ -317,121 +322,63 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const pillar = (String(formData.get('pillar') ?? 'cybersecurity').trim() ||
     'cybersecurity') as ServicePillarKey;
   const totalUsd = Number(formData.get('total_usd') ?? 0);
-  const depositPercent = Number(formData.get('deposit_percent') ?? 50);
-  const requiresRoe = formData.get('requires_roe') === 'on';
-  const dueDays = Number(formData.get('due_days') ?? 10);
+  const depositPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('deposit_percent') ?? 50))));
+  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+  const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 10)));
 
   if (!clientId || !title || totalUsd < 0) return;
 
   const totalCents = Math.round(totalUsd * 100);
   const admin = getSupabaseAdmin();
 
-  const initialStatus: OrderStatus =
-    depositPercent > 0 ? 'awaiting_payment' : 'pending_requirements';
+  const { data: rpcRes, error: rpcErr } = await admin.rpc('create_admin_order_atomic', {
+    p_admin_id: session.userId,
+    p_client_id: clientId,
+    p_title: title,
+    p_description: description,
+    p_pillar: pillar,
+    p_total_cents: totalCents,
+    p_deposit_percent: depositPercent,
+    p_requires_roe: requiresRoe,
+    p_due_days: dueDays,
+  });
 
-  const dueAt = new Date(Date.now() + Math.max(1, dueDays) * 86400 * 1000).toISOString();
+  if (rpcErr) {
+    throw new Error(rpcErr.message);
+  }
 
-  const { data: order } = await admin
-    .from('orders')
-    .insert({
-      client_id: clientId,
-      title,
-      description,
-      pillar,
-      pricing_model: 'fixed_package',
-      status: initialStatus,
-      requires_roe: requiresRoe,
-      currency: 'USD',
-      subtotal_cents: totalCents,
-      total_cents: totalCents,
-      deposit_percent: depositPercent,
-      due_at: dueAt,
-    })
-    .select('id, code')
-    .single();
+  const parsed =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { order_id?: string; code?: string; status?: OrderStatus })
+      : null;
 
-  if (order) {
-    await admin.from('order_milestones').insert([
-      {
-        order_id: order.id,
-        position: 0,
-        title: 'Kickoff & Scope Alignment',
-        weight_percent: 30,
-        amount_cents: Math.round(totalCents * 0.3),
-        status: 'in_progress',
-      },
-      {
-        order_id: order.id,
-        position: 1,
-        title: 'Core Execution & Verification',
-        weight_percent: 50,
-        amount_cents: Math.round(totalCents * 0.5),
-        status: 'pending',
-      },
-      {
-        order_id: order.id,
-        position: 2,
-        title: 'Final Deliverable Handover & Sign-Off',
-        weight_percent: 20,
-        amount_cents: Math.round(totalCents * 0.2),
-        status: 'pending',
-      },
-    ]);
-
-    if (depositPercent > 0 && totalCents > 0) {
-      const depositCents = Math.round((totalCents * depositPercent) / 100);
-      const { data: inv } = await admin
-        .from('invoices')
-        .insert({
-          client_id: clientId,
-          order_id: order.id,
-          status: 'issued',
-          is_deposit_invoice: true,
-          currency: 'USD',
-          fx_rate_to_usd: 1,
-          subtotal_cents: depositCents,
-          total_cents: depositCents,
-          issued_at: new Date().toISOString(),
-          due_at: new Date(Date.now() + 5 * 86400 * 1000).toISOString(),
-          notes: `Kickoff deposit (${depositPercent}%) for ${order.code}: ${title}`,
-        })
-        .select('id')
-        .single();
-
-      if (inv) {
-        await admin.from('invoice_items').insert({
-          invoice_id: inv.id,
-          position: 0,
-          description: `Kickoff Deposit (${depositPercent}%) — ${order.code}: ${title}`,
-          qty: 1,
-          unit_price_cents: depositCents,
-        });
-      }
-    }
-
+  if (parsed?.order_id) {
+    const orderCode = parsed.code ?? '';
     await createInAppNotification({
       recipientId: clientId,
       category: 'order',
-      title: `New Order Created: ${order.code}`,
+      title: `New Order Created: ${orderCode}`,
       body: title,
-      href: `/portal/orders/${order.id}`,
+      href: `/portal/orders/${parsed.order_id}`,
     });
 
     await recordAuditLog({
       actorId: session.userId,
       actorRole: 'admin',
       clientId,
-      orderId: order.id,
+      orderId: parsed.order_id,
       action: 'order.created',
       entityType: 'order',
-      entityId: order.id,
-      summary: `Created order ${order.code}: ${title}`,
-      metadata: { totalCents, pillar, initialStatus },
+      entityId: parsed.order_id,
+      summary: `Created order ${orderCode}: ${title}`,
+      metadata: { totalCents, pillar, initialStatus: parsed.status ?? 'awaiting_payment' },
     });
   }
 
   revalidatePath('/admin/orders');
+  revalidatePath('/admin/invoices');
   revalidatePath('/portal/orders');
+  revalidatePath('/portal/invoices');
 }
 
 export async function updateOrderStatusAndProgressAction(formData: FormData): Promise<void> {
@@ -443,6 +390,18 @@ export async function updateOrderStatusAndProgressAction(formData: FormData): Pr
   if (!orderId || !status) return;
 
   const admin = getSupabaseAdmin();
+  if (status === 'completed') {
+    const { data: unpaid } = await admin
+      .from('invoices')
+      .select('id')
+      .eq('order_id', orderId)
+      .not('status', 'in', '("paid","void")')
+      .limit(1);
+    if (unpaid && unpaid.length > 0) {
+      throw new Error('Cannot mark order completed while unpaid invoices remain.');
+    }
+  }
+
   const { data: existing } = await admin
     .from('orders')
     .select('client_id, code, title')
@@ -713,55 +672,54 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
   const fxRate = Number(formData.get('fx_rate_to_usd') ?? 1) || 1;
   const description = String(formData.get('description') ?? '').trim();
   const amountMajor = Number(formData.get('amount_major') ?? 0);
-  const dueDays = Number(formData.get('due_days') ?? 7);
+  const discountMajor = Number(formData.get('discount_major') ?? 0);
+  const taxRateBps = Math.round(Number(formData.get('tax_rate_bps') ?? 0));
+  const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 7)));
   const notes = String(formData.get('notes') ?? '').trim() || null;
-  const isDeposit = formData.get('is_deposit_invoice') === 'on';
+  const isDeposit = parseFormBoolean(formData, 'is_deposit_invoice');
 
   if (!clientId || !description || amountMajor <= 0) return;
 
-  const totalCents = Math.round(amountMajor * 100);
-  const admin = getSupabaseAdmin();
-
-  const { data: invoice, error: invErr } = await admin
-    .from('invoices')
-    .insert({
-      client_id: clientId,
-      order_id: orderId,
-      status: 'issued',
-      is_deposit_invoice: isDeposit,
-      currency,
-      fx_rate_to_usd: fxRate,
-      subtotal_cents: totalCents,
-      total_cents: totalCents,
-      issued_at: new Date().toISOString(),
-      due_at: new Date(Date.now() + Math.max(1, dueDays) * 86400 * 1000).toISOString(),
-      notes,
-    })
-    .select('id, code')
-    .single();
-  if (invErr || !invoice) {
-    throw new Error(invErr?.message ?? 'Could not issue invoice.');
-  }
-
-  const { error: itemErr } = await admin.from('invoice_items').insert({
-    invoice_id: invoice.id,
-    position: 0,
-    description,
-    qty: 1,
-    unit_price_cents: totalCents,
+  const subtotalCents = Math.round(amountMajor * 100);
+  const discountCents = Math.max(0, Math.round(discountMajor * 100));
+  const totals = computeInvoiceTotals({
+    subtotalCents,
+    discountCents,
+    taxRateBps,
   });
-  if (itemErr) {
-    throw new Error(itemErr.message);
+
+  const admin = getSupabaseAdmin();
+  const { data: rpcRes, error: invErr } = await admin.rpc('issue_invoice_atomic', {
+    p_client_id: clientId,
+    p_order_id: orderId,
+    p_is_deposit: isDeposit,
+    p_currency: currency,
+    p_fx_rate_to_usd: fxRate,
+    p_subtotal_cents: totals.subtotalCents,
+    p_discount_cents: totals.discountCents,
+    p_tax_rate_bps: totals.taxRateBps,
+    p_due_days: dueDays,
+    p_notes: notes,
+    p_item_description: description,
+  });
+
+  if (invErr) {
+    throw new Error(invErr.message);
   }
 
-  if (invoice) {
+  const invoice =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { invoice_id?: string; code?: string; total_cents?: number })
+      : null;
 
+  if (invoice?.invoice_id) {
+    const displayMajor = (totals.totalCents / 100).toLocaleString();
     await createInAppNotification({
       recipientId: clientId,
       category: 'invoice',
-      title: `Invoice Issued: ${invoice.code}`,
-      body: `${description} (${currency} ${amountMajor.toLocaleString()})`,
-      href: `/portal/invoices/${invoice.id}`,
+      title: `Invoice Issued: ${invoice.code ?? ''}`,
+      body: `${description} (${currency} ${displayMajor})`,
+      href: `/portal/invoices/${invoice.invoice_id}`,
     });
 
     await recordAuditLog({
@@ -771,9 +729,9 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
       orderId,
       action: 'invoice.issued',
       entityType: 'invoice',
-      entityId: invoice.id,
-      summary: `Issued invoice ${invoice.code} for ${currency} ${amountMajor.toLocaleString()}`,
-      metadata: { currency, totalCents, fxRate },
+      entityId: invoice.invoice_id,
+      summary: `Issued invoice ${invoice.code ?? ''} for ${currency} ${displayMajor}`,
+      metadata: { currency, totalCents: totals.totalCents, fxRate },
     });
   }
 
@@ -1028,57 +986,6 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
 
   const admin = getSupabaseAdmin();
 
-  const initialStatus: OrderStatus =
-    depositPercent > 0 ? 'awaiting_payment' : 'pending_requirements';
-
-  const dueAt = new Date(
-    Date.now() + Math.max(1, finalDeliveryDays) * 86400 * 1000
-  ).toISOString();
-
-  const { data: order, error } = await admin
-    .from('orders')
-    .insert({
-      client_id: session.userId,
-      service_id: serviceItem.id.length === 36 ? serviceItem.id : null,
-      title: finalTitle,
-      description: projectNotes || pkg?.summary || serviceItem.tagline,
-      pillar: serviceItem.pillar,
-      pricing_model: isCustomDeal ? 'custom_milestone' : 'fixed_package',
-      status: initialStatus,
-      requires_roe: serviceItem.requiresRoe,
-      revisions_included: revisionsIncluded,
-      currency: 'USD',
-      subtotal_cents: finalPriceCents,
-      total_cents: finalPriceCents,
-      deposit_percent: depositPercent,
-      due_at: dueAt,
-      is_custom_deal: isCustomDeal,
-      proposed_budget_cents: isCustomDeal ? finalPriceCents : null,
-      proposed_delivery_days: isCustomDeal ? finalDeliveryDays : null,
-    })
-    .select('id, code')
-    .single();
-
-  if (error || !order) {
-    throw new Error(error?.message ?? 'Could not place order.');
-  }
-
-  if (targetScope || projectNotes) {
-    await admin.from('order_requirements').upsert({
-      order_id: order.id,
-      client_id: session.userId,
-      target_scope_notes: targetScope || projectNotes,
-      responses: {
-        service_slug: serviceItem.slug,
-        package_tier: isCustomDeal ? 'custom' : (pkg?.tier ?? tier),
-        is_custom_deal: isCustomDeal,
-        proposed_budget_cents: isCustomDeal ? finalPriceCents : null,
-        proposed_delivery_days: isCustomDeal ? finalDeliveryDays : null,
-      },
-    });
-  }
-
-  // Create milestones
   const milestoneFeatures =
     pkg && pkg.features.length > 0
       ? pkg.features
@@ -1088,57 +995,47 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
           'Verification & Final Delivery Sign-Off',
         ];
 
-  await admin.from('order_milestones').insert(
-    milestoneFeatures.map((feat, idx) => ({
-      order_id: order.id,
-      position: idx,
-      title: feat,
-      weight_percent: Math.round(100 / Math.max(1, milestoneFeatures.length)),
-      amount_cents: Math.round(finalPriceCents / Math.max(1, milestoneFeatures.length)),
-      status: idx === 0 ? 'in_progress' : 'pending',
-    }))
-  );
+  const initialMessageTemplate = isCustomDeal
+    ? `Started Custom Deal Contract ({{ORDER_CODE}}) with proposed budget $${(finalPriceCents / 100).toLocaleString()} USD and ${finalDeliveryDays}-day timeline.\n\nScope: ${projectNotes || targetScope || finalTitle}`
+    : `Started Package Contract ({{ORDER_CODE}}): ${finalTitle}.\n\nScope: ${projectNotes || targetScope || pkg?.summary || serviceItem.tagline}`;
 
-  // Start the live contract chat thread automatically
-  await admin.from('order_messages').insert({
-    order_id: order.id,
-    author_id: session.userId,
-    body: isCustomDeal
-      ? `Started Custom Deal Contract (${order.code}) with proposed budget $${(finalPriceCents / 100).toLocaleString()} USD and ${finalDeliveryDays}-day timeline.\n\nScope: ${projectNotes || targetScope || finalTitle}`
-      : `Started Package Contract (${order.code}): ${finalTitle}.\n\nScope: ${projectNotes || targetScope || pkg?.summary || serviceItem.tagline}`,
-    is_internal_note: false,
+  const depositItemLabel = `${isCustomDeal ? 'Custom Deal' : (pkg?.name ?? 'Package')} (${depositPercent}% Kickoff Deposit)`;
+
+  const { data: rpcRes, error } = await admin.rpc('create_package_order_atomic', {
+    p_client_id: session.userId,
+    p_service_id: serviceItem.id.length === 36 ? serviceItem.id : null,
+    p_title: finalTitle,
+    p_description: projectNotes || pkg?.summary || serviceItem.tagline,
+    p_pillar: serviceItem.pillar,
+    p_is_custom_deal: isCustomDeal,
+    p_requires_roe: serviceItem.requiresRoe,
+    p_revisions_included: revisionsIncluded,
+    p_total_cents: finalPriceCents,
+    p_deposit_percent: depositPercent,
+    p_delivery_days: finalDeliveryDays,
+    p_target_scope_notes: targetScope || projectNotes,
+    p_requirements_responses: {
+      service_slug: serviceItem.slug,
+      package_tier: isCustomDeal ? 'custom' : (pkg?.tier ?? tier),
+      is_custom_deal: isCustomDeal,
+      proposed_budget_cents: isCustomDeal ? finalPriceCents : null,
+      proposed_delivery_days: isCustomDeal ? finalDeliveryDays : null,
+    },
+    p_milestone_titles: milestoneFeatures,
+    p_initial_message: initialMessageTemplate,
+    p_deposit_item_label: depositItemLabel,
   });
 
-  // Issue kickoff deposit invoice
-  if (depositPercent > 0 && finalPriceCents > 0) {
-    const depositCents = Math.round((finalPriceCents * depositPercent) / 100);
-    const { data: inv } = await admin
-      .from('invoices')
-      .insert({
-        client_id: session.userId,
-        order_id: order.id,
-        status: 'issued',
-        is_deposit_invoice: true,
-        currency: 'USD',
-        fx_rate_to_usd: 1,
-        subtotal_cents: depositCents,
-        total_cents: depositCents,
-        issued_at: new Date().toISOString(),
-        due_at: new Date(Date.now() + 5 * 86400 * 1000).toISOString(),
-        notes: `Kickoff Deposit (${depositPercent}%) for ${order.code}: ${finalTitle}`,
-      })
-      .select('id')
-      .single();
+  const order =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? {
+          id: String((rpcRes as { order_id?: unknown }).order_id ?? ''),
+          code: String((rpcRes as { code?: unknown }).code ?? ''),
+        }
+      : null;
 
-    if (inv) {
-      await admin.from('invoice_items').insert({
-        invoice_id: inv.id,
-        position: 0,
-        description: `${isCustomDeal ? 'Custom Deal' : (pkg?.name ?? 'Package')} (${depositPercent}% Kickoff Deposit) — ${order.code}`,
-        qty: 1,
-        unit_price_cents: depositCents,
-      });
-    }
+  if (error || !order?.id) {
+    throw new Error(error?.message ?? 'Could not place order.');
   }
 
   await notifyAllAdmins({
@@ -1351,7 +1248,9 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
     revalidatePath(`/admin/orders/${orderId}`);
   }
   revalidatePath('/portal/orders');
+  revalidatePath('/portal/invoices');
   revalidatePath('/admin/orders');
+  revalidatePath('/admin/invoices');
 }
 
 export async function submitInvoicePaymentProofAction(formData: FormData): Promise<void> {
@@ -1371,7 +1270,9 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   const admin = getSupabaseAdmin();
   const { data: invoice } = await admin
     .from('invoices')
-    .select('id, code, client_id, order_id, currency, fx_rate_to_usd, status')
+    .select(
+      'id, code, client_id, order_id, currency, fx_rate_to_usd, status, total_cents, amount_paid_cents, credited_cents'
+    )
     .eq('id', invoiceId)
     .maybeSingle();
 
@@ -1385,6 +1286,22 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     invoice.status !== 'overdue'
   ) {
     throw new Error('Invoice is not open for payment submission.');
+  }
+
+  const amountCents = Math.round(amountMajor * 100);
+  const paymentDecision = validatePaymentSubmission({
+    invoiceTotalCents: invoice.total_cents,
+    amountPaidCents: invoice.amount_paid_cents,
+    creditedCents: invoice.credited_cents,
+    invoiceCurrency: invoice.currency,
+    paymentAmountCents: amountCents,
+    paymentCurrency: invoice.currency,
+  });
+  if (!paymentDecision.ok) {
+    if (paymentDecision.reason === 'overpayment') {
+      throw new Error('Payment amount exceeds remaining invoice balance.');
+    }
+    throw new Error('Invalid payment amount or currency.');
   }
 
   let proofFileId: string | null = null;
@@ -1415,7 +1332,6 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     proofFileId = vFile.id;
   }
 
-  const amountCents = Math.round(amountMajor * 100);
   const { data: payment, error: paymentErr } = await admin
     .from('payments')
     .insert({

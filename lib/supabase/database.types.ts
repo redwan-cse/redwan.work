@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2428,7 +2428,58 @@ export type Database = {
         Args: { p_displayed_version?: string }
         Returns: Json
       }
+      create_admin_order_atomic: {
+        Args: {
+          p_admin_id: string
+          p_client_id: string
+          p_deposit_percent: number
+          p_description?: string | null
+          p_due_days: number
+          p_pillar: Database["public"]["Enums"]["service_pillar"]
+          p_requires_roe: boolean
+          p_title: string
+          p_total_cents: number
+        }
+        Returns: Json
+      }
+      create_package_order_atomic: {
+        Args: {
+          p_client_id: string
+          p_delivery_days: number
+          p_deposit_item_label: string
+          p_deposit_percent: number
+          p_description: string
+          p_initial_message: string
+          p_is_custom_deal: boolean
+          p_milestone_titles: string[]
+          p_pillar: Database["public"]["Enums"]["service_pillar"]
+          p_requirements_responses: Json
+          p_requires_roe: boolean
+          p_revisions_included: number
+          p_service_id?: string | null
+          p_target_scope_notes: string
+          p_title: string
+          p_total_cents: number
+        }
+        Returns: Json
+      }
       is_admin: { Args: never; Returns: boolean }
+      issue_invoice_atomic: {
+        Args: {
+          p_client_id: string
+          p_currency: string
+          p_discount_cents: number
+          p_due_days: number
+          p_fx_rate_to_usd: number
+          p_is_deposit: boolean
+          p_item_description: string
+          p_notes?: string | null
+          p_order_id?: string | null
+          p_subtotal_cents: number
+          p_tax_rate_bps: number
+        }
+        Returns: Json
+      }
       review_invoice_payment: {
         Args: {
           p_admin_id: string
