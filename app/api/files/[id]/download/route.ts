@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { isR2Configured, presignPrivateGet } from '@/lib/r2';
+import { getPrivateObjectSize, isR2Configured, presignPrivateGet } from '@/lib/r2';
 import { recordAuditLog } from '@/lib/crm/audit';
 
 export const dynamic = 'force-dynamic';
@@ -50,12 +50,17 @@ export async function GET(
 
   if (!isR2Configured()) {
     return NextResponse.json(
-      { error: 'Private R2 storage is not configured in this environment.' },
+      { error: 'Private attachment vault is not configured in this environment.' },
       { status: 503 }
     );
   }
 
   try {
+    const storedSize = await getPrivateObjectSize(file.r2_key);
+    if (storedSize === null) {
+      return NextResponse.json({ error: 'Stored file object not found.' }, { status: 404 });
+    }
+
     const signedUrl = await presignPrivateGet(file.r2_key, 60);
 
     await admin

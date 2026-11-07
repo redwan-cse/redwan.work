@@ -79,6 +79,7 @@ export function staleObjectKeys(objects: R2ObjectSummary[], cutoff: Date, retain
   return objects.filter(o => o.lastModified < cutoff && !retainedKeys.has(o.key)).map(o => o.key);
 }
 export const ARCHIVE_MAX_BYTES = 100 * 1024 * 1024;
+export const CLIENT_VAULT_QUOTA_BYTES = 500 * 1024 * 1024;
 export const ARCHIVE_PREFIX = 'archive/';
 function sanitizeExt(ext: string): string {
   const sanitized = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -130,6 +131,10 @@ export async function getPrivateObjectSize(key: string): Promise<number | null> 
 }
 export async function verifyStoredObjectSize(key: string, declared: number): Promise<boolean> {
   if (!Number.isSafeInteger(declared) || declared < 1 || declared > CONTACT_MAX_SIZE_BYTES) return false;
+  return await getPrivateObjectSize(key) === declared;
+}
+export async function verifyStoredPortalObjectSize(key: string, declared: number): Promise<boolean> {
+  if (!isPortalKey(key) || !Number.isSafeInteger(declared) || declared < 1 || declared > ARCHIVE_MAX_BYTES) return false;
   return await getPrivateObjectSize(key) === declared;
 }
 export async function presignPrivateGet(key: string, expiresIn = 60): Promise<string> {

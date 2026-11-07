@@ -596,6 +596,7 @@ export type Database = {
           entity_type: string | null
           id: string
           last_error: string | null
+          locked_at: string | null
           next_attempt_at: string
           payload: Json
           resend_id: string | null
@@ -612,6 +613,7 @@ export type Database = {
           entity_type?: string | null
           id?: string
           last_error?: string | null
+          locked_at?: string | null
           next_attempt_at?: string
           payload?: Json
           resend_id?: string | null
@@ -628,6 +630,7 @@ export type Database = {
           entity_type?: string | null
           id?: string
           last_error?: string | null
+          locked_at?: string | null
           next_attempt_at?: string
           payload?: Json
           resend_id?: string | null
@@ -2414,6 +2417,10 @@ export type Database = {
       }
       admin_command_center_metrics: { Args: never; Returns: Json }
       caller_account_state: { Args: never; Returns: string }
+      claim_pending_email_outbox: {
+        Args: { p_limit?: number; p_stale_seconds?: number }
+        Returns: Database["public"]["Tables"]["email_outbox"]["Row"][]
+      }
       client_portal_overview: { Args: { p_client_id: string }; Returns: Json }
       consume_rate_limit: {
         Args: {

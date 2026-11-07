@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { isR2Configured, verifyStoredPortalObjectSize } from '@/lib/r2';
 import {
   createInAppNotification,
   enqueueTransactionalEmail,
@@ -525,6 +526,19 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
 
   if (!order || order.client_id !== clientId) {
     throw new Error('Order does not match target client.');
+  }
+
+  if (r2Key && filename && sizeBytes > 0) {
+    const expectedPrefix = `private/${clientId}/deliverable/`;
+    if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
+      throw new Error('Invalid deliverable storage key prefix.');
+    }
+    if (isR2Configured()) {
+      const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
+      if (!okSize) {
+        throw new Error('Uploaded deliverable object could not be verified in private storage.');
+      }
+    }
   }
 
   const autoAcceptDays = order.auto_accept_days ?? 7;
@@ -1309,6 +1323,12 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     const expectedPrefix = `private/${session.userId}/payment_proof/`;
     if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
       throw new Error('Invalid payment proof storage key prefix.');
+    }
+    if (isR2Configured()) {
+      const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
+      if (!okSize) {
+        throw new Error('Uploaded payment proof object could not be verified in private storage.');
+      }
     }
 
     const { data: vFile, error: fileErr } = await admin
