@@ -279,34 +279,47 @@ export function extractFirstImage(content: string): string {
 }
 
 /**
- * Extract plain text excerpt from HTML content
+ * Strip HTML tags and residual angle brackets into safe plain text.
+ * Decodes markup entities before tag removal and decodes `&amp;` last so
+ * neither encoded tags (`&lt;script&gt;`) nor nested fragments (`<scr<script>ipt>`)
+ * can survive as markup, while `&amp;lt;` remains literal `&lt;`.
  */
-export function extractExcerpt(content: string, maxLength: number = 200): string {
-  // Decode entities FIRST, then strip tags — decoding after stripping lets
-  // `&lt;script&gt;` smuggle markup past the filter (CodeQL
-  // js/incomplete-multi-character-sanitization). `&amp;` decodes LAST so one
-  // replacement's output can never feed a later one: `&amp;lt;` becomes the
-  // literal text `&lt;`, never markup (CodeQL js/double-escaping). The tag
-  // strip runs after all decoding, so nothing decoded survives as markup.
-  let text = content
+export function stripHtmlToPlainText(content: string): string {
+  const preDecoded = content
     .replace(/&nbsp;/g, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&hellip;/g, "...")
-    .replace(/&amp;/g, "&");
+    .replace(/&hellip;/g, "...");
 
-  // Strip HTML tags after decoding.
-  // codeql[js/incomplete-multi-character-sanitization]: false positive in
-  // context. This function returns PLAIN TEXT whose sole consumer renders it
-  // as a JSX text child (`BlogPreviewModal`, auto-escaped by React) — never
-  // as HTML. Do NOT pass its output to dangerouslySetInnerHTML without a
-  // real sanitizer (e.g. DOMPurify).
-  text = text.replace(/<[^>]*>/g, "");
-  
-  // Trim whitespace and remove extra spaces
-  text = text.trim().replace(/\s+/g, " ");
-  
+  let out = "";
+  let inTag = false;
+  for (let i = 0; i < preDecoded.length; i += 1) {
+    const ch = preDecoded[i];
+    if (ch === "<") {
+      inTag = true;
+      continue;
+    }
+    if (ch === ">") {
+      inTag = false;
+      continue;
+    }
+    if (!inTag) {
+      out += ch;
+    }
+  }
+
+  return out
+    .replace(/&amp;/g, "&")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Extract plain text excerpt from HTML content
+ */
+export function extractExcerpt(content: string, maxLength: number = 200): string {
+  const text = stripHtmlToPlainText(content);
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }

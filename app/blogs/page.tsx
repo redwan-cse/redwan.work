@@ -6,7 +6,12 @@ import { Button } from '@/components/ui/button';
 import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field';
 import { HeroReveal, HeroRevealItem } from '@/components/motion/reveal';
 import { BlogBrowser, type EnrichedBlogPost } from '@/components/blog-browser';
-import { extractExcerpt, extractFirstImage, getBlogPostsPage } from '@/lib/blogger';
+import {
+  extractExcerpt,
+  extractFirstImage,
+  getBlogPostsPage,
+  stripHtmlToPlainText,
+} from '@/lib/blogger';
 
 export const metadata: Metadata = {
   title: 'Security & Engineering Blog — Insights by Md Redwan Ahmed',
@@ -24,7 +29,7 @@ export const metadata: Metadata = {
 const POSTS_PER_PAGE = 9;
 
 function estimateReadingMinutes(html: string): number {
-  const plain = html.replace(/<[^>]*>/g, ' ').trim();
+  const plain = stripHtmlToPlainText(html);
   const words = plain ? plain.split(/\s+/).length : 0;
   return Math.max(2, Math.ceil(words / 200));
 }

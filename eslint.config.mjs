@@ -3,7 +3,16 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 const eslintConfig = [
   ...nextCoreWebVitals,
   {
-    ignores: [".next/**", "node_modules/**", "out/**", ".opencode/**"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "out/**",
+      ".opencode/**",
+      "artifacts/**",
+      "playwright-report/**",
+      "test-results/**",
+      "coverage/**",
+    ],
   },
   {
     files: ["components/ui/**/*.tsx", "components/enhanced-contact-form.tsx"],
