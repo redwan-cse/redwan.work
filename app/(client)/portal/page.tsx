@@ -110,14 +110,14 @@ export default async function ClientPortalOverviewPage() {
           <div className="flex items-center gap-2">
             <Badge className="bg-primary/15 text-primary hover:bg-primary/20">
               <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-              C|EH Verified Client Workspace
+              Verified Client Workspace
             </Badge>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
             Welcome back, {session.fullName || session.email}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track live engagements, sign C|EH Rules of Engagement, download encrypted deliverables, and place new service orders.
+            Track live engagements, sign Rules of Engagement, download encrypted deliverables, and place new service orders.
           </p>
         </div>
 

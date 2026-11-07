@@ -25,7 +25,7 @@ export default async function ClientProfilePage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Account & Billing Profile</h1>
         <p className="text-sm text-muted-foreground">
-          Keep your organization details, timezone, and preferred billing currency up to date for invoices and C|EH engagement authorizations.
+          Keep your organization details, timezone, and preferred billing currency up to date for invoices and engagement authorizations.
         </p>
       </div>
 

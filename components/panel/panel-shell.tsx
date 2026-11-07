@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   Activity,
   Bell,
@@ -34,6 +34,7 @@ import { ModeToggle } from '@/components/mode-toggle';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -82,6 +83,7 @@ export function PanelShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const isNavItemActive = (href: string) => {
     if (href === '/admin' || href === '/portal') {
@@ -91,7 +93,7 @@ export function PanelShell({
   };
 
   const renderNavList = (onItemClick?: () => void) => (
-    <nav className="flex-1 space-y-1 px-3 py-4">
+    <nav aria-label={role === 'admin' ? 'Admin navigation' : 'Client portal navigation'} className="flex-1 space-y-1 px-3 py-4">
       {navItems.map((item) => {
         const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
         const active = isNavItemActive(item.href);
@@ -99,6 +101,7 @@ export function PanelShell({
           <Link
             key={item.href}
             href={item.href}
+            aria-current={active ? 'page' : undefined}
             onClick={onItemClick}
             className={cn(
               'group relative flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -107,13 +110,16 @@ export function PanelShell({
                 : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
             )}
           >
-            {active && (
-              <motion.span
-                layoutId="panel-sidebar-active"
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                className="absolute inset-0 rounded-lg bg-primary shadow-2xs"
-              />
-            )}
+            {active &&
+              (prefersReducedMotion ? (
+                <span className="absolute inset-0 rounded-lg bg-primary shadow-2xs" />
+              ) : (
+                <motion.span
+                  layoutId="panel-sidebar-active"
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  className="absolute inset-0 rounded-lg bg-primary shadow-2xs"
+                />
+              ))}
             <span className="relative z-10 flex items-center gap-2.5">
               <Icon className="h-4 w-4 shrink-0" />
               <span>{item.label}</span>
@@ -137,7 +143,14 @@ export function PanelShell({
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen overflow-x-clip bg-background text-foreground">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
+      >
+        Skip to main content
+      </a>
+
       {/* Desktop Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border/80 bg-card/50 lg:flex">
         <div className="flex h-16 items-center justify-between border-b border-border/80 px-5">
@@ -162,7 +175,7 @@ export function PanelShell({
         <div className="border-t border-border/80 p-4">
           <div className="mb-3 truncate text-xs">
             <div className="font-semibold text-foreground">
-              {userName || (role === 'admin' ? 'Md Redwan Ahmed' : 'Client Account')}
+              {userName || (role === 'admin' ? 'Md. Redwan Ahmed' : 'Client Account')}
             </div>
             <div className="truncate font-mono text-[11px] text-muted-foreground">
               {userEmail}
@@ -203,23 +216,26 @@ export function PanelShell({
                   <span className="sr-only">Open panel navigation</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className=" flex w-64 flex-col p-0">
+              <SheetContent side="left" className="flex w-[min(256px,86vw)] flex-col p-0">
                 <SheetHeader className="border-b border-border p-4 text-left">
                   <SheetTitle className="flex items-center gap-2 text-sm font-bold">
                     <ShieldCheck className="h-4 w-4 text-primary" />
                     {role === 'admin' ? 'Admin Command Center' : 'Client Portal'}
                   </SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Workspace navigation menu
+                  </SheetDescription>
                 </SheetHeader>
                 {renderNavList(() => setMobileOpen(false))}
               </SheetContent>
             </Sheet>
 
             <Badge variant="outline" className="hidden font-mono text-xs sm:inline-flex">
-              {role === 'admin' ? 'C|EH Operations & CRM' : 'Encrypted Client Workspace'}
+              {role === 'admin' ? 'Security Operations & CRM' : 'Encrypted Client Workspace'}
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             {role === 'client' && (
               <Button asChild size="sm" className="gap-1.5 rounded-full text-xs">
                 <Link href="/portal/orders/new">
@@ -237,8 +253,11 @@ export function PanelShell({
               </Button>
             )}
 
-            <div className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground">
-              <Bell className="h-4 w-4" />
+            <div
+              className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground"
+              aria-label={`Notifications (${unreadNotifications} unread)`}
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
               {unreadNotifications > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-bold text-primary-foreground">
                   {unreadNotifications}
@@ -250,7 +269,9 @@ export function PanelShell({
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 focus:outline-none sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

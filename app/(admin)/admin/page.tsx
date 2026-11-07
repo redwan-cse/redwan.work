@@ -68,7 +68,7 @@ export default async function AdminOverviewPage() {
             Operations, Revenue &amp; Client Pipeline
           </h1>
           <p className="text-sm text-muted-foreground">
-            Real-time overview across inquiries, proposals, active C|EH &amp; engineering orders, R2 deliverables, and USD-normalized revenue.
+            Real-time overview across inquiries, proposals, active security &amp; engineering orders, encrypted deliverables, and USD-normalized revenue.
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">

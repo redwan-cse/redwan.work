@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useEffect, useState } from 'react';
+import { Suspense, useActionState, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,15 +25,14 @@ import {
 
 const initial: ActionState = {};
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
 
   const [signInState, signIn, signInPending] = useActionState(signInWithPasswordAction, initial);
   const [magicState, magic, magicPending] = useActionState(requestMagicLinkAction, initial);
   const [resetState, reset, resetPending] = useActionState(requestPasswordResetAction, initial);
 
-  const searchParams =
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const searchParams = useSearchParams();
   const nextPath = searchParams?.get('next') ?? '';
 
   const tokenHash = searchParams?.get('token_hash') ?? '';
@@ -164,5 +164,13 @@ export default function LoginPage() {
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

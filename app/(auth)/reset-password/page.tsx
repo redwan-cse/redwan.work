@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,13 +18,9 @@ import { setNewPasswordFromRecoveryAction, type ActionState } from '@/lib/auth/a
 
 const initial: ActionState = {};
 
-function searchParam(name: string): string {
-  if (typeof window === 'undefined') return '';
-  return new URLSearchParams(window.location.search).get(name) ?? '';
-}
-
-export default function ResetPasswordPage() {
-  const tokenHash = searchParam('token_hash');
+function ResetPasswordContent() {
+  const searchParams = useSearchParams();
+  const tokenHash = searchParams?.get('token_hash') ?? '';
   const [state, submit, pending] = useActionState(setNewPasswordFromRecoveryAction, initial);
 
   if (!tokenHash) {
@@ -87,5 +84,13 @@ export default function ResetPasswordPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

@@ -12,21 +12,49 @@ import {
   getBlogPostsPage,
   stripHtmlToPlainText,
 } from '@/lib/blogger';
-
-export const metadata: Metadata = {
-  title: 'Security & Engineering Blog — Insights by Md Redwan Ahmed',
-  description:
-    'Cybersecurity research, offensive security writeups, Wazuh SIEM guides, and full-stack engineering articles by Md Redwan Ahmed.',
-  alternates: { canonical: '/blogs' },
-  openGraph: {
-    title: 'Security & Engineering Blog — Md Redwan Ahmed',
-    description:
-      'Cybersecurity research, offensive security writeups, and engineering insights.',
-    type: 'website',
-  },
-};
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
 const POSTS_PER_PAGE = 9;
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const rawPage = params.page;
+  const parsedPage = rawPage !== undefined ? Number(rawPage) : 1;
+  const isPositiveInt = Number.isSafeInteger(parsedPage) && parsedPage > 0;
+
+  const { totalItems } = await getBlogPostsPage(1, POSTS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(totalItems / POSTS_PER_PAGE));
+
+  const isInvalidOrOutOfRange =
+    rawPage !== undefined && (!isPositiveInt || parsedPage > totalPages);
+
+  if (isInvalidOrOutOfRange) {
+    return buildPublicMetadata({
+      title: 'Security & Engineering Blog — Md. Redwan Ahmed',
+      description:
+        'Cybersecurity research, offensive security writeups, Wazuh SIEM guides, and full-stack engineering articles by Md. Redwan Ahmed.',
+      path: '/blogs',
+      noindex: true,
+    });
+  }
+
+  const canonicalPath = parsedPage > 1 ? `/blogs?page=${parsedPage}` : '/blogs';
+  const title =
+    parsedPage > 1
+      ? `Security & Engineering Blog (Page ${parsedPage}) — Insights by Md. Redwan Ahmed`
+      : 'Security & Engineering Blog — Insights by Md. Redwan Ahmed';
+
+  return buildPublicMetadata({
+    title,
+    description:
+      'Cybersecurity research, offensive security writeups, Wazuh SIEM guides, and full-stack engineering articles by Md. Redwan Ahmed.',
+    path: canonicalPath,
+  });
+}
 
 function estimateReadingMinutes(html: string): number {
   const plain = stripHtmlToPlainText(html);

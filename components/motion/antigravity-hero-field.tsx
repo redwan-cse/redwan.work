@@ -232,12 +232,16 @@ export function AntigravityHeroField() {
     <div
       ref={containerRef}
       aria-hidden="true"
+      data-hero-field=""
+      data-reduced-motion={prefersReducedMotion ? 'true' : 'false'}
       className="pointer-events-none absolute inset-0 overflow-hidden select-none"
     >
-      <motion.div
-        className="absolute inset-0 transition-opacity duration-500"
-        style={{ background: ambientSpotlight }}
-      />
+      {!prefersReducedMotion && (
+        <motion.div
+          className="absolute inset-0 transition-opacity duration-500"
+          style={{ background: ambientSpotlight }}
+        />
+      )}
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-90" />
     </div>
   );

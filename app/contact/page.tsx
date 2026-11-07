@@ -26,15 +26,16 @@ import {
   ContractLiveChat,
   type ActiveContractOption,
 } from '@/components/panel/contract-live-chat';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Contact & Project Inquiry — Md Redwan Ahmed',
+export const metadata: Metadata = buildPublicMetadata({
+  title: 'Contact & Project Inquiry — Md. Redwan Ahmed',
   description:
-    'Request a C|EH penetration test, full-stack engineering proposal, cloud/Linux hardening, or emergency incident recovery.',
-  alternates: { canonical: '/contact' },
-};
+    'Request an offensive security penetration test, full-stack engineering proposal, cloud/Linux hardening, or emergency incident recovery.',
+  path: '/contact',
+});
 
 export default async function Contact() {
   const [services, { settings }, session] = await Promise.all([
@@ -142,7 +143,7 @@ export default async function Contact() {
                       ACTIVE CONTRACT WORKSPACE
                     </Badge>
                     <h2 className="text-xl font-bold tracking-tight">
-                      Live Contract Chat with Md Redwan Ahmed
+                      Live Contract Chat with Md. Redwan Ahmed
                     </h2>
                     <p className="text-xs text-muted-foreground">
                       Your contract is active. Message directly here or open your full Contract Workspace in the Portal.

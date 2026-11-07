@@ -21,17 +21,18 @@ import {
   ScrollReveal,
 } from '@/components/motion/reveal';
 import { SITE } from '@/lib/content/site';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPublicMetadata({
   title: 'Terms of Service & Rules of Engagement (RoE)',
   description:
-    'Terms of Service, C|EH Penetration Testing Rules of Engagement (RoE), deliverable sign-off, and payment terms for redwan.work.',
-  alternates: { canonical: '/tos' },
-};
+    'Terms of Service, Penetration Testing Rules of Engagement (RoE), deliverable sign-off, and payment terms for redwan.work.',
+  path: '/tos',
+});
 
 const TOS_SECTIONS = [
   { id: 'scope', label: '1. Service Scope' },
-  { id: 'roe', label: '2. C|EH Rules of Engagement' },
+  { id: 'roe', label: '2. Rules of Engagement' },
   { id: 'payments', label: '3. Deposits & Billing' },
   { id: 'deliverables', label: '4. Deliverables & Sign-Off' },
   { id: 'confidentiality', label: '5. Confidentiality & IP' },
@@ -49,7 +50,7 @@ export default function TermsOfServicePage() {
             <HeroRevealItem>
               <Badge variant="outline" className="mb-3 gap-1.5 font-mono text-xs text-primary">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                LEGAL &amp; ENGAGEMENT GOVERNANCE · C|EH COMPLIANT
+                LEGAL &amp; ENGAGEMENT GOVERNANCE · ROE AUTHORIZED
               </Badge>
             </HeroRevealItem>
             <HeroRevealItem>
@@ -59,7 +60,7 @@ export default function TermsOfServicePage() {
             </HeroRevealItem>
             <HeroRevealItem>
               <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Clear commercial, technical, and legal terms governing C|EH offensive security assessments, full-stack software engineering, cloud infrastructure, AI automation, and executive support engagements.
+                Clear commercial, technical, and legal terms governing offensive security assessments, full-stack software engineering, cloud infrastructure, AI automation, and executive support engagements.
               </p>
             </HeroRevealItem>
             <HeroRevealItem>
@@ -157,7 +158,7 @@ export default function TermsOfServicePage() {
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
                       <p>
-                        <strong className="text-foreground">{SITE.name}</strong> provides specialized consulting and execution across five core service pillars: Cybersecurity &amp; Offensive Security (C|EH), Full-Stack Web &amp; Custom Software Engineering, Cloud/DevOps &amp; Linux Infrastructure, Applied AI/ML &amp; Automation, and Executive Tech Support &amp; Digital Recovery.
+                        <strong className="text-foreground">{SITE.name}</strong> provides specialized consulting and execution across five core service pillars: Cybersecurity &amp; Offensive Security (VAPT &amp; OSINT), Full-Stack Web &amp; Custom Software Engineering, Cloud/DevOps &amp; Linux Infrastructure, Applied AI/ML &amp; Automation, and Executive Tech Support &amp; Digital Recovery.
                       </p>
                       <p>
                         Each engagement is governed by the specific deliverables, milestones, timeline, and pricing defined in the accepted Proposal (`PRP-XXXX`) or Service Package Order (`ORD-XXXX`) inside the Client Portal. Any out-of-scope additions requested after kickoff are quoted via an addendum or milestone adjustment.
@@ -178,7 +179,7 @@ export default function TermsOfServicePage() {
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm leading-relaxed text-muted-foreground">
                       <p>
-                        In strict compliance with EC-Council Certified Ethical Hacker (C|EH) standards and applicable computer security laws, active penetration testing, vulnerability scanning (VAPT), or forensic recovery requires a digitally signed{' '}
+                        In strict compliance with OWASP, PTES, and applicable computer security laws, active penetration testing, vulnerability scanning (VAPT), or forensic recovery requires a digitally signed{' '}
                         <strong className="text-foreground">
                           Engagement Authorization / Rules of Engagement (RoE)
                         </strong>{' '}

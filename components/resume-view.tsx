@@ -211,7 +211,7 @@ export function ResumeView({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className="gap-1.5 font-mono text-xs text-primary">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      C|EH · CCEP · CNSP · CAP
+                      CCEP · GitHub · CNSP · CAP
                     </Badge>
                     <Badge variant="secondary" className="font-mono text-xs">
                       Q1 Scopus &amp; IEEE Author

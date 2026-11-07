@@ -8,15 +8,16 @@ import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field
 import { HeroReveal, HeroRevealItem, ScrollReveal } from '@/components/motion/reveal';
 import { PortfolioShowcase } from '@/components/portfolio-showcase';
 import { getPublicPortfolioItems } from '@/lib/cms/queries';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPublicMetadata({
   title: 'Portfolio & Case Studies — VAPT, Full-Stack Platforms, SIEM & AI Research',
   description:
-    'Explore offensive security assessments, production full-stack applications, Wazuh SIEM deployments, and peer-reviewed Q1 Scopus / IEEE machine learning research by Md Redwan Ahmed.',
-  alternates: { canonical: '/portfolio' },
-};
+    'Explore offensive security assessments, production full-stack applications, Wazuh SIEM deployments, and peer-reviewed Q1 Scopus / IEEE machine learning research by Md. Redwan Ahmed.',
+  path: '/portfolio',
+});
 
 export default async function PortfolioPage() {
   const portfolioItems = await getPublicPortfolioItems();
@@ -40,7 +41,7 @@ export default async function PortfolioPage() {
               </HeroRevealItem>
               <HeroRevealItem>
                 <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                  Sanitized case studies across C|EH offensive security engagements, full-stack web applications, Wazuh SIEM infrastructure, and peer-reviewed AI/ML publications.
+                  Sanitized case studies across offensive security engagements, full-stack web applications, Wazuh SIEM infrastructure, and peer-reviewed AI/ML publications.
                 </p>
               </HeroRevealItem>
             </HeroReveal>

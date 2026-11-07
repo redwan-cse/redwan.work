@@ -29,7 +29,7 @@ export default async function ClientOrdersListPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Orders & Projects</h1>
           <p className="text-sm text-muted-foreground">
-            Track milestones, submit requirements, sign C|EH authorizations, and review versioned deliverables.
+            Track milestones, submit requirements, sign RoE authorizations, and review versioned deliverables.
           </p>
         </div>
         <Button asChild size="sm" className="gap-1.5 rounded-full">

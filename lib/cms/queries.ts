@@ -308,13 +308,13 @@ export async function getSiteSettingsAndResume(options?: {
   const defaultSettings: SiteSettingsRecord = {
     id: 'default',
     full_name: 'Md. Redwan Ahmed',
-    role_title: 'C|EH Certified Cybersecurity Specialist & CSE Professional',
+    role_title: SITE.role,
     short_role: SITE.shortRole,
     subtitle:
-      'Certified Ethical Hacker (C|EH) | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator',
+      'Offensive Security & VAPT Specialist | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator',
     tagline: SITE.tagline,
     executive_summary:
-      'C|EH Certified Computer Science & Engineering professional specializing in offensive security, full-stack software engineering, Linux/cloud infrastructure, and applied machine learning. Proven track record delivering international penetration testing, OSINT investigations, incident recovery, and custom web platforms alongside peer-reviewed Q1 Scopus and IEEE research publications.',
+      'Computer Science & Engineering professional specializing in offensive security (VAPT & OSINT), full-stack software engineering, Linux/cloud infrastructure, and applied machine learning. Proven track record delivering international penetration testing, digital fraud investigations, incident recovery, and custom web platforms alongside peer-reviewed Q1 Scopus and IEEE research publications.',
     email: SITE.email,
     phone: SITE.phoneDisplay,
     whatsapp_number: SITE.whatsappNumber,
@@ -422,5 +422,57 @@ export async function getSiteSettingsAndResume(options?: {
     return { settings, items };
   } catch {
     return { settings: defaultSettings, items: [] };
+  }
+}
+
+export interface ApprovedClientReview {
+  id: string;
+  authorName: string;
+  authorRole: string;
+  rating: number;
+  headline: string | null;
+  content: string;
+  createdAt: string;
+}
+
+export async function getApprovedClientReviews(): Promise<ApprovedClientReview[]> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data: reviewRows, error } = await admin
+      .from('client_reviews')
+      .select('id, client_id, rating_overall, headline, review_text, created_at')
+      .eq('is_public_approved', true)
+      .order('created_at', { ascending: false })
+      .limit(12);
+
+    if (error || !reviewRows || reviewRows.length === 0) {
+      return [];
+    }
+
+    const clientIds = Array.from(new Set(reviewRows.map((r) => r.client_id)));
+    const [{ data: profiles }, { data: clientProfiles }] = await Promise.all([
+      admin.from('profiles').select('id, full_name').in('id', clientIds),
+      admin.from('client_profiles').select('user_id, company_name, company_role').in('user_id', clientIds),
+    ]);
+
+    const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+    const clientMetaMap = new Map(
+      (clientProfiles ?? []).map((cp) => [
+        cp.user_id,
+        [cp.company_role, cp.company_name].filter(Boolean).join(', ') || 'Verified Portal Client',
+      ])
+    );
+
+    return reviewRows.map((row) => ({
+      id: row.id,
+      authorName: profileMap.get(row.client_id) || 'Verified Client',
+      authorRole: clientMetaMap.get(row.client_id) || 'Verified Portal Client',
+      rating: Math.min(5, Math.max(1, Number(row.rating_overall) || 5)),
+      headline: row.headline ?? null,
+      content: row.review_text,
+      createdAt: row.created_at,
+    }));
+  } catch {
+    return [];
   }
 }

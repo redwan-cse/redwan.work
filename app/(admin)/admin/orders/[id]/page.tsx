@@ -157,14 +157,14 @@ export default async function AdminOrderDetailPage({
         </Card>
       </div>
 
-      {/* C|EH Rules of Engagement & Client Requirements Row */}
+      {/* Rules of Engagement & Client Requirements Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className={order.requires_roe ? 'border-primary/40' : ''}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
                 <ShieldCheck className="h-4 w-4 text-primary" />
-                C|EH Rules of Engagement (RoE) Authorization
+                Rules of Engagement (RoE) Authorization
               </CardTitle>
               <Badge variant={roe ? 'default' : 'outline'} className="font-mono text-[10px]">
                 {roe ? 'SIGNED & VERIFIED' : order.requires_roe ? 'SIGNATURE REQUIRED' : 'OPTIONAL'}
@@ -198,7 +198,7 @@ export default async function AdminOrderDetailPage({
             ) : (
               <p className="text-muted-foreground">
                 {order.requires_roe
-                  ? 'Waiting for the client to digitally sign the C|EH Rules of Engagement in their Portal before active testing transitions to in_progress.'
+                  ? 'Waiting for the client to digitally sign the Rules of Engagement in their Portal before active testing transitions to in_progress.'
                   : 'This engagement does not require an offensive security RoE authorization.'}
               </p>
             )}

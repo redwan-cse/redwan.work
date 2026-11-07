@@ -86,7 +86,7 @@ export function HeroPortrait({
   src,
   alt,
   caption,
-  badgeText = 'C|EH Certified',
+  badgeText = 'CCEP · CNSP · CAP',
 }: {
   src: string;
   alt: string;
@@ -99,7 +99,7 @@ export function HeroPortrait({
     <motion.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.68, delay: 0.14, ease: EASE_OUT_EXPO }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.68, delay: prefersReducedMotion ? 0 : 0.14, ease: EASE_OUT_EXPO }}
       className="group relative mx-auto flex flex-col items-center"
     >
       <div className="relative flex items-center justify-center">
@@ -114,7 +114,7 @@ export function HeroPortrait({
         />
 
         {/* Circular photograph — remains completely unchanged on hover */}
-        <div className="relative h-60 w-60 overflow-hidden rounded-full border-2 border-background bg-muted shadow-xl sm:h-72 sm:w-72">
+        <div className="relative h-52 w-52 overflow-hidden rounded-full border-2 border-background bg-muted shadow-xl sm:h-72 sm:w-72">
           <Image
             src={src}
             alt={alt}

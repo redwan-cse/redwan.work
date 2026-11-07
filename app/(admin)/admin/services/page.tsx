@@ -137,7 +137,7 @@ export default async function AdminServicesCmsPage() {
               <div className="flex flex-wrap items-center gap-4 text-xs">
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" name="requires_roe" className="h-4 w-4 rounded" />
-                  Requires C|EH RoE Signature
+                  Requires RoE Signature
                 </label>
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" name="is_featured" defaultChecked className="h-4 w-4 rounded" />
@@ -178,7 +178,7 @@ export default async function AdminServicesCmsPage() {
                       className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-500"
                     >
                       <ShieldAlert className="mr-1 h-3 w-3" />
-                      C|EH RoE
+                      RoE Required
                     </Badge>
                   )}
                 </div>
@@ -301,7 +301,7 @@ export default async function AdminServicesCmsPage() {
                         defaultChecked={service.requiresRoe}
                         className="h-4 w-4 rounded"
                       />
-                      Requires C|EH RoE
+                      Requires RoE
                     </label>
                     <label className="flex items-center gap-1.5">
                       <input

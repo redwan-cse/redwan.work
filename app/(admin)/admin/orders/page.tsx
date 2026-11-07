@@ -45,7 +45,7 @@ export default async function AdminOrdersPage() {
           Client Orders &amp; Deliverables (`ORD-XXXX`)
         </h1>
         <p className="text-sm text-muted-foreground">
-          Manage active engagements across all 5 service pillars, enforce C|EH Rules of Engagement, publish versioned R2 deliverables, and communicate in order threads.
+          Manage active engagements across all 5 service pillars, enforce Rules of Engagement, publish versioned encrypted deliverables, and communicate in order threads.
         </p>
       </div>
 
@@ -143,7 +143,7 @@ export default async function AdminOrdersPage() {
                   name="requires_roe"
                   className="h-4 w-4 rounded border-border"
                 />
-                Require Signed C|EH RoE Before Execution
+                Require Signed RoE Before Execution
               </label>
 
               <div className="space-y-1.5">

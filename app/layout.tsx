@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SITE } from "@/lib/content/site";
+import { serializeJsonLd } from "@/lib/seo/metadata";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -17,21 +18,17 @@ const fontMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
-    default: `${SITE.name} - ${SITE.role}`,
-    template: `%s - ${SITE.name}`,
+    default: `${SITE.name} — ${SITE.shortRole}`,
+    template: `%s — ${SITE.name}`,
   },
   description: SITE.tagline,
   keywords:
-    "C|EH, Certified Ethical Hacker, cybersecurity consultant, penetration testing, vulnerability assessment, full-stack development, technical support, Md Redwan Ahmed, Fast Cyber Defense",
-  alternates: {
-    canonical: "/",
-  },
+    "cybersecurity consultant, penetration testing, VAPT, OSINT investigation, Wazuh SIEM, full-stack development, Next.js, Linux hardening, AI ML pipelines, Md. Redwan Ahmed, Fast Cyber Defense",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: SITE.url,
     siteName: SITE.name,
-    title: `${SITE.name} - ${SITE.role}`,
+    title: `${SITE.name} — ${SITE.shortRole}`,
     description: SITE.tagline,
     images: [
       {
@@ -44,7 +41,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: `${SITE.name} - ${SITE.role}`,
+    title: `${SITE.name} — ${SITE.shortRole}`,
     description: SITE.tagline,
     images: [SITE.profileImage],
   },
@@ -54,20 +51,41 @@ export const metadata: Metadata = {
   },
 };
 
-const personJsonLd = {
+const siteGraphJsonLd = {
   "@context": "https://schema.org",
-  "@type": "Person",
-  name: SITE.name,
-  url: SITE.url,
-  image: `${SITE.url}${SITE.profileImage}`,
-  jobTitle: SITE.role,
-  email: `mailto:${SITE.email}`,
-  worksFor: {
-    "@type": "Organization",
-    name: SITE.company.name,
-    url: SITE.company.url,
-  },
-  sameAs: Object.values(SITE.socials),
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": `${SITE.url}/#person`,
+      name: SITE.name,
+      url: SITE.url,
+      image: `${SITE.url}${SITE.profileImage}`,
+      jobTitle: SITE.role,
+      email: `mailto:${SITE.email}`,
+      worksFor: {
+        "@type": "Organization",
+        name: SITE.company.name,
+        url: SITE.company.url,
+      },
+      sameAs: Object.values(SITE.socials),
+    },
+    {
+      "@type": "ProfessionalService",
+      "@id": `${SITE.url}/#service`,
+      name: `${SITE.name} — Security & Engineering Consulting`,
+      url: SITE.url,
+      founder: { "@id": `${SITE.url}/#person` },
+      email: SITE.email,
+      areaServed: "Worldwide",
+      serviceType: [
+        "Penetration Testing & VAPT",
+        "OSINT & Digital Fraud Investigation",
+        "Wazuh SIEM & Linux Infrastructure Hardening",
+        "Full-Stack Web & Client Portal Engineering",
+        "Applied AI/ML & Incident Recovery",
+      ],
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -82,7 +100,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://challenges.cloudflare.com" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteGraphJsonLd) }}
         />
       </head>
       <body

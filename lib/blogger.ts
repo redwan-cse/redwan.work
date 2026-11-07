@@ -120,6 +120,21 @@ const MAX_POSTS_FETCH = 300;
 const POSTS_PER_API_CALL = 100;
 
 async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
+  const fixtureRaw = process.env.BLOGGER_FIXTURE_POSTS_JSON;
+  if (fixtureRaw) {
+    try {
+      const parsed = JSON.parse(fixtureRaw) as BloggerPostItem[];
+      const items = Array.isArray(parsed) ? parsed.slice(0, MAX_POSTS_FETCH) : [];
+      return {
+        items,
+        totalItems: items.length,
+        isCapped: Array.isArray(parsed) && parsed.length > MAX_POSTS_FETCH,
+      };
+    } catch {
+      return { items: [], totalItems: 0, isCapped: false };
+    }
+  }
+
   const client = createBloggerClient();
 
   if (!client) {

@@ -41,7 +41,7 @@ export default async function AdminProposalsPage() {
           Proposals &amp; Scope Quotations (`PRP-XXXX`)
         </h1>
         <p className="text-sm text-muted-foreground">
-          Author structured proposals with milestone breakdowns and C|EH RoE requirements. Clients can accept in 1 click inside the Portal to auto-create their Order and Deposit Invoice.
+          Author structured proposals with milestone breakdowns and RoE requirements. Clients can accept in 1 click inside the Portal to auto-create their Order and Deposit Invoice.
         </p>
       </div>
 
@@ -156,7 +156,7 @@ export default async function AdminProposalsPage() {
                       defaultChecked
                       className="h-4 w-4 rounded border-border"
                     />
-                    Requires Signed C|EH RoE
+                    Requires Signed RoE
                   </label>
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default async function AdminProposalsPage() {
                         </Badge>
                         {prop.requires_roe && (
                           <Badge variant="secondary" className="font-mono text-[10px]">
-                            C|EH RoE
+                            RoE Required
                           </Badge>
                         )}
                       </div>

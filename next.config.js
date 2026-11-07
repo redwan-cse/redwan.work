@@ -50,6 +50,20 @@ const nextConfig = {
       { protocol: 'https', hostname: 'raw.githubusercontent.com' },
     ],
   },
-  async headers() { return [{ source: '/:path*', headers: securityHeaders }]; },
+  async headers() {
+    const noindexHeader = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      { source: '/admin', headers: noindexHeader },
+      { source: '/admin/:path*', headers: noindexHeader },
+      { source: '/portal', headers: noindexHeader },
+      { source: '/portal/:path*', headers: noindexHeader },
+      { source: '/api/:path*', headers: noindexHeader },
+      { source: '/login', headers: noindexHeader },
+      { source: '/mfa', headers: noindexHeader },
+      { source: '/reset-password', headers: noindexHeader },
+      { source: '/invite/:path*', headers: noindexHeader },
+    ];
+  },
 };
 module.exports = nextConfig;

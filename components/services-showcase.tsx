@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
   Bot,
@@ -48,6 +48,7 @@ export function ServicesShowcase({
   initialServices?: ServiceCatalogItem[];
 }) {
   const searchParams = useSearchParams();
+  const prefersReducedMotion = useReducedMotion();
   const urlPillar = searchParams?.get('pillar') as ServicePillarKey | null;
 
   const [selectedPillar, setSelectedPillar] = useState<'all' | ServicePillarKey>(
@@ -77,13 +78,16 @@ export function ServicesShowcase({
                   : 'border-border/80 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
               )}
             >
-              {isActive && (
-                <motion.span
-                  layoutId="service-pillar-pill"
-                  transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-                  className="absolute inset-0 rounded-full bg-primary"
-                />
-              )}
+              {isActive &&
+                (prefersReducedMotion ? (
+                  <span className="absolute inset-0 rounded-full bg-primary" />
+                ) : (
+                  <motion.span
+                    layoutId="service-pillar-pill"
+                    transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                    className="absolute inset-0 rounded-full bg-primary"
+                  />
+                ))}
               <Icon className="relative z-10 h-4 w-4" />
               <span className="relative z-10">{label}</span>
             </button>
@@ -106,7 +110,7 @@ export function ServicesShowcase({
                     {service.requiresRoe && (
                       <Badge className="gap-1 bg-primary/15 text-primary hover:bg-primary/20">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        Requires Signed C|EH RoE
+                        Requires Signed RoE
                       </Badge>
                     )}
                     <span className="font-mono text-xs text-muted-foreground">

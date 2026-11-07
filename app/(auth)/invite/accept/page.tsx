@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,14 +18,10 @@ import { acceptInviteAction, type ActionState } from '@/lib/auth/actions';
 
 const initial: ActionState = {};
 
-function searchParam(name: string): string {
-  if (typeof window === 'undefined') return '';
-  return new URLSearchParams(window.location.search).get(name) ?? '';
-}
-
-export default function InviteAcceptPage() {
-  const tokenHash = searchParam('token_hash');
-  const email = searchParam('email');
+function InviteAcceptContent() {
+  const searchParams = useSearchParams();
+  const tokenHash = searchParams?.get('token_hash') ?? '';
+  const email = searchParams?.get('email') ?? '';
   const [state, submit, pending] = useActionState(acceptInviteAction, initial);
 
   if (!tokenHash) {
@@ -88,5 +85,13 @@ export default function InviteAcceptPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+export default function InviteAcceptPage() {
+  return (
+    <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>}>
+      <InviteAcceptContent />
+    </Suspense>
   );
 }

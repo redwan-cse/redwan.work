@@ -33,16 +33,19 @@ import {
   type ServicePillarKey,
 } from '@/lib/content/site';
 import {
+  getApprovedClientReviews,
   getPublicPortfolioItems,
   getPublicServicesCatalog,
-  getSiteSettingsAndResume,
 } from '@/lib/cms/queries';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
-};
+export const metadata: Metadata = buildPublicMetadata({
+  title: `${SITE.name} — ${SITE.shortRole}`,
+  description: SITE.tagline,
+  path: '/',
+});
 
 const PILLAR_ICONS: Record<ServicePillarKey, typeof ShieldAlert> = {
   cybersecurity: ShieldAlert,
@@ -61,7 +64,7 @@ const ORDER_LIFECYCLE_STEPS = [
   },
   {
     step: '02',
-    title: 'Portal Onboarding, Deposit & C|EH RoE',
+    title: 'Portal Onboarding, Deposit & Signed RoE',
     description:
       'Access your dedicated Client Portal (`ORD-1001`). Offensive security orders include digital Rules of Engagement (RoE) authorization before testing begins.',
   },
@@ -80,10 +83,10 @@ const ORDER_LIFECYCLE_STEPS = [
 ];
 
 export default async function Home() {
-  const [services, portfolioItems, { settings }] = await Promise.all([
+  const [services, portfolioItems, approvedReviews] = await Promise.all([
     getPublicServicesCatalog(),
     getPublicPortfolioItems(),
-    getSiteSettingsAndResume(),
+    getApprovedClientReviews(),
   ]);
   const pillars = Object.values(SERVICE_PILLARS);
   const featuredStudies = portfolioItems.slice(0, 4);
@@ -104,10 +107,10 @@ export default async function Home() {
                 <HeroRevealItem>
                   <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-primary/30 bg-primary/8 px-3.5 py-1.5 text-xs font-medium text-primary backdrop-blur-sm">
                     <ShieldCheck className="h-3.5 w-3.5" />
-                    <span className="font-mono font-semibold">C|EH Certified Ethical Hacker</span>
+                    <span className="font-mono font-semibold">Offensive Security &amp; Engineering</span>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-foreground/90">
-                      Security, Engineering &amp; Executive Tech Consulting
+                      VAPT, Full-Stack Platforms &amp; Executive Tech Consulting
                     </span>
                   </div>
                 </HeroRevealItem>
@@ -215,7 +218,7 @@ export default async function Home() {
                 <HeroPortrait
                   src={SITE.profileImage}
                   alt={SITE.name}
-                  badgeText="C|EH · Founder @ Fast Cyber Defense"
+                  badgeText="Founder @ Fast Cyber Defense"
                   caption="Available for direct portal engagements, custom retainers, and emergency incident response."
                 />
               </div>
@@ -236,7 +239,7 @@ export default async function Home() {
                 One Trusted Specialist Across Security, Code &amp; Infrastructure
               </h2>
               <p className="mt-3 text-base text-muted-foreground sm:text-lg">
-                Whether you need a C|EH penetration test, a custom Next.js/Supabase platform, Linux server hardening, or emergency recovery—order directly with transparent deliverables.
+                Whether you need an OWASP/PTES penetration test, a custom Next.js web platform, Linux server hardening, or emergency recovery—order directly with transparent deliverables.
               </p>
             </ScrollReveal>
 
@@ -471,7 +474,7 @@ export default async function Home() {
                 Verified feedback from long-term security, software engineering, and technical consulting engagements.
               </p>
             </ScrollReveal>
-            <TestimonialCarousel />
+            <TestimonialCarousel reviews={approvedReviews} />
           </div>
         </section>
 

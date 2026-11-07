@@ -224,7 +224,7 @@ export function ContractLiveChat({
               msg.author?.role === 'admin' ||
               (viewerRole === 'admin' && msg.author_id === viewerId);
             const authorLabel = isAdminAuthor
-              ? 'Md Redwan Ahmed (C|EH)'
+              ? 'Md. Redwan Ahmed'
               : msg.author?.full_name || msg.author?.email || 'Client';
 
             return (

@@ -103,7 +103,7 @@ export default async function ClientOrderDetailPage({
         </div>
       </div>
 
-      {/* C|EH Rules of Engagement Signer (when requires_roe is true) */}
+      {/* Rules of Engagement Signer (when requires_roe is true) */}
       {order.requires_roe && (
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardHeader className="pb-2">
@@ -113,7 +113,7 @@ export default async function ClientOrderDetailPage({
               ) : (
                 <ShieldAlert className="h-4 w-4 text-amber-500" />
               )}
-              C|EH Rules of Engagement & Written Target Authorization
+              Rules of Engagement &amp; Written Target Authorization
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs">
@@ -145,7 +145,7 @@ export default async function ClientOrderDetailPage({
               <form action={signOrderRoeAction} className="space-y-3">
                 <input type="hidden" name="order_id" value={order.id} />
                 <p className="text-muted-foreground">
-                  Before active penetration testing, vulnerability scanning, or forensic recovery begins, EC-Council C|EH compliance requires explicit written authorization of the target assets you own or control.
+                  Before active penetration testing, vulnerability scanning, or forensic recovery begins, OWASP/PTES operational governance requires explicit written authorization of the target assets you own or control.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">

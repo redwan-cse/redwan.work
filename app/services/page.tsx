@@ -8,15 +8,16 @@ import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field
 import { HeroReveal, HeroRevealItem, ScrollReveal } from '@/components/motion/reveal';
 import { ServicesShowcase } from '@/components/services-showcase';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPublicMetadata({
   title: 'Services & Tiered Packages — Cybersecurity, Full-Stack, Cloud & AI',
   description:
-    'Order C|EH Penetration Testing (VAPT), Full-Stack Web & Portal Engineering, Cloud/Linux Hardening, AI/ML Pipelines, and Emergency Incident Recovery.',
-  alternates: { canonical: '/services' },
-};
+    'Order Penetration Testing (VAPT), Full-Stack Web & Portal Engineering, Cloud/Linux Hardening, AI/ML Pipelines, and Emergency Incident Recovery.',
+  path: '/services',
+});
 
 export default async function ServicesPage() {
   const services = await getPublicServicesCatalog();
@@ -47,7 +48,7 @@ export default async function ServicesPage() {
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                    C|EH Certified Security Standards
+                    OWASP &amp; PTES Security Standards
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-primary" />

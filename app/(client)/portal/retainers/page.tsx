@@ -27,11 +27,11 @@ export default async function ClientRetainersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Monthly Advisory & Retainers</h1>
           <p className="text-sm text-muted-foreground">
-            Track your dedicated monthly engineering, DevSecOps, and C|EH security advisory hours.
+            Track your dedicated monthly engineering, DevSecOps, and security advisory hours.
           </p>
         </div>
         <Button asChild size="sm" className="gap-1.5 rounded-full">
-          <Link href="/portal/orders/new?service=monthly-security-devops-tech-retainer&tier=standard">
+          <Link href="/portal/orders/new?service=monthly-security-and-engineering-retainer&tier=standard">
             <Sparkles className="h-3.5 w-3.5" />
             Start Monthly Retainer
           </Link>

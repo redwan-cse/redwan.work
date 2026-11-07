@@ -35,11 +35,11 @@ export interface ServiceCatalogItem {
 }
 
 export const SITE = {
-  name: 'Md Redwan Ahmed',
-  role: 'C|EH Certified Cybersecurity Specialist, Full-Stack Engineer & Founder of Fast Cyber Defense',
-  shortRole: 'C|EH Security Specialist & Full-Stack Consultant',
+  name: 'Md. Redwan Ahmed',
+  role: 'Cybersecurity Specialist, Full-Stack Engineer & Founder of Fast Cyber Defense',
+  shortRole: 'Security Specialist & Full-Stack Consultant',
   tagline:
-    'C|EH Certified Ethical Hacker, Full-Stack Software Engineer, Cloud/DevOps Architect, and Executive Technical Consultant delivering high-stakes offensive security, custom software, AI pipelines, and rapid incident recovery.',
+    'Cybersecurity Specialist (CCEP, CNSP, CAP), Full-Stack Software Engineer, Cloud/DevOps Architect, and Executive Technical Consultant delivering offensive security assessments, custom software, AI pipelines, and rapid incident recovery.',
   url: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work',
   email: 'contact@redwan.work',
   whatsappNumber: '8801776387624',
@@ -51,8 +51,8 @@ export const SITE = {
   },
   profileImage: '/profile.jpg',
   credentials: [
-    { code: 'C|EH', label: 'Certified Ethical Hacker (EC-Council)' },
     { code: 'CCEP', label: 'Certified Cybersecurity Educator Professional' },
+    { code: 'GitHub', label: 'GitHub Foundations Certified' },
     { code: 'CNSP', label: 'Certified Network Security Practitioner' },
     { code: 'CAP', label: 'Certified AppSec Practitioner' },
     { code: 'Q1 / IEEE', label: 'Published AI & Security Researcher' },
@@ -82,7 +82,7 @@ export const SERVICE_PILLARS: Record<
     key: 'cybersecurity',
     label: 'Cybersecurity & Offensive Security',
     shortLabel: 'Cybersecurity & VAPT',
-    badge: 'C|EH Authorized',
+    badge: 'OWASP · PTES',
     summary:
       'OWASP/PTES penetration testing, vulnerability assessments, OSINT & fraud investigations, and Wazuh SIEM engineering.',
   },
@@ -126,7 +126,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     pillar: 'cybersecurity',
     pillarLabel: 'Cybersecurity & Offensive Security',
     title: 'Web, API & Network Penetration Testing (VAPT)',
-    tagline: 'C|EH-led manual & automated offensive security assessments with executive & technical remediation reports.',
+    tagline: 'Manual & automated offensive security assessments with executive & technical remediation reports.',
     description:
       'Comprehensive offensive security testing aligned with OWASP Top 10, OWASP API Security, and PTES. Includes signed Rules of Engagement (RoE), manual exploitation validation, PoC walkthroughs, CVSS v3.1 risk scoring, and free re-test verification.',
     requiresRoe: true,
@@ -134,7 +134,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     deliveryDaysMin: 5,
     deliveryDaysMax: 14,
     highlights: [
-      'C|EH Certified manual exploitation & business-logic testing',
+      'OWASP & PTES manual exploitation & business-logic testing',
       'Executive summary + developer-ready remediation blueprint',
       'Signed Rules of Engagement (RoE) & NDA protection',
       'Complimentary post-fix verification re-test',
@@ -500,7 +500,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     pillar: 'tech_support',
     pillarLabel: 'Executive Tech Support & Digital Recovery',
     title: 'Dedicated Monthly Security & Engineering Retainer',
-    tagline: 'Your on-call C|EH Security Advisor, Full-Stack Developer & Infrastructure Guardian on a predictable monthly plan.',
+    tagline: 'Your on-call Security Advisor, Full-Stack Developer & Infrastructure Guardian on a predictable monthly plan.',
     description:
       'Built for long-term client relationships. Reserve guaranteed monthly hours for continuous vulnerability monitoring, feature development, server maintenance, code reviews, and priority emergency SLA.',
     requiresRoe: false,

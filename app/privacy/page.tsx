@@ -36,13 +36,14 @@ import {
   InteractiveCard,
   ScrollReveal,
 } from '@/components/motion/reveal';
+import { buildPublicMetadata } from '@/lib/seo/metadata';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPublicMetadata({
   title: 'Data & Privacy Policy',
   description:
-    'How your data is collected, used, and protected when you contact Md Redwan Ahmed or use the Client Portal.',
-  alternates: { canonical: '/privacy' },
-};
+    'How your data is collected, used, and protected when you contact Md. Redwan Ahmed or use the Client Portal.',
+  path: '/privacy',
+});
 
 const PRIVACY_SECTIONS = [
   { id: 'who-we-are', label: '1. Scope & Controller' },
@@ -171,7 +172,7 @@ export default function Privacy() {
                     <CardContent className="space-y-4 text-sm leading-relaxed text-muted-foreground">
                       <p>
                         This website and Client Portal are operated by{' '}
-                        <strong className="text-foreground">Md Redwan Ahmed</strong> (Founder &amp; CEO, Fast Cyber Defense). References to &quot;I&quot;, &quot;me&quot;, or &quot;we&quot; refer to Md Redwan Ahmed and authorized specialists working under strict confidentiality obligations.
+                        <strong className="text-foreground">Md. Redwan Ahmed</strong> (Founder &amp; CEO, Fast Cyber Defense). References to &quot;I&quot;, &quot;me&quot;, or &quot;we&quot; refer to Md. Redwan Ahmed and authorized specialists working under strict confidentiality obligations.
                       </p>
                       <p>
                         This notice covers <strong className="text-foreground">redwan.work</strong>, the project intake form at{' '}
@@ -276,7 +277,7 @@ export default function Privacy() {
                             <TableRow>
                               <TableCell className="font-medium text-foreground">Selected Service(s)</TableCell>
                               <TableCell className="text-muted-foreground">
-                                To route your inquiry to the appropriate C|EH security, engineering, cloud, AI, or support workflow
+                                To route your inquiry to the appropriate security, engineering, cloud, AI, or support workflow
                               </TableCell>
                             </TableRow>
                             <TableRow>
@@ -353,7 +354,7 @@ export default function Privacy() {
                         <div className="rounded-xl border border-border/70 bg-background/60 p-4">
                           <h3 className="font-semibold text-foreground">Contractual &amp; Pre-Contractual Necessity</h3>
                           <p className="mt-1 text-xs">
-                            Processing required to prepare custom proposals (`PRP-XXXX`), execute orders (`ORD-XXXX`), verify C|EH Rules of Engagement, and issue invoices (`INV-XXXX`).
+                            Processing required to prepare custom proposals (`PRP-XXXX`), execute orders (`ORD-XXXX`), verify signed Rules of Engagement, and issue invoices (`INV-XXXX`).
                           </p>
                         </div>
                       </div>

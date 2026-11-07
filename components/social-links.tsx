@@ -54,7 +54,7 @@ const socialLinks = [
   },
   {
     name: "Email",
-    href: "mailto:info@redwan.work",
+    href: "mailto:contact@redwan.work",
     icon: Mail,
     color: "#EA4335",
   },

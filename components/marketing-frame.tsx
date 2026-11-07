@@ -5,9 +5,17 @@ import { WhatsAppButton } from '@/components/whatsapp-button';
 /** Public chrome is selected by server route composition, never by auth state. */
 export function MarketingFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col" data-marketing-frame="">
+    <div className="flex min-h-screen flex-col overflow-x-clip" data-marketing-frame="">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
+      >
+        Skip to main content
+      </a>
       <Navigation />
-      <main className="flex-1">{children}</main>
+      <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
+        {children}
+      </main>
       <Footer />
       <WhatsAppButton />
     </div>
