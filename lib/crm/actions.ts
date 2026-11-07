@@ -29,6 +29,14 @@ async function requireAdminSession() {
   return session;
 }
 
+async function requireClientSession() {
+  const session = await getCurrentSession();
+  if (!session || session.role !== 'client') {
+    throw new Error('Client account authorization required.');
+  }
+  return session;
+}
+
 async function requireAuthenticatedSession() {
   const session = await getCurrentSession();
   if (!session) {
@@ -881,12 +889,12 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
 // =============================================================================
 
 export async function acceptProposalClientAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
   if (!proposalId) return;
 
   const admin = getSupabaseAdmin();
-  const { data: orderId, error } = await admin.rpc('accept_proposal_and_create_order', {
+  const { data: rpcResult, error } = await admin.rpc('accept_proposal_and_create_order', {
     p_proposal_id: proposalId,
     p_actor_id: session.userId,
   });
@@ -900,13 +908,20 @@ export async function acceptProposalClientAction(formData: FormData): Promise<vo
   revalidatePath('/admin/proposals');
   revalidatePath('/admin/orders');
 
-  if (typeof orderId === 'string') {
-    redirect(`/portal/orders/${orderId}`);
+  const resolvedOrderId =
+    typeof rpcResult === 'string'
+      ? rpcResult
+      : rpcResult && typeof rpcResult === 'object' && !Array.isArray(rpcResult)
+        ? (rpcResult as { order_id?: unknown }).order_id
+        : null;
+
+  if (typeof resolvedOrderId === 'string' && resolvedOrderId) {
+    redirect(`/portal/orders/${resolvedOrderId}`);
   }
 }
 
 export async function placePortalPackageOrderAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const serviceSlug = String(formData.get('service_slug') ?? '').trim();
   const tier = String(formData.get('tier') ?? 'standard').trim().toLowerCase();
   const projectTitle = String(formData.get('title') ?? '').trim();
@@ -1090,7 +1105,7 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
 }
 
 export async function submitOrderRequirementsAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const targetScopeNotes = String(formData.get('target_scope_notes') ?? '').trim();
   const accessInstructions = String(formData.get('access_instructions') ?? '').trim();
@@ -1104,25 +1119,34 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
     .eq('id', orderId)
     .maybeSingle();
 
-  if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
+  if (!order || order.client_id !== session.userId) {
     throw new Error('Forbidden.');
   }
 
-  await admin.from('order_requirements').upsert(
+  const { error: reqErr } = await admin.from('order_requirements').upsert(
     {
       order_id: orderId,
-      client_id: order.client_id,
+      client_id: session.userId,
       target_scope_notes: targetScopeNotes,
       access_instructions: accessInstructions,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'order_id' }
   );
+  if (reqErr) {
+    throw new Error(reqErr.message);
+  }
 
   if (order.status === 'pending_requirements') {
     const nextStatus: OrderStatus =
       order.requires_roe && !order.roe_signed_at ? 'pending_requirements' : 'in_progress';
-    await admin.from('orders').update({ status: nextStatus }).eq('id', orderId);
+    const { error: statusErr } = await admin
+      .from('orders')
+      .update({ status: nextStatus })
+      .eq('id', orderId);
+    if (statusErr) {
+      throw new Error(statusErr.message);
+    }
   }
 
   revalidatePath(`/portal/orders/${orderId}`);
@@ -1130,7 +1154,7 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
 }
 
 export async function signOrderRoeAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const targetsRaw = String(formData.get('authorized_targets') ?? '').trim();
   const excludedSystems = String(formData.get('excluded_systems') ?? '').trim() || null;
@@ -1138,7 +1162,8 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
   const emergencyPhone = String(formData.get('emergency_contact_phone') ?? '').trim();
   const signerFullName = String(formData.get('signer_full_name') ?? '').trim();
   const signerTitle = String(formData.get('signer_title') ?? '').trim() || null;
-  const ownershipAttested = formData.get('ownership_attested') === 'on';
+  const ownershipAttested =
+    formData.get('ownership_attested') === 'on' || formData.get('ownership_attested') === 'true';
 
   if (
     !orderId ||
@@ -1165,17 +1190,17 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     .eq('id', orderId)
     .maybeSingle();
 
-  if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
+  if (!order || order.client_id !== session.userId) {
     throw new Error('Forbidden.');
   }
 
   const nowIso = new Date().toISOString();
   const windowEnd = new Date(Date.now() + 21 * 86400 * 1000).toISOString();
 
-  await admin.from('engagement_authorizations').upsert(
+  const { error: roeErr } = await admin.from('engagement_authorizations').upsert(
     {
       order_id: orderId,
-      client_id: order.client_id,
+      client_id: session.userId,
       authorized_targets: authorizedTargets,
       excluded_systems: excludedSystems,
       testing_window_start: nowIso,
@@ -1189,8 +1214,11 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     },
     { onConflict: 'order_id' }
   );
+  if (roeErr) {
+    throw new Error(roeErr.message);
+  }
 
-  await admin
+  const { error: orderErr } = await admin
     .from('orders')
     .update({
       roe_signed_at: nowIso,
@@ -1198,23 +1226,26 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
       status: order.status === 'pending_requirements' ? 'in_progress' : order.status,
     })
     .eq('id', orderId);
+  if (orderErr) {
+    throw new Error(orderErr.message);
+  }
 
   await notifyAllAdmins({
     category: 'roe',
-    title: `C|EH RoE Signed for ${order.code}`,
+    title: `Rules of Engagement Signed for ${order.code}`,
     body: `${signerFullName} authorized ${authorizedTargets.length} target(s).`,
     href: `/admin/orders/${orderId}`,
   });
 
   await recordAuditLog({
     actorId: session.userId,
-    actorRole: session.role,
-    clientId: order.client_id,
+    actorRole: 'client',
+    clientId: session.userId,
     orderId,
     action: 'order.roe_signed',
     entityType: 'engagement_authorization',
     entityId: orderId,
-    summary: `Signed C|EH Rules of Engagement for ${order.code}`,
+    summary: `Signed Rules of Engagement for ${order.code}`,
     metadata: { authorizedTargets, signerFullName },
   });
 
@@ -1223,7 +1254,7 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
 }
 
 export async function reviewDeliverableClientAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const deliverableId = String(formData.get('deliverable_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const decision = String(formData.get('decision') ?? '').trim();
@@ -1254,7 +1285,7 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
 }
 
 export async function submitInvoicePaymentProofAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const invoiceId = String(formData.get('invoice_id') ?? '').trim();
   const method = (String(formData.get('method') ?? 'bank_transfer').trim() ||
     'bank_transfer') as PaymentMethod;
@@ -1270,21 +1301,35 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   const admin = getSupabaseAdmin();
   const { data: invoice } = await admin
     .from('invoices')
-    .select('id, code, client_id, order_id, currency, fx_rate_to_usd')
+    .select('id, code, client_id, order_id, currency, fx_rate_to_usd, status')
     .eq('id', invoiceId)
     .maybeSingle();
 
-  if (!invoice || (session.role !== 'admin' && invoice.client_id !== session.userId)) {
+  if (!invoice || invoice.client_id !== session.userId) {
     throw new Error('Forbidden.');
+  }
+
+  if (
+    invoice.status !== 'issued' &&
+    invoice.status !== 'partially_paid' &&
+    invoice.status !== 'overdue'
+  ) {
+    throw new Error('Invoice is not open for payment submission.');
   }
 
   let proofFileId: string | null = null;
   if (r2Key && filename && sizeBytes > 0) {
-    const { data: vFile } = await admin
+    const expectedPrefix = `private/${session.userId}/payment_proof/`;
+    if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
+      throw new Error('Invalid payment proof storage key prefix.');
+    }
+
+    const { data: vFile, error: fileErr } = await admin
       .from('vault_files')
       .insert({
-        owner_client_id: invoice.client_id,
+        owner_client_id: session.userId,
         order_id: invoice.order_id,
+        invoice_id: invoice.id,
         category: 'payment_proof',
         r2_key: r2Key,
         filename,
@@ -1294,16 +1339,19 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
       })
       .select('id')
       .single();
-    proofFileId = vFile?.id ?? null;
+    if (fileErr || !vFile) {
+      throw new Error(fileErr?.message ?? 'Could not register payment proof file.');
+    }
+    proofFileId = vFile.id;
   }
 
   const amountCents = Math.round(amountMajor * 100);
-  const { data: payment } = await admin
+  const { data: payment, error: paymentErr } = await admin
     .from('payments')
     .insert({
       invoice_id: invoice.id,
       order_id: invoice.order_id,
-      client_id: invoice.client_id,
+      client_id: session.userId,
       amount_cents: amountCents,
       currency: invoice.currency,
       fx_rate_to_usd: invoice.fx_rate_to_usd,
@@ -1314,23 +1362,26 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     })
     .select('id, code')
     .single();
+  if (paymentErr || !payment) {
+    throw new Error(paymentErr?.message ?? 'Could not submit payment proof.');
+  }
 
   await notifyAllAdmins({
     category: 'payment',
-    title: `Payment Submitted (${payment?.code ?? ''})`,
+    title: `Payment Submitted (${payment.code ?? ''})`,
     body: `Invoice ${invoice.code}: ${invoice.currency} ${amountMajor.toLocaleString()} via ${method}`,
     href: `/admin/invoices/${invoice.id}`,
   });
 
   await recordAuditLog({
     actorId: session.userId,
-    actorRole: session.role,
-    clientId: invoice.client_id,
+    actorRole: 'client',
+    clientId: session.userId,
     orderId: invoice.order_id,
     action: 'payment.submitted',
     entityType: 'payment',
-    entityId: payment?.id,
-    summary: `Submitted payment ${payment?.code ?? ''} for ${invoice.code} (${method}: ${reference})`,
+    entityId: payment.id,
+    summary: `Submitted payment ${payment.code ?? ''} for ${invoice.code} (${method}: ${reference})`,
     metadata: { amountCents, method, reference },
   });
 
@@ -1341,7 +1392,7 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
 }
 
 export async function createClientTicketAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const subject = String(formData.get('subject') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
   const rawPriority = String(formData.get('priority') ?? 'medium').trim();
@@ -1354,8 +1405,18 @@ export async function createClientTicketAction(formData: FormData): Promise<void
   if (!subject || !body) return;
 
   const admin = getSupabaseAdmin();
+  if (orderId) {
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, client_id')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (!order || order.client_id !== session.userId) {
+      throw new Error('Forbidden: order does not belong to client.');
+    }
+  }
 
-  const { data: ticket } = await admin
+  const { data: ticket, error: ticketErr } = await admin
     .from('tickets')
     .insert({
       client_id: session.userId,
@@ -1367,29 +1428,34 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     .select('id, code')
     .single();
 
-  if (ticket) {
-    await admin.from('ticket_messages').insert({
-      ticket_id: ticket.id,
-      author_id: session.userId,
-      body,
-      is_internal_note: false,
-    });
-
-    await notifyAllAdmins({
-      category: 'ticket',
-      title: `New Support Ticket ${ticket.code}`,
-      body: subject,
-      href: `/admin/tickets/${ticket.id}`,
-    });
-
-    revalidatePath('/portal/tickets');
-    revalidatePath('/admin/tickets');
-    redirect(`/portal/tickets/${ticket.id}`);
+  if (ticketErr || !ticket) {
+    throw new Error(ticketErr?.message ?? 'Could not create support ticket.');
   }
+
+  const { error: msgErr } = await admin.from('ticket_messages').insert({
+    ticket_id: ticket.id,
+    author_id: session.userId,
+    body,
+    is_internal_note: false,
+  });
+  if (msgErr) {
+    throw new Error(msgErr.message);
+  }
+
+  await notifyAllAdmins({
+    category: 'ticket',
+    title: `New Support Ticket ${ticket.code}`,
+    body: subject,
+    href: `/admin/tickets/${ticket.id}`,
+  });
+
+  revalidatePath('/portal/tickets');
+  revalidatePath('/admin/tickets');
+  redirect(`/portal/tickets/${ticket.id}`);
 }
 
 export async function submitClientReviewAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const ratingOverall = Math.min(5, Math.max(1, Number(formData.get('rating_overall') ?? 5)));
   const headline = String(formData.get('headline') ?? '').trim() || null;
@@ -1398,7 +1464,20 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
   if (!orderId || !reviewText) return;
 
   const admin = getSupabaseAdmin();
-  await admin.from('client_reviews').upsert(
+  const { data: order } = await admin
+    .from('orders')
+    .select('id, client_id, status')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (!order || order.client_id !== session.userId) {
+    throw new Error('Forbidden.');
+  }
+  if (order.status !== 'completed') {
+    throw new Error('Order must be completed before submitting a client review.');
+  }
+
+  const { error } = await admin.from('client_reviews').upsert(
     {
       order_id: orderId,
       client_id: session.userId,
@@ -1408,16 +1487,20 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
       rating_timeliness: ratingOverall,
       headline,
       review_text: reviewText,
+      is_public_approved: false,
     },
     { onConflict: 'order_id' }
   );
+  if (error) {
+    throw new Error(error.message);
+  }
 
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath('/admin/reviews');
 }
 
 export async function updateClientProfileAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
+  const session = await requireClientSession();
   const fullName = String(formData.get('full_name') ?? '').trim();
   const phoneE164 = String(formData.get('phone_e164') ?? '').trim() || null;
   const timezone = String(formData.get('timezone') ?? 'UTC').trim() || 'UTC';

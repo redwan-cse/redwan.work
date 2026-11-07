@@ -20,10 +20,15 @@ function safeRelativePath(raw:FormDataEntryValue|null):string|null {
 async function panelHomeForCurrentUser():Promise<string> {
  const supabase=await createSupabaseServerClient();
  const {data}=await supabase.auth.getClaims();
- const sub=typeof data?.claims?.sub==='string'?data.claims.sub:null;
+ const claims=data?.claims as {sub?:string;aal?:string}|undefined;
+ const sub=typeof claims?.sub==='string'?claims.sub:null;
  if(!sub)return '/portal';
- const {data:profile}=await supabase.from('profiles').select('role').eq('id',sub).maybeSingle();
- return profile?.role==='admin'?'/admin':'/portal';
+ const {data:profile}=await supabase.from('profiles').select('role, mfa_enforced').eq('id',sub).maybeSingle();
+ if(profile?.role==='admin'){
+  if(profile.mfa_enforced===true&&claims?.aal!=='aal2')return '/mfa';
+  return '/admin';
+ }
+ return '/portal';
 }
 const MIN_PASSWORD=12;
 const INVALID_LINK='This link is invalid or has expired. Ask for a new one.';
@@ -51,6 +56,9 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  if(!email||!password)return {error:'Email and password are required.'};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return {error:'Invalid email or password.'};
  const home=await panelHomeForCurrentUser();
+ if(home==='/mfa'){
+  redirect(next?`/mfa?next=${encodeURIComponent(next)}`:'/mfa');
+ }
  if(next){
   // Navigation policy only. Proxy/layout/action current-account checks still authorize access.
   // Avoid an intermediate wrong-panel Server Action navigation; mirror proxy panel prefixes.
