@@ -107,7 +107,7 @@ export default async function AdminInquiriesPage() {
                       className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
                     >
                       <option value="new">new</option>
-                      <option value="triaged">triaged</option>
+                      <option value="reviewing">reviewing</option>
                       <option value="proposal_sent">proposal_sent</option>
                       <option value="converted">converted</option>
                       <option value="archived">archived</option>

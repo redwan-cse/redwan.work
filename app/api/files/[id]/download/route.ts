@@ -24,7 +24,7 @@ export async function GET(
   const { data: file, error } = await admin
     .from('vault_files')
     .select(
-      'id, owner_client_id, order_id, deliverable_id, r2_key, filename, mime, size_bytes, download_count, deleted_from_r2_at'
+      'id, owner_client_id, order_id, deliverable_id, r2_key, filename, mime_type, size_bytes, download_count, retention_until, archived_at'
     )
     .eq('id', id)
     .maybeSingle();
@@ -37,7 +37,11 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
   }
 
-  if (file.deleted_from_r2_at) {
+  const retentionExpired =
+    typeof file.retention_until === 'string' &&
+    new Date(file.retention_until).getTime() <= Date.now();
+
+  if (file.archived_at || retentionExpired) {
     return NextResponse.json(
       { error: 'This file has expired under the storage retention policy.' },
       { status: 410 }

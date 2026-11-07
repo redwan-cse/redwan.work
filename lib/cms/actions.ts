@@ -5,6 +5,7 @@ import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { SERVICE_PILLARS, type ServicePillarKey } from '@/lib/content/site';
+import { parseFormBoolean } from '@/lib/forms/boolean';
 
 async function requireAdmin() {
   const session = await getCurrentSession();
@@ -44,9 +45,9 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
   const deliveryDaysMin = Math.max(1, Number(formData.get('delivery_days_min') ?? 3));
   const deliveryDaysMax = Math.max(deliveryDaysMin, Number(formData.get('delivery_days_max') ?? 10));
   const sortOrder = Number(formData.get('sort_order') ?? 10);
-  const requiresRoe = formData.get('requires_roe') === 'on' || formData.get('requires_roe') === 'true';
-  const isPublic = formData.get('is_public') !== 'false';
-  const isFeatured = formData.get('is_featured') === 'on' || formData.get('is_featured') === 'true';
+  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+  const isPublic = parseFormBoolean(formData, 'is_public');
+  const isFeatured = parseFormBoolean(formData, 'is_featured');
   const highlights = parseLines(formData.get('highlights'));
 
   if (!title || !slug) return;
@@ -69,9 +70,11 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
   };
 
   if (id) {
-    await admin.from('services').update(payload).eq('id', id);
+    const { error } = await admin.from('services').update(payload).eq('id', id);
+    if (error) throw new Error(error.message);
   } else {
-    await admin.from('services').insert(payload);
+    const { error } = await admin.from('services').insert(payload);
+    if (error) throw new Error(error.message);
   }
 
   await recordAuditLog({
@@ -96,7 +99,8 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  await admin.from('services').delete().eq('id', id);
+  const { error } = await admin.from('services').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,
@@ -129,8 +133,8 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
   const depositPercent = Math.min(100, Math.max(0, Number(formData.get('deposit_percent') ?? 50)));
   const deliveryDays = Math.max(1, Number(formData.get('delivery_days') ?? 7));
   const revisionsIncluded = Math.max(0, Number(formData.get('revisions_included') ?? 2));
-  const isPopular = formData.get('is_popular') === 'on' || formData.get('is_popular') === 'true';
-  const isActive = formData.get('is_active') !== 'false';
+  const isPopular = parseFormBoolean(formData, 'is_popular');
+  const isActive = parseFormBoolean(formData, 'is_active');
   const features = parseLines(formData.get('features'));
   const sortOrder =
     tierName === 'Starter' ? 1 : tierName === 'Standard' ? 2 : tierName === 'Enterprise' ? 3 : 4;
@@ -153,11 +157,13 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
   };
 
   if (id) {
-    await admin.from('service_packages').update(payload).eq('id', id);
+    const { error } = await admin.from('service_packages').update(payload).eq('id', id);
+    if (error) throw new Error(error.message);
   } else {
-    await admin
+    const { error } = await admin
       .from('service_packages')
       .upsert(payload, { onConflict: 'service_id,tier_name' });
+    if (error) throw new Error(error.message);
   }
 
   await recordAuditLog({
@@ -182,7 +188,8 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  await admin.from('service_packages').delete().eq('id', id);
+  const { error } = await admin.from('service_packages').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,
@@ -234,8 +241,8 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
     String(formData.get('related_service_slug') ?? '').trim() || null;
   const externalUrl = String(formData.get('external_url') ?? '').trim() || null;
   const sortOrder = Number(formData.get('sort_order') ?? 10);
-  const isPublished = formData.get('is_published') !== 'false';
-  const isFeatured = formData.get('is_featured') === 'on' || formData.get('is_featured') === 'true';
+  const isPublished = parseFormBoolean(formData, 'is_published');
+  const isFeatured = parseFormBoolean(formData, 'is_featured');
 
   if (!title || !slug) return;
 
@@ -261,9 +268,11 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
   };
 
   if (id) {
-    await admin.from('portfolio_items').update(payload).eq('id', id);
+    const { error } = await admin.from('portfolio_items').update(payload).eq('id', id);
+    if (error) throw new Error(error.message);
   } else {
-    await admin.from('portfolio_items').insert(payload);
+    const { error } = await admin.from('portfolio_items').insert(payload);
+    if (error) throw new Error(error.message);
   }
 
   await recordAuditLog({
@@ -286,7 +295,8 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  await admin.from('portfolio_items').delete().eq('id', id);
+  const { error } = await admin.from('portfolio_items').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,
@@ -372,7 +382,8 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
     updatePayload.technical_skills = technicalSkills;
   }
 
-  await admin.from('site_settings').update(updatePayload).eq('id', 'default');
+  const { error } = await admin.from('site_settings').update(updatePayload).eq('id', 'default');
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,
@@ -404,7 +415,7 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   const verificationUrl = String(formData.get('verification_url') ?? '').trim() || null;
   const highlights = parseLines(formData.get('highlights'));
   const sortOrder = Number(formData.get('sort_order') ?? 10);
-  const isVisible = formData.get('is_visible') !== 'false';
+  const isVisible = parseFormBoolean(formData, 'is_visible');
 
   if (!title) return;
 
@@ -423,9 +434,11 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   };
 
   if (id) {
-    await admin.from('resume_items').update(payload).eq('id', id);
+    const { error } = await admin.from('resume_items').update(payload).eq('id', id);
+    if (error) throw new Error(error.message);
   } else {
-    await admin.from('resume_items').insert(payload);
+    const { error } = await admin.from('resume_items').insert(payload);
+    if (error) throw new Error(error.message);
   }
 
   await recordAuditLog({
@@ -448,7 +461,8 @@ export async function deleteResumeItemAction(formData: FormData): Promise<void> 
   const id = String(formData.get('id') ?? '').trim();
   if (!id) return;
 
-  await admin.from('resume_items').delete().eq('id', id);
+  const { error } = await admin.from('resume_items').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,

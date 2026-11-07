@@ -12,6 +12,7 @@ import {
 } from '@/lib/crm/audit';
 import { type ServicePillarKey } from '@/lib/content/site';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
+import { parseFormBoolean } from '@/lib/forms/boolean';
 import type { Database } from '@/lib/supabase/database.types';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -49,14 +50,28 @@ async function requireAuthenticatedSession() {
 // 1. ADMIN: INQUIRY TRIAGE & CLIENT INVITATION / CONVERSION
 // =============================================================================
 
+const ALLOWED_INQUIRY_STATUSES = new Set<InquiryStatus>([
+  'new',
+  'reviewing',
+  'proposal_sent',
+  'converted',
+  'archived',
+]);
+
 export async function updateInquiryStatusAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim();
-  const status = String(formData.get('status') ?? 'triaged').trim() as InquiryStatus;
+  const rawStatus = String(formData.get('status') ?? 'reviewing').trim();
+  const status: InquiryStatus = ALLOWED_INQUIRY_STATUSES.has(rawStatus as InquiryStatus)
+    ? (rawStatus as InquiryStatus)
+    : 'reviewing';
   if (!inquiryId) return;
 
   const admin = getSupabaseAdmin();
-  await admin.from('inquiries').update({ status }).eq('id', inquiryId);
+  const { error } = await admin.from('inquiries').update({ status }).eq('id', inquiryId);
+  if (error) {
+    throw new Error(error.message);
+  }
 
   await recordAuditLog({
     actorId: session.userId,
@@ -103,9 +118,13 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
       redirectTo: `${siteOrigin}/invite/accept`,
     });
 
+    if (inviteRes.error) {
+      throw new Error(inviteRes.error.message);
+    }
+
     if (inviteRes.data?.user?.id) {
       clientId = inviteRes.data.user.id;
-      await admin
+      const { error: profErr } = await admin
         .from('profiles')
         .upsert({
           id: clientId,
@@ -114,30 +133,39 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
           role: 'client',
           is_active: true,
         });
-      await admin.from('client_profiles').upsert({
+      if (profErr) throw new Error(profErr.message);
+
+      const { error: cpErr } = await admin.from('client_profiles').upsert({
         user_id: clientId,
         company_name: company,
         tier,
         acquisition_source: inquiryId ? 'contact_inquiry' : 'direct_invite',
       });
+      if (cpErr) throw new Error(cpErr.message);
     }
   }
 
-  await admin.from('client_invitations').insert({
+  const { error: invErr } = await admin.from('client_invitations').insert({
     email,
     full_name: fullName || null,
     company,
     tier,
     invited_by: session.userId,
     accepted_user_id: clientId,
-    status: clientId ? 'sent' : 'pending',
+    status: 'pending',
   });
+  if (invErr) {
+    throw new Error(invErr.message);
+  }
 
   if (inquiryId && clientId) {
-    await admin
+    const { error: inqErr } = await admin
       .from('inquiries')
       .update({ status: 'converted', converted_client_id: clientId })
       .eq('id', inquiryId);
+    if (inqErr) {
+      throw new Error(inqErr.message);
+    }
   }
 
   await recordAuditLog({
@@ -189,7 +217,7 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     .filter(Boolean);
 
   const admin = getSupabaseAdmin();
-  const { data: proposal } = await admin
+  const { data: proposal, error: propErr } = await admin
     .from('proposals')
     .insert({
       client_id: clientId,
@@ -214,27 +242,34 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     })
     .select('id, code')
     .single();
+  if (propErr || !proposal) {
+    throw new Error(propErr?.message ?? 'Could not create proposal.');
+  }
+
+  // Default 2 milestones (Kickoff & Final Delivery)
+  const depositCents = Math.round((totalCents * depositPercent) / 100);
+  const balanceCents = Math.max(0, totalCents - depositCents);
+  const { error: msErr } = await admin.from('proposal_milestones').insert([
+    {
+      proposal_id: proposal.id,
+      position: 0,
+      title: 'Phase 1: Kickoff, Architecture & Initial Execution',
+      amount_cents: depositCents,
+      due_days_offset: Math.max(1, Math.floor(deliveryDays / 2)),
+    },
+    {
+      proposal_id: proposal.id,
+      position: 1,
+      title: 'Phase 2: Final Deliverables, Verification & Handover',
+      amount_cents: balanceCents,
+      due_days_offset: deliveryDays,
+    },
+  ]);
+  if (msErr) {
+    throw new Error(msErr.message);
+  }
 
   if (proposal) {
-    // Default 2 milestones (Kickoff & Final Delivery)
-    const depositCents = Math.round((totalCents * depositPercent) / 100);
-    const balanceCents = Math.max(0, totalCents - depositCents);
-    await admin.from('proposal_milestones').insert([
-      {
-        proposal_id: proposal.id,
-        position: 0,
-        title: 'Phase 1: Kickoff, Architecture & Initial Execution',
-        amount_cents: depositCents,
-        due_days_offset: Math.max(1, Math.floor(deliveryDays / 2)),
-      },
-      {
-        proposal_id: proposal.id,
-        position: 1,
-        title: 'Phase 2: Final Deliverables, Verification & Handover',
-        amount_cents: balanceCents,
-        due_days_offset: deliveryDays,
-      },
-    ]);
 
     if (clientId) {
       await createInAppNotification({
@@ -461,16 +496,19 @@ export async function addOrderTaskAction(formData: FormData): Promise<void> {
   await requireAdminSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const title = String(formData.get('title') ?? '').trim();
-  const isClientVisible = formData.get('is_client_visible') !== 'off';
+  const isClientVisible = parseFormBoolean(formData, 'is_client_visible');
 
   if (!orderId || !title) return;
 
   const admin = getSupabaseAdmin();
-  await admin.from('order_tasks').insert({
+  const { error } = await admin.from('order_tasks').insert({
     order_id: orderId,
     title,
     is_client_visible: isClientVisible,
   });
+  if (error) {
+    throw new Error(error.message);
+  }
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/portal/orders/${orderId}`);
@@ -481,18 +519,21 @@ export async function toggleOrderTaskAction(formData: FormData): Promise<void> {
   await requireAdminSession();
   const taskId = String(formData.get('task_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
-  const completed = formData.get('is_completed') === 'true';
+  const completed = parseFormBoolean(formData, 'is_completed');
 
   if (!taskId) return;
 
   const admin = getSupabaseAdmin();
-  await admin
+  const { error } = await admin
     .from('order_tasks')
     .update({
       is_completed: completed,
       completed_at: completed ? new Date().toISOString() : null,
     })
     .eq('id', taskId);
+  if (error) {
+    throw new Error(error.message);
+  }
 
   if (orderId) {
     revalidatePath(`/admin/orders/${orderId}`);
@@ -507,7 +548,7 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   const title = String(formData.get('title') ?? '').trim();
   const versionLabel = String(formData.get('version_label') ?? 'v1.0').trim() || 'v1.0';
   const releaseNotes = String(formData.get('release_notes') ?? '').trim() || null;
-  const isFinal = formData.get('is_final_delivery') !== 'off';
+  const isFinal = parseFormBoolean(formData, 'is_final_delivery');
   const r2Key = String(formData.get('r2_key') ?? '').trim();
   const filename = String(formData.get('filename') ?? '').trim();
   const mime = String(formData.get('mime') ?? 'application/pdf').trim();
@@ -519,14 +560,18 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
     .from('orders')
-    .select('code, auto_accept_days')
+    .select('code, auto_accept_days, client_id')
     .eq('id', orderId)
     .maybeSingle();
 
-  const autoAcceptDays = order?.auto_accept_days ?? 7;
+  if (!order || order.client_id !== clientId) {
+    throw new Error('Order does not match target client.');
+  }
+
+  const autoAcceptDays = order.auto_accept_days ?? 7;
   const autoAcceptAt = new Date(Date.now() + autoAcceptDays * 86400 * 1000).toISOString();
 
-  const { data: deliverable } = await admin
+  const { data: deliverable, error: delivErr } = await admin
     .from('deliverables')
     .insert({
       order_id: orderId,
@@ -540,9 +585,12 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     })
     .select('id, code')
     .single();
+  if (delivErr || !deliverable) {
+    throw new Error(delivErr?.message ?? 'Could not publish deliverable.');
+  }
 
-  if (deliverable && r2Key && filename && sizeBytes > 0) {
-    await admin.from('vault_files').insert({
+  if (r2Key && filename && sizeBytes > 0) {
+    const { error: fileErr } = await admin.from('vault_files').insert({
       owner_client_id: clientId,
       order_id: orderId,
       deliverable_id: deliverable.id,
@@ -554,9 +602,12 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
       sha256_checksum: sha256Checksum,
       uploaded_by: session.userId,
     });
+    if (fileErr) {
+      throw new Error(fileErr.message);
+    }
   }
 
-  await admin
+  const { error: ordUpdateErr } = await admin
     .from('orders')
     .update({
       status: isFinal ? 'delivered' : 'in_review',
@@ -564,6 +615,9 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
       progress_percent: isFinal ? 95 : 80,
     })
     .eq('id', orderId);
+  if (ordUpdateErr) {
+    throw new Error(ordUpdateErr.message);
+  }
 
   await createInAppNotification({
     recipientId: clientId,
@@ -611,12 +665,15 @@ export async function postOrderMessageAction(formData: FormData): Promise<void> 
     throw new Error('Forbidden.');
   }
 
-  await admin.from('order_messages').insert({
+  const { error: msgErr } = await admin.from('order_messages').insert({
     order_id: orderId,
     author_id: session.userId,
     body,
     is_internal_note: isInternalNote,
   });
+  if (msgErr) {
+    throw new Error(msgErr.message);
+  }
 
   if (!isInternalNote) {
     if (session.role === 'admin') {
@@ -665,7 +722,7 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
   const totalCents = Math.round(amountMajor * 100);
   const admin = getSupabaseAdmin();
 
-  const { data: invoice } = await admin
+  const { data: invoice, error: invErr } = await admin
     .from('invoices')
     .insert({
       client_id: clientId,
@@ -682,15 +739,22 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
     })
     .select('id, code')
     .single();
+  if (invErr || !invoice) {
+    throw new Error(invErr?.message ?? 'Could not issue invoice.');
+  }
+
+  const { error: itemErr } = await admin.from('invoice_items').insert({
+    invoice_id: invoice.id,
+    position: 0,
+    description,
+    qty: 1,
+    unit_price_cents: totalCents,
+  });
+  if (itemErr) {
+    throw new Error(itemErr.message);
+  }
 
   if (invoice) {
-    await admin.from('invoice_items').insert({
-      invoice_id: invoice.id,
-      position: 0,
-      description,
-      qty: 1,
-      unit_price_cents: totalCents,
-    });
 
     await createInAppNotification({
       recipientId: clientId,
@@ -757,21 +821,23 @@ export async function updateClientCrmAndNoteAction(formData: FormData): Promise<
   if (!clientId) return;
 
   const admin = getSupabaseAdmin();
-  await admin.from('client_profiles').upsert({
+  const { error: cpErr } = await admin.from('client_profiles').upsert({
     user_id: clientId,
     tier,
     company_name: companyName,
     relationship_summary: relationshipSummary,
     next_followup_at: nextFollowupRaw ? new Date(nextFollowupRaw).toISOString() : null,
   });
+  if (cpErr) throw new Error(cpErr.message);
 
   if (noteBody) {
-    await admin.from('client_notes').insert({
+    const { error: noteErr } = await admin.from('client_notes').insert({
       client_id: clientId,
       author_id: session.userId,
       body: noteBody,
       note_type: 'general',
     });
+    if (noteErr) throw new Error(noteErr.message);
   }
 
   revalidatePath(`/admin/clients/${clientId}`);
@@ -799,12 +865,13 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
     throw new Error('Forbidden.');
   }
 
-  await admin.from('ticket_messages').insert({
+  const { error: msgErr } = await admin.from('ticket_messages').insert({
     ticket_id: ticketId,
     author_id: session.userId,
     body,
     is_internal_note: isInternalNote,
   });
+  if (msgErr) throw new Error(msgErr.message);
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
@@ -819,13 +886,14 @@ export async function updateTicketStatusAction(formData: FormData): Promise<void
   if (!ticketId) return;
 
   const admin = getSupabaseAdmin();
-  await admin
+  const { error } = await admin
     .from('tickets')
     .update({
       status,
       resolved_at: status === 'resolved' || status === 'closed' ? new Date().toISOString() : null,
     })
     .eq('id', ticketId);
+  if (error) throw new Error(error.message);
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
@@ -839,10 +907,11 @@ export async function toggleReviewPublicApprovalAction(formData: FormData): Prom
   if (!reviewId) return;
 
   const admin = getSupabaseAdmin();
-  await admin
+  const { error } = await admin
     .from('client_reviews')
     .update({ is_public_approved: approved })
     .eq('id', reviewId);
+  if (error) throw new Error(error.message);
 
   revalidatePath('/admin/reviews');
 }
@@ -859,7 +928,7 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
   if (!clientId || !title) return;
 
   const admin = getSupabaseAdmin();
-  await admin.from('retainer_plans').insert({
+  const { error } = await admin.from('retainer_plans').insert({
     client_id: clientId,
     title,
     pillar,
@@ -869,6 +938,7 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
     hours_used_current_period: 0,
     status: 'active',
   });
+  if (error) throw new Error(error.message);
 
   await recordAuditLog({
     actorId: session.userId,
@@ -1513,7 +1583,7 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     .toUpperCase();
 
   const admin = getSupabaseAdmin();
-  await admin
+  const { error: profErr } = await admin
     .from('profiles')
     .update({
       full_name: fullName || session.fullName,
@@ -1523,8 +1593,9 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
       timezone,
     })
     .eq('id', session.userId);
+  if (profErr) throw new Error(profErr.message);
 
-  await admin.from('client_profiles').upsert({
+  const { error: cpErr } = await admin.from('client_profiles').upsert({
     user_id: session.userId,
     company_name: companyName,
     company_role: companyRole,
@@ -1532,6 +1603,7 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     tax_id: taxId,
     preferred_currency: preferredCurrency,
   });
+  if (cpErr) throw new Error(cpErr.message);
 
   revalidatePath('/portal/profile');
 }

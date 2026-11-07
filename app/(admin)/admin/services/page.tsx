@@ -420,16 +420,27 @@ export default async function AdminServicesCmsPage() {
                             className="font-mono text-[11px]"
                           />
                         </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <label className="flex items-center gap-1.5 text-[11px]">
-                            <input
-                              type="checkbox"
-                              name="is_popular"
-                              defaultChecked={pkg.is_popular}
-                              className="h-3.5 w-3.5 rounded"
-                            />
-                            Most Popular
-                          </label>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1.5 text-[11px]">
+                              <input
+                                type="checkbox"
+                                name="is_popular"
+                                defaultChecked={pkg.is_popular}
+                                className="h-3.5 w-3.5 rounded"
+                              />
+                              Most Popular
+                            </label>
+                            <label className="flex items-center gap-1.5 text-[11px]">
+                              <input
+                                type="checkbox"
+                                name="is_active"
+                                defaultChecked={pkg.is_active}
+                                className="h-3.5 w-3.5 rounded"
+                              />
+                              Active
+                            </label>
+                          </div>
                           <Button type="submit" size="sm" variant="secondary" className="h-7 text-[11px]">
                             Update Tier
                           </Button>
@@ -482,7 +493,16 @@ export default async function AdminServicesCmsPage() {
                       <Label className="text-[11px]">Features (One per line)</Label>
                       <Textarea name="features" rows={2} placeholder="Feature 1&#10;Feature 2" className="font-mono text-xs" />
                     </div>
-                    <div className="flex justify-end sm:col-span-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-6">
+                      <label className="flex items-center gap-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          name="is_active"
+                          defaultChecked
+                          className="h-4 w-4 rounded"
+                        />
+                        Active package tier
+                      </label>
                       <Button type="submit" size="sm" className="h-8">
                         Save Package Tier
                       </Button>

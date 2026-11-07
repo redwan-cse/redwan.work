@@ -62,7 +62,10 @@ export async function insertLead(
         mime: att.mime,
         size_bytes: att.size_bytes,
       }));
-      await admin.from('inquiry_attachments').insert(attachmentRows);
+      const { error: attErr } = await admin.from('inquiry_attachments').insert(attachmentRows);
+      if (attErr) {
+        throw new Error('Inquiry attachment persistence failed');
+      }
     }
 
     return { ok: true, ticketRef: data.code ?? `INQ-${data.ticket_number}` };

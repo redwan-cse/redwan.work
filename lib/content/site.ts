@@ -122,7 +122,7 @@ export const SERVICE_PILLARS: Record<
 
 export const SERVICE_CATALOG: ServiceCatalogItem[] = [
   {
-    slug: 'penetration-testing-vapt',
+    slug: 'vapt-penetration-testing',
     pillar: 'cybersecurity',
     pillarLabel: 'Cybersecurity & Offensive Security',
     title: 'Web, API & Network Penetration Testing (VAPT)',
@@ -186,7 +186,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'osint-fraud-investigation',
+    slug: 'osint-threat-investigation',
     pillar: 'cybersecurity',
     pillarLabel: 'Cybersecurity & Offensive Security',
     title: 'OSINT, Threat Intelligence & Cyber Fraud Investigation',
@@ -200,7 +200,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     highlights: [
       'Domain, infrastructure, dark-web & identity attribution',
       'Phishing & brand impersonation takedown intelligence',
-      'Chain-of-custody evidence dossier in private R2 vault',
+      'Chain-of-custody evidence dossier in Encrypted Deliverables Vault',
     ],
     packages: [
       {
@@ -235,7 +235,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'wazuh-siem-soc-engineering',
+    slug: 'siem-security-monitoring',
     pillar: 'cybersecurity',
     pillarLabel: 'Cybersecurity & Offensive Security',
     title: 'Wazuh SIEM Deployment & Threat Detection Engineering',
@@ -284,11 +284,11 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'fullstack-web-and-portal-development',
+    slug: 'fullstack-web-development',
     pillar: 'development',
     pillarLabel: 'Full-Stack Web & Custom Software',
     title: 'Full-Stack Web Apps, Client Portals & Custom SaaS',
-    tagline: 'High-performance Next.js, TypeScript, Supabase, and Python/Django platforms built with security-first architecture.',
+    tagline: 'High-performance Next.js, TypeScript, PostgreSQL, and Python/Django platforms built with security-first architecture.',
     description:
       'From sleek marketing sites to complex multi-tenant SaaS applications, client CRMs, invoicing portals, and custom REST/GraphQL backends—engineered for speed, strict access control, and maintainability.',
     requiresRoe: false,
@@ -297,8 +297,8 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     deliveryDaysMax: 21,
     highlights: [
       'Next.js App Router, React 19, TypeScript & Tailwind CSS v4',
-      'Supabase PostgreSQL with Row-Level Security (RLS) or Django',
-      'Cloudflare R2 storage, Resend email workflows & Stripe/manual billing',
+      'PostgreSQL with Row-Level Security (RLS) or Python/Django',
+      'Encrypted Vault storage, transactional email workflows & multi-currency billing',
       'Security-hardened authentication & audit logging out of the box',
     ],
     packages: [
@@ -348,7 +348,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'cloud-linux-hardening-devops',
+    slug: 'cloud-linux-devops',
     pillar: 'cloud_devops',
     pillarLabel: 'Cloud, DevOps & Linux Infrastructure',
     title: 'Cloud Infrastructure, Linux Hardening & DevOps Automation',
@@ -397,7 +397,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'applied-ai-ml-and-automation',
+    slug: 'ai-ml-automation',
     pillar: 'ai_ml',
     pillarLabel: 'Applied AI/ML & Automation',
     title: 'Applied AI/ML Systems, Threat Models & Workflow Automation',
@@ -446,7 +446,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
   },
   {
-    slug: 'emergency-recovery-and-tech-support',
+    slug: 'executive-tech-support-recovery',
     pillar: 'tech_support',
     pillarLabel: 'Executive Tech Support & Digital Recovery',
     title: 'Emergency Incident Recovery, Malware Cleanup & Executive Tech Support',

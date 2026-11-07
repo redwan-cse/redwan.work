@@ -432,13 +432,22 @@ export default async function AdminOrderDetailPage({
                 ))}
               </div>
 
-              <form action={addOrderTaskAction} className="flex gap-2 pt-2">
+              <form action={addOrderTaskAction} className="flex flex-wrap items-center gap-2 pt-2">
                 <input type="hidden" name="order_id" value={order.id} />
                 <Input
                   name="title"
-                  placeholder="Add execution task visible to client..."
-                  className="h-9 text-xs"
+                  placeholder="Add execution task..."
+                  className="h-9 min-w-[200px] flex-1 text-xs"
                 />
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    name="is_client_visible"
+                    defaultChecked
+                    className="h-3.5 w-3.5 rounded"
+                  />
+                  Client-visible
+                </label>
                 <Button type="submit" variant="outline" size="sm" className="h-9 gap-1">
                   <Plus className="h-3.5 w-3.5" />
                   Add Task

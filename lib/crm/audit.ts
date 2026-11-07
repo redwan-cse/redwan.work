@@ -17,7 +17,7 @@ export interface AuditEventInput {
 export async function recordAuditLog(input: AuditEventInput): Promise<void> {
   try {
     const admin = getSupabaseAdmin();
-    await admin.from('audit_logs').insert({
+    const { error } = await admin.from('audit_logs').insert({
       actor_id: input.actorId ?? null,
       actor_role: input.actorRole ?? 'system',
       client_id: input.clientId ?? null,
@@ -28,6 +28,9 @@ export async function recordAuditLog(input: AuditEventInput): Promise<void> {
       summary: input.summary,
       metadata: (input.metadata ?? {}) as Json,
     });
+    if (error) {
+      console.error('Failed to record audit log:', error.message);
+    }
   } catch (err) {
     console.error('Failed to record audit log:', err);
   }
@@ -44,13 +47,16 @@ export interface NotificationInput {
 export async function createInAppNotification(input: NotificationInput): Promise<void> {
   try {
     const admin = getSupabaseAdmin();
-    await admin.from('notifications').insert({
+    const { error } = await admin.from('notifications').insert({
       recipient_id: input.recipientId,
       category: input.category ?? 'general',
       title: input.title,
       body: input.body,
       href: input.href ?? null,
     });
+    if (error) {
+      console.error('Failed to create notification:', error.message);
+    }
   } catch (err) {
     console.error('Failed to create notification:', err);
   }
@@ -59,14 +65,14 @@ export async function createInAppNotification(input: NotificationInput): Promise
 export async function notifyAllAdmins(input: Omit<NotificationInput, 'recipientId'>): Promise<void> {
   try {
     const admin = getSupabaseAdmin();
-    const { data: admins } = await admin
+    const { data: admins, error: queryErr } = await admin
       .from('profiles')
       .select('id')
       .eq('role', 'admin')
       .eq('is_active', true);
 
-    if (!admins?.length) return;
-    await admin.from('notifications').insert(
+    if (queryErr || !admins?.length) return;
+    const { error } = await admin.from('notifications').insert(
       admins.map((a) => ({
         recipient_id: a.id,
         category: input.category ?? 'general',
@@ -75,6 +81,9 @@ export async function notifyAllAdmins(input: Omit<NotificationInput, 'recipientI
         href: input.href ?? null,
       }))
     );
+    if (error) {
+      console.error('Failed to notify admins:', error.message);
+    }
   } catch (err) {
     console.error('Failed to notify admins:', err);
   }
@@ -92,7 +101,7 @@ export interface QueueEmailInput {
 export async function enqueueTransactionalEmail(input: QueueEmailInput): Promise<void> {
   try {
     const admin = getSupabaseAdmin();
-    await admin.from('email_outbox').insert({
+    const { error } = await admin.from('email_outbox').insert({
       to_email: input.toEmail,
       template: input.template,
       subject: input.subject,
@@ -100,6 +109,9 @@ export async function enqueueTransactionalEmail(input: QueueEmailInput): Promise
       entity_type: input.entityType ?? null,
       entity_id: input.entityId ?? null,
     });
+    if (error) {
+      console.error('Failed to enqueue transactional email:', error.message);
+    }
   } catch (err) {
     console.error('Failed to enqueue transactional email:', err);
   }
