@@ -525,20 +525,22 @@ export async function startLoopbackServices(options = {}) {
   }
 
   function verifyJwtToken(rawToken) {
-    if (!rawToken || typeof rawToken !== 'string') return null;
-    const parts = rawToken.split('.');
-    if (parts.length !== 3) return null;
     try {
-      const signingInput = `${parts[0]}.${parts[1]}`;
-      const sig = base64UrlDecode(parts[2]);
+      const tokenStr = typeof rawToken === 'string' ? rawToken : '';
+      const parts = tokenStr.split('.');
+      const headerB64 = parts[0] || '';
+      const payloadB64 = parts[1] || '';
+      const sigB64 = parts[2] || '';
+      const signingInput = `${headerB64}.${payloadB64}`;
+      const sig = base64UrlDecode(sigB64);
       const ok = crypto.verify(
         'sha256',
         Buffer.from(signingInput, 'utf8'),
         { key: publicKey, dsaEncoding: 'ieee-p1363' },
         sig
       );
-      if (!ok) return null;
-      const payload = JSON.parse(base64UrlDecode(parts[1]).toString('utf8'));
+      if (!ok || parts.length !== 3) return null;
+      const payload = JSON.parse(base64UrlDecode(payloadB64).toString('utf8'));
       if (typeof payload.exp === 'number' && payload.exp < Math.floor(Date.now() / 1000)) {
         return null;
       }
@@ -550,25 +552,32 @@ export async function startLoopbackServices(options = {}) {
     }
   }
 
+  function isServiceRoleKey(candidate) {
+    if (typeof candidate !== 'string') return false;
+    const expected = Buffer.from(LOOPBACK_SECRETS.secretKey, 'utf8');
+    const actual = Buffer.from(candidate, 'utf8');
+    if (actual.length !== expected.length) return false;
+    return crypto.timingSafeEqual(actual, expected);
+  }
+
   function resolveDbSession(req) {
-    const apiKey = req.headers['apikey'] || '';
-    const authHeader = req.headers['authorization'] || '';
+    const apiKey = typeof req.headers['apikey'] === 'string' ? req.headers['apikey'] : '';
+    const authHeader =
+      typeof req.headers['authorization'] === 'string' ? req.headers['authorization'] : '';
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
 
-    if (apiKey === LOOPBACK_SECRETS.secretKey || bearer === LOOPBACK_SECRETS.secretKey) {
-      return { role: 'service_role' };
+    const claims = verifyJwtToken(bearer);
+    if (claims?.sub) {
+      return {
+        role: 'authenticated',
+        userId: claims.sub,
+        email: claims.email,
+        aal: claims.aal || 'aal1',
+        appRole: claims.app_metadata?.role || null,
+      };
     }
-    if (bearer && bearer !== LOOPBACK_SECRETS.publishableKey) {
-      const claims = verifyJwtToken(bearer);
-      if (claims?.sub) {
-        return {
-          role: 'authenticated',
-          userId: claims.sub,
-          email: claims.email,
-          aal: claims.aal || 'aal1',
-          appRole: claims.app_metadata?.role || null,
-        };
-      }
+    if (isServiceRoleKey(apiKey) || isServiceRoleKey(bearer)) {
+      return { role: 'service_role' };
     }
     return { role: 'anon' };
   }
@@ -695,19 +704,24 @@ export async function startLoopbackServices(options = {}) {
     if (!rows || rows.length === 0) return [];
     const { columns, relations } = parseSelectItems(selectRaw);
 
-    const projectedRows = rows.map((row) => {
+    const rowMaps = rows.map((row) => {
+      const entryMap = new Map();
       if (columns.includes('*') || columns.length === 0) {
-        return { ...row };
+        for (const [k, v] of Object.entries(row)) {
+          entryMap.set(k, v);
+        }
+        return entryMap;
       }
-      const out = {};
       for (const colSpec of columns) {
         if (typeof colSpec === 'string') {
-          if (colSpec in row) out[colSpec] = row[colSpec];
+          if (Object.prototype.hasOwnProperty.call(row, colSpec)) {
+            entryMap.set(colSpec, row[colSpec]);
+          }
         } else if (colSpec && typeof colSpec === 'object') {
-          out[colSpec.alias] = row[colSpec.col];
+          entryMap.set(String(colSpec.alias), row[colSpec.col]);
         }
       }
-      return out;
+      return entryMap;
     });
 
     for (const rel of relations) {
@@ -747,8 +761,10 @@ export async function startLoopbackServices(options = {}) {
         }
         rows.forEach((rawRow, idx) => {
           const fkVal = rawRow[outgoing.source_column];
-          projectedRows[idx][rel.alias] =
-            fkVal == null ? null : (targetByKey.get(String(fkVal)) ?? null);
+          rowMaps[idx].set(
+            String(rel.alias),
+            fkVal == null ? null : (targetByKey.get(String(fkVal)) ?? null)
+          );
         });
         continue;
       }
@@ -799,12 +815,12 @@ export async function startLoopbackServices(options = {}) {
         }
         rows.forEach((rawRow, idx) => {
           const key = String(rawRow[incoming.target_column]);
-          projectedRows[idx][rel.alias] = grouped.get(key) ?? [];
+          rowMaps[idx].set(String(rel.alias), grouped.get(key) ?? []);
         });
       }
     }
 
-    return projectedRows;
+    return rowMaps.map((m) => Object.fromEntries(m));
   }
 
   // Supabase HTTP Server (GoTrue + PostgREST + Test Control)
