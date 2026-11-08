@@ -1,13 +1,14 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
+  PORTFOLIO_ITEMS,
   SERVICE_CATALOG,
   SERVICE_PILLARS,
   SITE,
+  type PortfolioCaseStudy,
   type ServiceCatalogItem,
   type ServicePackageSeed,
   type ServicePillarKey,
 } from '@/lib/content/site';
-import type { PortfolioCaseStudy } from '@/components/portfolio-showcase';
 
 export interface ResumeItemRecord {
   id: string;
@@ -270,9 +271,17 @@ export async function getPublicPortfolioItems(options?: {
     }
 
     const { data, error } = await query;
-    if (error || !data) return [];
+    const fallbackMapped = PORTFOLIO_ITEMS.map((item, idx) => ({
+      ...item,
+      dbId: item.id,
+      slug: item.id,
+      isPublished: true,
+      isFeatured: idx < 6,
+      sortOrder: (idx + 1) * 10,
+    }));
+    if (error || !data || data.length === 0) return fallbackMapped;
 
-    return data.map((row) => ({
+    const dbMapped = data.map((row) => ({
       dbId: row.id,
       id: row.slug,
       slug: row.slug,
@@ -294,8 +303,23 @@ export async function getPublicPortfolioItems(options?: {
       isFeatured: Boolean(row.is_featured),
       sortOrder: row.sort_order ?? 0,
     }));
+
+    if (options?.includeUnpublished) {
+      return dbMapped;
+    }
+
+    const existingSlugs = new Set(dbMapped.map((item) => item.slug));
+    const additionalItems = fallbackMapped.filter((item) => !existingSlugs.has(item.slug));
+    return [...dbMapped, ...additionalItems];
   } catch {
-    return [];
+    return PORTFOLIO_ITEMS.map((item, idx) => ({
+      ...item,
+      dbId: item.id,
+      slug: item.id,
+      isPublished: true,
+      isFeatured: idx < 6,
+      sortOrder: (idx + 1) * 10,
+    }));
   }
 }
 
@@ -521,7 +545,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
       'Restored permanently deleted Google Drive files and a lost Word document from OneDrive.',
       'Provided technical and cybersecurity support, from proxy and fingerprint consulting to e-commerce and website tasks.',
     ],
-    verification_url: 'https://www.upwork.com/freelancers/redwancse',
+    verification_url: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
     badge_label: null,
     sort_order: 10,
     is_visible: true,

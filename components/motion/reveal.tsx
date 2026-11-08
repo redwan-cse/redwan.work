@@ -143,10 +143,12 @@ export function InteractiveCard({
   children,
   className,
   enableTilt = true,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   enableTilt?: boolean;
+  id?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
@@ -184,6 +186,7 @@ export function InteractiveCard({
 
   return (
     <motion.div
+      id={id}
       ref={ref}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}

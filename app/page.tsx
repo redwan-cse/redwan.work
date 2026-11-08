@@ -89,7 +89,7 @@ export default async function Home() {
     getApprovedClientReviews(),
   ]);
   const pillars = Object.values(SERVICE_PILLARS);
-  const featuredStudies = portfolioItems.slice(0, 4);
+  const featuredStudies = portfolioItems.slice(0, 6);
 
   return (
     <MarketingFrame>

@@ -119,7 +119,11 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
   if(existsInProfiles === false){
    const regParams = new URLSearchParams({email});
    if(next) regParams.set('next', next);
-   redirect(`/register?${regParams.toString()}`);
+   return {
+    error:'Sign-in blocked: no active account was found for this email. Please create a client account first to continue.',
+    linkHref:`/register?${regParams.toString()}`,
+    linkText:'Create a client account first',
+   };
   }
   if(existsInProfiles === true){
    const resetParams = new URLSearchParams({mode:'forgot',email});
@@ -250,7 +254,28 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
 }
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
+ const next=safeRelativePath(formData.get('next'));
  if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
+ let existsInProfiles: boolean | null = null;
+ try {
+  const {data:existing} = await getSupabaseAdmin()
+   .from('profiles')
+   .select('id')
+   .eq('email', email)
+   .maybeSingle();
+  existsInProfiles = Boolean(existing?.id);
+ } catch {
+  existsInProfiles = null;
+ }
+ if(existsInProfiles === false){
+  const regParams = new URLSearchParams({email});
+  if(next) regParams.set('next', next);
+  return {
+   error:'Sign-in link blocked: no active account was found for this email. Please create a client account first to continue.',
+   linkHref:`/register?${regParams.toString()}`,
+   linkText:'Create a client account first',
+  };
+ }
  const origin=credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
  // Preserve the documented token-hash flow; /login does not exchange PKCE codes.
  // Supabase's Site URL and Magic Link template must also match docs/auth/README.md.

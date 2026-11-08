@@ -63,7 +63,7 @@ export const SITE = {
     twitter: 'https://twitter.com/redwancse',
     facebook: 'https://facebook.com/redwancse',
     instagram: 'https://instagram.com/redwancse',
-    upwork: 'https://www.upwork.com/freelancers/redwancse',
+    upwork: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
     fiverr: 'https://www.fiverr.com/redwancse',
   },
 } as const;
@@ -631,3 +631,415 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
 ];
 
 export type SiteConfig = typeof SITE;
+
+export interface PortfolioCaseStudy {
+  id: string;
+  code: string;
+  pillar: ServicePillarKey;
+  pillarLabel: string;
+  title: string;
+  clientSector: string;
+  year: string;
+  headlineMetric: string;
+  summary: string;
+  challenge: string;
+  approach: string[];
+  outcomes: string[];
+  stack: string[];
+  relatedServiceSlug: string;
+  externalUrl?: string;
+}
+
+export const PORTFOLIO_ITEMS: PortfolioCaseStudy[] = [
+  {
+    id: 'vapt-fintech-api',
+    code: 'CS-101',
+    pillar: 'cybersecurity',
+    pillarLabel: 'Cybersecurity & Offensive Security',
+    title: 'Web, REST API & Network Penetration Testing (VAPT)',
+    clientSector: 'FinTech, SaaS & Upwork International Clients',
+    year: '2024–2026',
+    headlineMetric: 'OWASP Top 10 & API Security VAPT · 5.0★ Verified Upwork Security Tester',
+    summary:
+      'Black-box and grey-box OWASP Top 10, API Security, and Kali Linux network assessments covering authorization boundaries, session tokens, and business-logic flaws.',
+    challenge:
+      'Clients required independent offensive security testing across web applications, REST APIs, and perimeter networks to uncover exploitable vulnerabilities before production release.',
+    approach: [
+      'Executed signed Rules of Engagement (RoE) and threat-modeled multi-role authorization boundaries.',
+      'Performed manual exploitation validation using Burp Suite Pro, Kali Linux, Nmap, OWASP ZAP, and Nuclei.',
+      'Delivered reproducible PoC evidence, CVSS v3.1 risk scoring, and developer remediation walkthroughs.',
+    ],
+    outcomes: [
+      'Critical and high-risk authentication and authorization flaws remediated and verified on re-test.',
+      'Maintained 100% Job Success and 5.0★ client feedback across Security Tester contracts on Upwork.',
+      'Delivered executive summaries alongside developer-ready patch blueprints.',
+    ],
+    stack: ['OWASP Top 10', 'API Security', 'Burp Suite Pro', 'Kali Linux', 'Nuclei', 'CVSS v3.1'],
+    relatedServiceSlug: 'vapt-penetration-testing',
+    externalUrl: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
+  },
+  {
+    id: 'enterprise-client-crm-portal',
+    code: 'CS-102',
+    pillar: 'development',
+    pillarLabel: 'Full-Stack Web & Custom Software',
+    title: 'Redwan.work — Full-Stack Client CRM, Order & Encrypted Vault Platform',
+    clientSector: 'B2B Security & Engineering Commerce · GitHub Public Repo',
+    year: '2026',
+    headlineMetric: 'Next.js 16 · Supabase PostgreSQL RLS · Cloudflare R2 Encrypted Vault',
+    summary:
+      'Architected a full-lifecycle client relationship and service commerce platform with proposals, digital RoE sign-off, versioned R2 deliverables, and multi-currency invoicing.',
+    challenge:
+      'Traditional freelance workflows fragment communication, deliverables, and invoices across disconnected tools. The goal was a single, high-trust portal for taking orders, delivering sensitive security reports, and managing retainers.',
+    approach: [
+      'Designed a 19-migration PostgreSQL schema with strict Row-Level Security (RLS) and atomic financial stored procedures.',
+      'Integrated a Cloudflare R2 Encrypted Deliverables Vault with SHA-256 checksums and audit-logged presigned downloads.',
+      'Built an Antigravity-inspired Tailwind CSS v4 + Motion interface with progressive 2-phase authentication and MFA enforcement.',
+    ],
+    outcomes: [
+      'Unified service catalog -> custom quote/order -> encrypted delivery -> invoice -> verified review pipeline.',
+      'Automated unit, database, Playwright E2E, WCAG accessibility, and SEO verification gates.',
+    ],
+    stack: ['Next.js 16', 'TypeScript', 'Tailwind CSS v4', 'Supabase RLS', 'Cloudflare R2', 'Resend'],
+    relatedServiceSlug: 'fullstack-web-development',
+    externalUrl: 'https://github.com/redwan-cse/redwan.work',
+  },
+  {
+    id: 'fast-cyber-defense-platform',
+    code: 'CS-103',
+    pillar: 'development',
+    pillarLabel: 'Full-Stack Web & Custom Software',
+    title: 'Fast Cyber Defense — Cybersecurity Agency Platform & Support Portal',
+    clientSector: 'Cybersecurity Agency · Organization Repository',
+    year: '2025–2026',
+    headlineMetric: 'Full-Stack Agency Ecosystem · Support Portal & Zcal Booking Integration',
+    summary:
+      'Engineered the web platform, client support center (fcd-support), and consultation scheduling architecture for Fast Cyber Defense (fastcyberdefense.com).',
+    challenge:
+      'Needed a fast, conversion-focused cybersecurity agency platform paired with a dedicated support portal, granular GDPR cookie preference controls, and sticky legal/compliance documentation.',
+    approach: [
+      'Developed the core agency platform and fcd-support application in TypeScript and Next.js with modular UI components.',
+      'Implemented interactive cookie consent management (Essential, Analytics, Marketing, Social) and sticky legal TOC navigation.',
+      'Integrated consultation scheduling (fcd_zcal) and automated technical blog publishing pipelines.',
+    ],
+    outcomes: [
+      'Launched a cohesive multi-repo agency ecosystem serving commercial cybersecurity and incident response clients.',
+      'Standardized reusable legal, consent, and support UI patterns across agency properties.',
+    ],
+    stack: ['TypeScript', 'Next.js', 'Tailwind CSS', 'Support Portal', 'Zcal Integration', 'Cloudflare'],
+    relatedServiceSlug: 'fullstack-web-development',
+    externalUrl: 'https://fastcyberdefense.com',
+  },
+  {
+    id: 'jnuits-fullstack-platform',
+    code: 'CS-104',
+    pillar: 'development',
+    pillarLabel: 'Full-Stack Web & Custom Software',
+    title: 'Jagannath University IT Society (jnuits.org.bd) — Portal & Admin Suite',
+    clientSector: 'Higher Education & Student Tech Organization · Collaborator Repo',
+    year: '2024–2026',
+    headlineMetric: 'Full-Stack Public Portal + Dedicated Admin Panel (admin.jnuits.org.bd)',
+    summary:
+      'Collaborated on the full-stack web platform, static fast-load portal, and administrative management system for the 200+ member Jagannath University IT Society.',
+    challenge:
+      'The university IT society needed a modern digital platform to manage member registrations, workshop announcements, committee directories, and certificate verification.',
+    approach: [
+      'Co-developed the TypeScript full-stack portal (jnuits/jnuits-full-stack & jnuits.org.bd) and decoupled admin dashboard (admin.jnuits.org.bd).',
+      'Built structured workflows for event publishing, member onboarding, and society announcements.',
+      'Deployed static edge assets (static.jnuits.org.bd) for high-traffic campus recruitment drives.',
+    ],
+    outcomes: [
+      'Streamlined digital operations and event registration for 200+ active student members and alumni.',
+      'Provided long-term maintainability and role-based administration for incoming executive committees.',
+    ],
+    stack: ['TypeScript', 'Next.js', 'Admin RBAC', 'REST API', 'Tailwind CSS', 'GitHub Actions'],
+    relatedServiceSlug: 'fullstack-web-development',
+    externalUrl: 'https://jnuits.org.bd',
+  },
+  {
+    id: 'sdgc-michigan-web-platform',
+    code: 'CS-105',
+    pillar: 'development',
+    pillarLabel: 'Full-Stack Web & Custom Software',
+    title: 'Saugatuck Douglas Garden Club (sdgc.redwan.work) — Web Platform',
+    clientSector: 'Non-Profit Community Organization · Michigan, USA (Collaborator Repo)',
+    year: '2026',
+    headlineMetric: 'Cross-Team TypeScript Web Platform · Accessible Community Portal',
+    summary:
+      'Collaborated on the design and full-stack TypeScript implementation of the Saugatuck Douglas Garden Club digital platform (sdgcmich/sdgc-web).',
+    challenge:
+      'The organization required a clean, accessible, mobile-responsive web presence to showcase community horticulture programs, seasonal events, and member resources.',
+    approach: [
+      'Engineered responsive pages and reusable component layouts in TypeScript and Next.js.',
+      'Calibrated typography, color contrast, and navigation clarity for diverse community demographics.',
+      'Configured staging and preview deployments at sdgc.redwan.work for rapid stakeholder review.',
+    ],
+    outcomes: [
+      'Delivered a fast, maintainable web platform simplifying event discovery and member engagement.',
+      'Established clean Git collaboration workflows across contributor branches.',
+    ],
+    stack: ['TypeScript', 'Next.js', 'Tailwind CSS', 'Responsive UI', 'Accessibility', 'Vercel'],
+    relatedServiceSlug: 'fullstack-web-development',
+    externalUrl: 'https://sdgc.redwan.work/',
+  },
+  {
+    id: 'openseo-selfhosted-cloud-stack',
+    code: 'CS-106',
+    pillar: 'cloud_devops',
+    pillarLabel: 'Cloud, DevOps & Linux Infrastructure',
+    title: 'OpenSEO — Self-Hosted SERP, Headless Chrome & AI Search Infrastructure',
+    clientSector: 'Search Intelligence & Cloud Engineering · GitHub Public & Infra Repos',
+    year: '2026',
+    headlineMetric: '100% Self-Hosted OpenSEO · Native SearXNG + Headless Chrome + DR Backups',
+    summary:
+      'Built an unmetered, self-hosted SEO and SERP analysis platform integrating native SearXNG metasearch, Headless Chrome JS rendering, local Manifest AI, and encrypted disaster-recovery snapshots.',
+    challenge:
+      'Commercial SEO APIs impose steep per-query metering and rate limits. The objective was a 100% self-hosted stack capable of JavaScript-rendered page audits and live SERP tracking.',
+    approach: [
+      'Developed the TypeScript OpenSEO application (redwan-cse/open-seo) paired with containerized infrastructure (seo-platform-infra).',
+      'Integrated native SearXNG SERP aggregation, Headless Chrome rendering for SPA audits, and local Manifest AI analysis.',
+      'Automated encrypted disaster-recovery snapshots (seo-platform-backups) for zero-data-loss restoration.',
+    ],
+    outcomes: [
+      'Eliminated third-party SERP API metering while supporting full JavaScript-rendered technical SEO crawls.',
+      'Established reproducible container orchestration and automated encrypted backup rotation.',
+    ],
+    stack: ['TypeScript', 'SearXNG', 'Headless Chrome', 'Docker', 'Manifest AI', 'Encrypted Backups'],
+    relatedServiceSlug: 'cloud-linux-devops',
+    externalUrl: 'https://github.com/redwan-cse/open-seo',
+  },
+  {
+    id: 'cybersecurity-sigma-falco-detection',
+    code: 'CS-107',
+    pillar: 'cybersecurity',
+    pillarLabel: 'Cybersecurity & Offensive Security',
+    title: 'Threat Models, Sigma Rules, eBPF/Falco Policies & Browser Hardening Kit',
+    clientSector: 'Detection Engineering & Blue Team Research · GitHub Open Source',
+    year: '2025–2026',
+    headlineMetric: 'Sigma Detection Rules · Falco eBPF Policies · Windows Browser Policy Kit',
+    summary:
+      'Published open-source detection engineering artifacts (redwan-cse/cybersecurity-research) and PowerShell enterprise browser hardening policies (windows-browser-policy-kit).',
+    challenge:
+      'Modern blue teams need actionable detection-as-code rules for Active Directory, cloud workloads, and container runtimes alongside repeatable endpoint browser lockdown.',
+    approach: [
+      'Authored threat models, Sigma detection rules, and eBPF-based Falco runtime security policies published alongside technical articles on blogs.redwan.work.',
+      'Developed PowerShell Group Policy/registry automation (windows-browser-policy-kit) for hardened Chrome, Edge, and Firefox enterprise configurations.',
+      'Validated exploit paths and privilege escalation mechanics in controlled lab environments (including CVE-2023-36003 XAML diagnostics PoC analysis).',
+    ],
+    outcomes: [
+      'Open-sourced reusable Sigma, Falco, and PowerShell hardening kits for defenders and sysadmins.',
+      'Bridged offensive exploit research with practical blue-team detection engineering.',
+    ],
+    stack: ['Sigma Rules', 'Falco / eBPF', 'Active Directory', 'PowerShell', 'Threat Modeling', 'Blue Team'],
+    relatedServiceSlug: 'siem-security-monitoring',
+    externalUrl: 'https://github.com/redwan-cse/cybersecurity-research',
+  },
+  {
+    id: 'wazuh-siem-soc',
+    code: 'CS-108',
+    pillar: 'cloud_devops',
+    pillarLabel: 'Cloud, DevOps & Linux Infrastructure',
+    title: 'Wazuh SIEM/XDR SOC Architecture & CIS Linux Fleet Hardening',
+    clientSector: 'Cloud Infrastructure & Enterprise Linux Environments',
+    year: '2024–2025',
+    headlineMetric: 'Centralized Wazuh SIEM · CIS Ubuntu/CentOS Hardening & Active Response',
+    summary:
+      'Centralized Wazuh SIEM deployment with custom MITRE ATT&CK detection rules, File Integrity Monitoring (FIM), CIS Linux hardening, and automated active-response IP blocking.',
+    challenge:
+      'Distributed Ubuntu, CentOS, and Windows workloads lacked centralized log visibility and standardized OS hardening against credential-stuffing and unauthorized file tampering.',
+    approach: [
+      'Provisioned hardened Wazuh Server, Indexer, and Dashboard nodes with TLS agent enrollment.',
+      'Authored custom XML decoders and rules mapped to MITRE ATT&CK techniques for SSH, Nginx, and web logs.',
+      'Applied CIS-aligned Linux administration and hardening practices documented in redwan-cse/centos9-sysadmin-handbook and delivered to BTCL enterprise billing staff.',
+    ],
+    outcomes: [
+      'Centralized real-time SSH, web, and file-integrity alerting in a unified Wazuh SOC dashboard.',
+      'Enabled automated active-response blocking and standardized Linux server hardening playbooks.',
+    ],
+    stack: ['Wazuh SIEM', 'Ubuntu / CentOS 9', 'MITRE ATT&CK', 'Docker', 'FIM', 'CIS Hardening'],
+    relatedServiceSlug: 'siem-security-monitoring',
+    externalUrl: 'https://github.com/redwan-cse/centos9-sysadmin-handbook',
+  },
+  {
+    id: 'osint-bec-fraud',
+    code: 'CS-109',
+    pillar: 'cybersecurity',
+    pillarLabel: 'Cybersecurity & Offensive Security',
+    title: 'Executive OSINT, Scam Network Attribution & BEC Fraud Investigation',
+    clientSector: 'Cross-Border Commerce & Upwork Investigation Clients',
+    year: '2024–2025',
+    headlineMetric: 'Scam Infrastructure Attribution · Lookalike Domain Takedown & DMARC Lockdown',
+    summary:
+      'Conducted deep open-source intelligence (OSINT) investigations into scam websites, impersonation networks, and invoice-redirection threats for international clients.',
+    challenge:
+      'Clients targeted by coordinated scammer networks and typosquatted domains needed forensic attribution, infrastructure mapping, and rapid email/brand containment.',
+    approach: [
+      'Performed passive DNS, WHOIS/RDAP history, TLS certificate transparency, and social/handle correlation across scam networks.',
+      'Enforced strict SPF, DKIM, and DMARC p=reject policies alongside account MFA and session lockdown.',
+      'Compiled structured abuse dossiers for domain registrars and hosting providers to neutralize malicious infrastructure.',
+    ],
+    outcomes: [
+      'Mapped scammer infrastructure and supported registrar abuse takedowns and executive OPSEC hardening.',
+      'Maintained curated actionable OSINT methodology resources (redwan-cse/OSINT_Collection).',
+    ],
+    stack: ['OSINT', 'Email Forensics', 'DMARC / DKIM / SPF', 'Threat Attribution', 'Maltego', 'DNS Recon'],
+    relatedServiceSlug: 'osint-threat-investigation',
+    externalUrl: 'https://github.com/redwan-cse/OSINT_Collection',
+  },
+  {
+    id: 'q1-ml-healthcare-security',
+    code: 'CS-110',
+    pillar: 'ai_ml',
+    pillarLabel: 'Applied AI/ML & Automation',
+    title: 'Published Q1 Scopus (Elsevier) & IEEE Machine Learning Pipelines',
+    clientSector: 'Academic & Applied AI Security Research',
+    year: '2024–2025',
+    headlineMetric: 'Published in Q1 Scopus (Elsevier IJCCE) & IEEE CS BDC Symposium',
+    summary:
+      'Peer-reviewed machine learning research and reproducible Python pipelines covering market-segmentation clustering and feature-engineered phishing URL detection (PhishDF).',
+    challenge:
+      'High-stakes security and behavioral models require strong generalization alongside interpretable feature extraction that practitioners can audit and reproduce.',
+    approach: [
+      'Engineered end-to-end preprocessing, feature extraction, and clustering/classification benchmarking in Python and Scikit-Learn.',
+      'Developed comprehensive URL lexical, host, and structural feature extraction pipelines for phishing detection (redwan-cse/PhishDF).',
+      'Published peer-reviewed papers in Elsevier International Journal of Cognitive Computing in Engineering (Q1 Scopus) and IEEE CS BDC Symposium 2024.',
+    ],
+    outcomes: [
+      'Two peer-reviewed publications with DOI/proceedings verification links on the public curriculum vitae.',
+      'Applied curriculum in hands-on Machine Learning with Python training for the EDGE Project at Jagannath University.',
+    ],
+    stack: ['Python', 'Scikit-Learn', 'PhishDF', 'Feature Engineering', 'K-Means Clustering', 'Elsevier Q1 / IEEE'],
+    relatedServiceSlug: 'ai-ml-automation',
+    externalUrl: 'https://doi.org/10.1016/j.ijcce.2024.04.002',
+  },
+  {
+    id: 'leadpilot-and-multi-cloud-bots',
+    code: 'CS-111',
+    pillar: 'ai_ml',
+    pillarLabel: 'Applied AI/ML & Automation',
+    title: 'LeadPilot-OS & Multi-Cloud Serverless Bot Automation Suite',
+    clientSector: 'Workflow Automation & Serverless Engineering · GitHub Repos',
+    year: '2025–2026',
+    headlineMetric: 'LeadPilot-OS (leads.redwan.work) · AWS Lambda + Cloudflare Workers + Python Bots',
+    summary:
+      'Designed LeadPilot-OS for B2B lead intelligence alongside multi-platform serverless automation systems across AWS Lambda, DynamoDB, Cloudflare Workers, Telegram, Discord, and Zoho Mail.',
+    challenge:
+      'Organizations and communities needed reliable, low-cost automation for lead triage, multi-platform support bots, and scheduled communication workflows without expensive recurring SaaS overhead.',
+    approach: [
+      'Architected LeadPilot-OS (redwan-cse/LeadPilot-OS) in TypeScript for structured lead pipeline management.',
+      'Built a multi-cloud bot automation system (multi-platform-bot-system) combining AWS Lambda, DynamoDB, Cloudflare Workers, and Google Cloud Storage within free-tier budgets.',
+      'Developed Python/Telethon and Discord automation agents (telegram-daily-checkin, zoho-mail-automation, stw-owner-bot) with SOCKS5 proxy support and jitter.',
+    ],
+    outcomes: [
+      'Automated repetitive lead, email, and community support operations across web, Telegram, and Discord.',
+      'Achieved resilient serverless execution with minimal cloud infrastructure cost.',
+    ],
+    stack: ['TypeScript', 'Python', 'AWS Lambda', 'Cloudflare Workers', 'DynamoDB', 'Telethon / Discord.py'],
+    relatedServiceSlug: 'ai-ml-automation',
+    externalUrl: 'https://github.com/redwan-cse/multi-platform-bot-system',
+  },
+  {
+    id: 'ledger-technical-publishing-stack',
+    code: 'CS-112',
+    pillar: 'development',
+    pillarLabel: 'Full-Stack Web & Custom Software',
+    title: 'Ledger Technical Publishing Theme, Django URL Service & Java eLibrary',
+    clientSector: 'Open-Source Web Engineering & Academic Systems · GitHub Public Repos',
+    year: '2023–2026',
+    headlineMetric: 'Ledger Blogger Theme (blogs.redwan.work) · Django & Java/MySQL Systems',
+    summary:
+      'Created the open-source Ledger technical publishing theme for blogs.redwan.work alongside a Python/Django URL shortener web app and a collaborative Java eLibrary platform.',
+    challenge:
+      'Technical security publications require fast typography, syntax highlighting, and clean structured metadata, while campus utilities needed lightweight URL routing and digital library cataloging.',
+    approach: [
+      'Engineered redwan-cse/ledger-blogger-theme in TypeScript and SCSS with dedicated CDN asset delivery (blog-assets).',
+      'Built redwan-cse/URL-Shortener-Django in Python/Django for clean link aliasing and redirect analytics.',
+      'Collaborated on JnU_eLibrary (redwan-cse/JnU_eLibrary) in Java for university digital book cataloging and lending workflows.',
+    ],
+    outcomes: [
+      'Powers technical cybersecurity research publishing at blogs.redwan.work under the PolyForm Noncommercial license.',
+      'Demonstrated full-stack versatility across TypeScript, Python/Django, and Java software engineering.',
+    ],
+    stack: ['TypeScript', 'Python / Django', 'Java', 'SCSS', 'Technical Publishing', 'PolyForm License'],
+    relatedServiceSlug: 'api-backend-engineering',
+    externalUrl: 'https://github.com/redwan-cse/ledger-blogger-theme',
+  },
+  {
+    id: 'wireguard-gateway-cloud-infra',
+    code: 'CS-113',
+    pillar: 'cloud_devops',
+    pillarLabel: 'Cloud, DevOps & Linux Infrastructure',
+    title: 'WireGuard VPS Gateway, Self-Hosted PaaS & DevOps Guidebook Architecture',
+    clientSector: 'Hybrid Cloud & Self-Hosted Infrastructure · GitHub Repos',
+    year: '2024–2026',
+    headlineMetric: 'Home-Origin + VPS WireGuard Gateway · Docker / Coolify & CI/CD Pipelines',
+    summary:
+      'Designed a "Home Origin + VPS Gateway" WireGuard dumb-pipe architecture (myHomeLab), automated server backup tracking (oc-backup), and a public DevOps Guidebook.',
+    challenge:
+      'Self-hosting production workloads behind residential or private origins requires secure ingress tunneling, static public IP termination, and automated configuration backups without exposing internal networks.',
+    approach: [
+      'Engineered Shell-automated WireGuard tunnel routing between public VPS gateways and private origin servers (redwan-cse/myHomeLab).',
+      'Configured automated server state and configuration backups (oc-backup) alongside Docker, Nginx, and Coolify PaaS deployments.',
+      'Authored structured cloud, CI/CD, and containerization documentation in redwan-cse/DevOpsGuidebook.',
+    ],
+    outcomes: [
+      'Enabled low-latency, DDoS-shielded public ingress to private self-hosted origins without opening local router ports.',
+      'Standardized repeatable Docker + GitHub Actions deployment workflows across personal and client servers.',
+    ],
+    stack: ['WireGuard VPN', 'Linux Shell', 'Docker', 'Nginx', 'GitHub Actions', 'Coolify / VPS'],
+    relatedServiceSlug: 'cloud-linux-devops',
+    externalUrl: 'https://redwan-cse.gitbook.io/devopsguidebook/',
+  },
+  {
+    id: 'emergency-breach-recovery',
+    code: 'CS-114',
+    pillar: 'tech_support',
+    pillarLabel: 'Executive Tech Support & Digital Recovery',
+    title: 'Compromised Account, Server & Cloud Drive Forensic Recovery (Upwork 5.0★)',
+    clientSector: 'Executive Tech Support & Cloud Data Recovery · Upwork Verified',
+    year: '2023–2026',
+    headlineMetric: '5.0★ Upwork Verified · Google Drive / OneDrive Recovery & Breach Cleanup',
+    summary:
+      'Recovered hacked business/social accounts, restored permanently deleted Google Drive and OneDrive files, migrated Google Workspace drives, and cleaned compromised web servers.',
+    challenge:
+      'Clients faced urgent business disruption from permanently purged Google Drive folders, lost OneDrive documents, hijacked online accounts, and malware-infected web hosts.',
+    approach: [
+      'Executed admin-console audit trail analysis and Google Workspace / OneDrive retention recovery workflows to restore permanently deleted business files.',
+      'Performed cross-tenant Google Drive migrations while preserving folder hierarchies and sharing permissions.',
+      'Isolated compromised web servers, eradicated persistence backdoors, rotated credentials, and enforced MFA and WAF rules.',
+    ],
+    outcomes: [
+      'Successfully recovered critical client Google Drive and OneDrive datasets with 5.0★ verified client reviews on Upwork ("You saved my life, high quality work").',
+      'Restored compromised accounts and servers to clean, MFA-protected operational state.',
+    ],
+    stack: ['Google Workspace Admin', 'Cloud Data Recovery', 'Incident Response', 'Account Recovery', 'OneDrive Forensics', 'WAF Hardening'],
+    relatedServiceSlug: 'executive-tech-support-recovery',
+    externalUrl: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
+  },
+  {
+    id: 'opsec-fingerprint-proxy-engineering',
+    code: 'CS-115',
+    pillar: 'tech_support',
+    pillarLabel: 'Executive Tech Support & Digital Recovery',
+    title: 'Anti-Bot Fingerprint Isolation, SOCKS5 Proxy & ISP Network Routing (Upwork 5.0★)',
+    clientSector: 'Privacy Engineering, Automation & Network Administration · Upwork Verified',
+    year: '2025–2026',
+    headlineMetric: '5.0★ Upwork Verified · Anti-Bot Fingerprint + SOCKS5 Proxifier + ISP Routing',
+    summary:
+      'Engineered anti-bot browser fingerprint isolation workflows, Windows SOCKS5 Proxifier playbooks, and cross-ISP Chromebook/network routing solutions for international clients.',
+    challenge:
+      'Clients required reliable browser fingerprint isolation for automated testing, leak-free SOCKS5 proxy routing on Windows, and complex cross-ISP Chromebook and network diagnostics.',
+    approach: [
+      'Configured anti-bot browser fingerprint profiles and task automation workflows (5.0★ Upwork contract: "Expert Needed for Fingerprint Changing with Anti-Bot Method").',
+      'Authored a reusable Windows Proxifier engineering playbook (redwan-cse/proxifier-windows-playbook) covering SOCKS5 rules, proxy DNS, WPAD exclusions, and IPv6 leak prevention.',
+      'Resolved cross-ISP network routing and Chromebook management challenges alongside Google Merchant and PDF automation deployments.',
+    ],
+    outcomes: [
+      'Delivered leak-free proxy routing and anti-bot automation with 5.0★ rating ("Great working with you, solved my problem in a timely manner").',
+      'Documented repeatable SOCKS5, DNS, and browser policy playbooks for rapid client deployment.',
+    ],
+    stack: ['Anti-Bot / Fingerprinting', 'SOCKS5 / Proxifier', 'Network Security', 'Chromebook Admin', 'DNS / IPv6 OPSEC', 'Task Automation'],
+    relatedServiceSlug: 'executive-tech-support-recovery',
+    externalUrl: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
+  },
+];

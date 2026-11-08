@@ -82,7 +82,7 @@ const socialLinks = [
   },
   {
     name: "Upwork",
-    href: "https://www.upwork.com/freelancers/redwancse",
+    href: "https://www.upwork.com/freelancers/~01bd47ab2da223b848",
     icon: Briefcase,
     color: "#6FDA44",
   },
