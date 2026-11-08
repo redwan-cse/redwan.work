@@ -1531,27 +1531,34 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
   const serviceItem =
     catalog.find((s) => s.slug === serviceSlug) ?? catalog[0];
 
-  const isCustomDeal = tier === 'custom';
-  const pkg = !isCustomDeal
+  const isUnselectedOrCustomTier = tier === 'custom' || tier === 'unselected';
+  const hasCustomBudget = Number.isFinite(customBudgetUsd) && customBudgetUsd > 0;
+  const isCustomDeal = isUnselectedOrCustomTier || hasCustomBudget;
+  const pkg = !isUnselectedOrCustomTier
     ? serviceItem.packages.find((p) => p.tier === tier) ?? serviceItem.packages[0]
     : undefined;
 
-  const finalPriceCents = isCustomDeal
-    ? Math.max(5000, Math.round((customBudgetUsd || serviceItem.startingPriceCents / 100) * 100))
-    : (pkg?.priceCents ?? serviceItem.startingPriceCents);
+  const finalPriceCents = hasCustomBudget
+    ? Math.max(2500, Math.round(customBudgetUsd * 100))
+    : isUnselectedOrCustomTier
+      ? Math.max(2500, serviceItem.startingPriceCents)
+      : (pkg?.priceCents ?? serviceItem.startingPriceCents);
 
-  const finalDeliveryDays = isCustomDeal
-    ? Math.max(1, Math.round(customDeliveryDays || 7))
-    : (pkg?.deliveryDays ?? 7);
+  const finalDeliveryDays =
+    Number.isFinite(customDeliveryDays) && customDeliveryDays > 0 && isCustomDeal
+      ? Math.max(1, Math.round(customDeliveryDays))
+      : (pkg?.deliveryDays ?? 7);
 
-  const depositPercent = isCustomDeal ? 50 : (pkg?.depositPercent ?? 50);
-  const revisionsIncluded = isCustomDeal ? 2 : (pkg?.revisions ?? 2);
+  const depositPercent = pkg?.depositPercent ?? 50;
+  const revisionsIncluded = pkg?.revisions ?? 2;
 
   const finalTitle =
     projectTitle ||
-    (isCustomDeal
-      ? `${serviceItem.title} — Custom Deal Offer ($${(finalPriceCents / 100).toLocaleString()})`
-      : `${serviceItem.title} — ${pkg?.name ?? 'Standard Package'}`);
+    (pkg && hasCustomBudget
+      ? `${serviceItem.title} — ${pkg.name} (Custom Offer $${(finalPriceCents / 100).toLocaleString()})`
+      : isUnselectedOrCustomTier
+        ? `${serviceItem.title} — Custom Scope & Requirements ($${(finalPriceCents / 100).toLocaleString()})`
+        : `${serviceItem.title} — ${pkg?.name ?? 'Standard Package'}`);
 
   const admin = getSupabaseAdmin();
 

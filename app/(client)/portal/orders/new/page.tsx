@@ -16,23 +16,43 @@ export const dynamic = 'force-dynamic';
 export default async function ClientPortalNewOrderPage({
   searchParams,
 }: {
-  searchParams: Promise<{ service?: string; tier?: string }>;
+  searchParams: Promise<{
+    service?: string;
+    tier?: string;
+    budget?: string;
+    requirements?: string;
+  }>;
 }) {
+  const params = await searchParams;
   const session = await getCurrentSession();
-  if (!session) redirect('/login?next=/portal/orders/new');
+  if (!session) {
+    const qs = new URLSearchParams();
+    if (params.service) qs.set('service', params.service);
+    if (params.tier) qs.set('tier', params.tier);
+    if (params.budget) qs.set('budget', params.budget);
+    if (params.requirements) qs.set('requirements', params.requirements);
+    const nextTarget = qs.toString()
+      ? `/portal/orders/new?${qs.toString()}`
+      : '/portal/orders/new';
+    redirect(`/login?next=${encodeURIComponent(nextTarget)}`);
+  }
 
-  const [params, catalog] = await Promise.all([
-    searchParams,
-    getPublicServicesCatalog(),
-  ]);
+  const catalog = await getPublicServicesCatalog();
 
   const selectedService =
     catalog.find((s) => s.slug === params.service) ?? catalog[0];
   const isCustomDefault = params.tier === 'custom';
+  const isUnselectedDefault = params.tier === 'unselected';
   const selectedPkg =
     selectedService?.packages.find((p) => p.tier === params.tier) ??
     selectedService?.packages.find((p) => p.popular) ??
     selectedService?.packages[0];
+
+  const defaultTierValue = isUnselectedDefault
+    ? 'unselected'
+    : isCustomDefault
+      ? 'custom'
+      : (selectedPkg?.tier ?? 'standard');
 
   return (
     <div className="space-y-8">
@@ -41,10 +61,10 @@ export default async function ClientPortalNewOrderPage({
           In-Portal Service Store &amp; Custom Deal Desk
         </Badge>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Order a Package or Offer a Custom Deal
+          Order a Package or Offer a Custom Budget
         </h1>
         <p className="text-sm text-muted-foreground">
-          Select any fixed-scope Starter, Standard, or Enterprise tier—or propose a custom deal with your own budget and delivery timeline to launch an interactive contract workspace immediately.
+          Choose a Starter, Standard, or Enterprise package (with its standard price or your own custom budget offer), or unselect packages and specify your custom requirements to launch an interactive contract workspace immediately.
         </p>
       </div>
 
@@ -81,44 +101,46 @@ export default async function ClientPortalNewOrderPage({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Package Tier or Custom Deal *</Label>
+                <Label className="text-xs">Package Selection (or Unselect for Custom Scope) *</Label>
                 <select
                   name="tier"
-                  defaultValue={isCustomDefault ? 'custom' : (selectedPkg?.tier ?? 'standard')}
+                  defaultValue={defaultTierValue}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
-                  <option value="starter">Starter Tier (Fixed Scope)</option>
+                  <option value="starter">Starter Tier (Basic / South Asian Freelancer Standard Rate)</option>
                   <option value="standard">Standard Tier (Most Popular)</option>
                   <option value="enterprise">Enterprise Tier (Full Production / Multi-Target)</option>
-                  <option value="custom">✨ Offer a Custom Deal (Propose Your Own Budget &amp; Timeline)</option>
+                  <option value="unselected">No Package Selected (Custom Scope &amp; Requirements Only)</option>
+                  <option value="custom">✨ Offer a Custom Deal (Custom Budget &amp; Timeline)</option>
                 </select>
               </div>
 
               <div className="rounded-xl border border-primary/25 bg-primary/5 p-3.5 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
                   <Handshake className="h-3.5 w-3.5" />
-                  Custom Deal Offer Fields (Used when &ldquo;Offer a Custom Deal&rdquo; is selected)
+                  Custom Budget Offer (Optional with any package or unselected tier)
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col justify-end gap-1">
-                    <Label className="mb-auto text-[11px]">Proposed Budget (USD)</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[11px]">Custom Budget Offer (USD)</Label>
                     <Input
                       name="custom_budget_usd"
                       type="number"
-                      min={50}
-                      step={10}
-                      placeholder="e.g. 950"
+                      min={25}
+                      step={5}
+                      defaultValue={params.budget ?? ''}
+                      placeholder="Leave blank for package price"
                       className="h-9 font-mono text-xs"
                     />
                   </div>
-                  <div className="flex flex-col justify-end gap-1">
-                    <Label className="mb-auto text-[11px]">Desired Delivery (Days)</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[11px]">Desired Delivery (Days)</Label>
                     <Input
                       name="custom_delivery_days"
                       type="number"
                       min={1}
                       max={365}
-                      placeholder="e.g. 10"
+                      placeholder="e.g. 7"
                       className="h-9 font-mono text-xs"
                     />
                   </div>
@@ -130,7 +152,7 @@ export default async function ClientPortalNewOrderPage({
                 <Input
                   name="title"
                   placeholder={
-                    selectedService && selectedPkg
+                    selectedService && selectedPkg && !isUnselectedDefault
                       ? `${selectedService.title} — ${selectedPkg.name}`
                       : 'Custom Engagement Title'
                   }
@@ -139,11 +161,12 @@ export default async function ClientPortalNewOrderPage({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Project Objectives, Scope &amp; Deal Terms</Label>
+                <Label className="text-xs">Project Requirements, Scope &amp; Deal Terms</Label>
                 <Textarea
                   name="description"
                   rows={3}
-                  placeholder="Describe your timeline, tech stack, deliverables, or custom deal terms..."
+                  defaultValue={params.requirements ?? ''}
+                  placeholder="Add your specific requirements, deliverables, timeline, or custom budget notes..."
                   className="text-xs"
                 />
               </div>

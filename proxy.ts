@@ -2,7 +2,7 @@ import { createServerClient, parseCookieHeader } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { shouldUseSecureCookies } from '@/lib/security/safe-redirect';
 
-const AUTH_PAGES = new Set(['/login', '/reset-password']);
+const AUTH_PAGES = new Set(['/login', '/register', '/reset-password']);
 
 function panelHome(role: unknown): string | null {
   return role === 'admin' ? '/admin' : role === 'client' ? '/portal' : null;
@@ -83,7 +83,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const validAdminClaim = role !== 'admin' || claims?.app_metadata?.role === 'admin';
 
     if (!home || !profile.data || profile.data.is_active !== true || !validAdminClaim) {
-      if (pathname === '/login') return withNoIndex(response);
+      if (pathname === '/login' || pathname === '/register') return withNoIndex(response);
       const logout = new URL('/api/auth/logout', request.url);
       let inactive = profile.data?.is_active === false;
       if (!profile.data) {
@@ -113,6 +113,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
     if (
       pathname === '/login' ||
+      pathname === '/register' ||
       (pathname.startsWith('/admin') && role !== 'admin') ||
       (pathname.startsWith('/portal') && role !== 'client')
     ) {
@@ -147,5 +148,5 @@ function unavailable(base: NextResponse): NextResponse {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/portal/:path*', '/login', '/reset-password', '/mfa', '/invite/:path*'],
+  matcher: ['/admin/:path*', '/portal/:path*', '/login', '/register', '/reset-password', '/mfa', '/invite/:path*'],
 };

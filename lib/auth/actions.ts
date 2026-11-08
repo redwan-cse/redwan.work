@@ -102,7 +102,36 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  const email=String(formData.get('email')??'').trim().toLowerCase(),password=String(formData.get('password')??''),next=safeRelativePath(formData.get('next'));
  if(!email||!password)return {error:'Email and password are required.'};
  if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return {error:'Invalid email or password.'};
+ const supabase=await createSupabaseServerClient();
+ const {error}=await supabase.auth.signInWithPassword({email,password});
+ if(error){
+  let existsInProfiles: boolean | null = null;
+  try {
+   const {data:existing} = await getSupabaseAdmin()
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+   existsInProfiles = Boolean(existing?.id);
+  } catch {
+   existsInProfiles = null;
+  }
+  if(existsInProfiles === false){
+   const regParams = new URLSearchParams({email});
+   if(next) regParams.set('next', next);
+   redirect(`/register?${regParams.toString()}`);
+  }
+  if(existsInProfiles === true){
+   const resetParams = new URLSearchParams({mode:'forgot',email});
+   if(next) resetParams.set('next', next);
+   return {
+    error:'Invalid password for this registered account. Please try again or reset your password.',
+    linkHref:`/login?${resetParams.toString()}`,
+    linkText:'Reset password',
+   };
+  }
+  return {error:'Invalid email or password.'};
+ }
  const destination=await resolveCurrentPanelDestination();
  if(!destination.ok)return {error:destination.error};
  const home=destination.home;
@@ -117,6 +146,107 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
   redirect(next);
  }
  redirect(home);
+}
+export async function checkClientEmailRegistrationAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
+ const email=String(formData.get('email')??'').trim().toLowerCase();
+ const next=safeRelativePath(formData.get('next'));
+ if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+  return {error:'Please enter a valid email address.'};
+ }
+ if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
+ let exists = false;
+ try {
+  const {data} = await getSupabaseAdmin()
+   .from('profiles')
+   .select('id')
+   .eq('email', email)
+   .maybeSingle();
+  exists = Boolean(data?.id);
+ } catch {
+  return {error:'Unable to verify account status right now. Please sign in or register directly.'};
+ }
+ const params = new URLSearchParams({email});
+ if(next) params.set('next', next);
+ if(exists){
+  params.set('registered', '1');
+  redirect(`/login?${params.toString()}`);
+ }
+ redirect(`/register?${params.toString()}`);
+}
+export async function registerClientAccountAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
+ const fullName=String(formData.get('full_name')??'').trim();
+ const email=String(formData.get('email')??'').trim().toLowerCase();
+ const companyName=String(formData.get('company_name')??'').trim();
+ const phone=String(formData.get('phone')??'').trim();
+ const next=safeRelativePath(formData.get('next'));
+ if(fullName.length<2)return {error:'Full name is required (at least 2 characters).'};
+ if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+  return {error:'Please enter a valid email address.'};
+ }
+ const checked=validatePasswordPair(formData);
+ if('error' in checked)return checked;
+ if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
+
+ const admin=getSupabaseAdmin();
+ const {data:existingProfile}=await admin
+  .from('profiles')
+  .select('id')
+  .eq('email',email)
+  .maybeSingle();
+
+ if(existingProfile?.id){
+  const loginParams=new URLSearchParams({email,registered:'1'});
+  if(next)loginParams.set('next',next);
+  redirect(`/login?${loginParams.toString()}`);
+ }
+
+ const created=await admin.auth.admin.createUser({
+  email,
+  password:checked.password,
+  email_confirm:true,
+  user_metadata:{full_name:fullName},
+  app_metadata:{role:'client'},
+ });
+
+ if(created.error||!created.data?.user?.id){
+  const msg=(created.error?.message??'').toLowerCase();
+  if(msg.includes('already')||msg.includes('registered')||msg.includes('exists')){
+   const loginParams=new URLSearchParams({email,registered:'1'});
+   if(next)loginParams.set('next',next);
+   redirect(`/login?${loginParams.toString()}`);
+  }
+  return {error:'Could not create your client account. Please try again.'};
+ }
+
+ const userId=created.data.user.id;
+ await admin.from('profiles').upsert({
+  id:userId,
+  email,
+  full_name:fullName,
+  phone:phone||null,
+  role:'client',
+  is_active:true,
+ });
+
+ await admin.from('client_profiles').upsert({
+  user_id:userId,
+  company_name:companyName||null,
+  onboarding_completed:Boolean(companyName),
+ });
+
+ const supabase=await createSupabaseServerClient();
+ const signedIn=await supabase.auth.signInWithPassword({email,password:checked.password});
+ if(signedIn.error){
+  const loginParams=new URLSearchParams({email,registered:'1'});
+  if(next)loginParams.set('next',next);
+  redirect(`/login?${loginParams.toString()}`);
+ }
+
+ if(next){
+  const pathname=decodeURIComponent(new URL(next,'https://return-path.invalid').pathname);
+  if(pathname.startsWith('/portal'))redirect(next);
+ }
+ redirect('/portal');
 }
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};

@@ -1,6 +1,7 @@
 import { Navigation } from '@/components/navigation';
 import { Footer } from '@/components/footer';
 import { WhatsAppButton } from '@/components/whatsapp-button';
+import { CookiePreferences } from '@/components/cookie-preferences';
 
 /** Public chrome is selected by server route composition, never by auth state. */
 export function MarketingFrame({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,7 @@ export function MarketingFrame({ children }: { children: React.ReactNode }) {
       </main>
       <Footer />
       <WhatsAppButton />
+      <CookiePreferences />
     </div>
   );
 }

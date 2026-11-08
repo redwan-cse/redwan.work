@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Globe, Lock, ShieldCheck } from 'lucide-react';
 import { SocialLinks } from '@/components/social-links';
+import { CookiePreferencesTrigger } from '@/components/cookie-preferences';
 import { SITE } from '@/lib/content/site';
 
 export function Footer() {
@@ -121,7 +122,7 @@ export function Footer() {
           <SocialLinks />
           <div className="mt-6 flex flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
             <p>© {new Date().getFullYear()} {SITE.name}. All rights reserved.</p>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <Link href="/privacy" className="hover:text-primary hover:underline">
                 Privacy Policy
               </Link>
@@ -129,6 +130,8 @@ export function Footer() {
               <Link href="/tos" className="hover:text-primary hover:underline">
                 Terms of Service &amp; RoE
               </Link>
+              <span aria-hidden="true">·</span>
+              <CookiePreferencesTrigger />
               <span aria-hidden="true">·</span>
               <Link href="/admin" className="hover:text-primary hover:underline">
                 Command Center

@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
           '/admin',
           '/portal',
           '/login',
+          '/register',
           '/mfa',
           '/reset-password',
           '/invite',

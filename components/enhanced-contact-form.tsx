@@ -46,8 +46,8 @@ import { formatBytes } from '@/lib/format';
 import { parseBudgetRange } from '@/lib/contact/intake-contract';
 import { useContactConsentPolicy } from '@/hooks/use-contact-consent-policy';
 import { CONSENT_STALE_MESSAGE, CONSENT_UNAVAILABLE_MESSAGE } from '@/lib/contact/consent-client';
-import { SERVICE_CATALOG, SERVICE_PILLARS, type ServiceCatalogItem } from '@/lib/content/site';
-import { Badge } from '@/components/ui/badge';
+import { SERVICE_CATALOG, type ServiceCatalogItem } from '@/lib/content/site';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
 /**
  * Contact intake: /api/contact validates consent, Turnstile and rate limits,
@@ -327,7 +327,7 @@ export default function EnhancedContactForm({
   const countryRef = React.useRef<HTMLButtonElement>(null);
   const whatsAppNumberRef = React.useRef<HTMLInputElement>(null);
   const timeZoneRef = React.useRef<HTMLButtonElement>(null);
-  const serviceTypeRef = React.useRef<HTMLDivElement>(null);
+  const serviceTypeRef = React.useRef<HTMLButtonElement>(null);
   const projectSummaryRef = React.useRef<HTMLTextAreaElement>(null);
   const urgencyRef = React.useRef<HTMLButtonElement>(null);
   const gdprConsentRef = React.useRef<HTMLButtonElement>(null);
@@ -370,20 +370,32 @@ export default function EnhancedContactForm({
       const matchedService = slugParam
         ? initialServices.find((s) => s.slug === slugParam)
         : undefined;
-      const tierLabelMap: Record<string, string> = {
-        custom: 'Offer a Custom Deal (Custom Budget & Scope)',
-        starter: 'Starter Package (Focused Scope)',
-        standard: 'Standard Package (Most Popular)',
-        enterprise: 'Enterprise Package (Multi-Target / Full Production)',
-        retainer: 'Monthly Advisory & Support Retainer',
-      };
-      if (matchedService || (tierParam && tierLabelMap[tierParam])) {
+
+      let resolvedTierValue = '';
+      if (matchedService && tierParam) {
+        const matchedPkg = matchedService.packages.find(
+          (p) => p.tier.toLowerCase() === tierParam.toLowerCase()
+        );
+        if (matchedPkg) {
+          const tierTitle =
+            matchedPkg.tier.charAt(0).toUpperCase() + matchedPkg.tier.slice(1);
+          resolvedTierValue = `${tierTitle}: ${matchedPkg.name} ($${(matchedPkg.priceCents / 100).toLocaleString()})`;
+        } else if (tierParam === 'custom') {
+          resolvedTierValue = 'Custom Offer (Custom Budget & Scope)';
+        }
+      } else if (tierParam === 'custom') {
+        resolvedTierValue = 'Custom Offer (Custom Budget & Scope)';
+      }
+
+      if (matchedService || resolvedTierValue) {
         setFormData((prev) => ({
           ...prev,
           serviceType: matchedService
-            ? Array.from(new Set([...prev.serviceType, matchedService.title]))
-            : prev.serviceType,
-          packageTier: (tierParam && tierLabelMap[tierParam]) || prev.packageTier,
+            ? [matchedService.title]
+            : prev.serviceType.length > 0
+              ? prev.serviceType
+              : ['Other'],
+          packageTier: resolvedTierValue || prev.packageTier,
         }));
       }
     }
@@ -583,16 +595,94 @@ export default function EnhancedContactForm({
     }
   };
 
-  const handleServiceTypeToggle = (service: string) => {
-    setFormData(prev => {
-      const currentServices = prev.serviceType;
-      const newServices = currentServices.includes(service)
-        ? currentServices.filter(s => s !== service)
-        : [...currentServices, service];
-      return { ...prev, serviceType: newServices };
+  const selectedProjectOption = formData.serviceType[0] || '';
+  const selectedCatalogService = initialServices.find(
+    (s) => s.title === selectedProjectOption
+  );
+
+  const availablePackageTierOptions = React.useMemo(() => {
+    if (selectedProjectOption === 'Query Only / General Consultation') {
+      return [
+        {
+          value: 'Query Only — No Package Required',
+          label: 'Query Only — No Package Required',
+        },
+        {
+          value: 'Custom Offer (Custom Budget & Scope)',
+          label: 'Custom Offer (Custom Budget & Scope)',
+        },
+      ];
+    }
+
+    if (selectedCatalogService && selectedCatalogService.packages.length > 0) {
+      const tiers = selectedCatalogService.packages.map((pkg) => {
+        const tierLabel = pkg.tier.charAt(0).toUpperCase() + pkg.tier.slice(1);
+        const value = `${tierLabel}: ${pkg.name} ($${(pkg.priceCents / 100).toLocaleString()})`;
+        return {
+          value,
+          label: `${tierLabel} — ${pkg.name} ($${(pkg.priceCents / 100).toLocaleString()} · ~${pkg.deliveryDays}d)`,
+        };
+      });
+      tiers.push({
+        value: 'Custom Offer (Custom Budget & Scope)',
+        label: 'Custom Offer (Propose Your Own Budget & Scope)',
+      });
+      return tiers;
+    }
+
+    return [
+      {
+        value: 'Starter Package (Focused Scope)',
+        label: 'Starter Package (Focused Scope)',
+      },
+      {
+        value: 'Standard Package (Most Popular)',
+        label: 'Standard Package (Most Popular)',
+      },
+      {
+        value: 'Enterprise Package (Multi-Target / Full Production)',
+        label: 'Enterprise Package (Multi-Target / Full Production)',
+      },
+      {
+        value: 'Custom Offer (Custom Budget & Scope)',
+        label: 'Custom Offer (Propose Your Own Budget & Scope)',
+      },
+    ];
+  }, [selectedProjectOption, selectedCatalogService]);
+
+  const handleProjectSelect = (value: string) => {
+    setFormData((prev) => {
+      const matched = initialServices.find((s) => s.title === value);
+      let nextTier = prev.packageTier;
+      if (value === 'Query Only / General Consultation') {
+        nextTier = 'Query Only — No Package Required';
+      } else if (matched && matched.packages.length > 0) {
+        const validValues = matched.packages.map((pkg) => {
+          const tierLabel = pkg.tier.charAt(0).toUpperCase() + pkg.tier.slice(1);
+          return `${tierLabel}: ${pkg.name} ($${(pkg.priceCents / 100).toLocaleString()})`;
+        });
+        validValues.push('Custom Offer (Custom Budget & Scope)');
+        if (!validValues.includes(nextTier)) {
+          const popularPkg =
+            matched.packages.find((p) => p.popular) ?? matched.packages[0];
+          const tierLabel =
+            popularPkg.tier.charAt(0).toUpperCase() + popularPkg.tier.slice(1);
+          nextTier = `${tierLabel}: ${popularPkg.name} ($${(popularPkg.priceCents / 100).toLocaleString()})`;
+        }
+      } else if (value === 'Other') {
+        nextTier = 'Custom Offer (Custom Budget & Scope)';
+      }
+
+      return {
+        ...prev,
+        serviceType: value ? [value] : [],
+        serviceTypeOther: value === 'Other' ? prev.serviceTypeOther : '',
+        packageTier: nextTier,
+      };
     });
+
     if (errors.serviceType) {
-      setErrors(prev => {
+      setErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors.serviceType;
         return newErrors;
@@ -1203,16 +1293,16 @@ export default function EnhancedContactForm({
           </div>
 
           {/* Contact Preferences */}
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid items-start gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="preferredContactMethod" className="mb-auto leading-snug">
+              <Label htmlFor="preferredContactMethod" className="leading-snug">
                 Preferred Contact Method <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Select 
                 value={formData.preferredContactMethod} 
                 onValueChange={(value) => handleInputChange('preferredContactMethod', value as 'Email' | 'WhatsApp' | 'Both' | '')}
               >
-                <SelectTrigger id="preferredContactMethod">
+                <SelectTrigger id="preferredContactMethod" className="h-10">
                   <SelectValue placeholder="Select method" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1227,7 +1317,7 @@ export default function EnhancedContactForm({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="bestTimeToContact" className="mb-auto leading-snug">
+              <Label htmlFor="bestTimeToContact" className="leading-snug">
                 Best Time to Contact <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               
@@ -1349,7 +1439,7 @@ export default function EnhancedContactForm({
                 
                 return hasTimeSelected ? (
                   // Show selected time when complete
-                  <p className="text-xs text-muted-foreground font-normal mt-1">
+                  <p className="text-xs text-muted-foreground font-normal">
                     Selected: {formData.bestTimeToContact}
                   </p>
                 ) : (
@@ -1362,7 +1452,7 @@ export default function EnhancedContactForm({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="preferredContactDate" className="mb-auto leading-snug">
+              <Label htmlFor="preferredContactDate" className="leading-snug">
                 Preferred Contact Date <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Popover open={isPreferredDateOpen} onOpenChange={setIsPreferredDateOpen}>
@@ -1371,7 +1461,7 @@ export default function EnhancedContactForm({
                     id="preferredContactDate"
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal",
+                      "h-10 w-full justify-start text-left font-normal",
                       !formData.preferredContactDate && "text-muted-foreground"
                     )}
                   >
@@ -1425,149 +1515,100 @@ export default function EnhancedContactForm({
             <h3 className="text-lg font-semibold">Project Details</h3>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label className="flex items-center gap-1 text-base font-semibold">
-                Select Service(s) Needed <span className="text-destructive">*</span>
+          <div className="grid items-start gap-6 md:grid-cols-2">
+            {/* 1st Dropdown: Project / Service Option */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="serviceSelect" className="leading-snug">
+                Project / Service Option <span className="text-destructive">*</span>
               </Label>
-              <span className="text-xs text-muted-foreground">
-                Choose one or more services from our 5 core pillars, or select &quot;Other&quot;
-              </span>
-            </div>
-
-            <div ref={serviceTypeRef} className="grid gap-3 sm:grid-cols-2">
-              {initialServices.map((service) => {
-                const isSelected = formData.serviceType.includes(service.title);
-                const pillarMeta = SERVICE_PILLARS[service.pillar];
-                return (
-                  <label
-                    key={service.slug}
-                    htmlFor={`service-${service.slug}`}
-                    className={cn(
-                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all",
-                      isSelected
-                        ? "border-primary bg-primary/8 shadow-2xs"
-                        : "border-border/80 bg-card/60 hover:border-primary/40 hover:bg-muted/30"
-                    )}
-                  >
-                    <Checkbox
-                      id={`service-${service.slug}`}
-                      checked={isSelected}
-                      onCheckedChange={() => handleServiceTypeToggle(service.title)}
-                      aria-invalid={!!errors.serviceType}
-                      className="mt-0.5"
-                    />
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex flex-wrap items-center justify-between gap-1.5">
-                        <Badge variant="secondary" className="font-mono text-[10px]">
-                          {pillarMeta?.shortLabel ?? service.pillarLabel}
-                        </Badge>
-                        <span className="font-mono text-[11px] font-semibold text-primary">
-                          From ${(service.startingPriceCents / 100).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="text-sm font-semibold leading-snug text-foreground">
-                        {service.title}
-                      </div>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">
-                        {service.tagline}
-                      </p>
-                      {service.packages && service.packages.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {service.packages.map((pkg) => (
-                            <span
-                              key={pkg.tier}
-                              className="rounded border border-border/70 bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                            >
-                              {pkg.tier.toUpperCase()}: ${(pkg.priceCents / 100).toLocaleString()}
-                            </span>
-                          ))}
-                          <span className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
-                            + Custom Deal
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
-
-              {/* Other / Custom Service Option */}
-              <label
-                htmlFor="service-Other"
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all sm:col-span-2",
-                  formData.serviceType.includes('Other')
-                    ? "border-primary bg-primary/8 shadow-2xs"
-                    : "border-dashed border-border/80 bg-card/40 hover:border-primary/40 hover:bg-muted/30"
-                )}
+              <Select
+                value={selectedProjectOption}
+                onValueChange={(value) => handleProjectSelect(value)}
               >
-                <Checkbox
-                  id="service-Other"
-                  checked={formData.serviceType.includes('Other')}
-                  onCheckedChange={() => handleServiceTypeToggle('Other')}
+                <SelectTrigger
+                  id="serviceSelect"
+                  ref={serviceTypeRef}
+                  className={cn(
+                    "h-10",
+                    errors.serviceType && "border-destructive focus:ring-destructive"
+                  )}
                   aria-invalid={!!errors.serviceType}
-                  className="mt-0.5"
-                />
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="text-sm font-semibold text-foreground">
-                    Other / Custom Service or Bespoke Consulting
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Need something not listed above (e.g., custom security training, architecture review, specialized development, or general tech support)? Select this option and describe below.
-                  </p>
-                </div>
-              </label>
+                >
+                  <SelectValue placeholder="Select project or service option" />
+                </SelectTrigger>
+                <SelectContent>
+                  {initialServices.map((service) => (
+                    <SelectItem key={service.slug} value={service.title}>
+                      {service.title} (From ${(service.startingPriceCents / 100).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="Other">
+                    Custom Project / Bespoke Service
+                  </SelectItem>
+                  <SelectItem value="Query Only / General Consultation">
+                    Query Only / General Consultation
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.serviceType ? (
+                <p className="text-xs text-destructive" role="alert">
+                  {errors.serviceType}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Choose a catalog service, Custom Project, or Query Only.
+                </p>
+              )}
             </div>
 
-            {errors.serviceType && (
-              <p className="text-sm text-destructive" role="alert">
-                {errors.serviceType}
-              </p>
-            )}
-
-            {/* Show additional text input when "Other" is selected */}
-            {formData.serviceType.includes('Other') && (
-              <div className="pt-1">
-                <Label htmlFor="serviceTypeOther" className="mb-1.5 block text-xs font-medium">
-                  Specify Custom Service Needed <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="serviceTypeOther"
-                  type="text"
-                  value={formData.serviceTypeOther}
-                  onChange={(e) => handleInputChange('serviceTypeOther', e.target.value)}
-                  placeholder="Describe the custom service, technical support, or consulting you need..."
-                  className="text-sm"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="flex flex-col justify-end gap-2">
-              <Label htmlFor="packageTier" className="mb-auto leading-snug">
-                Preferred Package / Engagement Tier <span className="text-muted-foreground text-xs">(optional)</span>
+            {/* 2nd Dropdown: Available Package Tier for Selected Project + Custom Option */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="packageTier" className="leading-snug">
+                Package / Engagement Tier <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Select
                 value={formData.packageTier}
                 onValueChange={(value) => handleInputChange('packageTier', value)}
               >
-                <SelectTrigger id="packageTier">
-                  <SelectValue placeholder="Select tier or engagement model" />
+                <SelectTrigger id="packageTier" className="h-10">
+                  <SelectValue placeholder="Select tier or custom option" />
                 </SelectTrigger>
                 <SelectContent>
-                  {packageTierOptions.map((opt) => (
+                  {availablePackageTierOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                {selectedCatalogService
+                  ? `Showing all tiers for ${selectedCatalogService.title} + Custom Offer.`
+                  : 'Select a package tier or propose a custom budget offer.'}
+              </p>
             </div>
+          </div>
 
-            <div className="flex flex-col justify-end gap-2">
-              <Label htmlFor="company" className="mb-auto leading-snug">
+          {/* Show additional text input when "Other" (Custom Project) is selected */}
+          {formData.serviceType.includes('Other') && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="serviceTypeOther" className="leading-snug">
+                Specify Custom Service Needed <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="serviceTypeOther"
+                type="text"
+                value={formData.serviceTypeOther}
+                onChange={(e) => handleInputChange('serviceTypeOther', e.target.value)}
+                placeholder="Describe the custom service, technical support, or consulting you need..."
+                className="text-sm"
+              />
+            </div>
+          )}
+
+          <div className="grid items-start gap-6 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="company" className="leading-snug">
                 Company / Organization <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
@@ -1578,8 +1619,8 @@ export default function EnhancedContactForm({
               />
             </div>
 
-            <div className="flex flex-col justify-end gap-2">
-              <Label htmlFor="projectUrl" className="mb-auto leading-snug">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="projectUrl" className="leading-snug">
                 Target Domain, Repo or Project URL <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
@@ -1595,15 +1636,16 @@ export default function EnhancedContactForm({
             <Label htmlFor="projectSummary" className="flex items-center gap-1">
               Project Summary / Message <span className="text-destructive">*</span>
             </Label>
-            <Textarea
+            <RichTextEditor
               id="projectSummary"
-              ref={projectSummaryRef}
+              textareaRef={projectSummaryRef}
               value={formData.projectSummary}
-              onChange={(e) => handleInputChange('projectSummary', e.target.value)}
-              placeholder="Please describe your security needs, challenges, or questions in detail..."
-              className={`min-h-[150px] ${errors.projectSummary ? "border-destructive focus-visible:ring-destructive" : ""}`}
+              onChange={(val) => handleInputChange('projectSummary', val)}
+              placeholder="Please describe your project scope, security requirements, or questions in detail. Use the toolbar above for headings, bold, italic, bullet points, or tables..."
+              minHeightClassName="min-h-[160px]"
               aria-invalid={!!errors.projectSummary}
               aria-describedby={errors.projectSummary ? "projectSummary-error" : undefined}
+              disabled={isSubmitting}
             />
             {errors.projectSummary && (
               <p id="projectSummary-error" className="text-sm text-destructive" role="alert">
@@ -1611,7 +1653,7 @@ export default function EnhancedContactForm({
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Minimum 30 characters. Be specific about your requirements.
+              Minimum 30 characters. Supports rich formatting (Bold, Italic, Headings, Lists, Tables, Code).
             </p>
           </div>
 
@@ -1693,9 +1735,9 @@ export default function EnhancedContactForm({
             </Label>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid items-start gap-6 md:grid-cols-3">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="urgency" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+              <Label htmlFor="urgency" className="flex flex-wrap items-center gap-1 leading-snug">
                 <Clock className="h-4 w-4 shrink-0" />
                 <span>Urgency</span> <span className="text-destructive">*</span>
               </Label>
@@ -1703,7 +1745,7 @@ export default function EnhancedContactForm({
                 <SelectTrigger
                   id="urgency"
                   ref={urgencyRef}
-                  className={errors.urgency ? "border-destructive focus:ring-destructive" : ""}
+                  className={cn("h-10", errors.urgency && "border-destructive focus:ring-destructive")}
                   aria-invalid={!!errors.urgency}
                   aria-describedby={errors.urgency ? "urgency-error" : undefined}
                 >
@@ -1725,7 +1767,7 @@ export default function EnhancedContactForm({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="budgetMin" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+              <Label htmlFor="budgetMin" className="flex flex-wrap items-center gap-1 leading-snug">
                 <DollarSign className="h-4 w-4 shrink-0" />
                 <span>Budget Min (USD)</span> <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
@@ -1735,7 +1777,7 @@ export default function EnhancedContactForm({
                 inputMode="numeric"
                 value={formData.budgetMin}
                 onChange={(e) => handleInputChange('budgetMin', e.target.value)}
-                placeholder="1000"
+                placeholder="100"
                 aria-invalid={!!errors.budgetMin}
                 aria-describedby={errors.budgetMin ? "budgetMin-error" : undefined}
                 className={errors.budgetMin ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -1748,7 +1790,7 @@ export default function EnhancedContactForm({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="budgetMax" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+              <Label htmlFor="budgetMax" className="flex flex-wrap items-center gap-1 leading-snug">
                 <DollarSign className="h-4 w-4 shrink-0" />
                 <span>Budget Max (USD)</span> <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
@@ -1758,7 +1800,7 @@ export default function EnhancedContactForm({
                 inputMode="numeric"
                 value={formData.budgetMax}
                 onChange={(e) => handleInputChange('budgetMax', e.target.value)}
-                placeholder="5000"
+                placeholder="1500"
                 aria-invalid={!!errors.budgetMax}
                 aria-describedby={errors.budgetMax ? "budgetMax-error" : undefined}
                 className={errors.budgetMax ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -1794,7 +1836,7 @@ export default function EnhancedContactForm({
                 handleInputChange('howDidYouFindMeReferral', '');
               }
             }}>
-              <SelectTrigger id="howDidYouFindMe">
+              <SelectTrigger id="howDidYouFindMe" className="h-10">
                 <SelectValue placeholder="Select an option" />
               </SelectTrigger>
               <SelectContent>
@@ -1836,25 +1878,25 @@ export default function EnhancedContactForm({
           </div>
         </div>
 
-        {policyLoading && <p role="status" className="text-sm text-muted-foreground">Loading the current Data & Privacy policy...</p>}
+        {policyLoading && <p role="status" className="text-sm text-muted-foreground">Loading privacy policy verification...</p>}
         {policyError && (
           <div className="space-y-2">
             <p role="alert" className="text-sm text-destructive">{policyError}</p>
             <Button type="button" variant="outline" disabled={policyLoading || isSubmitting} onClick={() => {
               setFormData(previous => ({ ...previous, gdprConsent: false }));
               void refreshPolicy();
-            }}>Load privacy policy again</Button>
+            }}>Retry privacy verification</Button>
           </div>
         )}
-        {/* GDPR Consent */}
-        <div className="flex items-start space-x-3 p-4 border-2 rounded-lg bg-muted/30">
+        {/* GDPR & Privacy Policy Consent */}
+        <div className="flex items-start space-x-3 p-4 border rounded-lg bg-muted/30">
           <Checkbox
             id="gdprConsent"
             ref={gdprConsentRef}
             checked={formData.gdprConsent}
             onCheckedChange={(checked) => handleInputChange('gdprConsent', checked === true)}
             disabled={!consentPolicy || policyLoading || isSubmitting}
-            aria-describedby={errors.gdprConsent ? 'gdprConsent-error consent-policy-text' : 'consent-policy-text'}
+            aria-describedby={errors.gdprConsent ? 'gdprConsent-error' : undefined}
             aria-invalid={!!errors.gdprConsent}
             className={`mt-0.5 ${errors.gdprConsent ? "border-destructive" : ""}`}
           />
@@ -1864,10 +1906,15 @@ export default function EnhancedContactForm({
               className="text-sm font-medium cursor-pointer leading-normal inline"
             >
               <span className="text-destructive">*</span>{" "}
-              {consentPolicy ? consentPolicy.checkbox : <>I agree that my data will be used to review and respond to my request, as described on the{" "}
-              <Link href="/privacy" className="text-primary underline underline-offset-4" target="_blank" rel="noopener noreferrer">
-                Data & Privacy page
-              </Link>.</>}
+              I agree that my information and any attached files will be processed to review and respond to my request in accordance with our{" "}
+              <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                Privacy Policy
+              </Link>{" "}
+              and{" "}
+              <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                Terms of Service
+              </Link>
+              .
             </Label>
             {errors.gdprConsent && (
               <p id="gdprConsent-error" className="text-xs text-destructive mt-2" role="alert">
@@ -1876,27 +1923,6 @@ export default function EnhancedContactForm({
             )}
           </div>
         </div>
-
-        {consentPolicy && (
-          <details id="consent-policy-text" open={!!errors.gdprConsent} className="rounded-lg border p-4">
-            <summary className="cursor-pointer text-sm font-medium">Data & Privacy policy for this request ({consentPolicy.version})</summary>
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">{consentPolicy.policyText}</p>
-          </details>
-        )}
-        {/* Privacy Notice */}
-        <Card className="bg-muted/50 border-primary/20">
-          <CardContent className="p-4">
-            {consentPolicy ? <p className="whitespace-pre-wrap text-sm text-muted-foreground">{consentPolicy.privacyNotice}</p> : <>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">Privacy & Data Usage:</span> We only use your details to respond to your inquiry and provide the services you request. 
-              Your information is stored securely and never shared with third parties.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Note: Technical data (device type, browser info) is collected automatically for security and spam prevention purposes only.
-            </p>
-            </>}
-          </CardContent>
-        </Card>
 
         {/* Submission Status Messages */}
         {submitSuccess && submittedTicketId && (
