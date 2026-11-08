@@ -57,9 +57,14 @@ export function Navigation() {
               priority
             />
           </div>
-          <span className="whitespace-nowrap text-base font-bold tracking-tight text-foreground sm:text-xl">
-            Md. Redwan Ahmed
-          </span>
+          <div className="flex min-w-0 flex-col">
+            <span className="whitespace-nowrap text-sm font-bold tracking-tight text-foreground sm:text-lg">
+              Md. Redwan Ahmed
+            </span>
+            <span className="truncate text-[11px] text-muted-foreground sm:text-xs">
+              Security · Full-Stack · Cloud · AI
+            </span>
+          </div>
         </Link>
 
         {/* Desktop Navigation with Antigravity Shared-Layout Pill */}
