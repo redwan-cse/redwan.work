@@ -43,3 +43,13 @@ For full architectural details, schema summaries, environment configurations, an
 ## For Developers & AI Agents
 
 When building or scaffolding new features in this repository, check [`AGENTS.md`](./AGENTS.md) and [`docs/LEGACY_ARCHITECTURE.md`](./docs/LEGACY_ARCHITECTURE.md). You can inspect and reference existing schemas, utilities, components, and patterns directly from `J:\DevDrive\redwan.work_old`.
+
+---
+
+## Security & Licensing
+
+- **Security Policy:** See [`SECURITY.md`](./SECURITY.md) for supported versions, scope, and private vulnerability reporting instructions.
+- **Dual-Part Licensing:**
+  - [`LICENSE`](./LICENSE) — Master dual-part license covering code snippet reuse and personal biodata reservation.
+  - [`LICENSE-CODE.md`](./LICENSE-CODE.md) — Permits reusing and adapting code snippets, UI components, and technical utilities in your own applications with attribution.
+  - [`LICENSE-BIODATA.md`](./LICENSE-BIODATA.md) — **All Rights Reserved** on all personal biodata, CV/resume (`public/resume.pdf`), academic publications, certifications, photographs (`public/portrait.png`, `public/redwan.jpg`), and brand identity of **Md. Redwan Ahmed**. Copying or impersonating personal biodata is strictly prohibited.

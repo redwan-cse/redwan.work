@@ -1,0 +1,59 @@
+Dual-Part Portfolio License (Code Snippet Reuse + All Rights Reserved Personal Biodata)
+
+Copyright (c) 2025-2026 Md. Redwan Ahmed. All Rights Reserved for Personal Biodata, Identity, and Media.
+
+===============================================================================
+PLAIN-ENGLISH SUMMARY
+===============================================================================
+
+- This repository powers the personal portfolio and Client CRM of Md. Redwan Ahmed (https://redwan.work).
+- CODE SNIPPETS ALLOWED: You ARE permitted to copy, adapt, and use application code snippets, UI components, hooks, database schema patterns, and utility modules in your own applications (with attribution).
+- PERSONAL BIODATA STRICTLY PROHIBITED: You are NOT allowed to copy, reuse, redistribute, or impersonate my personal biodata, curriculum vitae / resume, academic publications, professional certifications, personal photographs, brand identity, or case-study narratives.
+
+===============================================================================
+PART I — SOURCE CODE & CODE SNIPPETS LICENSE
+===============================================================================
+
+Subject to the restrictions in Part II below, Md. Redwan Ahmed ("the Author") grants you a worldwide, royalty-free, non-exclusive license to use, copy, modify, and integrate code snippets, UI components, utility functions, test harnesses, and database schema patterns from the software source code of this repository (`app/`, `components/`, `lib/`, `scripts/`, `supabase/migrations/`, `tests/`) into your own software applications, subject to the following conditions:
+
+1. Attribution Requirement:
+   When reusing substantial code snippets or modules in source files, include a brief attribution comment:
+   // Adapted from redwan.work by Md. Redwan Ahmed (https://github.com/redwan-cse/redwan.work)
+
+2. No Direct Portfolio Impersonation or Re-Skinning:
+   You may use code snippets and architectural components inside your own applications, but you may not deploy a direct clone of this entire portfolio website presented as your own personal portfolio without replacing the layout/content and removing all personal biodata of the Author.
+
+3. No Warranty ("AS IS"):
+   THE SOFTWARE AND CODE SNIPPETS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+===============================================================================
+PART II — PERSONAL BIODATA, IDENTITY, CREDENTIALS & MEDIA (ALL RIGHTS RESERVED)
+===============================================================================
+
+All personal, biographical, academic, professional, and branding materials contained in this repository — whether in static files, source files, or database seed/migration scripts — remain the exclusive property of Md. Redwan Ahmed. All rights are reserved.
+
+Protected Personal Biodata & Assets include, without limitation:
+  - Personal name, biography, executive summaries, contact details, and social profiles (`lib/content/site.ts`, `supabase/seed.sql`, `supabase/migrations/0010_cms_portfolio_resume_and_custom_deals.sql`, `supabase/migrations/0015_reconcile_verified_identity_and_portfolio.sql`)
+  - Curriculum Vitae and Resume documents (`public/resume.pdf`, `components/printable-resume.tsx`, `components/resume-view.tsx`)
+  - Academic degrees, research publications, DOIs, and Q1 Scopus / IEEE citations
+  - Professional certifications, credential IDs, and work history
+  - Personal photographs, portraits, avatars, favicons, and logos (`public/portrait.png`, `public/redwan.jpg`, `app/icon0.svg`, `app/icon1.png`, `app/apple-icon.png`)
+  - Portfolio case studies, service descriptions, and client engagement materials
+
+With respect to all items in Part II, you may NOT:
+  - Copy, reproduce, republish, upload, post, transmit, or distribute the Author's personal biodata, resume, credentials, or photographs in any medium
+  - Present the Author's work experience, certifications, publications, or case studies as your own
+  - Use the Author's name, likeness, domain (`redwan.work`), or business identity (`Fast Cyber Defense`) for impersonation, endorsement, or commercial representation
+  - Scrape or harvest personal contact details or biodata for commercial, marketing, or AI-training datasets
+
+===============================================================================
+CONTACT & PERMISSIONS
+===============================================================================
+
+For licensing inquiries or written permissions beyond the scope of this license:
+
+Md. Redwan Ahmed
+Website:  https://redwan.work
+GitHub:   https://github.com/redwan-cse/redwan.work
+LinkedIn: https://linkedin.com/in/redwancse
+Email:    contact@redwan.work
