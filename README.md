@@ -49,7 +49,5 @@ When building or scaffolding new features in this repository, check [`AGENTS.md`
 ## Security & Licensing
 
 - **Security Policy:** See [`SECURITY.md`](./SECURITY.md) for supported versions, scope, and private vulnerability reporting instructions.
-- **Dual-Part Licensing:**
-  - [`LICENSE`](./LICENSE) — Master dual-part license covering code snippet reuse and personal biodata reservation.
-  - [`LICENSE-CODE.md`](./LICENSE-CODE.md) — Permits reusing and adapting code snippets, UI components, and technical utilities in your own applications with attribution.
-  - [`LICENSE-BIODATA.md`](./LICENSE-BIODATA.md) — **All Rights Reserved** on all personal biodata, CV/resume (`public/resume.pdf`), academic publications, certifications, photographs (`public/portrait.png`, `public/redwan.jpg`), and brand identity of **Md. Redwan Ahmed**. Copying or impersonating personal biodata is strictly prohibited.
+- **License & Attribution:** Source-available under the [PolyForm Noncommercial License 1.0.0](./LICENSE). Noncommercial reuse of code snippets, educational study, and contribution are permitted.
+  > **Note:** Personal biodata, curriculum vitae / resume (`public/resume.pdf`), academic credentials, research publications, certifications, photographs (`public/portrait.png`, `public/redwan.jpg`), case studies, and branding belonging to **Md. Redwan Ahmed** and **Fast Cyber Defense** are proprietary (`All Rights Reserved`) and must be removed or replaced before any deployment or publication.
