@@ -14,7 +14,6 @@ import {
   Menu,
   PenTool,
   Phone,
-  ShieldCheck,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -58,20 +57,9 @@ export function Navigation() {
               priority
             />
           </div>
-          <div className="flex min-w-0 flex-col">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
-                Md. Redwan Ahmed
-              </span>
-              <span className="hidden shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary xl:inline-flex">
-                <ShieldCheck className="h-3 w-3" />
-                CCEP · CNSP · CAP
-              </span>
-            </div>
-            <span className="truncate text-[11px] text-muted-foreground sm:text-xs">
-              Security · Full-Stack · Cloud · AI
-            </span>
-          </div>
+          <span className="whitespace-nowrap text-base font-bold tracking-tight text-foreground sm:text-xl">
+            Md. Redwan Ahmed
+          </span>
         </Link>
 
         {/* Desktop Navigation with Antigravity Shared-Layout Pill */}
