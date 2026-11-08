@@ -10,11 +10,9 @@ import {
   Download,
   ExternalLink,
   FileText,
-  Github,
   Globe,
   GraduationCap,
   Heart,
-  Linkedin,
   Mail,
   MapPin,
   Phone,
@@ -22,6 +20,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import { GithubIcon, LinkedinIcon } from '@/components/social-links';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -260,7 +259,7 @@ export function ResumeView({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 hover:text-primary"
                     >
-                      <Linkedin className="h-4 w-4 text-primary" />
+                      <LinkedinIcon className="h-4 w-4 text-primary" />
                       <span>LinkedIn</span>
                     </a>
                     <a
@@ -269,7 +268,7 @@ export function ResumeView({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 hover:text-primary"
                     >
-                      <Github className="h-4 w-4 text-primary" />
+                      <GithubIcon className="h-4 w-4 text-primary" />
                       <span>GitHub</span>
                     </a>
                   </div>
