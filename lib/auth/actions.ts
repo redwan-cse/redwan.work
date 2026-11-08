@@ -602,3 +602,22 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
 export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
  if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};const destination=await resolveCurrentPanelDestination();if(!destination.ok)return {ok:false,error:destination.error};return {ok:true,home:destination.home};
 }
+
+export async function resetUnverifiedMfaFactorsAction(): Promise<{ ok: boolean }> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const sub = typeof claimsData?.claims?.sub === 'string' ? claimsData.claims.sub : null;
+    if (!sub) return { ok: false };
+
+    const admin = getSupabaseAdmin();
+    const { data: factorsData } = await admin.auth.admin.mfa.listFactors({ userId: sub });
+    const unverified = (factorsData?.factors ?? []).filter((f) => f.status !== 'verified');
+    for (const factor of unverified) {
+      await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: sub });
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
