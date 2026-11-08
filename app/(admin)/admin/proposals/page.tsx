@@ -45,9 +45,9 @@ export default async function AdminProposalsPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-12">
+      <div className="grid gap-8 xl:grid-cols-12">
         {/* Proposal Builder Form */}
-        <Card className="lg:col-span-5">
+        <Card className="xl:col-span-5">
           <CardHeader>
             <CardTitle className="text-lg">Create &amp; Send Proposal</CardTitle>
             <CardDescription>
@@ -99,11 +99,11 @@ export default async function AdminProposalsPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Service Pillar</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Service Pillar</Label>
                   <select
                     name="pillar"
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
                   >
                     <option value="cybersecurity">Cybersecurity &amp; VAPT</option>
                     <option value="development">Full-Stack Dev</option>
@@ -112,8 +112,8 @@ export default async function AdminProposalsPage() {
                     <option value="tech_support">Tech Support &amp; Recovery</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Total Price (USD) *</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Total Price (USD) *</Label>
                   <Input
                     name="total_usd"
                     type="number"
@@ -124,8 +124,8 @@ export default async function AdminProposalsPage() {
                     className="h-9 font-mono text-xs"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Deposit %</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Deposit %</Label>
                   <Input
                     name="deposit_percent"
                     type="number"
@@ -191,7 +191,7 @@ export default async function AdminProposalsPage() {
         </Card>
 
         {/* Sent Proposals List */}
-        <Card className="lg:col-span-7">
+        <Card className="xl:col-span-7">
           <CardHeader>
             <CardTitle className="text-lg">Issued Proposals</CardTitle>
             <CardDescription>Track client views, acceptance, and converted orders.</CardDescription>

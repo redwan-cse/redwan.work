@@ -100,26 +100,26 @@ export default async function ClientPortalNewOrderPage({
                   Custom Deal Offer Fields (Used when &ldquo;Offer a Custom Deal&rdquo; is selected)
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-[11px]">Proposed Budget (USD)</Label>
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Proposed Budget (USD)</Label>
                     <Input
                       name="custom_budget_usd"
                       type="number"
                       min={50}
                       step={10}
                       placeholder="e.g. 950"
-                      className="h-8 font-mono text-xs"
+                      className="h-9 font-mono text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px]">Desired Delivery (Days)</Label>
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Desired Delivery (Days)</Label>
                     <Input
                       name="custom_delivery_days"
                       type="number"
                       min={1}
                       max={365}
                       placeholder="e.g. 10"
-                      className="h-8 font-mono text-xs"
+                      className="h-9 font-mono text-xs"
                     />
                   </div>
                 </div>

@@ -253,7 +253,7 @@ export default async function Home() {
                     : 150;
 
                 return (
-                  <ScrollReveal key={pillar.key} delay={index * 0.05}>
+                  <ScrollReveal key={pillar.key} delay={index * 0.05} className="h-full">
                     <InteractiveCard className="flex h-full flex-col justify-between p-6">
                       <div>
                         <div className="mb-4 flex items-center justify-between gap-2">
@@ -302,7 +302,7 @@ export default async function Home() {
               })}
 
               {/* 6th Card: Custom High-Value Engagement / Retainer Card */}
-              <ScrollReveal delay={0.25}>
+              <ScrollReveal delay={0.25} className="h-full">
                 <InteractiveCard className="flex h-full flex-col justify-between border-primary/35 bg-primary/5 p-6">
                   <div>
                     <div className="mb-4 flex items-center justify-between gap-2">
@@ -371,7 +371,7 @@ export default async function Home() {
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               {ORDER_LIFECYCLE_STEPS.map((item, idx) => (
-                <ScrollReveal key={item.step} delay={idx * 0.06}>
+                <ScrollReveal key={item.step} delay={idx * 0.06} className="h-full">
                   <div className="relative flex h-full flex-col rounded-xl border border-border/80 bg-card p-6 shadow-2xs">
                     <div className="mb-4 flex items-center justify-between">
                       <span className="font-mono text-2xl font-bold text-primary">
@@ -414,7 +414,7 @@ export default async function Home() {
 
             <div className="grid gap-6 md:grid-cols-2">
               {featuredStudies.map((study, index) => (
-                <ScrollReveal key={study.code} delay={index * 0.06}>
+                <ScrollReveal key={study.code} delay={index * 0.06} className="h-full">
                   <InteractiveCard className="flex h-full flex-col justify-between p-6">
                     <div>
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

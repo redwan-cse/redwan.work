@@ -89,26 +89,26 @@ export default async function AdminResumeCmsPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <div className="space-y-1">
                 <Label className="text-xs">Cal.com URL</Label>
-                <Input name="cal_com_url" defaultValue={settings.cal_com_url} className="h-8 font-mono text-xs" />
+                <Input name="cal_com_url" defaultValue={settings.cal_com_url} className="h-9 font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">LinkedIn URL</Label>
-                <Input name="linkedin_url" defaultValue={settings.linkedin_url} className="h-8 font-mono text-xs" />
+                <Input name="linkedin_url" defaultValue={settings.linkedin_url} className="h-9 font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">GitHub URL</Label>
-                <Input name="github_url" defaultValue={settings.github_url} className="h-8 font-mono text-xs" />
+                <Input name="github_url" defaultValue={settings.github_url} className="h-9 font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Company Name</Label>
-                <Input name="company_name" defaultValue={settings.company_name} className="h-8 text-xs" />
+                <Input name="company_name" defaultValue={settings.company_name} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Company URL</Label>
-                <Input name="company_url" defaultValue={settings.company_url} className="h-8 font-mono text-xs" />
+                <Input name="company_url" defaultValue={settings.company_url} className="h-9 font-mono text-xs" />
               </div>
             </div>
 
@@ -218,21 +218,21 @@ export default async function AdminResumeCmsPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div className="space-y-1">
-                <Label className="text-xs">Organization / Issuer / Journal</Label>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex flex-col justify-end gap-1">
+                <Label className="mb-auto text-xs">Organization / Issuer / Journal</Label>
                 <Input name="organization" placeholder="EC-Council / Elsevier" className="h-9 text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Role Type / Location</Label>
+              <div className="flex flex-col justify-end gap-1">
+                <Label className="mb-auto text-xs">Role Type / Location</Label>
                 <Input name="role_type" placeholder="Full-Time / Remote" className="h-9 text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Badge Label (e.g. Q1 Scopus / Validated)</Label>
+              <div className="flex flex-col justify-end gap-1">
+                <Label className="mb-auto text-xs">Badge Label (e.g. Q1 Scopus / Validated)</Label>
                 <Input name="badge_label" placeholder="Active & Verified" className="h-9 font-mono text-xs" />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Verification / DOI Link</Label>
+              <div className="flex flex-col justify-end gap-1">
+                <Label className="mb-auto text-xs">Verification / DOI Link</Label>
                 <Input name="verification_url" placeholder="https://..." className="h-9 font-mono text-xs" />
               </div>
             </div>
@@ -242,10 +242,10 @@ export default async function AdminResumeCmsPage() {
               <Textarea name="highlights" rows={3} className="font-mono text-xs" />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
                 <Label className="text-xs">Sort Order</Label>
-                <Input name="sort_order" type="number" defaultValue={10} className="h-8 w-20 font-mono text-xs" />
+                <Input name="sort_order" type="number" defaultValue={10} className="h-9 w-20 font-mono text-xs" />
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" name="is_visible" defaultChecked className="h-4 w-4 rounded" />
                   Visible
@@ -281,7 +281,7 @@ export default async function AdminResumeCmsPage() {
                     type="submit"
                     variant="ghost"
                     size="sm"
-                    className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10"
+                    className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
@@ -291,13 +291,13 @@ export default async function AdminResumeCmsPage() {
 
               <form action={upsertResumeItemAction} className="space-y-3">
                 <input type="hidden" name="id" value={item.id} />
-                <div className="grid gap-2.5 sm:grid-cols-4">
-                  <div>
-                    <Label className="text-[11px]">Section</Label>
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Section</Label>
                     <select
                       name="section"
                       defaultValue={item.section}
-                      className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >
                       <option value="experience">experience</option>
                       <option value="vendor_certification">vendor_certification</option>
@@ -307,36 +307,36 @@ export default async function AdminResumeCmsPage() {
                       <option value="education">education</option>
                     </select>
                   </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[11px]">Title</Label>
-                    <Input name="title" defaultValue={item.title} required className="h-8 text-xs" />
+                  <div className="flex flex-col justify-end gap-1 lg:col-span-2">
+                    <Label className="mb-auto text-[11px]">Title</Label>
+                    <Input name="title" defaultValue={item.title} required className="h-9 text-xs" />
                   </div>
-                  <div>
-                    <Label className="text-[11px]">Period</Label>
-                    <Input name="period" defaultValue={item.period ?? ''} className="h-8 font-mono text-xs" />
-                  </div>
-                </div>
-
-                <div className="grid gap-2.5 sm:grid-cols-4">
-                  <div>
-                    <Label className="text-[11px]">Organization / Issuer</Label>
-                    <Input name="organization" defaultValue={item.organization ?? ''} className="h-8 text-xs" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Role Type</Label>
-                    <Input name="role_type" defaultValue={item.role_type ?? ''} className="h-8 text-xs" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Badge Label</Label>
-                    <Input name="badge_label" defaultValue={item.badge_label ?? ''} className="h-8 font-mono text-xs" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Verification / DOI URL</Label>
-                    <Input name="verification_url" defaultValue={item.verification_url ?? ''} className="h-8 font-mono text-xs" />
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Period</Label>
+                    <Input name="period" defaultValue={item.period ?? ''} className="h-9 font-mono text-xs" />
                   </div>
                 </div>
 
-                <div>
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Organization / Issuer</Label>
+                    <Input name="organization" defaultValue={item.organization ?? ''} className="h-9 text-xs" />
+                  </div>
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Role Type</Label>
+                    <Input name="role_type" defaultValue={item.role_type ?? ''} className="h-9 text-xs" />
+                  </div>
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Badge Label</Label>
+                    <Input name="badge_label" defaultValue={item.badge_label ?? ''} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="flex flex-col justify-end gap-1">
+                    <Label className="mb-auto text-[11px]">Verification / DOI URL</Label>
+                    <Input name="verification_url" defaultValue={item.verification_url ?? ''} className="h-9 font-mono text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
                   <Label className="text-[11px]">Highlights / Bullets (One per line)</Label>
                   <Textarea
                     name="highlights"
@@ -346,14 +346,14 @@ export default async function AdminResumeCmsPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-3 text-xs">
                     <Label className="text-[11px]">Sort Order</Label>
                     <Input
                       name="sort_order"
                       type="number"
                       defaultValue={item.sort_order}
-                      className="h-7 w-16 font-mono text-xs"
+                      className="h-9 w-16 font-mono text-xs"
                     />
                     <label className="flex items-center gap-1.5">
                       <input
@@ -365,7 +365,7 @@ export default async function AdminResumeCmsPage() {
                       Visible
                     </label>
                   </div>
-                  <Button type="submit" size="sm" variant="outline" className="h-7 gap-1 text-xs">
+                  <Button type="submit" size="sm" variant="outline" className="h-9 gap-1 text-xs">
                     <Save className="h-3 w-3" />
                     Update Entry
                   </Button>

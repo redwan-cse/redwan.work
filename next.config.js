@@ -21,7 +21,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self' data:",
-  `connect-src 'self' https://challenges.cloudflare.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
+  `connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
   'frame-src https://challenges.cloudflare.com',
   "worker-src 'self' blob:",
   "object-src 'none'",

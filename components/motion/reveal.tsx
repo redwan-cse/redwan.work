@@ -208,7 +208,7 @@ export function InteractiveCard({
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{ background: borderHighlight }}
       />
-      <div className="relative z-10 h-full">{children}</div>
+      <div className="relative z-10 flex h-full w-full flex-col justify-between">{children}</div>
     </motion.div>
   );
 }

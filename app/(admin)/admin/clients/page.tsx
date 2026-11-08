@@ -37,9 +37,9 @@ export default async function AdminClientsPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-12">
+      <div className="grid gap-8 xl:grid-cols-12">
         {/* Invite Client Card */}
-        <Card className="lg:col-span-4">
+        <Card className="xl:col-span-5">
           <CardHeader>
             <CardTitle className="text-lg">Invite Client to Portal</CardTitle>
             <CardDescription>
@@ -92,7 +92,7 @@ export default async function AdminClientsPage() {
         </Card>
 
         {/* Client Roster */}
-        <Card className="lg:col-span-8">
+        <Card className="xl:col-span-7">
           <CardHeader>
             <CardTitle className="text-lg">Client Roster</CardTitle>
             <CardDescription>Click any client to inspect LTV, notes, orders, and follow-up schedule.</CardDescription>
@@ -108,7 +108,7 @@ export default async function AdminClientsPage() {
                       className="flex flex-wrap items-center justify-between gap-4 py-4"
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Link
                             href={`/admin/clients/${client.id}`}
                             className="text-base font-bold hover:text-primary"
@@ -118,6 +118,11 @@ export default async function AdminClientsPage() {
                           <Badge variant="outline" className="font-mono text-[10px] uppercase">
                             {crm?.tier ?? 'standard'}
                           </Badge>
+                          {client.is_active === false && (
+                            <Badge variant="destructive" className="font-mono text-[10px]">
+                              DEACTIVATED
+                            </Badge>
+                          )}
                         </div>
                         <div className="font-mono text-xs text-muted-foreground">
                           {client.email}{' '}

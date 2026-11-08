@@ -95,13 +95,13 @@ export function R2FileUploader({
   return (
     <div className="space-y-2">
       <Label className="text-xs font-medium">{label}</Label>
-      <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
         <UploadCloud className="h-5 w-5 shrink-0 text-primary" />
         <Input
           type="file"
           onChange={handleFileChange}
           disabled={status === 'uploading'}
-          className="h-9 cursor-pointer text-xs"
+          className="h-9 min-w-[200px] flex-1 cursor-pointer text-xs"
         />
       </div>
 

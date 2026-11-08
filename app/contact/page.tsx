@@ -162,7 +162,7 @@ export default async function Contact() {
 
           {/* 3 Interactive Quick Channels */}
           <div className="grid gap-6 md:grid-cols-3">
-            <ScrollReveal>
+            <ScrollReveal className="h-full">
               <InteractiveCard className="flex h-full flex-col justify-between p-6">
                 <div>
                   <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
@@ -188,7 +188,7 @@ export default async function Contact() {
               </InteractiveCard>
             </ScrollReveal>
 
-            <ScrollReveal delay={0.05}>
+            <ScrollReveal delay={0.05} className="h-full">
               <InteractiveCard className="flex h-full flex-col justify-between p-6">
                 <div>
                   <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
@@ -214,7 +214,7 @@ export default async function Contact() {
               </InteractiveCard>
             </ScrollReveal>
 
-            <ScrollReveal delay={0.1}>
+            <ScrollReveal delay={0.1} className="h-full">
               <InteractiveCard className="flex h-full flex-col justify-between border-primary/35 bg-primary/5 p-6">
                 <div>
                   <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">

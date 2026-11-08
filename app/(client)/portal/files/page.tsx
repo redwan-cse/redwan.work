@@ -69,12 +69,12 @@ export default async function ClientVaultFilesPage() {
                       </Link>
                     )}
                   </div>
-                  <div className="font-mono text-sm font-bold">{file.filename}</div>
+                  <div className="break-all font-mono text-sm font-bold">{file.filename}</div>
                   <div className="flex flex-wrap gap-4 font-mono text-[11px] text-muted-foreground">
                     <span>{(file.size_bytes / 1024).toFixed(1)} KB</span>
                     <span>{file.mime_type}</span>
                     {file.sha256_checksum && (
-                      <span>SHA-256: {file.sha256_checksum.slice(0, 20)}…</span>
+                      <span className="break-all">SHA-256: {file.sha256_checksum.slice(0, 20)}…</span>
                     )}
                     <span>Uploaded {new Date(file.created_at).toLocaleDateString()}</span>
                   </div>

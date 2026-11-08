@@ -4,6 +4,8 @@ import { ArrowLeft, CheckCircle2, Download, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { PrintInvoiceButton } from '@/components/panel/print-invoice-button';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { reviewPaymentProofAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
@@ -43,23 +45,26 @@ export default async function AdminInvoiceDetailPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link
-          href="/admin/invoices"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Invoices Ledger
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="font-mono text-3xl font-bold">{invoice.code}</h1>
-          <Badge variant="outline" className="font-mono text-xs uppercase">
-            {invoice.status}
-          </Badge>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Link
+            href="/admin/invoices"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary print:hidden"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Invoices Ledger
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="font-mono text-3xl font-bold">{invoice.code}</h1>
+            <Badge variant="outline" className="font-mono text-xs uppercase">
+              {invoice.status}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Billed to {client?.full_name || client?.email} ({client?.email})
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Billed to {client?.full_name || client?.email} ({client?.email})
-        </p>
+        <PrintInvoiceButton />
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
@@ -151,34 +156,42 @@ export default async function AdminInvoiceDetailPage({
                   )}
 
                   {pay.status === 'submitted' && (
-                    <div className="flex items-center gap-2 border-t border-border/60 pt-3">
-                      <form action={reviewPaymentProofAction}>
+                    <div className="space-y-2 border-t border-border/60 pt-3">
+                      <form action={reviewPaymentProofAction} className="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="payment_id" value={pay.id} />
                         <input type="hidden" name="decision" value="confirmed" />
-                        <input
-                          type="hidden"
-                          name="fx_rate"
-                          value={pay.fx_rate_to_usd || invoice.fx_rate_to_usd || 1}
-                        />
-                        <Button type="submit" size="sm" className="h-8 gap-1 rounded-full text-xs">
+                        {pay.currency !== 'USD' ? (
+                          <Input
+                            name="fx_rate"
+                            type="number"
+                            step="0.0001"
+                            defaultValue={pay.fx_rate_to_usd || invoice.fx_rate_to_usd || 1}
+                            title="FX rate to USD"
+                            className="h-9 w-24 font-mono text-xs"
+                          />
+                        ) : (
+                          <input type="hidden" name="fx_rate" value="1" />
+                        )}
+                        <Button type="submit" size="sm" className="h-9 gap-1 rounded-full text-xs">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Confirm
                         </Button>
                       </form>
 
-                      <form action={reviewPaymentProofAction}>
+                      <form action={reviewPaymentProofAction} className="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="payment_id" value={pay.id} />
                         <input type="hidden" name="decision" value="rejected" />
-                        <input
-                          type="hidden"
+                        <Input
                           name="reason"
-                          value="Transaction reference could not be verified."
+                          placeholder="Rejection note..."
+                          defaultValue="Transaction reference could not be verified."
+                          className="h-9 min-w-[180px] flex-1 text-xs"
                         />
                         <Button
                           type="submit"
                           variant="outline"
                           size="sm"
-                          className="h-8 gap-1 rounded-full text-xs"
+                          className="h-9 gap-1 rounded-full text-xs"
                         >
                           <XCircle className="h-3.5 w-3.5" />
                           Reject

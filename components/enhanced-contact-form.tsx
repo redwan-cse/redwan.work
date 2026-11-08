@@ -1053,7 +1053,7 @@ export default function EnhancedContactForm({
                     aria-invalid={!!errors.country}
                     aria-describedby={errors.country ? "country-error" : undefined}
                     className={cn(
-                      "w-full justify-between",
+                      "w-full justify-between font-normal",
                       errors.country ? "border-destructive focus:ring-destructive" : "",
                       !selectedCountryCode && "text-muted-foreground"
                     )}
@@ -1069,7 +1069,7 @@ export default function EnhancedContactForm({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[260px] p-0" align="start">
                   <Command>
                     <CommandInput placeholder="Search country..." />
                     <CommandList>
@@ -1203,9 +1203,9 @@ export default function EnhancedContactForm({
           </div>
 
           {/* Contact Preferences */}
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="preferredContactMethod">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="preferredContactMethod" className="mb-auto leading-snug">
                 Preferred Contact Method <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Select 
@@ -1226,16 +1226,13 @@ export default function EnhancedContactForm({
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="bestTimeToContact">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="bestTimeToContact" className="mb-auto leading-snug">
                 Best Time to Contact <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               
               {/* Time Picker - Segmented Control */}
-              <div className="flex items-center gap-2">
-                {/* Clock icon (standalone) */}
-                <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                
+              <div className="flex items-center gap-1.5">
                 {/* Hour Select */}
                 <Select 
                   value={formData.bestTimeToContact ? formData.bestTimeToContact.split(':')[0] : ''}
@@ -1250,7 +1247,7 @@ export default function EnhancedContactForm({
                   <SelectTrigger
                     id="bestTimeToContact"
                     aria-label="Best time to contact hour"
-                    className="h-10 w-[4.25rem]"
+                    className="h-10 min-w-0 flex-1 px-2.5"
                   >
                     <SelectValue placeholder="HH">
                       {formData.bestTimeToContact 
@@ -1286,7 +1283,7 @@ export default function EnhancedContactForm({
                 >
                   <SelectTrigger
                     aria-label="Best time to contact minute"
-                    className="h-10 w-[4.25rem]"
+                    className="h-10 min-w-0 flex-1 px-2.5"
                   >
                     <SelectValue placeholder="MM">
                       {formData.bestTimeToContact?.match(/:(\d{2})/)?.[1] || 'MM'}
@@ -1317,7 +1314,7 @@ export default function EnhancedContactForm({
                 >
                   <SelectTrigger
                     aria-label="Best time to contact AM or PM"
-                    className="h-10 w-[4.5rem]"
+                    className="h-10 min-w-0 flex-1 px-2.5"
                   >
                     <SelectValue placeholder="AM">
                       {formData.bestTimeToContact?.match(/\s*(AM|PM)/i)?.[1] || 'AM'}
@@ -1336,7 +1333,7 @@ export default function EnhancedContactForm({
                     variant="ghost"
                     size="icon"
                     onClick={() => handleInputChange('bestTimeToContact', '')}
-                    className="h-10 w-10 flex-shrink-0"
+                    className="h-10 w-9 flex-shrink-0"
                   >
                     <span className="sr-only">Clear time</span>
                     <span className="text-muted-foreground hover:text-foreground">✕</span>
@@ -1364,8 +1361,8 @@ export default function EnhancedContactForm({
               })()}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="preferredContactDate">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="preferredContactDate" className="mb-auto leading-snug">
                 Preferred Contact Date <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Popover open={isPreferredDateOpen} onOpenChange={setIsPreferredDateOpen}>
@@ -1548,8 +1545,8 @@ export default function EnhancedContactForm({
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="packageTier">
+            <div className="flex flex-col justify-end gap-2">
+              <Label htmlFor="packageTier" className="mb-auto leading-snug">
                 Preferred Package / Engagement Tier <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Select
@@ -1569,8 +1566,8 @@ export default function EnhancedContactForm({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="company">
+            <div className="flex flex-col justify-end gap-2">
+              <Label htmlFor="company" className="mb-auto leading-snug">
                 Company / Organization <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
@@ -1581,8 +1578,8 @@ export default function EnhancedContactForm({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="projectUrl">
+            <div className="flex flex-col justify-end gap-2">
+              <Label htmlFor="projectUrl" className="mb-auto leading-snug">
                 Target Domain, Repo or Project URL <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
@@ -1697,10 +1694,10 @@ export default function EnhancedContactForm({
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="urgency" className="flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                Urgency <span className="text-destructive">*</span>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="urgency" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+                <Clock className="h-4 w-4 shrink-0" />
+                <span>Urgency</span> <span className="text-destructive">*</span>
               </Label>
               <Select value={formData.urgency} onValueChange={(value) => handleInputChange('urgency', value)}>
                 <SelectTrigger
@@ -1727,10 +1724,10 @@ export default function EnhancedContactForm({
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="budgetMin" className="flex items-center gap-1">
-                <DollarSign className="h-4 w-4" />
-                Budget Min (USD) <span className="text-muted-foreground text-xs">(optional)</span>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="budgetMin" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+                <DollarSign className="h-4 w-4 shrink-0" />
+                <span>Budget Min (USD)</span> <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
                 id="budgetMin"
@@ -1750,10 +1747,10 @@ export default function EnhancedContactForm({
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="budgetMax" className="flex items-center gap-1">
-                <DollarSign className="h-4 w-4" />
-                Budget Max (USD) <span className="text-muted-foreground text-xs">(optional)</span>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="budgetMax" className="mb-auto flex flex-wrap items-center gap-1 leading-snug">
+                <DollarSign className="h-4 w-4 shrink-0" />
+                <span>Budget Max (USD)</span> <span className="text-muted-foreground text-xs">(optional)</span>
               </Label>
               <Input
                 id="budgetMax"

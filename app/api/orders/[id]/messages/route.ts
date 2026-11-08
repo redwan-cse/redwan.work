@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { createInAppNotification, notifyAllAdmins } from '@/lib/crm/audit';
+import {
+  createInAppNotification,
+  enqueueTransactionalEmail,
+  notifyAllAdmins,
+} from '@/lib/crm/audit';
 import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 
 export async function GET(
@@ -96,6 +100,8 @@ export async function POST(
   }
 
   if (!isInternalNote) {
+    const siteOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
     if (session.role === 'admin') {
       await createInAppNotification({
         recipientId: order.client_id,
@@ -104,12 +110,44 @@ export async function POST(
         body: body.slice(0, 120),
         href: `/portal/orders/${id}`,
       });
+      try {
+        const { data: clientProf } = await admin
+          .from('profiles')
+          .select('email')
+          .eq('id', order.client_id)
+          .maybeSingle();
+        if (clientProf?.email) {
+          await enqueueTransactionalEmail({
+            toEmail: clientProf.email,
+            template: 'order_message',
+            subject: `New Message on Contract ${order.code} — ${order.title}`,
+            payload: {
+              message: body.slice(0, 400),
+              actionUrl: `${siteOrigin}/portal/orders/${id}`,
+            },
+            entityType: 'order',
+            entityId: id,
+          });
+        }
+      } catch {}
     } else {
       await notifyAllAdmins({
         category: 'message',
         title: `Client message on contract ${order.code}`,
         body: body.slice(0, 120),
         href: `/admin/orders/${id}`,
+      });
+      await enqueueTransactionalEmail({
+        toEmail:
+          process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work',
+        template: 'order_message_admin',
+        subject: `Client Message on Contract ${order.code} — ${order.title}`,
+        payload: {
+          message: body.slice(0, 400),
+          actionUrl: `${siteOrigin}/admin/orders/${id}`,
+        },
+        entityType: 'order',
+        entityId: id,
       });
     }
   }

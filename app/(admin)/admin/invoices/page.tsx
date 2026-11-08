@@ -93,33 +93,41 @@ export default async function AdminInvoicesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <form action={reviewPaymentProofAction} className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <form action={reviewPaymentProofAction} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="confirmed" />
-                    <input
-                      type="hidden"
-                      name="fx_rate"
-                      value={pay.fx_rate_to_usd || 1}
-                    />
-                    <Button type="submit" size="sm" className="h-8 rounded-full text-xs">
+                    {pay.currency !== 'USD' ? (
+                      <Input
+                        name="fx_rate"
+                        type="number"
+                        step="0.0001"
+                        defaultValue={pay.fx_rate_to_usd || 1}
+                        title="FX rate to USD"
+                        className="h-9 w-24 font-mono text-xs"
+                      />
+                    ) : (
+                      <input type="hidden" name="fx_rate" value="1" />
+                    )}
+                    <Button type="submit" size="sm" className="h-9 rounded-full text-xs">
                       Confirm Payment
                     </Button>
                   </form>
 
-                  <form action={reviewPaymentProofAction}>
+                  <form action={reviewPaymentProofAction} className="flex flex-wrap items-center gap-2">
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="rejected" />
-                    <input
-                      type="hidden"
+                    <Input
                       name="reason"
-                      value="Reference or receipt could not be verified."
+                      placeholder="Rejection note..."
+                      defaultValue="Reference or receipt could not be verified."
+                      className="h-9 w-48 text-xs"
                     />
                     <Button
                       type="submit"
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-full text-xs"
+                      className="h-9 rounded-full text-xs"
                     >
                       Reject
                     </Button>
@@ -131,9 +139,9 @@ export default async function AdminInvoicesPage() {
         </Card>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-12">
+      <div className="grid gap-8 xl:grid-cols-12">
         {/* Issue New Invoice Form */}
-        <Card className="lg:col-span-4">
+        <Card className="xl:col-span-5">
           <CardHeader>
             <CardTitle className="text-lg">Issue New Invoice</CardTitle>
             <CardDescription>Creates and locks an `INV-XXXX` statement.</CardDescription>
@@ -182,8 +190,8 @@ export default async function AdminInvoicesPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Amount *</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Amount *</Label>
                   <Input
                     name="amount_major"
                     type="number"
@@ -194,12 +202,12 @@ export default async function AdminInvoicesPage() {
                     className="h-9 font-mono text-xs"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Currency</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Currency</Label>
                   <select
                     name="currency"
                     defaultValue="USD"
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 font-mono text-xs"
+                    className="h-9 w-full rounded-lg border border-border bg-background px-3 font-mono text-xs"
                   >
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
@@ -207,8 +215,8 @@ export default async function AdminInvoicesPage() {
                     <option value="BDT">BDT</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">FX → USD</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">FX → USD</Label>
                   <Input
                     name="fx_rate_to_usd"
                     type="number"
@@ -261,7 +269,7 @@ export default async function AdminInvoicesPage() {
         </Card>
 
         {/* Invoices Ledger */}
-        <Card className="lg:col-span-8">
+        <Card className="xl:col-span-7">
           <CardHeader>
             <CardTitle className="text-lg">Issued Invoices Ledger</CardTitle>
           </CardHeader>

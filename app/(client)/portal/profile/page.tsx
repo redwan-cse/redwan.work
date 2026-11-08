@@ -3,6 +3,7 @@ import { UserCheck } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { updateClientProfileAction } from '@/lib/crm/actions';
+import { PasswordChangeCard } from '@/components/panel/password-change-card';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -100,8 +101,8 @@ export default async function ClientProfilePage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Company Website</Label>
+              <div className="flex flex-col justify-end gap-1.5">
+                <Label className="mb-auto text-xs">Company Website</Label>
                 <Input
                   name="website_url"
                   defaultValue={clientProfile?.website_url ?? ''}
@@ -109,8 +110,8 @@ export default async function ClientProfilePage() {
                   className="h-9 text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">VAT / Tax ID</Label>
+              <div className="flex flex-col justify-end gap-1.5">
+                <Label className="mb-auto text-xs">VAT / Tax ID</Label>
                 <Input
                   name="tax_id"
                   defaultValue={clientProfile?.tax_id ?? ''}
@@ -118,12 +119,12 @@ export default async function ClientProfilePage() {
                   className="h-9 font-mono text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Preferred Billing Currency</Label>
+              <div className="flex flex-col justify-end gap-1.5">
+                <Label className="mb-auto text-xs">Preferred Billing Currency</Label>
                 <select
                   name="preferred_currency"
                   defaultValue={clientProfile?.preferred_currency ?? 'USD'}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="BDT">BDT (৳)</option>
@@ -139,6 +140,8 @@ export default async function ClientProfilePage() {
           </form>
         </CardContent>
       </Card>
+
+      <PasswordChangeCard />
     </div>
   );
 }

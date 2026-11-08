@@ -186,7 +186,7 @@ export default async function AdminPortfolioCmsPage() {
                     name="sort_order"
                     type="number"
                     defaultValue={(portfolioList.length + 1) * 10}
-                    className="h-8 w-20 font-mono text-xs"
+                    className="h-9 w-20 font-mono text-xs"
                   />
                 </div>
                 <label className="flex items-center gap-1.5">
@@ -242,25 +242,25 @@ export default async function AdminPortfolioCmsPage() {
             <CardContent>
               <form action={upsertPortfolioItemAction} className="space-y-3">
                 <input type="hidden" name="id" value={study.dbId} />
-                <div className="grid gap-3 sm:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="space-y-1">
                     <Label className="text-xs">Code</Label>
-                    <Input name="code" defaultValue={study.code} required className="h-8 font-mono text-xs" />
+                    <Input name="code" defaultValue={study.code} required className="h-9 font-mono text-xs" />
                   </div>
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1 xl:col-span-2">
                     <Label className="text-xs">Title</Label>
-                    <Input name="title" defaultValue={study.title} required className="h-8 text-xs" />
+                    <Input name="title" defaultValue={study.title} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Slug</Label>
-                    <Input name="slug" defaultValue={study.slug} required className="h-8 font-mono text-xs" />
+                    <Input name="slug" defaultValue={study.slug} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Pillar</Label>
                     <select
                       name="pillar"
                       defaultValue={study.pillar}
-                      className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >
                       <option value="cybersecurity">cybersecurity</option>
                       <option value="development">development</option>
@@ -271,22 +271,22 @@ export default async function AdminPortfolioCmsPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="space-y-1">
                     <Label className="text-xs">Year</Label>
-                    <Input name="year" defaultValue={study.year} required className="h-8 font-mono text-xs" />
+                    <Input name="year" defaultValue={study.year} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Client Sector</Label>
-                    <Input name="client_sector" defaultValue={study.clientSector} required className="h-8 text-xs" />
+                    <Input name="client_sector" defaultValue={study.clientSector} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Headline Metric</Label>
-                    <Input name="headline_metric" defaultValue={study.headlineMetric} required className="h-8 font-mono text-xs" />
+                    <Input name="headline_metric" defaultValue={study.headlineMetric} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Related Service Slug</Label>
-                    <Input name="related_service_slug" defaultValue={study.relatedServiceSlug} required className="h-8 font-mono text-xs" />
+                    <Input name="related_service_slug" defaultValue={study.relatedServiceSlug} required className="h-9 font-mono text-xs" />
                   </div>
                 </div>
 
@@ -340,7 +340,7 @@ export default async function AdminPortfolioCmsPage() {
                         name="sort_order"
                         type="number"
                         defaultValue={study.sortOrder}
-                        className="h-7 w-16 font-mono text-xs"
+                        className="h-9 w-16 font-mono text-xs"
                       />
                     </div>
                     <label className="flex items-center gap-1.5">
@@ -362,7 +362,7 @@ export default async function AdminPortfolioCmsPage() {
                       Published
                     </label>
                   </div>
-                  <Button type="submit" size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+                  <Button type="submit" size="sm" variant="outline" className="h-9 gap-1.5 text-xs">
                     <Save className="h-3.5 w-3.5" />
                     Save Case Study Changes
                   </Button>

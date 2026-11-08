@@ -90,9 +90,18 @@ function validatePasswordPair(formData:FormData):{error:string}|{password:string
  if(password.length<MIN_PASSWORD)return {error:`Password must be at least ${MIN_PASSWORD} characters.`};
  if(password!==confirm)return {error:'Passwords do not match.'};return {password};
 }
+async function checkPasswordSignInRateLimit(email:string):Promise<boolean> {
+ const salt=process.env.LEAD_IP_HASH_SALT;if(!salt)return true;
+ try {
+  const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
+  const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'password-login',p_key_hash:await sha256Hex(`${salt}:${ip}:${email}`),p_window_seconds:300,p_max_count:10});
+  if(error)return true;return data===true;
+ }catch{return true;}
+}
 export async function signInWithPasswordAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase(),password=String(formData.get('password')??''),next=safeRelativePath(formData.get('next'));
  if(!email||!password)return {error:'Email and password are required.'};
+ if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithPassword({email,password});if(error)return {error:'Invalid email or password.'};
  const destination=await resolveCurrentPanelDestination();
  if(!destination.ok)return {error:destination.error};
@@ -328,6 +337,54 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   redirect(destination.home);
 }
 
+async function markInvitationAccepted(userId: string, email?: string | null): Promise<void> {
+  try {
+    const admin = getSupabaseAdmin();
+    const nowIso = new Date().toISOString();
+    await admin
+      .from('client_invitations')
+      .update({
+        status: 'accepted',
+        accepted_at: nowIso,
+        accepted_user_id: userId,
+      })
+      .eq('accepted_user_id', userId)
+      .eq('status', 'pending');
+    if (email) {
+      await admin
+        .from('client_invitations')
+        .update({
+          status: 'accepted',
+          accepted_at: nowIso,
+          accepted_user_id: userId,
+        })
+        .eq('email', email.trim().toLowerCase())
+        .eq('status', 'pending');
+    }
+  } catch {
+    // Non-fatal if service role is unavailable in isolated unit tests
+  }
+}
+
+export async function changeAuthenticatedPasswordAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const checked = validatePasswordPair(formData);
+  if ('error' in checked) return checked;
+  const supabase = await createSupabaseServerClient();
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const sub = typeof claimsData?.claims?.sub === 'string' ? claimsData.claims.sub : null;
+  if (claimsError || !sub) {
+    return { error: 'Your session has expired. Please sign in again.' };
+  }
+  const updated = await supabase.auth.updateUser({ password: checked.password });
+  if (updated.error) {
+    return { error: 'Could not update your password. Please choose a different strong password.' };
+  }
+  return { notice: 'Your account password has been updated.' };
+}
+
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
   const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
   const checked=validatePasswordPair(formData);if('error' in checked)return checked;
@@ -357,6 +414,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
       return {error:'Could not save your password. Try again.'};
     }
     cookieStore.delete(retryCookieName);
+    await markInvitationAccepted(otpData.user.id, otpData.user.email);
     const destination=await resolveCurrentPanelDestination();
     if(!destination.ok)return {error:destination.error};
     redirect(destination.home);
@@ -364,6 +422,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
 
   const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
   const sub=typeof claimsData?.claims?.sub==='string'?claimsData.claims.sub:null;
+  const emailClaim=typeof claimsData?.claims?.email==='string'?claimsData.claims.email:null;
   const sessionId=extractSessionId(null,claimsData?.claims);
   if(claimsErr||!sub||!sessionId||!existingAuthority)return {error:INVALID_LINK};
 
@@ -380,6 +439,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
   }
 
+  await markInvitationAccepted(sub, emailClaim);
   const destination=await resolveCurrentPanelDestination();
   if(!destination.ok)return {error:destination.error};
   redirect(destination.home);

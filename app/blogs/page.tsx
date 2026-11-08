@@ -134,7 +134,7 @@ export default async function BlogsPage({
           {/* Server Pagination */}
           {totalPages > 1 && (
             <div className="mt-14 flex flex-col items-center gap-4 border-t border-border/70 pt-8">
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <Button
                   asChild={currentPage !== 1}
                   variant="outline"

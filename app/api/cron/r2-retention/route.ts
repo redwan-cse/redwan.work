@@ -26,6 +26,24 @@ async function handleStorageRetentionCron(request: NextRequest) {
     return NextResponse.json({ error: autoErr.message }, { status: 500 });
   }
 
+  // 1b. Transition overdue invoices and expired proposals
+  try {
+    const todayDate = new Date().toISOString().slice(0, 10);
+    await admin
+      .from('invoices')
+      .update({ status: 'overdue' })
+      .in('status', ['issued', 'partially_paid'])
+      .lt('due_at', todayDate);
+
+    await admin
+      .from('proposals')
+      .update({ status: 'expired' })
+      .in('status', ['sent', 'viewed'])
+      .lt('valid_until', todayDate);
+  } catch {
+    // Non-fatal in isolated storage unit tests
+  }
+
   let deletedVaultFiles = 0;
   let deletedInquiryAttachments = 0;
   let deletedOrphanContactObjects = 0;

@@ -31,6 +31,12 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
+import { markAllNotificationsReadAction } from '@/lib/crm/actions';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Sheet,
   SheetContent,
@@ -45,6 +51,15 @@ export interface PanelNavItem {
   href: string;
   icon: string;
   badge?: number;
+}
+
+export interface PanelNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  href: string | null;
+  is_read: boolean;
+  created_at: string;
 }
 
 const ICON_MAP: Record<string, typeof LayoutDashboard> = {
@@ -71,6 +86,7 @@ export function PanelShell({
   userEmail,
   userName,
   unreadNotifications = 0,
+  recentNotifications = [],
   navItems,
   children,
 }: {
@@ -78,6 +94,7 @@ export function PanelShell({
   userEmail: string;
   userName?: string | null;
   unreadNotifications?: number;
+  recentNotifications?: PanelNotificationItem[];
   navItems: PanelNavItem[];
   children: React.ReactNode;
 }) {
@@ -265,36 +282,88 @@ export function PanelShell({
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {role === 'client' && (
-              <Button asChild size="sm" className="gap-1.5 rounded-full text-xs">
+              <Button asChild size="sm" className="gap-1.5 rounded-full px-2.5 text-xs sm:px-3">
                 <Link href="/portal/orders/new">
                   <Sparkles className="h-3.5 w-3.5" />
-                  New Order
+                  <span>New Order</span>
                 </Link>
               </Button>
             )}
             {role === 'admin' && (
-              <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full text-xs">
+              <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full px-2.5 text-xs sm:px-3">
                 <Link href="/admin/proposals">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  New Proposal
+                  <span>New Proposal</span>
                 </Link>
               </Button>
             )}
 
-            <Link
-              href={role === 'admin' ? '/admin/audit' : '/portal'}
-              className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-              aria-label={`Notifications (${unreadNotifications} unread)`}
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-bold text-primary-foreground">
-                  {unreadNotifications}
-                </span>
-              )}
-            </Link>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  aria-label={`Notifications (${unreadNotifications} unread)`}
+                >
+                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-bold text-primary-foreground">
+                      {unreadNotifications}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="flex items-center justify-between border-b border-border/70 px-3.5 py-2.5">
+                  <span className="text-xs font-bold">
+                    Notifications ({unreadNotifications} unread)
+                  </span>
+                  {unreadNotifications > 0 && (
+                    <form action={markAllNotificationsReadAction}>
+                      <button
+                        type="submit"
+                        className="font-mono text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    </form>
+                  )}
+                </div>
+                <div className="max-h-72 divide-y divide-border/60 overflow-y-auto">
+                  {recentNotifications.length > 0 ? (
+                    recentNotifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        className={cn(
+                          'px-3.5 py-2.5 text-xs transition-colors',
+                          !notif.is_read && 'bg-primary/5'
+                        )}
+                      >
+                        {notif.href ? (
+                          <Link
+                            href={notif.href}
+                            className="block font-semibold text-foreground hover:text-primary"
+                          >
+                            {notif.title}
+                          </Link>
+                        ) : (
+                          <div className="font-semibold text-foreground">{notif.title}</div>
+                        )}
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                          {notif.body}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
+                      No notifications yet.
+                    </p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <ModeToggle />
           </div>

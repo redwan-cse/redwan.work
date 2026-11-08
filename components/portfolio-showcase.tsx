@@ -279,7 +279,7 @@ export function PortfolioShowcase({
       {/* Case Studies Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredItems.map((study, idx) => (
-          <ScrollReveal key={study.id} delay={idx * 0.05}>
+          <ScrollReveal key={study.id} delay={idx * 0.05} className="h-full">
             <InteractiveCard className="flex h-full flex-col justify-between p-6">
               <div>
                 <div className="mb-3 flex items-center justify-between gap-2">

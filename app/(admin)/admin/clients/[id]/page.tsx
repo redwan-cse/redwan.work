@@ -9,7 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { updateClientCrmAndNoteAction } from '@/lib/crm/actions';
+import {
+  toggleClientActiveStatusAction,
+  updateClientCrmAndNoteAction,
+} from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -52,29 +55,54 @@ export default async function AdminClientDetailPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link
-          href="/admin/clients"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Clients Directory
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-bold tracking-tight">
-            {profile.full_name || profile.email}
-          </h1>
-          <Badge variant="outline" className="font-mono text-xs uppercase text-primary">
-            {crm?.tier ?? 'standard'}
-          </Badge>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Link
+            href="/admin/clients"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Clients Directory
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-bold tracking-tight">
+              {profile.full_name || profile.email}
+            </h1>
+            <Badge variant="outline" className="font-mono text-xs uppercase text-primary">
+              {crm?.tier ?? 'standard'}
+            </Badge>
+            <Badge
+              variant={profile.is_active ? 'secondary' : 'destructive'}
+              className="font-mono text-[10px] uppercase"
+            >
+              {profile.is_active ? 'Active Account' : 'Deactivated'}
+            </Badge>
+          </div>
+          <p className="font-mono text-xs text-muted-foreground">
+            {profile.email} · Lifetime Value:{' '}
+            <strong className="text-foreground">
+              {formatMoney(crm?.lifetime_value_usd_cents ?? 0, 'USD')}
+            </strong>{' '}
+            · Completed Orders: {crm?.completed_orders_count ?? 0}
+          </p>
         </div>
-        <p className="font-mono text-xs text-muted-foreground">
-          {profile.email} · Lifetime Value:{' '}
-          <strong className="text-foreground">
-            {formatMoney(crm?.lifetime_value_usd_cents ?? 0, 'USD')}
-          </strong>{' '}
-          · Completed Orders: {crm?.completed_orders_count ?? 0}
-        </p>
+
+        <form action={toggleClientActiveStatusAction}>
+          <input type="hidden" name="client_id" value={profile.id} />
+          <input
+            type="hidden"
+            name="is_active"
+            value={profile.is_active ? 'false' : 'true'}
+          />
+          <Button
+            type="submit"
+            variant={profile.is_active ? 'outline' : 'default'}
+            size="sm"
+            className="h-9 rounded-full text-xs"
+          >
+            {profile.is_active ? 'Deactivate Account' : 'Reactivate Account'}
+          </Button>
+        </form>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-12">
@@ -197,7 +225,7 @@ export default async function AdminClientDetailPage({
                   {orders.map((o) => (
                     <div
                       key={o.id}
-                      className="flex items-center justify-between gap-2 py-3 text-xs"
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs"
                     >
                       <div>
                         <Link
@@ -208,7 +236,7 @@ export default async function AdminClientDetailPage({
                         </Link>
                         <span className="ml-2 font-medium">{o.title}</span>
                       </div>
-                      <div className="flex items-center gap-2 font-mono">
+                      <div className="flex flex-wrap items-center gap-2 font-mono">
                         <Badge variant="outline" className="text-[10px]">
                           {o.status}
                         </Badge>
@@ -233,7 +261,7 @@ export default async function AdminClientDetailPage({
                   {invoices.map((inv) => (
                     <div
                       key={inv.id}
-                      className="flex items-center justify-between gap-2 py-3 text-xs"
+                      className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs"
                     >
                       <Link
                         href={`/admin/invoices/${inv.id}`}
@@ -241,7 +269,7 @@ export default async function AdminClientDetailPage({
                       >
                         {inv.code}
                       </Link>
-                      <div className="flex items-center gap-2 font-mono">
+                      <div className="flex flex-wrap items-center gap-2 font-mono">
                         <Badge variant="outline" className="text-[10px]">
                           {inv.status}
                         </Badge>

@@ -4,6 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  color-scheme: light;
   --background: oklch(0.9842 0.0034 247.8575);
   --foreground: oklch(0.2077 0.0398 265.7549);
   --card: oklch(1.0000 0 0);
@@ -16,12 +17,12 @@
   --secondary-foreground: oklch(0.3462 0.0736 256.0397);
   --muted: oklch(0.9683 0.0069 247.8956);
   --muted-foreground: oklch(0.4455 0.0374 257.2808);
-  --accent: oklch(0.5461 0.2152 262.8809);
-  --accent-foreground: oklch(1.0000 0 0);
+  --accent: oklch(0.9550 0.0120 255.0000);
+  --accent-foreground: oklch(0.2077 0.0398 265.7549);
   --destructive: oklch(0.4437 0.1613 26.8994);
   --destructive-foreground: oklch(0.9842 0.0034 247.8575);
-  --border: oklch(0.9288 0.0126 255.5078);
-  --input: oklch(0.9288 0.0126 255.5078);
+  --border: oklch(0.8950 0.0140 255.5078);
+  --input: oklch(0.8550 0.0160 255.0000);
   --ring: oklch(0.3462 0.0736 256.0397);
   --chart-1: oklch(0.3462 0.0736 256.0397);
   --chart-2: oklch(0.5461 0.2152 262.8809);
@@ -34,12 +35,12 @@
   --sidebar-primary-foreground: oklch(1.0000 0 0);
   --sidebar-accent: oklch(0.9683 0.0069 247.8956);
   --sidebar-accent-foreground: oklch(0.3462 0.0736 256.0397);
-  --sidebar-border: oklch(0.9288 0.0126 255.5078);
+  --sidebar-border: oklch(0.8950 0.0140 255.5078);
   --sidebar-ring: oklch(0.3462 0.0736 256.0397);
   --font-sans: Inter, system-ui, sans-serif;
   --font-serif: ui-serif, Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   --shadow-x: 0px;
   --shadow-y: 2px;
   --shadow-blur: 12px;
@@ -59,6 +60,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.1831 0.0309 263.3831);
   --foreground: oklch(0.9472 0.0137 258.3454);
   --card: oklch(0.2351 0.0378 261.6534);
@@ -71,12 +73,12 @@
   --secondary-foreground: oklch(0.9472 0.0137 258.3454);
   --muted: oklch(0.3250 0.0596 254.9248);
   --muted-foreground: oklch(0.7107 0.0351 256.7878);
-  --accent: oklch(0.6231 0.1880 259.8145);
-  --accent-foreground: oklch(1.0000 0 0);
+  --accent: oklch(0.2750 0.0350 260.0000);
+  --accent-foreground: oklch(0.9472 0.0137 258.3454);
   --destructive: oklch(0.7040 0.1910 22.2160);
   --destructive-foreground: oklch(0.1410 0.0050 285.8230);
   --border: oklch(0.3250 0.0596 254.9248);
-  --input: oklch(0.3250 0.0596 254.9248);
+  --input: oklch(0.3550 0.0480 256.0000);
   --ring: oklch(0.7137 0.1434 254.6240);
   --chart-1: oklch(0.7137 0.1434 254.6240);
   --chart-2: oklch(0.6231 0.1880 259.8145);
@@ -94,7 +96,7 @@
   --font-sans: Inter, system-ui, sans-serif;
   --font-serif: ui-serif, Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
   --shadow-x: 0px;
   --shadow-y: 4px;
   --shadow-blur: 24px;
@@ -190,6 +192,19 @@
   body {
     @apply bg-background text-foreground font-sans;
     letter-spacing: var(--tracking-normal);
+  }
+  select {
+    @apply border-input bg-background text-foreground ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  input[type="checkbox"] {
+    @apply accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    box-shadow: 0 0 0 1000px var(--background) inset !important;
+    -webkit-text-fill-color: var(--foreground) !important;
+    caret-color: var(--foreground);
   }
 }
 

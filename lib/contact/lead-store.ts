@@ -1,5 +1,6 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { enqueueTransactionalEmail, notifyAllAdmins } from '@/lib/crm/audit';
 import { SERVICE_CATALOG, type ServicePillarKey } from '@/lib/content/site';
 import type { ConsentedLead } from '@/lib/contact/consent-intake';
 
@@ -98,7 +99,44 @@ export async function insertLead(
       }
     }
 
-    return { ok: true, ticketRef: data.code ?? `INQ-${data.ticket_number}` };
+    const ticketRef = data.code ?? `INQ-${data.ticket_number}`;
+    const siteOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
+    const adminEmail =
+      process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work';
+
+    await notifyAllAdmins({
+      category: 'inquiry',
+      title: `New Inquiry ${ticketRef} from ${inquiryFields.name}`,
+      body: `${inquiryFields.services.join(', ')} (${inquiryFields.urgency ?? 'standard'})`,
+      href: '/admin/inquiries',
+    });
+
+    await enqueueTransactionalEmail({
+      toEmail: inquiryFields.email,
+      template: 'inquiry_received_customer',
+      subject: `[${ticketRef}] We Received Your Project Brief — redwan.work`,
+      payload: {
+        message: `Hi ${inquiryFields.name}, thank you for reaching out. Your inquiry (${ticketRef}) for ${inquiryFields.services.join(', ')} has been logged and will be reviewed within 12 hours.`,
+        actionUrl: `${siteOrigin}/contact`,
+      },
+      entityType: 'inquiry',
+      entityId: data.id,
+    });
+
+    await enqueueTransactionalEmail({
+      toEmail: adminEmail,
+      template: 'inquiry_received_admin',
+      subject: `[${ticketRef}] New Inquiry from ${inquiryFields.name} (${inquiryFields.country})`,
+      payload: {
+        message: `${inquiryFields.name} (${inquiryFields.email}) submitted inquiry ${ticketRef} for ${inquiryFields.services.join(', ')}.\n\nSummary:\n${inquiryFields.project_summary.slice(0, 500)}`,
+        actionUrl: `${siteOrigin}/admin/inquiries`,
+      },
+      entityType: 'inquiry',
+      entityId: data.id,
+    });
+
+    return { ok: true, ticketRef };
   } catch {
     console.error('Inquiry insert failed.');
     return { ok: false, error: 'Could not save your message.' };

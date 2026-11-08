@@ -6,6 +6,7 @@ const mockFrom = vi.fn();
 const mockRecordAuditLog = vi.fn();
 const mockIsR2Configured = vi.fn();
 const mockPresignPrivateGet = vi.fn();
+const mockGetPrivateObjectSize = vi.fn();
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/lib/crm/audit', () => ({
 vi.mock('@/lib/r2', () => ({
   isR2Configured: () => mockIsR2Configured(),
   presignPrivateGet: (...args: unknown[]) => mockPresignPrivateGet(...args),
+  getPrivateObjectSize: () => mockGetPrivateObjectSize(),
 }));
 
 import {
@@ -39,7 +41,13 @@ import {
   upsertServiceAction,
   upsertServicePackageAction,
 } from '@/lib/cms/actions';
-import { addOrderTaskAction, submitOrderDeliverableAction } from '@/lib/crm/actions';
+import {
+  addOrderTaskAction,
+  markAllNotificationsReadAction,
+  submitOrderDeliverableAction,
+  toggleClientActiveStatusAction,
+  updateRetainerPlanAction,
+} from '@/lib/crm/actions';
 import { GET as downloadVaultFile } from '@/app/api/files/[id]/download/route';
 import { insertLead } from '@/lib/contact/lead-store';
 
@@ -181,6 +189,83 @@ describe('Publishing Checkbox Parsing, Error Honesty & Vault Download Contract',
     expect(selectedColumns).toContain('mime_type');
     expect(selectedColumns).toContain('archived_at');
     expect(res.status).toBe(410);
+  });
+
+  it('allows admin fallback download of inquiry_attachments and supports client active toggle, retainer update, and bulk notification read', async () => {
+    const updatedTables: Array<{ table: string; payload: Record<string, unknown> }> = [];
+    mockIsR2Configured.mockReturnValue(true);
+    mockGetPrivateObjectSize.mockResolvedValue(1024);
+    mockPresignPrivateGet.mockResolvedValue('https://r2.disposable.test/signed-scope.pdf');
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'vault_files') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'inquiry_attachments') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                  inquiry_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                  r2_key: 'contact/2026/11/08/scope.pdf',
+                  filename: 'scope.pdf',
+                  mime_type: 'application/pdf',
+                  size_bytes: 1024,
+                  deleted_from_r2_at: null,
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        update: (payload: Record<string, unknown>) => {
+          updatedTables.push({ table, payload });
+          return {
+            eq: () => ({
+              eq: async () => ({ error: null }),
+              is: async () => ({ error: null }),
+              then: (resolve: (val: { error: null }) => unknown) => resolve({ error: null }),
+            }),
+          };
+        },
+      };
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/files/cccccccc-cccc-4ccc-8ccc-cccccccccccc/download');
+    const res = await downloadVaultFile(req, {
+      params: Promise.resolve({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }),
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://r2.disposable.test/signed-scope.pdf');
+
+    const toggleFd = new FormData();
+    toggleFd.set('client_id', '22222222-2222-2222-2222-222222222222');
+    toggleFd.set('is_active', 'false');
+    await toggleClientActiveStatusAction(toggleFd);
+    expect(updatedTables.find((u) => u.table === 'profiles')?.payload.is_active).toBe(false);
+
+    const retFd = new FormData();
+    retFd.set('retainer_id', '33333333-3333-4333-8333-333333333333');
+    retFd.set('hours_used_current_period', '12.5');
+    retFd.set('status', 'paused');
+    await updateRetainerPlanAction(retFd);
+    expect(updatedTables.find((u) => u.table === 'retainer_plans')?.payload).toMatchObject({
+      hours_used_current_period: 12.5,
+      status: 'paused',
+    });
+
+    await markAllNotificationsReadAction();
+    expect(updatedTables.find((u) => u.table === 'notifications')?.payload).toHaveProperty('read_at');
   });
 
   it('derives service_pillar from selected services and rolls back inquiry row if attachment insert fails', async () => {

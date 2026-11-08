@@ -25,7 +25,15 @@ export default async function AdminLayout({
   }
 
   const admin = getSupabaseAdmin();
-  const { data: metricsRaw } = await admin.rpc('admin_command_center_metrics');
+  const [{ data: metricsRaw }, { data: recentNotifications }] = await Promise.all([
+    admin.rpc('admin_command_center_metrics'),
+    admin
+      .from('notifications')
+      .select('id, title, body, href, is_read, created_at')
+      .eq('recipient_id', session.userId)
+      .order('created_at', { ascending: false })
+      .limit(12),
+  ]);
   const metrics = (metricsRaw ?? {}) as Record<string, number>;
 
   const navItems: PanelNavItem[] = [
@@ -75,6 +83,7 @@ export default async function AdminLayout({
       userEmail={session.email}
       userName={session.fullName}
       unreadNotifications={metrics.unread_notifications ?? 0}
+      recentNotifications={recentNotifications ?? []}
       navItems={navItems}
     >
       {children}

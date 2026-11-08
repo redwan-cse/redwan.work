@@ -22,9 +22,17 @@ export default async function ClientPortalLayout({
   }
 
   const admin = getSupabaseAdmin();
-  const { data: overviewRaw } = await admin.rpc('client_portal_overview', {
-    p_client_id: session.userId,
-  });
+  const [{ data: overviewRaw }, { data: recentNotifications }] = await Promise.all([
+    admin.rpc('client_portal_overview', {
+      p_client_id: session.userId,
+    }),
+    admin
+      .from('notifications')
+      .select('id, title, body, href, is_read, created_at')
+      .eq('recipient_id', session.userId)
+      .order('created_at', { ascending: false })
+      .limit(12),
+  ]);
   const overview = (overviewRaw ?? {}) as Record<string, number>;
 
   const navItems: PanelNavItem[] = [
@@ -75,6 +83,7 @@ export default async function ClientPortalLayout({
       userEmail={session.email}
       userName={session.fullName}
       unreadNotifications={overview.unread_notifications ?? 0}
+      recentNotifications={recentNotifications ?? []}
       navItems={navItems}
     >
       {children}

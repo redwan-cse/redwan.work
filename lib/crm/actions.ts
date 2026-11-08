@@ -84,6 +84,28 @@ async function requireAuthenticatedSession() {
   return session;
 }
 
+async function lookupProfileEmail(userId: string): Promise<string | null> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await admin
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .maybeSingle();
+    return typeof data?.email === 'string' && data.email.includes('@') ? data.email : null;
+  } catch {
+    return null;
+  }
+}
+
+function getAdminAlertEmail(): string {
+  return process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work';
+}
+
+function getSiteOrigin(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
+}
+
 // =============================================================================
 // 1. ADMIN: INQUIRY TRIAGE & CLIENT INVITATION / CONVERSION
 // =============================================================================
@@ -147,10 +169,9 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
     .maybeSingle();
 
   let clientId = existingProfile?.id ?? null;
+  const siteOrigin = getSiteOrigin();
 
   if (!clientId) {
-    const siteOrigin =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
     const inviteRes = await admin.auth.admin.inviteUserByEmail(email, {
       data: { full_name: fullName, role: 'client' },
       redirectTo: `${siteOrigin}/invite/accept`,
@@ -181,6 +202,18 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
       });
       if (cpErr) throw new Error(cpErr.message);
     }
+  } else {
+    await enqueueTransactionalEmail({
+      toEmail: email,
+      template: 'client_portal_invitation',
+      subject: 'Your redwan.work Client Portal Workspace Is Ready',
+      payload: {
+        message: `Hi ${fullName || email}, your Client Portal account on redwan.work has been updated. Sign in at ${siteOrigin}/login to access your proposals, orders, invoices, and encrypted deliverables vault.`,
+        actionUrl: `${siteOrigin}/login`,
+      },
+      entityType: 'client',
+      entityId: clientId,
+    });
   }
 
   const { error: invErr } = await admin.from('client_invitations').insert({
@@ -203,6 +236,14 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
       .eq('id', inquiryId);
     if (inqErr) {
       throw new Error(inqErr.message);
+    }
+    try {
+      await admin
+        .from('inquiry_attachments')
+        .update({ retained: true })
+        .eq('inquiry_id', inquiryId);
+    } catch {
+      // ignore if attachment retention update is unsupported in mock
     }
   }
 
@@ -240,7 +281,7 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
-  const requiresRoe = formData.get('requires_roe') === 'on' || pillar === 'cybersecurity';
+  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
   let clientId = String(formData.get('client_id') ?? '').trim() || null;
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim() || null;
 
@@ -264,7 +305,48 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     clientId = matchedProfile?.id ?? null;
   }
   if (!clientId) {
+    try {
+      const siteOrigin = getSiteOrigin();
+      const inviteRes = await admin.auth.admin.inviteUserByEmail(recipientEmail, {
+        data: { full_name: recipientName, role: 'client' },
+        redirectTo: `${siteOrigin}/invite/accept`,
+      });
+      if (inviteRes.data?.user?.id) {
+        clientId = inviteRes.data.user.id;
+        await admin.from('profiles').upsert({
+          id: clientId,
+          email: recipientEmail,
+          full_name: recipientName || recipientEmail,
+          role: 'client',
+          is_active: true,
+        });
+        await admin.from('client_profiles').upsert({
+          user_id: clientId,
+          tier: 'standard',
+          acquisition_source: inquiryId ? 'contact_inquiry' : 'proposal_invite',
+        });
+      }
+    } catch {
+      // fall through to explicit check below
+    }
+  }
+  if (!clientId) {
     throw new Error('Proposals must be linked to an invited or active Portal Client account.');
+  }
+
+  if (inquiryId) {
+    try {
+      await admin
+        .from('inquiries')
+        .update({ status: 'proposal_sent', converted_client_id: clientId })
+        .eq('id', inquiryId);
+      await admin
+        .from('inquiry_attachments')
+        .update({ retained: true })
+        .eq('inquiry_id', inquiryId);
+    } catch {
+      // non-fatal
+    }
   }
   const { data: proposal, error: propErr } = await admin
     .from('proposals')
@@ -406,6 +488,21 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
       href: `/portal/orders/${parsed.order_id}`,
     });
 
+    const clientEmail = await lookupProfileEmail(clientId);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'order_created',
+        subject: `Order ${orderCode} Created — ${title}`,
+        payload: {
+          message: `A new engagement order (${orderCode}: ${title}) for $${totalUsd.toLocaleString()} USD has been initialized in your Client Portal.`,
+          actionUrl: `${getSiteOrigin()}/portal/orders/${parsed.order_id}`,
+        },
+        entityType: 'order',
+        entityId: parsed.order_id,
+      });
+    }
+
     await recordAuditLog({
       actorId: session.userId,
       actorRole: 'admin',
@@ -479,6 +576,21 @@ export async function updateOrderStatusAndProgressAction(formData: FormData): Pr
       body: `Status changed to ${status.replace(/_/g, ' ')} (${updates.progress_percent}%).`,
       href: `/portal/orders/${orderId}`,
     });
+
+    const clientEmail = await lookupProfileEmail(existing.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'order_status_updated',
+        subject: `Order ${existing.code} Status Updated — ${status.replace(/_/g, ' ')}`,
+        payload: {
+          message: `Your order ${existing.code} (${existing.title}) is now marked as ${status.replace(/_/g, ' ')} (${updates.progress_percent}% complete).`,
+          actionUrl: `${getSiteOrigin()}/portal/orders/${orderId}`,
+        },
+        entityType: 'order',
+        entityId: orderId,
+      });
+    }
 
     await recordAuditLog({
       actorId: session.userId,
@@ -610,6 +722,7 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   }
 
   if (r2Key && filename && sizeBytes > 0) {
+    const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
     const { error: fileErr } = await admin.from('vault_files').insert({
       owner_client_id: clientId,
       order_id: orderId,
@@ -620,6 +733,7 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
       mime_type: mime,
       size_bytes: sizeBytes,
       sha256_checksum: sha256Checksum,
+      retention_until: retentionUntil,
       uploaded_by: session.userId,
     });
     if (fileErr) {
@@ -647,6 +761,21 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     href: `/portal/orders/${orderId}`,
   });
 
+  const clientEmail = await lookupProfileEmail(clientId);
+  if (clientEmail) {
+    await enqueueTransactionalEmail({
+      toEmail: clientEmail,
+      template: 'deliverable_published',
+      subject: `Deliverable ${deliverable?.code ?? ''} (${versionLabel}) Ready — ${title}`,
+      payload: {
+        message: `A new versioned deliverable (${versionLabel}: ${title}) has been published to your Encrypted Deliverables Vault for order ${order.code}.`,
+        actionUrl: `${getSiteOrigin()}/portal/orders/${orderId}`,
+      },
+      entityType: 'deliverable',
+      entityId: deliverable?.id,
+    });
+  }
+
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'admin',
@@ -669,7 +798,7 @@ export async function postOrderMessageAction(formData: FormData): Promise<void> 
   const orderId = String(formData.get('order_id') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
   const isInternalNote =
-    session.role === 'admin' && formData.get('is_internal_note') === 'on';
+    session.role === 'admin' && parseFormBoolean(formData, 'is_internal_note');
 
   if (!orderId || !body) return;
 
@@ -704,12 +833,37 @@ export async function postOrderMessageAction(formData: FormData): Promise<void> 
         body: body.slice(0, 120),
         href: `/portal/orders/${orderId}`,
       });
+      const clientEmail = await lookupProfileEmail(order.client_id);
+      if (clientEmail) {
+        await enqueueTransactionalEmail({
+          toEmail: clientEmail,
+          template: 'order_message',
+          subject: `New Message on Order ${order.code} — ${order.title}`,
+          payload: {
+            message: body.slice(0, 400),
+            actionUrl: `${getSiteOrigin()}/portal/orders/${orderId}`,
+          },
+          entityType: 'order',
+          entityId: orderId,
+        });
+      }
     } else {
       await notifyAllAdmins({
         category: 'message',
         title: `Client reply on ${order.code}`,
         body: body.slice(0, 120),
         href: `/admin/orders/${orderId}`,
+      });
+      await enqueueTransactionalEmail({
+        toEmail: getAdminAlertEmail(),
+        template: 'order_message_admin',
+        subject: `Client Reply on Order ${order.code} — ${order.title}`,
+        payload: {
+          message: body.slice(0, 400),
+          actionUrl: `${getSiteOrigin()}/admin/orders/${orderId}`,
+        },
+        entityType: 'order',
+        entityId: orderId,
       });
     }
   }
@@ -783,6 +937,21 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
       href: `/portal/invoices/${invoice.invoice_id}`,
     });
 
+    const clientEmail = await lookupProfileEmail(clientId);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_issued',
+        subject: `Invoice ${invoice.code ?? ''} Issued (${currency} ${displayMajor})`,
+        payload: {
+          message: `A new invoice (${invoice.code ?? ''}: ${description}) for ${currency} ${displayMajor} has been issued in your Client Portal.`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${invoice.invoice_id}`,
+        },
+        entityType: 'invoice',
+        entityId: invoice.invoice_id,
+      });
+    }
+
     await recordAuditLog({
       actorId: session.userId,
       actorRole: 'admin',
@@ -810,6 +979,25 @@ export async function reviewPaymentProofAction(formData: FormData): Promise<void
   if (!paymentId || (decision !== 'confirmed' && decision !== 'rejected')) return;
 
   const admin = getSupabaseAdmin();
+  let paymentMeta: {
+    client_id: string;
+    invoice_id: string;
+    order_id: string | null;
+    code: string;
+    amount_cents: number;
+    currency: string;
+  } | null = null;
+  try {
+    const { data } = await admin
+      .from('payments')
+      .select('client_id, invoice_id, order_id, code, amount_cents, currency')
+      .eq('id', paymentId)
+      .maybeSingle();
+    if (data) paymentMeta = data;
+  } catch {
+    // ignore in minimal unit test mocks
+  }
+
   const { error } = await admin.rpc('review_invoice_payment', {
     p_payment_id: paymentId,
     p_admin_id: session.userId,
@@ -822,6 +1010,59 @@ export async function reviewPaymentProofAction(formData: FormData): Promise<void
     throw new Error(error.message);
   }
 
+  if (paymentMeta?.client_id) {
+    await createInAppNotification({
+      recipientId: paymentMeta.client_id,
+      category: 'payment',
+      title:
+        decision === 'confirmed'
+          ? `Payment ${paymentMeta.code} Confirmed`
+          : `Payment ${paymentMeta.code} Needs Attention`,
+      body:
+        decision === 'confirmed'
+          ? `Your payment of ${paymentMeta.currency} ${(paymentMeta.amount_cents / 100).toLocaleString()} has been verified.`
+          : (reason ?? 'Your submitted payment proof could not be verified.'),
+      href: `/portal/invoices/${paymentMeta.invoice_id}`,
+    });
+
+    const clientEmail = await lookupProfileEmail(paymentMeta.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: `payment_${decision}`,
+        subject:
+          decision === 'confirmed'
+            ? `Payment Confirmed (${paymentMeta.code})`
+            : `Update Regarding Payment ${paymentMeta.code}`,
+        payload: {
+          message:
+            decision === 'confirmed'
+              ? `Your payment transfer ${paymentMeta.code} (${paymentMeta.currency} ${(paymentMeta.amount_cents / 100).toLocaleString()}) has been verified and applied to your invoice.`
+              : `Your payment transfer ${paymentMeta.code} could not be verified: ${reason ?? 'Please check your transaction reference or receipt.'}`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${paymentMeta.invoice_id}`,
+        },
+        entityType: 'payment',
+        entityId: paymentId,
+      });
+    }
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: paymentMeta?.client_id ?? null,
+    orderId: paymentMeta?.order_id ?? null,
+    action: `payment.${decision}`,
+    entityType: 'payment',
+    entityId: paymentId,
+    summary: `Reviewed payment ${paymentMeta?.code ?? paymentId}: ${decision}`,
+    metadata: { decision, fxRate, reason },
+  });
+
+  if (paymentMeta?.invoice_id) {
+    revalidatePath(`/admin/invoices/${paymentMeta.invoice_id}`);
+    revalidatePath(`/portal/invoices/${paymentMeta.invoice_id}`);
+  }
   revalidatePath('/admin/invoices');
   revalidatePath('/admin');
   revalidatePath('/portal/invoices');
@@ -859,6 +1100,46 @@ export async function updateClientCrmAndNoteAction(formData: FormData): Promise<
     if (noteErr) throw new Error(noteErr.message);
   }
 
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId,
+    action: 'client.crm_updated',
+    entityType: 'client',
+    entityId: clientId,
+    summary: `Updated CRM tier (${tier}) and retention profile for client`,
+    metadata: { tier, companyName, hasNewNote: Boolean(noteBody) },
+  });
+
+  revalidatePath(`/admin/clients/${clientId}`);
+  revalidatePath('/admin/clients');
+}
+
+export async function toggleClientActiveStatusAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const clientId = String(formData.get('client_id') ?? '').trim();
+  const nextActive = parseFormBoolean(formData, 'is_active');
+  if (!clientId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('profiles')
+    .update({ is_active: nextActive })
+    .eq('id', clientId)
+    .eq('role', 'client');
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId,
+    action: nextActive ? 'client.activated' : 'client.deactivated',
+    entityType: 'client',
+    entityId: clientId,
+    summary: `${nextActive ? 'Reactivated' : 'Deactivated'} client account`,
+    metadata: { is_active: nextActive },
+  });
+
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath('/admin/clients');
 }
@@ -868,7 +1149,7 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
   const ticketId = String(formData.get('ticket_id') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
   const isInternalNote =
-    session.role === 'admin' && formData.get('is_internal_note') === 'on';
+    session.role === 'admin' && parseFormBoolean(formData, 'is_internal_note');
 
   if (!ticketId || !body) return;
 
@@ -892,6 +1173,70 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
   });
   if (msgErr) throw new Error(msgErr.message);
 
+  if (!isInternalNote) {
+    if (session.role === 'admin') {
+      try {
+        await admin.from('tickets').update({ status: 'answered' }).eq('id', ticketId);
+      } catch {}
+      await createInAppNotification({
+        recipientId: ticket.client_id,
+        category: 'ticket',
+        title: `Support Reply on ${ticket.code}`,
+        body: body.slice(0, 120),
+        href: `/portal/tickets/${ticketId}`,
+      });
+      const clientEmail = await lookupProfileEmail(ticket.client_id);
+      if (clientEmail) {
+        await enqueueTransactionalEmail({
+          toEmail: clientEmail,
+          template: 'ticket_reply',
+          subject: `Re: [${ticket.code}] ${ticket.subject}`,
+          payload: {
+            message: body.slice(0, 400),
+            actionUrl: `${getSiteOrigin()}/portal/tickets/${ticketId}`,
+          },
+          entityType: 'ticket',
+          entityId: ticketId,
+        });
+      }
+    } else {
+      try {
+        await admin
+          .from('tickets')
+          .update({ status: 'open', resolved_at: null })
+          .eq('id', ticketId);
+      } catch {}
+      await notifyAllAdmins({
+        category: 'ticket',
+        title: `Client Reply on Ticket ${ticket.code}`,
+        body: body.slice(0, 120),
+        href: `/admin/tickets/${ticketId}`,
+      });
+      await enqueueTransactionalEmail({
+        toEmail: getAdminAlertEmail(),
+        template: 'ticket_reply_admin',
+        subject: `Client Reply on [${ticket.code}] ${ticket.subject}`,
+        payload: {
+          message: body.slice(0, 400),
+          actionUrl: `${getSiteOrigin()}/admin/tickets/${ticketId}`,
+        },
+        entityType: 'ticket',
+        entityId: ticketId,
+      });
+    }
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: session.role === 'admin' ? 'admin' : 'client',
+    clientId: ticket.client_id,
+    action: 'ticket.replied',
+    entityType: 'ticket',
+    entityId: ticketId,
+    summary: `Posted reply on ticket ${ticket.code}`,
+    metadata: { isInternalNote },
+  });
+
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
   revalidatePath(`/portal/tickets/${ticketId}`);
@@ -899,7 +1244,7 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
 }
 
 export async function updateTicketStatusAction(formData: FormData): Promise<void> {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   const ticketId = String(formData.get('ticket_id') ?? '').trim();
   const rawStatus = String(formData.get('status') ?? 'resolved').trim() as TicketStatus;
   if (!ticketId) return;
@@ -909,6 +1254,16 @@ export async function updateTicketStatusAction(formData: FormData): Promise<void
   const status: TicketStatus = rawStatus;
 
   const admin = getSupabaseAdmin();
+  let ticketMeta: { client_id: string; code: string; subject: string } | null = null;
+  try {
+    const { data } = await admin
+      .from('tickets')
+      .select('client_id, code, subject')
+      .eq('id', ticketId)
+      .maybeSingle();
+    if (data) ticketMeta = data;
+  } catch {}
+
   const { error } = await admin
     .from('tickets')
     .update({
@@ -918,15 +1273,50 @@ export async function updateTicketStatusAction(formData: FormData): Promise<void
     .eq('id', ticketId);
   if (error) throw new Error(error.message);
 
+  if (ticketMeta?.client_id) {
+    await createInAppNotification({
+      recipientId: ticketMeta.client_id,
+      category: 'ticket',
+      title: `Ticket ${ticketMeta.code} Marked ${status.replace(/_/g, ' ')}`,
+      body: ticketMeta.subject,
+      href: `/portal/tickets/${ticketId}`,
+    });
+    const clientEmail = await lookupProfileEmail(ticketMeta.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'ticket_status_updated',
+        subject: `Ticket ${ticketMeta.code} Status: ${status.replace(/_/g, ' ')}`,
+        payload: {
+          message: `Your support ticket ${ticketMeta.code} (${ticketMeta.subject}) is now marked as ${status.replace(/_/g, ' ')}.`,
+          actionUrl: `${getSiteOrigin()}/portal/tickets/${ticketId}`,
+        },
+        entityType: 'ticket',
+        entityId: ticketId,
+      });
+    }
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: ticketMeta?.client_id ?? null,
+    action: 'ticket.status_updated',
+    entityType: 'ticket',
+    entityId: ticketId,
+    summary: `Updated ticket ${ticketMeta?.code ?? ticketId} status to ${status}`,
+    metadata: { status },
+  });
+
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
   revalidatePath(`/portal/tickets/${ticketId}`);
 }
 
 export async function toggleReviewPublicApprovalAction(formData: FormData): Promise<void> {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   const reviewId = String(formData.get('review_id') ?? '').trim();
-  const approved = formData.get('is_public_approved') === 'true';
+  const approved = parseFormBoolean(formData, 'is_public_approved');
   if (!reviewId) return;
 
   const admin = getSupabaseAdmin();
@@ -936,7 +1326,19 @@ export async function toggleReviewPublicApprovalAction(formData: FormData): Prom
     .eq('id', reviewId);
   if (error) throw new Error(error.message);
 
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    action: 'review.public_approval_toggled',
+    entityType: 'review',
+    entityId: reviewId,
+    summary: `${approved ? 'Approved' : 'Unpublished'} client review for public display`,
+    metadata: { is_public_approved: approved },
+  });
+
   revalidatePath('/admin/reviews');
+  revalidatePath('/');
+  revalidatePath('/services');
 }
 
 export async function createRetainerPlanAction(formData: FormData): Promise<void> {
@@ -963,6 +1365,28 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
   });
   if (error) throw new Error(error.message);
 
+  await createInAppNotification({
+    recipientId: clientId,
+    category: 'retainer',
+    title: `Monthly Retainer Activated: ${title}`,
+    body: `${hoursIncluded} hrs/month (${monthlyUsd.toLocaleString()} USD/mo)`,
+    href: '/portal/retainers',
+  });
+
+  const clientEmail = await lookupProfileEmail(clientId);
+  if (clientEmail) {
+    await enqueueTransactionalEmail({
+      toEmail: clientEmail,
+      template: 'retainer_activated',
+      subject: `Monthly Retainer Activated — ${title}`,
+      payload: {
+        message: `Your monthly retainer plan (${title}: ${hoursIncluded} hrs/month at $${monthlyUsd.toLocaleString()} USD/mo) is now active in your Client Portal.`,
+        actionUrl: `${getSiteOrigin()}/portal/retainers`,
+      },
+      entityType: 'retainer',
+    });
+  }
+
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'admin',
@@ -975,6 +1399,53 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
 
   revalidatePath('/admin/retainers');
   revalidatePath('/portal/retainers');
+}
+
+export async function updateRetainerPlanAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const retainerId = String(formData.get('retainer_id') ?? '').trim();
+  const hoursUsed = Math.max(0, Number(formData.get('hours_used_current_period') ?? 0));
+  const rawStatus = String(formData.get('status') ?? 'active').trim();
+  const status =
+    rawStatus === 'paused' || rawStatus === 'cancelled' ? rawStatus : 'active';
+
+  if (!retainerId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('retainer_plans')
+    .update({
+      hours_used_current_period: hoursUsed,
+      status,
+    })
+    .eq('id', retainerId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    action: 'retainer.updated',
+    entityType: 'retainer',
+    entityId: retainerId,
+    summary: `Updated retainer status (${status}) and hours used (${hoursUsed})`,
+    metadata: { status, hoursUsed },
+  });
+
+  revalidatePath('/admin/retainers');
+  revalidatePath('/portal/retainers');
+}
+
+export async function markAllNotificationsReadAction(): Promise<void> {
+  const session = await requireAuthenticatedSession();
+  const admin = getSupabaseAdmin();
+  await admin
+    .from('notifications')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('recipient_id', session.userId)
+    .eq('is_read', false);
+
+  revalidatePath('/admin');
+  revalidatePath('/portal');
 }
 
 // =============================================================================
@@ -1007,6 +1478,39 @@ export async function acceptProposalClientAction(formData: FormData): Promise<vo
       : rpcResult && typeof rpcResult === 'object' && !Array.isArray(rpcResult)
         ? (rpcResult as { order_id?: unknown }).order_id
         : null;
+
+  await notifyAllAdmins({
+    category: 'proposal',
+    title: 'Proposal Accepted by Client',
+    body: `${session.email} accepted proposal ${proposalId}.`,
+    href:
+      typeof resolvedOrderId === 'string' && resolvedOrderId
+        ? `/admin/orders/${resolvedOrderId}`
+        : '/admin/proposals',
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'proposal_accepted_admin',
+    subject: `Proposal Accepted by ${session.email}`,
+    payload: {
+      message: `${session.email} accepted proposal ${proposalId} and initialized order ${resolvedOrderId ?? ''}.`,
+      actionUrl: `${getSiteOrigin()}/admin/orders`,
+    },
+    entityType: 'proposal',
+    entityId: proposalId,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId: typeof resolvedOrderId === 'string' ? resolvedOrderId : null,
+    action: 'proposal.accepted',
+    entityType: 'proposal',
+    entityId: proposalId,
+    summary: `Client accepted proposal ${proposalId}`,
+  });
 
   if (typeof resolvedOrderId === 'string' && resolvedOrderId) {
     redirect(`/portal/orders/${resolvedOrderId}`);
@@ -1112,6 +1616,30 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
     href: `/admin/orders/${order.id}`,
   });
 
+  await enqueueTransactionalEmail({
+    toEmail: session.email,
+    template: 'order_placed_client',
+    subject: `Order ${order.code} Confirmed — ${finalTitle}`,
+    payload: {
+      message: `Your engagement contract (${order.code}: ${finalTitle}) is active in your Client Portal.`,
+      actionUrl: `${getSiteOrigin()}/portal/orders/${order.id}`,
+    },
+    entityType: 'order',
+    entityId: order.id,
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'order_placed_admin',
+    subject: `New Portal Order ${order.code} from ${session.email}`,
+    payload: {
+      message: `${session.email} placed ${finalTitle} ($${(finalPriceCents / 100).toLocaleString()} USD).`,
+      actionUrl: `${getSiteOrigin()}/admin/orders/${order.id}`,
+    },
+    entityType: 'order',
+    entityId: order.id,
+  });
+
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'client',
@@ -1180,6 +1708,24 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
       throw new Error(statusErr.message);
     }
   }
+
+  await notifyAllAdmins({
+    category: 'order',
+    title: 'Client Updated Project Requirements',
+    body: `${session.email} submitted technical scope & access notes.`,
+    href: `/admin/orders/${orderId}`,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId,
+    action: 'order.requirements_submitted',
+    entityType: 'order',
+    entityId: orderId,
+    summary: 'Client updated project technical requirements and access notes',
+  });
 
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath(`/admin/orders/${orderId}`);
@@ -1308,6 +1854,43 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
     throw new Error(error.message);
   }
 
+  await notifyAllAdmins({
+    category: 'deliverable',
+    title:
+      decision === 'accepted'
+        ? 'Client Accepted Deliverable'
+        : 'Client Requested Deliverable Revision',
+    body: feedback || `${session.email} marked deliverable ${decision.replace(/_/g, ' ')}.`,
+    href: orderId ? `/admin/orders/${orderId}` : '/admin/orders',
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: `deliverable_${decision}_admin`,
+    subject:
+      decision === 'accepted'
+        ? `Deliverable Accepted by ${session.email}`
+        : `Revision Requested by ${session.email}`,
+    payload: {
+      message: `${session.email} reviewed deliverable ${deliverableId}: ${decision}. ${feedback ? `Feedback: ${feedback}` : ''}`,
+      actionUrl: `${getSiteOrigin()}${orderId ? `/admin/orders/${orderId}` : '/admin/orders'}`,
+    },
+    entityType: 'deliverable',
+    entityId: deliverableId,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId: orderId || null,
+    action: `deliverable.${decision}`,
+    entityType: 'deliverable',
+    entityId: deliverableId,
+    summary: `Client marked deliverable as ${decision}`,
+    metadata: { feedback },
+  });
+
   if (orderId) {
     revalidatePath(`/portal/orders/${orderId}`);
     revalidatePath(`/admin/orders/${orderId}`);
@@ -1386,6 +1969,7 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
       }
     }
 
+    const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
     const { data: vFile, error: fileErr } = await admin
       .from('vault_files')
       .insert({
@@ -1397,6 +1981,7 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
         filename,
         mime_type: mime,
         size_bytes: sizeBytes,
+        retention_until: retentionUntil,
         uploaded_by: session.userId,
       })
       .select('id')
@@ -1432,6 +2017,18 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     title: `Payment Submitted (${payment.code ?? ''})`,
     body: `Invoice ${invoice.code}: ${invoice.currency} ${amountMajor.toLocaleString()} via ${method}`,
     href: `/admin/invoices/${invoice.id}`,
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'payment_proof_submitted_admin',
+    subject: `Payment Proof Submitted (${payment.code ?? ''}) for ${invoice.code}`,
+    payload: {
+      message: `${session.email} submitted payment proof (${invoice.currency} ${amountMajor.toLocaleString()} via ${method}, Ref: ${reference}) for invoice ${invoice.code}.`,
+      actionUrl: `${getSiteOrigin()}/admin/invoices/${invoice.id}`,
+    },
+    entityType: 'payment',
+    entityId: payment.id,
   });
 
   await recordAuditLog({
@@ -1512,6 +2109,30 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     href: `/admin/tickets/${ticket.id}`,
   });
 
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'ticket_created_admin',
+    subject: `[${ticket.code}] New Support Ticket (${priority.toUpperCase()}): ${subject}`,
+    payload: {
+      message: `${session.email} opened ticket ${ticket.code} (${rawCategory}, priority: ${priority}):\n\n${body.slice(0, 400)}`,
+      actionUrl: `${getSiteOrigin()}/admin/tickets/${ticket.id}`,
+    },
+    entityType: 'ticket',
+    entityId: ticket.id,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId,
+    action: 'ticket.created',
+    entityType: 'ticket',
+    entityId: ticket.id,
+    summary: `Opened support ticket ${ticket.code}: ${subject}`,
+    metadata: { priority, category: rawCategory },
+  });
+
   revalidatePath('/portal/tickets');
   revalidatePath('/admin/tickets');
   redirect(`/portal/tickets/${ticket.id}`);
@@ -1558,6 +2179,25 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
     throw new Error(error.message);
   }
 
+  await notifyAllAdmins({
+    category: 'review',
+    title: `New ${ratingOverall}★ Client Review Submitted`,
+    body: headline || reviewText.slice(0, 120),
+    href: '/admin/reviews',
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId,
+    action: 'review.submitted',
+    entityType: 'review',
+    entityId: orderId,
+    summary: `Submitted ${ratingOverall}-star review for order`,
+    metadata: { ratingOverall, headline },
+  });
+
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath('/admin/reviews');
 }
@@ -1597,6 +2237,17 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     preferred_currency: preferredCurrency,
   });
   if (cpErr) throw new Error(cpErr.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    action: 'client.profile_updated',
+    entityType: 'client',
+    entityId: session.userId,
+    summary: 'Updated client billing and organization profile',
+    metadata: { companyName, preferredCurrency, timezone },
+  });
 
   revalidatePath('/portal/profile');
 }

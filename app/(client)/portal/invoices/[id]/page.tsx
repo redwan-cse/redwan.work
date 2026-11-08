@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, CreditCard } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, Download } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { submitInvoicePaymentProofAction } from '@/lib/crm/actions';
+import { PrintInvoiceButton } from '@/components/panel/print-invoice-button';
 import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,7 +42,9 @@ export default async function ClientInvoiceDetailPage({
   const confirmedCents = payments
     .filter((p: { status: string }) => p.status === 'confirmed')
     .reduce((acc: number, p: { amount_cents: number }) => acc + (p.amount_cents ?? 0), 0);
-  const balanceDueMajor = Math.max(0, (invoice.total_cents - confirmedCents) / 100);
+  const creditedCents = Number(invoice.credited_cents ?? 0);
+  const balanceDueMajor = Math.max(0, (invoice.total_cents - confirmedCents - creditedCents) / 100);
+  const canSubmitPaymentProof = ['issued', 'partially_paid', 'overdue'].includes(invoice.status);
 
   return (
     <div className="space-y-6">
@@ -49,7 +52,7 @@ export default async function ClientInvoiceDetailPage({
         <div>
           <Link
             href="/portal/invoices"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground print:hidden"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Invoices
@@ -65,12 +68,15 @@ export default async function ClientInvoiceDetailPage({
           </div>
         </div>
 
-        <div className="text-right">
-          <div className="font-mono text-2xl font-extrabold">
-            {invoice.currency} {(invoice.total_cents / 100).toLocaleString()}
-          </div>
-          <div className="font-mono text-xs text-muted-foreground">
-            Balance Due: {invoice.currency} {balanceDueMajor.toLocaleString()}
+        <div className="flex flex-wrap items-center gap-3">
+          <PrintInvoiceButton />
+          <div className="text-right">
+            <div className="font-mono text-2xl font-extrabold">
+              {invoice.currency} {(invoice.total_cents / 100).toLocaleString()}
+            </div>
+            <div className="font-mono text-xs text-muted-foreground">
+              Balance Due: {invoice.currency} {balanceDueMajor.toLocaleString()}
+            </div>
           </div>
         </div>
       </div>
@@ -130,30 +136,47 @@ export default async function ClientInvoiceDetailPage({
                   status: string;
                   rejection_reason: string | null;
                   created_at: string;
-                }) => (
-                  <div
-                    key={pmt.id}
-                    className="rounded-xl border border-border/70 bg-background/60 p-3.5 text-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-primary">{pmt.code}</span>
-                      <Badge variant="outline" className="font-mono text-[10px] uppercase">
-                        {pmt.status}
-                      </Badge>
+                  proof_file?: { id: string; filename: string } | Array<{ id: string; filename: string }> | null;
+                }) => {
+                  const proofFile = Array.isArray(pmt.proof_file)
+                    ? pmt.proof_file[0]
+                    : pmt.proof_file;
+                  return (
+                    <div
+                      key={pmt.id}
+                      className="rounded-xl border border-border/70 bg-background/60 p-3.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-primary">{pmt.code}</span>
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                          {pmt.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-muted-foreground">
+                          {pmt.method.replace(/_/g, ' ')} • Ref: {pmt.reference}
+                        </span>
+                        <span className="font-mono font-bold">
+                          {pmt.currency} {(pmt.amount_cents / 100).toLocaleString()}
+                        </span>
+                      </div>
+                      {proofFile?.id && (
+                        <div className="mt-2">
+                          <a
+                            href={`/api/files/${proofFile.id}/download`}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] text-primary hover:underline"
+                          >
+                            <Download className="h-3 w-3" />
+                            Receipt: {proofFile.filename}
+                          </a>
+                        </div>
+                      )}
+                      {pmt.rejection_reason && (
+                        <p className="mt-1 text-destructive">Note: {pmt.rejection_reason}</p>
+                      )}
                     </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        {pmt.method.replace(/_/g, ' ')} • Ref: {pmt.reference}
-                      </span>
-                      <span className="font-mono font-bold">
-                        {pmt.currency} {(pmt.amount_cents / 100).toLocaleString()}
-                      </span>
-                    </div>
-                    {pmt.rejection_reason && (
-                      <p className="mt-1 text-destructive">Note: {pmt.rejection_reason}</p>
-                    )}
-                  </div>
-                )
+                  );
+                }
               )}
               {payments.length === 0 && (
                 <p className="py-4 text-center text-xs text-muted-foreground">
@@ -182,15 +205,19 @@ export default async function ClientInvoiceDetailPage({
                     Thank you! Your payment has been verified and applied to your engagement.
                   </p>
                 </div>
+              ) : !canSubmitPaymentProof ? (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  This invoice is currently marked as <strong className="uppercase">{invoice.status}</strong> and is not accepting payment transfers.
+                </div>
               ) : (
                 <form action={submitInvoicePaymentProofAction} className="space-y-3.5">
                   <input type="hidden" name="invoice_id" value={invoice.id} />
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <Label className="text-xs">Payment Method *</Label>
                     <select
                       name="method"
                       defaultValue="bank_transfer"
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >
                       <option value="bank_transfer">Bank Wire / SWIFT / Local Transfer</option>
                       <option value="wise">Wise (USD / EUR / GBP)</option>

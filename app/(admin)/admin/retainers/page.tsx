@@ -1,11 +1,11 @@
-import { Plus, Repeat } from 'lucide-react';
+import { Plus, Repeat, Save } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { createRetainerPlanAction } from '@/lib/crm/actions';
+import { createRetainerPlanAction, updateRetainerPlanAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -34,8 +34,8 @@ export default async function AdminRetainersPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-12">
-        <Card className="lg:col-span-4">
+      <div className="grid gap-8 xl:grid-cols-12">
+        <Card className="xl:col-span-5">
           <CardHeader>
             <CardTitle className="text-lg">Start Client Retainer</CardTitle>
             <CardDescription>Assigns monthly hours and recurring billing rate.</CardDescription>
@@ -67,8 +67,8 @@ export default async function AdminRetainersPage() {
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Monthly Rate (USD)</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Monthly Rate (USD)</Label>
                   <Input
                     name="monthly_usd"
                     type="number"
@@ -76,8 +76,8 @@ export default async function AdminRetainersPage() {
                     className="h-9 font-mono text-xs"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Hours / Month</Label>
+                <div className="flex flex-col justify-end gap-1.5">
+                  <Label className="mb-auto text-xs">Hours / Month</Label>
                   <Input
                     name="hours_included"
                     type="number"
@@ -94,7 +94,7 @@ export default async function AdminRetainersPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-8">
+        <Card className="xl:col-span-7">
           <CardHeader>
             <CardTitle className="text-lg">Active &amp; Past Retainers</CardTitle>
           </CardHeader>
@@ -104,27 +104,60 @@ export default async function AdminRetainersPage() {
                 {retainers.map((r) => (
                   <div
                     key={r.id}
-                    className="flex flex-wrap items-center justify-between gap-4 py-4"
+                    className="space-y-3 py-4"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold">{r.title}</span>
-                        <Badge variant="outline" className="font-mono text-[10px]">
-                          {r.status}
-                        </Badge>
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold">{r.title}</span>
+                          <Badge variant="outline" className="font-mono text-[10px]">
+                            {r.status}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Client: {clientMap.get(r.client_id) ?? 'Client'}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Client: {clientMap.get(r.client_id) ?? 'Client'}
+                      <div className="text-right font-mono text-xs">
+                        <div className="font-bold">
+                          {formatMoney(r.monthly_fee_cents, r.currency)} / mo
+                        </div>
+                        <div className="text-muted-foreground">
+                          {r.hours_used_current_period} / {r.hours_per_month} hrs used
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right font-mono text-xs">
-                      <div className="font-bold">
-                        {formatMoney(r.monthly_fee_cents, r.currency)} / mo
+
+                    <form
+                      action={updateRetainerPlanAction}
+                      className="flex flex-wrap items-center gap-2.5 pt-1 text-xs"
+                    >
+                      <input type="hidden" name="retainer_id" value={r.id} />
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-[11px] text-muted-foreground">Hours Used:</Label>
+                        <Input
+                          name="hours_used_current_period"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          defaultValue={r.hours_used_current_period}
+                          className="h-9 w-20 font-mono text-xs"
+                        />
                       </div>
-                      <div className="text-muted-foreground">
-                        {r.hours_used_current_period} / {r.hours_per_month} hrs used
-                      </div>
-                    </div>
+                      <select
+                        name="status"
+                        defaultValue={r.status}
+                        className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+                      >
+                        <option value="active">active</option>
+                        <option value="paused">paused</option>
+                        <option value="cancelled">cancelled</option>
+                      </select>
+                      <Button type="submit" size="sm" variant="outline" className="h-9 gap-1 text-xs">
+                        <Save className="h-3.5 w-3.5" />
+                        Update Retainer
+                      </Button>
+                    </form>
                   </div>
                 ))}
               </div>

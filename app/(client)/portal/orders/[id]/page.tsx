@@ -168,27 +168,27 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Emergency Contact Name *</Label>
-                    <Input name="emergency_contact_name" required className="h-8 text-xs" />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="flex flex-col justify-end gap-1.5">
+                    <Label className="mb-auto text-xs">Emergency Contact Name *</Label>
+                    <Input name="emergency_contact_name" required className="h-9 text-xs" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Emergency Phone *</Label>
-                    <Input name="emergency_contact_phone" required className="h-8 text-xs" />
+                  <div className="flex flex-col justify-end gap-1.5">
+                    <Label className="mb-auto text-xs">Emergency Phone *</Label>
+                    <Input name="emergency_contact_phone" required className="h-9 text-xs" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Your Full Legal Name *</Label>
+                  <div className="flex flex-col justify-end gap-1.5">
+                    <Label className="mb-auto text-xs">Your Full Legal Name *</Label>
                     <Input
                       name="signer_full_name"
                       defaultValue={session.fullName ?? ''}
                       required
-                      className="h-8 text-xs"
+                      className="h-9 text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Your Role / Title</Label>
-                    <Input name="signer_title" placeholder="CTO / Founder" className="h-8 text-xs" />
+                  <div className="flex flex-col justify-end gap-1.5">
+                    <Label className="mb-auto text-xs">Your Role / Title</Label>
+                    <Input name="signer_title" placeholder="CTO / Founder" className="h-9 text-xs" />
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs font-medium">
@@ -260,15 +260,15 @@ export default async function ClientOrderDetailPage({
                               key={f.id}
                               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card px-3 py-2"
                             >
-                              <div>
-                                <div className="font-mono font-medium">{f.filename}</div>
+                              <div className="min-w-0">
+                                <div className="break-all font-mono font-medium">{f.filename}</div>
                                 {f.sha256_checksum && (
-                                  <div className="font-mono text-[10px] text-muted-foreground">
+                                  <div className="break-all font-mono text-[10px] text-muted-foreground">
                                     SHA-256: {f.sha256_checksum.slice(0, 24)}…
                                   </div>
                                 )}
                               </div>
-                              <Button asChild size="sm" variant="outline" className="h-7 gap-1 text-xs">
+                              <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs">
                                 <a href={`/api/files/${f.id}/download`}>
                                   <Download className="h-3.5 w-3.5" />
                                   Download ({(f.size_bytes / 1024).toFixed(1)} KB)
@@ -289,7 +289,7 @@ export default async function ClientOrderDetailPage({
                           <Input
                             name="feedback"
                             placeholder="Optional sign-off note or specific revision feedback..."
-                            className="h-8 text-xs"
+                            className="h-9 text-xs"
                           />
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -297,7 +297,7 @@ export default async function ClientOrderDetailPage({
                               name="decision"
                               value="accepted"
                               size="sm"
-                              className="h-8 gap-1.5 text-xs"
+                              className="h-9 gap-1.5 text-xs"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
                               Accept Deliverable & Sign Off
@@ -309,7 +309,7 @@ export default async function ClientOrderDetailPage({
                               size="sm"
                               variant="outline"
                               disabled={order.revisions_used >= order.revisions_included}
-                              className="h-8 gap-1.5 text-xs"
+                              className="h-9 gap-1.5 text-xs"
                             >
                               <RotateCcw className="h-3.5 w-3.5" />
                               Request Revision ({Math.max(0, order.revisions_included - order.revisions_used)} left)
@@ -428,46 +428,52 @@ export default async function ClientOrderDetailPage({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form action={submitClientReviewAction} className="space-y-3">
-                <input type="hidden" name="order_id" value={order.id} />
-                <div className="space-y-1">
-                  <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
-                  <select
-                    name="rating_overall"
-                    defaultValue={String(existingReview?.rating_overall ?? 5)}
-                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                  >
-                    <option value="5">★★★★★ (5/5 — Exceptional)</option>
-                    <option value="4">★★★★☆ (4/5 — Very Good)</option>
-                    <option value="3">★★★☆☆ (3/5 — Satisfactory)</option>
-                    <option value="2">★★☆☆☆ (2/5 — Subpar)</option>
-                    <option value="1">★☆☆☆☆ (1/5 — Poor)</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Headline</Label>
-                  <Input
-                    name="headline"
-                    defaultValue={existingReview?.headline ?? ''}
-                    placeholder="Thorough VAPT audit and fast remediation support"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Written Review *</Label>
-                  <Textarea
-                    name="review_text"
-                    rows={3}
-                    required
-                    defaultValue={existingReview?.review_text ?? ''}
-                    placeholder="Share your experience working on this engagement..."
-                    className="text-xs"
-                  />
-                </div>
-                <Button type="submit" size="sm" variant="outline" className="w-full">
-                  {existingReview ? 'Update Review' : 'Submit Engagement Review'}
-                </Button>
-              </form>
+              {order.status !== 'completed' && !existingReview ? (
+                <p className="py-2 text-xs text-muted-foreground">
+                  Engagement reviews unlock automatically once all deliverables are accepted and the order is marked completed.
+                </p>
+              ) : (
+                <form action={submitClientReviewAction} className="space-y-3">
+                  <input type="hidden" name="order_id" value={order.id} />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
+                    <select
+                      name="rating_overall"
+                      defaultValue={String(existingReview?.rating_overall ?? 5)}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                    >
+                      <option value="5">★★★★★ (5/5 — Exceptional)</option>
+                      <option value="4">★★★★☆ (4/5 — Very Good)</option>
+                      <option value="3">★★★☆☆ (3/5 — Satisfactory)</option>
+                      <option value="2">★★☆☆☆ (2/5 — Subpar)</option>
+                      <option value="1">★☆☆☆☆ (1/5 — Poor)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Headline</Label>
+                    <Input
+                      name="headline"
+                      defaultValue={existingReview?.headline ?? ''}
+                      placeholder="Thorough VAPT audit and fast remediation support"
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Written Review *</Label>
+                    <Textarea
+                      name="review_text"
+                      rows={3}
+                      required
+                      defaultValue={existingReview?.review_text ?? ''}
+                      placeholder="Share your experience working on this engagement..."
+                      className="text-xs"
+                    />
+                  </div>
+                  <Button type="submit" size="sm" variant="outline" className="w-full">
+                    {existingReview ? 'Update Review' : 'Submit Engagement Review'}
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>

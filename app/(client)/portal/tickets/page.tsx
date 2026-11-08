@@ -64,12 +64,12 @@ export default async function ClientTicketsPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Priority</Label>
+                <div className="flex flex-col justify-end gap-1">
+                  <Label className="mb-auto text-xs">Priority</Label>
                   <select
                     name="priority"
                     defaultValue="medium"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
                     <option value="low">Low (48h SLA)</option>
                     <option value="medium">Medium (24h SLA)</option>
@@ -78,12 +78,12 @@ export default async function ClientTicketsPage() {
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Category</Label>
+                <div className="flex flex-col justify-end gap-1">
+                  <Label className="mb-auto text-xs">Category</Label>
                   <select
                     name="category"
                     defaultValue="general"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
                     <option value="general">General Support</option>
                     <option value="security_incident">Security Incident / VAPT</option>
@@ -99,7 +99,7 @@ export default async function ClientTicketsPage() {
                 <select
                   name="order_id"
                   defaultValue=""
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
                   <option value="">General Account / Retainer</option>
                   {(orders ?? []).map((ord) => (

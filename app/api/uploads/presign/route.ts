@@ -226,50 +226,53 @@ export async function POST(request: NextRequest) {
 
     // ---- 5. Turnstile siteverify + single-use replay guard ----
     const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
-    if (!turnstileSecret) {
+    const developmentBypass = !turnstileSecret && process.env.NODE_ENV === 'development';
+    if (!turnstileSecret && !developmentBypass) {
       console.error('TURNSTILE_SECRET_KEY is not configured');
       return jsonError('Server configuration error. Please contact support.', 500);
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT);
+    if (!developmentBypass && turnstileSecret) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT);
 
-    try {
-      // Prepare validation request using FormData (recommended format)
-      const validationFormData = new FormData();
-      validationFormData.append('secret', turnstileSecret);
-      validationFormData.append('response', turnstileToken);
-      validationFormData.append('remoteip', clientIp);
+      try {
+        // Prepare validation request using FormData (recommended format)
+        const validationFormData = new FormData();
+        validationFormData.append('secret', turnstileSecret);
+        validationFormData.append('response', turnstileToken);
+        validationFormData.append('remoteip', clientIp);
 
-      // Call Cloudflare Siteverify API
-      const turnstileResponse = await fetch(
-        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
-        {
-          method: 'POST',
-          body: validationFormData,
-          signal: controller.signal,
+        // Call Cloudflare Siteverify API
+        const turnstileResponse = await fetch(
+          'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+          {
+            method: 'POST',
+            body: validationFormData,
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        const turnstileResult: TurnstileValidationResponse = await turnstileResponse.json();
+
+        if (!turnstileResult.success) {
+          // Provider categories are untrusted response data, not safe log fields.
+          console.warn('Contact presign verification rejected.');
+          return jsonError('Security verification failed. Please reload the form.', 400);
         }
-      );
+      } catch (error) {
+        clearTimeout(timeoutId);
 
-      clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.error('Turnstile validation timeout');
+          return jsonError('Verification timeout. Please try again.', 408);
+        }
 
-      const turnstileResult: TurnstileValidationResponse = await turnstileResponse.json();
-
-      if (!turnstileResult.success) {
-        // Provider categories are untrusted response data, not safe log fields.
-        console.warn('Contact presign verification rejected.');
-        return jsonError('Security verification failed. Please reload the form.', 400);
+        console.error('Contact presign verification unavailable.');
+        return jsonError('Verification service unavailable. Please try again.', 503);
       }
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error('Turnstile validation timeout');
-        return jsonError('Verification timeout. Please try again.', 408);
-      }
-
-      console.error('Contact presign verification unavailable.');
-      return jsonError('Verification service unavailable. Please try again.', 503);
     }
 
     const tokenHash = await sha256Hex(turnstileToken);

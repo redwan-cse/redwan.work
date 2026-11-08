@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { Inbox, ShieldCheck, UserPlus } from 'lucide-react';
+import { Download, Inbox, ShieldCheck, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,15 +127,17 @@ export default async function AdminInquiriesPage() {
                           size_bytes: number;
                           r2_key: string;
                         }) => (
-                          <div
+                          <a
                             key={att.id}
-                            className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-card px-2.5 py-1 font-mono text-xs"
+                            href={`/api/files/${att.id}/download`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 font-mono text-xs text-primary hover:bg-muted/50 hover:underline"
                           >
-                            <span>{att.filename}</span>
+                            <Download className="h-3 w-3 shrink-0" />
+                            <span className="break-all">{att.filename}</span>
                             <span className="text-[10px] text-muted-foreground">
                               ({(att.size_bytes / 1024).toFixed(1)} KB)
                             </span>
-                          </div>
+                          </a>
                         )
                       )}
                     </div>

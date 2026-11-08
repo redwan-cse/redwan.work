@@ -207,18 +207,18 @@ export default async function AdminServicesCmsPage() {
                 <div className="grid gap-3 sm:grid-cols-4">
                   <div className="space-y-1 sm:col-span-2">
                     <Label className="text-xs">Title</Label>
-                    <Input name="title" defaultValue={service.title} required className="h-8 text-xs" />
+                    <Input name="title" defaultValue={service.title} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Slug</Label>
-                    <Input name="slug" defaultValue={service.slug} required className="h-8 font-mono text-xs" />
+                    <Input name="slug" defaultValue={service.slug} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Pillar</Label>
                     <select
                       name="pillar"
                       defaultValue={service.pillar}
-                      className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >
                       <option value="cybersecurity">cybersecurity</option>
                       <option value="development">development</option>
@@ -229,10 +229,10 @@ export default async function AdminServicesCmsPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <div className="space-y-1 sm:col-span-2">
                     <Label className="text-xs">Tagline</Label>
-                    <Input name="tagline" defaultValue={service.tagline} required className="h-8 text-xs" />
+                    <Input name="tagline" defaultValue={service.tagline} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Starting USD</Label>
@@ -240,23 +240,23 @@ export default async function AdminServicesCmsPage() {
                       name="starting_price_usd"
                       type="number"
                       defaultValue={Math.round((service.startingPriceCents ?? 15000) / 100)}
-                      className="h-8 font-mono text-xs"
+                      className="h-9 font-mono text-xs"
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min/Max Days</Label>
-                    <div className="flex gap-1">
+                    <div className="flex gap-1.5">
                       <Input
                         name="delivery_days_min"
                         type="number"
                         defaultValue={service.deliveryDaysMin ?? 3}
-                        className="h-8 font-mono text-xs"
+                        className="h-9 font-mono text-xs"
                       />
                       <Input
                         name="delivery_days_max"
                         type="number"
                         defaultValue={service.deliveryDaysMax ?? 14}
-                        className="h-8 font-mono text-xs"
+                        className="h-9 font-mono text-xs"
                       />
                     </div>
                   </div>
@@ -266,7 +266,7 @@ export default async function AdminServicesCmsPage() {
                       name="sort_order"
                       type="number"
                       defaultValue={service.sortOrder}
-                      className="h-8 font-mono text-xs"
+                      className="h-9 font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -322,7 +322,7 @@ export default async function AdminServicesCmsPage() {
                       Public
                     </label>
                   </div>
-                  <Button type="submit" size="sm" variant="outline" className="h-8 gap-1.5 text-xs">
+                  <Button type="submit" size="sm" variant="outline" className="h-9 gap-1.5 text-xs">
                     <Save className="h-3.5 w-3.5" />
                     Save Service Changes
                   </Button>
@@ -334,7 +334,7 @@ export default async function AdminServicesCmsPage() {
                 <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Package Tiers ({service.rawPackages.length})
                 </div>
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {service.rawPackages.map((pkg) => (
                     <div
                       key={pkg.id}
@@ -350,14 +350,14 @@ export default async function AdminServicesCmsPage() {
                             type="submit"
                             variant="ghost"
                             size="sm"
-                            className="h-6 px-1.5 text-[11px] text-destructive"
+                            className="h-7 px-1.5 text-[11px] text-destructive"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </form>
                       </div>
 
-                      <form action={upsertServicePackageAction} className="space-y-2">
+                      <form action={upsertServicePackageAction} className="space-y-2.5">
                         <input type="hidden" name="id" value={pkg.id} />
                         <input type="hidden" name="service_id" value={service.id} />
                         <input type="hidden" name="tier_name" value={pkg.tier_name} />
@@ -367,38 +367,38 @@ export default async function AdminServicesCmsPage() {
                             name="package_name"
                             defaultValue={pkg.package_name}
                             required
-                            className="h-7 text-xs"
+                            className="h-9 text-xs"
                           />
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          <div className="space-y-1">
-                            <Label className="text-[10px]">Price (USD)</Label>
+                          <div className="flex flex-col justify-end gap-1">
+                            <Label className="mb-auto text-[10px]">Price (USD)</Label>
                             <Input
                               name="price_usd"
                               type="number"
                               defaultValue={Math.round(pkg.price_cents / 100)}
                               required
-                              className="h-7 font-mono text-xs"
+                              className="h-9 font-mono text-xs"
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-[10px]">Days</Label>
+                          <div className="flex flex-col justify-end gap-1">
+                            <Label className="mb-auto text-[10px]">Days</Label>
                             <Input
                               name="delivery_days"
                               type="number"
                               defaultValue={pkg.delivery_days}
                               required
-                              className="h-7 font-mono text-xs"
+                              className="h-9 font-mono text-xs"
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-[10px]">Revisions</Label>
+                          <div className="flex flex-col justify-end gap-1">
+                            <Label className="mb-auto text-[10px]">Revisions</Label>
                             <Input
                               name="revisions_included"
                               type="number"
                               defaultValue={pkg.revisions_included}
                               required
-                              className="h-7 font-mono text-xs"
+                              className="h-9 font-mono text-xs"
                             />
                           </div>
                         </div>
@@ -408,7 +408,7 @@ export default async function AdminServicesCmsPage() {
                             name="summary"
                             defaultValue={pkg.summary}
                             required
-                            className="h-7 text-xs"
+                            className="h-9 text-xs"
                           />
                         </div>
                         <div className="space-y-1">
@@ -441,7 +441,7 @@ export default async function AdminServicesCmsPage() {
                               Active
                             </label>
                           </div>
-                          <Button type="submit" size="sm" variant="secondary" className="h-7 text-[11px]">
+                          <Button type="submit" size="sm" variant="secondary" className="h-8 text-[11px]">
                             Update Tier
                           </Button>
                         </div>
@@ -455,45 +455,45 @@ export default async function AdminServicesCmsPage() {
                   <summary className="cursor-pointer font-semibold text-primary">
                     + Add or Replace a Package Tier for {service.title}
                   </summary>
-                  <form action={upsertServicePackageAction} className="mt-3 grid gap-3 sm:grid-cols-6">
+                  <form action={upsertServicePackageAction} className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                     <input type="hidden" name="service_id" value={service.id} />
-                    <div>
-                      <Label className="text-[11px]">Tier</Label>
+                    <div className="flex flex-col justify-end gap-1">
+                      <Label className="mb-auto text-[11px]">Tier</Label>
                       <select
                         name="tier_name"
                         defaultValue="Standard"
-                        className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                       >
                         <option value="Starter">Starter</option>
                         <option value="Standard">Standard</option>
                         <option value="Enterprise">Enterprise</option>
                       </select>
                     </div>
-                    <div className="sm:col-span-2">
-                      <Label className="text-[11px]">Package Name</Label>
-                      <Input name="package_name" placeholder="Standard Audit" required className="h-8 text-xs" />
+                    <div className="flex flex-col justify-end gap-1 xl:col-span-2">
+                      <Label className="mb-auto text-[11px]">Package Name</Label>
+                      <Input name="package_name" placeholder="Standard Audit" required className="h-9 text-xs" />
                     </div>
-                    <div>
-                      <Label className="text-[11px]">Price (USD)</Label>
-                      <Input name="price_usd" type="number" defaultValue={500} required className="h-8 font-mono text-xs" />
+                    <div className="flex flex-col justify-end gap-1">
+                      <Label className="mb-auto text-[11px]">Price (USD)</Label>
+                      <Input name="price_usd" type="number" defaultValue={500} required className="h-9 font-mono text-xs" />
                     </div>
-                    <div>
-                      <Label className="text-[11px]">Delivery Days</Label>
-                      <Input name="delivery_days" type="number" defaultValue={7} required className="h-8 font-mono text-xs" />
+                    <div className="flex flex-col justify-end gap-1">
+                      <Label className="mb-auto text-[11px]">Delivery Days</Label>
+                      <Input name="delivery_days" type="number" defaultValue={7} required className="h-9 font-mono text-xs" />
                     </div>
-                    <div>
-                      <Label className="text-[11px]">Revisions</Label>
-                      <Input name="revisions_included" type="number" defaultValue={2} required className="h-8 font-mono text-xs" />
+                    <div className="flex flex-col justify-end gap-1">
+                      <Label className="mb-auto text-[11px]">Revisions</Label>
+                      <Input name="revisions_included" type="number" defaultValue={2} required className="h-9 font-mono text-xs" />
                     </div>
-                    <div className="sm:col-span-3">
-                      <Label className="text-[11px]">Summary</Label>
-                      <Input name="summary" placeholder="Ideal for production apps" required className="h-8 text-xs" />
+                    <div className="flex flex-col justify-end gap-1 xl:col-span-3">
+                      <Label className="mb-auto text-[11px]">Summary</Label>
+                      <Input name="summary" placeholder="Ideal for production apps" required className="h-9 text-xs" />
                     </div>
-                    <div className="sm:col-span-3">
-                      <Label className="text-[11px]">Features (One per line)</Label>
+                    <div className="flex flex-col justify-end gap-1 xl:col-span-3">
+                      <Label className="mb-auto text-[11px]">Features (One per line)</Label>
                       <Textarea name="features" rows={2} placeholder="Feature 1&#10;Feature 2" className="font-mono text-xs" />
                     </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2 xl:col-span-6">
                       <label className="flex items-center gap-1.5 text-xs">
                         <input
                           type="checkbox"
@@ -503,7 +503,7 @@ export default async function AdminServicesCmsPage() {
                         />
                         Active package tier
                       </label>
-                      <Button type="submit" size="sm" className="h-8">
+                      <Button type="submit" size="sm" className="h-9">
                         Save Package Tier
                       </Button>
                     </div>

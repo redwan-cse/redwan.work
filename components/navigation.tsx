@@ -63,7 +63,7 @@ export function Navigation() {
               <span className="truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
                 Md. Redwan Ahmed
               </span>
-              <span className="hidden shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary sm:inline-flex">
+              <span className="hidden shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary xl:inline-flex">
                 <ShieldCheck className="h-3 w-3" />
                 CCEP · CNSP · CAP
               </span>
@@ -135,7 +135,7 @@ export function Navigation() {
                 <span className="sr-only">Toggle navigation menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[min(300px,88vw)] border-l border-border bg-background p-0">
+            <SheetContent side="right" className="flex w-[min(300px,88vw)] flex-col border-l border-border bg-background p-0">
               <SheetHeader className="border-b border-border p-5 text-left">
                 <SheetTitle className="flex items-center gap-3">
                   <Image

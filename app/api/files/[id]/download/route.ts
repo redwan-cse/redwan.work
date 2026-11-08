@@ -30,6 +30,48 @@ export async function GET(
     .maybeSingle();
 
   if (error || !file) {
+    if (session.role === 'admin') {
+      try {
+        const { data: att } = await admin
+          .from('inquiry_attachments')
+          .select('id, inquiry_id, r2_key, filename, mime, size_bytes')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (att) {
+          if (!isR2Configured()) {
+            return NextResponse.json(
+              { error: 'Private attachment vault is not configured in this environment.' },
+              { status: 503 }
+            );
+          }
+          const storedSize = await getPrivateObjectSize(att.r2_key);
+          if (storedSize === null) {
+            return NextResponse.json({ error: 'Stored file object not found.' }, { status: 404 });
+          }
+          const signedUrl = await presignPrivateGet(att.r2_key, 60);
+          await recordAuditLog({
+            actorId: session.userId,
+            actorRole: 'admin',
+            action: 'inquiry_attachment.downloaded',
+            entityType: 'inquiry_attachment',
+            entityId: att.id,
+            summary: `Admin downloaded inquiry attachment ${att.filename}`,
+            metadata: {
+              inquiry_id: att.inquiry_id,
+              filename: att.filename,
+              size_bytes: att.size_bytes,
+            },
+          });
+          return NextResponse.redirect(signedUrl, {
+            status: 302,
+            headers: { 'Cache-Control': 'no-store' },
+          });
+        }
+      } catch {
+        // fall through to 404
+      }
+    }
     return NextResponse.json({ error: 'File not found.' }, { status: 404 });
   }
 
