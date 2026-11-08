@@ -68,31 +68,46 @@ export default async function ClientTicketsPage() {
                   <Label className="text-xs">Priority</Label>
                   <select
                     name="priority"
-                    defaultValue="normal"
+                    defaultValue="medium"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
                   >
                     <option value="low">Low (48h SLA)</option>
-                    <option value="normal">Normal (24h SLA)</option>
+                    <option value="medium">Medium (24h SLA)</option>
                     <option value="high">High (8h SLA)</option>
                     <option value="urgent">Urgent Incident (4h SLA)</option>
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Related Order (Optional)</Label>
+                  <Label className="text-xs">Category</Label>
                   <select
-                    name="order_id"
-                    defaultValue=""
+                    name="category"
+                    defaultValue="general"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
                   >
-                    <option value="">General Account / Retainer</option>
-                    {(orders ?? []).map((ord) => (
-                      <option key={ord.id} value={ord.id}>
-                        {ord.code} — {ord.title}
-                      </option>
-                    ))}
+                    <option value="general">General Support</option>
+                    <option value="security_incident">Security Incident / VAPT</option>
+                    <option value="server_outage">Server / Cloud Outage</option>
+                    <option value="bug_report">Bug Report / Patch</option>
+                    <option value="billing">Billing &amp; Invoices</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Related Order (Optional)</Label>
+                <select
+                  name="order_id"
+                  defaultValue=""
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">General Account / Retainer</option>
+                  {(orders ?? []).map((ord) => (
+                    <option key={ord.id} value={ord.id}>
+                      {ord.code} — {ord.title}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">

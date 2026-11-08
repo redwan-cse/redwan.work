@@ -299,6 +299,119 @@ export async function getPublicPortfolioItems(options?: {
   }
 }
 
+const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
+  {
+    id: 'fallback-cert-ccep',
+    section: 'vendor_certification',
+    title: 'Certified Cybersecurity Educator Professional (CCEP)',
+    organization: 'Red Team Leaders',
+    role_type: null,
+    location: null,
+    period: 'Nov 2025',
+    description: null,
+    highlights: [],
+    verification_url: 'https://courses.redteamleaders.com/exam-completion/813c7d633cf28311',
+    badge_label: null,
+    sort_order: 10,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-cert-gh',
+    section: 'vendor_certification',
+    title: 'GitHub Foundations Certification',
+    organization: 'GitHub',
+    role_type: null,
+    location: null,
+    period: 'Feb 2025',
+    description: null,
+    highlights: [],
+    verification_url: 'https://www.credly.com/badges/a64ebfd3-aa7d-4dc0-8bb0-e0a3c4850d9f',
+    badge_label: null,
+    sort_order: 20,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-cert-cnsp',
+    section: 'vendor_certification',
+    title: 'Certified Network Security Practitioner (CNSP)',
+    organization: 'The SecOps Group',
+    role_type: null,
+    location: null,
+    period: 'Feb 2025',
+    description: null,
+    highlights: [],
+    verification_url: null,
+    badge_label: null,
+    sort_order: 30,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-cert-cap',
+    section: 'vendor_certification',
+    title: 'Certified AppSec Practitioner (CAP)',
+    organization: 'The SecOps Group',
+    role_type: null,
+    location: null,
+    period: 'Jul 2023',
+    description: null,
+    highlights: [],
+    verification_url: null,
+    badge_label: null,
+    sort_order: 40,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-exp-fcd',
+    section: 'experience',
+    title: 'Founder & Lead Security Consultant',
+    organization: 'Fast Cyber Defense',
+    role_type: 'Self-Employed / Agency',
+    location: 'Dhaka, BD (Global Remote)',
+    period: 'Jan 2023 – Present',
+    description:
+      'Lead offensive security assessments (VAPT & OSINT), incident response, and secure full-stack engineering engagements for international clients.',
+    highlights: [
+      'Conduct web, API, and network penetration testing aligned with OWASP and PTES methodologies.',
+      'Deliver OSINT threat investigations, digital fraud tracing, and compromised server recovery.',
+    ],
+    verification_url: 'https://fastcyberdefense.com',
+    badge_label: null,
+    sort_order: 100,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-edu-bsc',
+    section: 'education',
+    title: 'BSc in Computer Science & Engineering',
+    organization: 'Jagannath University',
+    role_type: null,
+    location: 'Dhaka, Bangladesh',
+    period: '2021 · CGPA: 3.15/4.00',
+    description: 'Department of Computer Science and Engineering.',
+    highlights: [],
+    verification_url: null,
+    badge_label: null,
+    sort_order: 200,
+    is_visible: true,
+  },
+  {
+    id: 'fallback-pub-q1',
+    section: 'research',
+    title:
+      'A Hybrid Machine Learning Approach for Customer Segmentation and Market Basket Analysis',
+    organization: 'International Journal of Cognitive Computing in Engineering (Elsevier · Q1 Scopus)',
+    role_type: 'Journal Article',
+    location: null,
+    period: '2024',
+    description: 'Peer-reviewed Q1 Scopus journal article on clustering and association-rule pipelines.',
+    highlights: [],
+    verification_url: 'https://doi.org/10.1016/j.ijcce.2024.07.004',
+    badge_label: 'Q1 Scopus',
+    sort_order: 300,
+    is_visible: true,
+  },
+];
+
 export async function getSiteSettingsAndResume(options?: {
   includeHidden?: boolean;
 }): Promise<{
@@ -333,8 +446,42 @@ export async function getSiteSettingsAndResume(options?: {
       'Explainable Artificial Intelligence (XAI)',
       'Cloud & Network Defense',
     ],
-    technical_skills: {},
-    soft_skills: [],
+    technical_skills: {
+      'Cybersecurity & Offensive Security': [
+        'Penetration Testing & Ethical Hacking',
+        'Vulnerability Assessment & Penetration Testing (VAPT)',
+        'Open-Source Intelligence (OSINT)',
+        'Network & API Security',
+      ],
+      'Security & SIEM Tooling': [
+        'Burp Suite Pro',
+        'OWASP ZAP',
+        'Nmap',
+        'Nessus',
+        'Metasploit',
+        'SQLmap',
+        'Wazuh (SIEM / XDR)',
+      ],
+      'Full-Stack & Programming': [
+        'TypeScript / Next.js',
+        'Python / Django',
+        'C/C++',
+        'PostgreSQL',
+        'MySQL',
+      ],
+      'Cloud, DevOps & Linux': [
+        'Linux Administration (Ubuntu, CentOS)',
+        'AWS (EC2, IAM)',
+        'Azure IAM',
+        'Docker & Containerization',
+        'CI/CD (GitHub Actions, Jenkins)',
+      ],
+    },
+    soft_skills: [
+      'Executive Technical Communication',
+      'Incident Triage & Crisis Leadership',
+      'Research & Technical Writing',
+    ],
     other_skills: [],
     hobbies: [],
     references_list: [],
@@ -419,9 +566,12 @@ export async function getSiteSettingsAndResume(options?: {
       is_visible: Boolean(r.is_visible),
     }));
 
-    return { settings, items };
+    return {
+      settings,
+      items: items.length > 0 || options?.includeHidden ? items : DEFAULT_RESUME_ITEMS,
+    };
   } catch {
-    return { settings: defaultSettings, items: [] };
+    return { settings: defaultSettings, items: DEFAULT_RESUME_ITEMS };
   }
 }
 

@@ -227,6 +227,36 @@ export function PanelShell({
                   </SheetDescription>
                 </SheetHeader>
                 {renderNavList(() => setMobileOpen(false))}
+                <div className="border-t border-border/80 p-4">
+                  <div className="mb-3 truncate text-xs">
+                    <div className="font-semibold text-foreground">
+                      {userName || (role === 'admin' ? 'Md. Redwan Ahmed' : 'Client Account')}
+                    </div>
+                    <div className="truncate font-mono text-[11px] text-muted-foreground">
+                      {userEmail}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button asChild variant="outline" size="sm" className="flex-1 gap-1.5 text-xs">
+                      <Link href="/" onClick={() => setMobileOpen(false)}>
+                        Public Site
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                    <form action="/api/auth/logout" method="post">
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="icon"
+                        title="Sign out"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span className="sr-only">Sign out</span>
+                      </Button>
+                    </form>
+                  </div>
+                </div>
               </SheetContent>
             </Sheet>
 
@@ -253,8 +283,9 @@ export function PanelShell({
               </Button>
             )}
 
-            <div
-              className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground"
+            <Link
+              href={role === 'admin' ? '/admin/audit' : '/portal'}
+              className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
               aria-label={`Notifications (${unreadNotifications} unread)`}
             >
               <Bell className="h-4 w-4" aria-hidden="true" />
@@ -263,7 +294,7 @@ export function PanelShell({
                   {unreadNotifications}
                 </span>
               )}
-            </div>
+            </Link>
 
             <ModeToggle />
           </div>

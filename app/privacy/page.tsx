@@ -439,6 +439,7 @@ export default function Privacy() {
               {/* Section 6 & 7 */}
               <ScrollReveal>
                 <section id="processing" className="scroll-mt-24">
+                  <div id="security" className="scroll-mt-24" />
                   <Card className="border-border/80 bg-card/85">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2.5 text-xl">

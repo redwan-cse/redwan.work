@@ -127,15 +127,16 @@ export default async function AdminOrderDetailPage({
                   defaultValue={order.status}
                   className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
                 >
-                  <option value="awaiting_requirements">awaiting_requirements</option>
                   <option value="awaiting_payment">awaiting_payment</option>
-                  <option value="awaiting_roe">awaiting_roe</option>
+                  <option value="pending_requirements">pending_requirements</option>
+                  <option value="queued">queued</option>
                   <option value="in_progress">in_progress</option>
                   <option value="in_review">in_review</option>
-                  <option value="delivered">delivered</option>
                   <option value="revision_requested">revision_requested</option>
+                  <option value="delivered">delivered</option>
                   <option value="completed">completed</option>
                   <option value="on_hold">on_hold</option>
+                  <option value="cancelled">cancelled</option>
                 </select>
               </div>
               <div className="space-y-1">

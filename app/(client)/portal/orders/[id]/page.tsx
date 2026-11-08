@@ -308,12 +308,22 @@ export default async function ClientOrderDetailPage({
                               value="revision_requested"
                               size="sm"
                               variant="outline"
+                              disabled={order.revisions_used >= order.revisions_included}
                               className="h-8 gap-1.5 text-xs"
                             >
                               <RotateCcw className="h-3.5 w-3.5" />
-                              Request Revision
+                              Request Revision ({Math.max(0, order.revisions_included - order.revisions_used)} left)
                             </Button>
                           </div>
+                          {order.revisions_used >= order.revisions_included && (
+                            <p className="text-[11px] text-muted-foreground">
+                              All {order.revisions_included} included revision(s) have been used. Need additional scope changes?{' '}
+                              <Link href="/portal/orders/new?tier=custom" className="font-medium text-primary underline">
+                                Request a custom scope extension
+                              </Link>
+                              .
+                            </p>
+                          )}
                         </form>
                       )}
                     </div>

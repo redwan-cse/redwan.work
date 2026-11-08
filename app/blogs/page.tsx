@@ -209,8 +209,16 @@ export default async function BlogsPage({
               </div>
 
               <p className="font-mono text-xs text-muted-foreground">
-                Showing {startIndex + 1}–{Math.min(endIndex, totalPosts)} of{' '}
-                {isCapped ? `${totalPosts}+` : totalPosts} articles
+                {allPosts.length > 0 ? (
+                  <>
+                    Showing {startIndex + 1}–{Math.min(endIndex, totalPosts)} of{' '}
+                    {isCapped ? `${totalPosts}+` : totalPosts} articles
+                  </>
+                ) : (
+                  <>
+                    Showing 0 of {isCapped ? `${totalPosts}+` : totalPosts} articles
+                  </>
+                )}
               </p>
             </div>
           )}

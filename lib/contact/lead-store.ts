@@ -1,6 +1,33 @@
 import 'server-only';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { SERVICE_CATALOG, type ServicePillarKey } from '@/lib/content/site';
 import type { ConsentedLead } from '@/lib/contact/consent-intake';
+
+export function deriveInquiryPillar(services: string[]): ServicePillarKey {
+  for (const raw of services) {
+    const normalized = raw.trim().toLowerCase();
+    const matched = SERVICE_CATALOG.find(
+      (s) => s.title.toLowerCase() === normalized || s.slug.toLowerCase() === normalized
+    );
+    if (matched) return matched.pillar;
+    if (/full-stack|web|nextjs|next\.js|software|api|saas|development/.test(normalized)) {
+      return 'development';
+    }
+    if (/cloud|devops|linux|siem|wazuh|docker|aws|azure|server/.test(normalized)) {
+      return 'cloud_devops';
+    }
+    if (/ai|ml|machine learning|llm|automation/.test(normalized)) {
+      return 'ai_ml';
+    }
+    if (/support|recovery|retainer|helpdesk|advisory/.test(normalized)) {
+      return 'tech_support';
+    }
+    if (/vapt|penetration|security|osint|cyber|audit/.test(normalized)) {
+      return 'cybersecurity';
+    }
+  }
+  return 'cybersecurity';
+}
 
 export async function insertLead(
   lead: ConsentedLead
@@ -11,6 +38,7 @@ export async function insertLead(
   try {
     const admin = getSupabaseAdmin();
     const { attachments, ...inquiryFields } = lead;
+    const servicePillar = deriveInquiryPillar(inquiryFields.services);
 
     const { data, error } = await admin
       .from('inquiries')
@@ -24,6 +52,7 @@ export async function insertLead(
         preferred_contact_date: inquiryFields.preferred_contact_date,
         best_time_to_contact: inquiryFields.best_time_to_contact,
         services: inquiryFields.services,
+        service_pillar: servicePillar,
         company: inquiryFields.company,
         project_url: inquiryFields.project_url,
         project_summary: inquiryFields.project_summary,
@@ -64,6 +93,7 @@ export async function insertLead(
       }));
       const { error: attErr } = await admin.from('inquiry_attachments').insert(attachmentRows);
       if (attErr) {
+        await admin.from('inquiries').delete().eq('id', data.id);
         throw new Error('Inquiry attachment persistence failed');
       }
     }

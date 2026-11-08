@@ -57,12 +57,12 @@ export default async function AdminProposalsPage() {
           <CardContent>
             <form action={createProposalAction} className="space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">Assign to Existing Portal Client (Optional)</Label>
+                <Label className="text-xs">Assign to Existing Portal Client (or auto-match by email)</Label>
                 <select
                   name="client_id"
                   className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
                 >
-                  <option value="">— Select or enter recipient below —</option>
+                  <option value="">— Auto-match by Recipient Email or select client —</option>
                   {(clients ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.full_name || c.email} ({c.email})

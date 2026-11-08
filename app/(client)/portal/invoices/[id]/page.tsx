@@ -193,10 +193,12 @@ export default async function ClientInvoiceDetailPage({
                       className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
                     >
                       <option value="bank_transfer">Bank Wire / SWIFT / Local Transfer</option>
-                      <option value="wise">Wise / Payoneer</option>
-                      <option value="bkash">bKash / Nagad (BDT)</option>
-                      <option value="crypto_usdt">USDT / USDC</option>
-                      <option value="card">Card / Stripe</option>
+                      <option value="wise">Wise (USD / EUR / GBP)</option>
+                      <option value="payoneer">Payoneer</option>
+                      <option value="paypal">PayPal</option>
+                      <option value="bkash">bKash (BDT)</option>
+                      <option value="nagad">Nagad (BDT)</option>
+                      <option value="manual">Manual / Direct Settlement</option>
                     </select>
                   </div>
 

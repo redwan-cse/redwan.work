@@ -176,5 +176,52 @@ describe('Database Financial Invariants, Payment Idempotency & Split-Deposit Set
     );
     expect(Number(cp.rows[0].lifetime_value_usd_cents)).toBe(100_000);
     expect(cp.rows[0].completed_orders_count).toBe(1);
+
+    // 8. DB-017 & FLOW-014: Accepted deliverable cannot be modified or deleted, and duplicate version_label on same order is rejected
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: admin.id, email: admin.email, aal: 'aal2', appRole: 'admin' },
+        `update public.deliverables set title = 'Tampered after acceptance' where id = $1`,
+        [deliv.rows[0].id]
+      )
+    ).rejects.toThrow(/accepted|immutable/i);
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: admin.id, email: admin.email, aal: 'aal2', appRole: 'admin' },
+        `insert into public.deliverables (order_id, version_label, title, is_final_delivery, status, submitted_by)
+         values ($1, ' v1.0 ', 'Duplicate version label', false, 'submitted', $2)`,
+        [orderId, admin.id]
+      )
+    ).rejects.toThrow(/duplicate|unique/i);
+
+    // 9. DB-012 & DB-013: Issued invoice rejects fx_rate_to_usd/due_at tampering, and credit_notes atomically settle invoice balance
+    const cnInvRes = await pg.queryAs<{ res: { invoice_id: string } }>(
+      { pgRole: 'authenticated', userId: admin.id, email: admin.email, aal: 'aal2', appRole: 'admin' },
+      `select public.issue_invoice_atomic($1, $2, false, 'USD', 1.0, 20000, 0, 0, 7, 'Advisory addendum', 'Addendum fee') as res`,
+      [client.id, orderId]
+    );
+    const cnInvId = cnInvRes.rows[0].res.invoice_id;
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: admin.id, email: admin.email, aal: 'aal2', appRole: 'admin' },
+        `update public.invoices set fx_rate_to_usd = 2.5 where id = $1`,
+        [cnInvId]
+      )
+    ).rejects.toThrow(/immutable|cannot modify/i);
+
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: admin.id, email: admin.email, aal: 'aal2', appRole: 'admin' },
+      `insert into public.credit_notes (invoice_id, client_id, currency, amount_cents, reason, issued_by)
+       values ($1, $2, 'USD', 20000, 'Full courtesy credit', $3)`,
+      [cnInvId, client.id, admin.id]
+    );
+
+    const settledByCredit = await pg.db.query<{ status: string; credited_cents: number }>(
+      `select status, credited_cents from public.invoices where id = $1`,
+      [cnInvId]
+    );
+    expect(settledByCredit.rows[0]).toEqual({ status: 'paid', credited_cents: 20000 });
   });
 });

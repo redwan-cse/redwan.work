@@ -87,6 +87,28 @@ const Carousel = React.forwardRef<
 
     const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLDivElement>) => {
+        const target = event.target as HTMLElement | null;
+        if (
+          target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+        const resolvedOrientation =
+          orientation || (opts?.axis === 'y' ? 'vertical' : 'horizontal');
+        if (resolvedOrientation === 'vertical') {
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            scrollPrev();
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            scrollNext();
+          }
+          return;
+        }
         if (event.key === 'ArrowLeft') {
           event.preventDefault();
           scrollPrev();
@@ -95,7 +117,7 @@ const Carousel = React.forwardRef<
           scrollNext();
         }
       },
-      [scrollPrev, scrollNext]
+      [opts?.axis, orientation, scrollPrev, scrollNext]
     );
 
     React.useEffect(() => {

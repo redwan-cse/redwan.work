@@ -213,9 +213,19 @@ export function AntigravityHeroField() {
       { threshold: 0.05 }
     );
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        window.cancelAnimationFrame(animationFrameId);
+      } else if (isVisible) {
+        window.cancelAnimationFrame(animationFrameId);
+        animationFrameId = window.requestAnimationFrame(render);
+      }
+    };
+
     observer.observe(container);
     window.addEventListener('resize', resize);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     container.addEventListener('pointerleave', handlePointerLeave);
 
     return () => {
@@ -224,6 +234,7 @@ export function AntigravityHeroField() {
       observer.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       container.removeEventListener('pointerleave', handlePointerLeave);
     };
   }, [pointerX, pointerY, prefersReducedMotion]);

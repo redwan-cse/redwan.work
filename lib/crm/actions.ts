@@ -28,6 +28,38 @@ type PaymentMethod = Database['public']['Enums']['payment_method'];
 type TicketPriority = Database['public']['Enums']['ticket_priority'];
 type TicketStatus = Database['public']['Enums']['ticket_status'];
 
+const ALLOWED_ORDER_STATUSES = new Set<OrderStatus>([
+  'awaiting_payment',
+  'pending_requirements',
+  'queued',
+  'in_progress',
+  'in_review',
+  'revision_requested',
+  'delivered',
+  'completed',
+  'on_hold',
+  'cancelled',
+]);
+
+const ALLOWED_TICKET_STATUSES = new Set<TicketStatus>([
+  'open',
+  'in_progress',
+  'awaiting_client',
+  'answered',
+  'resolved',
+  'closed',
+]);
+
+const ALLOWED_PAYMENT_METHODS = new Set<PaymentMethod>([
+  'bank_transfer',
+  'wise',
+  'payoneer',
+  'bkash',
+  'nagad',
+  'paypal',
+  'manual',
+]);
+
 async function requireAdminSession() {
   const session = await getCurrentSession();
   if (!session || session.role !== 'admin') {
@@ -209,10 +241,10 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
   const requiresRoe = formData.get('requires_roe') === 'on' || pillar === 'cybersecurity';
-  const clientId = String(formData.get('client_id') ?? '').trim() || null;
+  let clientId = String(formData.get('client_id') ?? '').trim() || null;
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim() || null;
 
-  if (!recipientEmail || ! recipientName || !title || !executiveSummary || totalUsd <= 0) {
+  if (!recipientEmail || !recipientName || !title || !executiveSummary || totalUsd <= 0) {
     return;
   }
 
@@ -223,6 +255,17 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     .filter(Boolean);
 
   const admin = getSupabaseAdmin();
+  if (!clientId) {
+    const { data: matchedProfile } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('email', recipientEmail)
+      .maybeSingle();
+    clientId = matchedProfile?.id ?? null;
+  }
+  if (!clientId) {
+    throw new Error('Proposals must be linked to an invited or active Portal Client account.');
+  }
   const { data: proposal, error: propErr } = await admin
     .from('proposals')
     .insert({
@@ -324,7 +367,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
     'cybersecurity') as ServicePillarKey;
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('deposit_percent') ?? 50))));
-  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+  const requiresRoe = parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
   const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 10)));
 
   if (!clientId || !title || totalUsd < 0) return;
@@ -385,10 +428,14 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
 export async function updateOrderStatusAndProgressAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
-  const status = String(formData.get('status') ?? '').trim() as OrderStatus;
+  const rawStatus = String(formData.get('status') ?? '').trim() as OrderStatus;
   const progressPercent = Number(formData.get('progress_percent') ?? 0);
 
-  if (!orderId || !status) return;
+  if (!orderId || !rawStatus) return;
+  if (!ALLOWED_ORDER_STATUSES.has(rawStatus)) {
+    throw new Error(`Invalid order status: ${rawStatus}`);
+  }
+  const status: OrderStatus = rawStatus;
 
   const admin = getSupabaseAdmin();
   if (status === 'completed') {
@@ -854,8 +901,12 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
 export async function updateTicketStatusAction(formData: FormData): Promise<void> {
   await requireAdminSession();
   const ticketId = String(formData.get('ticket_id') ?? '').trim();
-  const status = String(formData.get('status') ?? 'resolved').trim() as TicketStatus;
+  const rawStatus = String(formData.get('status') ?? 'resolved').trim() as TicketStatus;
   if (!ticketId) return;
+  if (!ALLOWED_TICKET_STATUSES.has(rawStatus)) {
+    throw new Error(`Invalid ticket status: ${rawStatus}`);
+  }
+  const status: TicketStatus = rawStatus;
 
   const admin = getSupabaseAdmin();
   const { error } = await admin
@@ -1270,8 +1321,12 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
 export async function submitInvoicePaymentProofAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
   const invoiceId = String(formData.get('invoice_id') ?? '').trim();
-  const method = (String(formData.get('method') ?? 'bank_transfer').trim() ||
+  const rawMethod = (String(formData.get('method') ?? 'bank_transfer').trim() ||
     'bank_transfer') as PaymentMethod;
+  if (!ALLOWED_PAYMENT_METHODS.has(rawMethod)) {
+    throw new Error(`Unsupported payment method: ${rawMethod}`);
+  }
+  const method: PaymentMethod = rawMethod;
   const reference = String(formData.get('reference') ?? '').trim();
   const amountMajor = Number(formData.get('amount_major') ?? 0);
   const r2Key = String(formData.get('r2_key') ?? '').trim();
@@ -1406,6 +1461,7 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     rawPriority === 'urgent' || rawPriority === 'high' || rawPriority === 'low'
       ? rawPriority
       : 'medium';
+  const rawCategory = String(formData.get('category') ?? 'general').trim() || 'general';
   const orderId = String(formData.get('order_id') ?? '').trim() || null;
 
   if (!subject || !body) return;
@@ -1428,6 +1484,7 @@ export async function createClientTicketAction(formData: FormData): Promise<void
       client_id: session.userId,
       order_id: orderId,
       subject,
+      category: rawCategory,
       priority,
       status: 'open',
     })

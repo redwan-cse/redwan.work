@@ -41,6 +41,7 @@ import {
 } from '@/lib/cms/actions';
 import { addOrderTaskAction, submitOrderDeliverableAction } from '@/lib/crm/actions';
 import { GET as downloadVaultFile } from '@/app/api/files/[id]/download/route';
+import { insertLead } from '@/lib/contact/lead-store';
 
 describe('Publishing Checkbox Parsing, Error Honesty & Vault Download Contract', () => {
   beforeEach(() => {
@@ -180,5 +181,82 @@ describe('Publishing Checkbox Parsing, Error Honesty & Vault Download Contract',
     expect(selectedColumns).toContain('mime_type');
     expect(selectedColumns).toContain('archived_at');
     expect(res.status).toBe(410);
+  });
+
+  it('derives service_pillar from selected services and rolls back inquiry row if attachment insert fails', async () => {
+    const insertedInquiryPayloads: Array<Record<string, unknown>> = [];
+    const deletedInquiryIds: string[] = [];
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'inquiries') {
+        return {
+          insert: (payload: Record<string, unknown>) => {
+            insertedInquiryPayloads.push(payload);
+            return {
+              select: () => ({
+                single: async () => ({
+                  data: { id: 'inq-rollback-1', code: 'INQ-9001', ticket_number: 9001 },
+                  error: null,
+                }),
+              }),
+            };
+          },
+          delete: () => ({
+            eq: async (_col: string, id: string) => {
+              deletedInquiryIds.push(id);
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === 'inquiry_attachments') {
+        return {
+          insert: async () => ({
+            error: { message: 'attachment table failure' },
+          }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const res = await insertLead({
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+      country: 'GB',
+      whatsapp_e164: '+447700900077',
+      preferred_contact_method: 'email',
+      timezone: 'Europe/London',
+      preferred_contact_date: '2026-11-15',
+      best_time_to_contact: 'Morning',
+      services: ['Full-Stack Web Development'],
+      company: 'Analytical Engine Ltd',
+      project_url: null,
+      project_summary: 'Need a Next.js + PostgreSQL enterprise portal.',
+      nda_required: true,
+      urgency: 'standard',
+      budget_min: 3000,
+      budget_max: 6000,
+      how_found: 'Search',
+      source_page: '/contact',
+      device_type: 'desktop',
+      user_agent: 'Vitest',
+      ip_hash: 'a'.repeat(64),
+      consent_at: '2026-11-08T00:00:00.000Z',
+      consent_policy_version: '2026-04-06',
+      consent_policy_hash: 'b'.repeat(64),
+      consent_capture_method: 'explicit-checkbox-v1',
+      attachments: [
+        {
+          key: 'contact/2026/11/08/11111111-1111-4111-8111-111111111111.pdf',
+          filename: 'scope.pdf',
+          mime: 'application/pdf',
+          size_bytes: 1024,
+        },
+      ],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(insertedInquiryPayloads[0]?.service_pillar).toBe('development');
+    expect(deletedInquiryIds).toEqual(['inq-rollback-1']);
   });
 });

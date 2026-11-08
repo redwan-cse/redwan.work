@@ -350,5 +350,52 @@ describe('Database Trust Boundaries, Function ACLs, AAL2 & Tenant Isolation', ()
         [`private/${clientB.id}/deliverable/oversize.zip`, orderBId, adminUser.id]
       )
     ).rejects.toThrow(/quota/i);
+
+    // 7. DB-016: anon and client roles cannot directly SELECT third-party references_list PII from site_settings
+    const anonSettings = await pg.queryAs(
+      { pgRole: 'anon' },
+      `select id, references_list from public.site_settings`
+    );
+    expect(anonSettings.rows).toEqual([]);
+
+    const clientSettings = await pg.queryAs(
+      { userId: clientA.id, email: clientA.email, appRole: 'client', aal: 'aal1' },
+      `select id, references_list from public.site_settings`
+    );
+    expect(clientSettings.rows).toEqual([]);
+
+    // 8. DB-019 & FLOW-002: admin_command_center_metrics and client_portal_overview return all snake_case keys
+    const adminMetricsRes = await pg.queryAs<{ m: Record<string, number> }>(
+      { userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.admin_command_center_metrics() as m`
+    );
+    const adminMetrics = adminMetricsRes.rows[0].m;
+    expect(typeof adminMetrics.lifetime_revenue_usd_cents).toBe('number');
+    expect(typeof adminMetrics.revenue_30d_usd_cents).toBe('number');
+    expect(typeof adminMetrics.active_orders).toBe('number');
+    expect(typeof adminMetrics.awaiting_review_orders).toBe('number');
+    expect(typeof adminMetrics.new_inquiries).toBe('number');
+    expect(typeof adminMetrics.submitted_payments).toBe('number');
+    expect(typeof adminMetrics.overdue_invoices).toBe('number');
+    expect(typeof adminMetrics.total_clients).toBe('number');
+    expect(typeof adminMetrics.vip_clients).toBe('number');
+    expect(typeof adminMetrics.open_tickets).toBe('number');
+    expect(typeof adminMetrics.active_retainers).toBe('number');
+    expect(typeof adminMetrics.unread_notifications).toBe('number');
+
+    const clientOverviewRes = await pg.queryAs<{ o: Record<string, number> }>(
+      { userId: clientA.id, email: clientA.email, appRole: 'client', aal: 'aal1' },
+      `select public.client_portal_overview($1) as o`,
+      [clientA.id]
+    );
+    const clientOverview = clientOverviewRes.rows[0].o;
+    expect(typeof clientOverview.outstanding_balance_cents).toBe('number');
+    expect(typeof clientOverview.active_orders).toBe('number');
+    expect(typeof clientOverview.pending_proposals).toBe('number');
+    expect(typeof clientOverview.awaiting_review_deliverables).toBe('number');
+    expect(typeof clientOverview.unpaid_invoices).toBe('number');
+    expect(typeof clientOverview.open_tickets).toBe('number');
+    expect(typeof clientOverview.active_retainers).toBe('number');
+    expect(typeof clientOverview.unread_notifications).toBe('number');
   });
 });

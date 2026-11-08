@@ -62,7 +62,8 @@ export default async function AdminTicketDetailPage({
           >
             <option value="open">open</option>
             <option value="in_progress">in_progress</option>
-            <option value="waiting_on_client">waiting_on_client</option>
+            <option value="awaiting_client">awaiting_client</option>
+            <option value="answered">answered</option>
             <option value="resolved">resolved</option>
             <option value="closed">closed</option>
           </select>
