@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useReactToPrint } from 'react-to-print';
 import {
@@ -32,7 +33,7 @@ import {
   ScrollReveal,
 } from '@/components/motion/reveal';
 import { PrintableResume } from '@/components/printable-resume';
-import { SITE } from '@/lib/content/site';
+import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import type { ResumeItemRecord, SiteSettingsRecord } from '@/lib/cms/queries';
 
 export function ResumeView({
@@ -213,7 +214,7 @@ export function ResumeView({
                           className="gap-1.5 border-primary/30 bg-primary/8 font-mono text-xs text-primary"
                         >
                           <ShieldCheck className="h-3.5 w-3.5" />
-                          CURRICULUM VITAE · CCEP · CNSP · CAP
+                          CURRICULUM VITAE · C|EH · CCEP · CNSP · CAP
                         </Badge>
                         <Badge variant="secondary" className="font-mono text-xs">
                           Q1 Scopus &amp; IEEE Author
@@ -537,30 +538,116 @@ export function ResumeView({
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
-                {vendorCertifications.map((cert, index) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/50"
-                  >
-                    {cert.verificationUrl ? (
-                      <Link
-                        href={cert.verificationUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
+                {vendorCertifications.map((cert, index) => {
+                  const isCeh = /Certified Ethical Hacker/i.test(cert.name);
+                  if (isCeh) {
+                    return (
+                      <div
+                        key={index}
+                        className="col-span-full flex flex-col justify-between gap-5 rounded-xl border border-primary/35 bg-primary/5 p-5 transition-all hover:border-primary/50 sm:flex-row sm:items-center"
                       >
-                        <h3 className="mb-1 flex items-center gap-2 font-semibold group-hover:text-primary">
-                          <span>{cert.name}</span>
-                          <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
-                        </h3>
-                      </Link>
-                    ) : (
-                      <h3 className="mb-1 font-semibold">{cert.name}</h3>
-                    )}
-                    <p className="text-sm text-muted-foreground">{cert.issuer}</p>
-                    <p className="mt-2 font-mono text-xs text-primary">{cert.date}</p>
-                  </div>
-                ))}
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="default" className="font-mono text-xs">
+                              ANSI / ISO/IEC 17024 Accredited
+                            </Badge>
+                            <Badge variant="outline" className="font-mono text-xs text-primary">
+                              Cert #{CEH_CERT_NUMBER}
+                            </Badge>
+                          </div>
+                          <Link
+                            href={cert.verificationUrl || CEH_VERIFICATION_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group inline-block"
+                          >
+                            <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight group-hover:text-primary sm:text-xl">
+                              <span>{cert.name}</span>
+                              <ExternalLink className="h-4 w-4 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
+                            </h3>
+                          </Link>
+                          <p className="text-sm text-muted-foreground">{cert.issuer}</p>
+                          <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+                            <span className="font-mono font-semibold text-primary">
+                              Issued: 10 Nov 2026 · Valid through: 01 Dec 2027
+                            </span>
+                            <Link
+                              href={cert.verificationUrl || CEH_VERIFICATION_URL}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                            >
+                              Verify on EC-Council ASPEN
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Link>
+                          </div>
+                        </div>
+
+                        {/* Official EC-Council Logo & Digital Badge (Compliant with EC-Council Logo Usage Guidelines:
+                            - Original upright horizontal aspect ratio, no version number on ANSI credential
+                            - White background container with >= 0.3cm (14px) clear spacing
+                            - Smaller than candidate name) */}
+                        <div className="flex shrink-0 flex-wrap items-center gap-4">
+                          <Link
+                            href={cert.verificationUrl || CEH_VERIFICATION_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Verify Certified Ethical Hacker (C|EH) credential on EC-Council ASPEN"
+                            className="inline-flex items-center justify-center rounded-lg border border-border/80 bg-white p-3.5 shadow-2xs transition-transform hover:scale-[1.02]"
+                          >
+                            <Image
+                              src="/ceh-logo.jpg"
+                              alt="EC-Council Certified Ethical Hacker (C|EH) Official Logo"
+                              width={128}
+                              height={96}
+                              className="h-auto w-[116px] object-contain"
+                            />
+                          </Link>
+                          <Link
+                            href={cert.verificationUrl || CEH_VERIFICATION_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Official EC-Council Certified Ethical Hacker Digital Badge"
+                            className="inline-flex items-center justify-center rounded-lg border border-border/80 bg-white p-3.5 shadow-2xs transition-transform hover:scale-[1.02]"
+                          >
+                            <Image
+                              src="/ceh-badge.png"
+                              alt="EC-Council Certified Ethical Hacker (C|EH) Official Digital Badge"
+                              width={88}
+                              height={88}
+                              className="h-[80px] w-[80px] object-contain"
+                            />
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/50"
+                    >
+                      {cert.verificationUrl ? (
+                        <Link
+                          href={cert.verificationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group"
+                        >
+                          <h3 className="mb-1 flex items-center gap-2 font-semibold group-hover:text-primary">
+                            <span>{cert.name}</span>
+                            <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
+                          </h3>
+                        </Link>
+                      ) : (
+                        <h3 className="mb-1 font-semibold">{cert.name}</h3>
+                      )}
+                      <p className="text-sm text-muted-foreground">{cert.issuer}</p>
+                      <p className="mt-2 font-mono text-xs text-primary">{cert.date}</p>
+                    </div>
+                  );
+                })}
               </CardContent>
             </InteractiveCard>
           </ScrollReveal>
@@ -787,28 +874,61 @@ export function ResumeView({
             </ScrollReveal>
           )}
 
-          {/* Bottom Footer Actions */}
+          {/* Bottom Footer Actions & Lower-Right Official C|EH Logo per EC-Council Guidelines Section 6(c) */}
           <ScrollReveal delay={0.26}>
-            <div className="flex flex-wrap justify-center gap-4 pt-4">
-              <Button asChild size="lg" className="gap-2 rounded-full">
-                <a
-                  href={settings.resume_pdf_url || '/resume.pdf'}
-                  download="Md_Redwan_Ahmed_Resume.pdf"
+            <div className="flex flex-col items-center justify-between gap-6 border-t border-border/70 pt-6 sm:flex-row">
+              <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
+                <Button asChild size="lg" className="gap-2 rounded-full">
+                  <a
+                    href={settings.resume_pdf_url || '/resume.pdf'}
+                    download="Md_Redwan_Ahmed_Resume.pdf"
+                  >
+                    <Download className="h-5 w-5" />
+                    Download CV
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePrint}
+                  className="gap-2 rounded-full"
                 >
-                  <Download className="h-5 w-5" />
-                  Download CV
-                </a>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={handlePrint}
-                className="gap-2 rounded-full"
-              >
-                <Printer className="h-5 w-5" />
-                Print Resume
-              </Button>
+                  <Printer className="h-5 w-5" />
+                  Print Resume
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-3 self-center sm:self-end">
+                <div className="text-right text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground">EC-Council Certified Member</p>
+                  <p className="font-mono text-[11px]">Cert #{CEH_CERT_NUMBER}</p>
+                  <Link
+                    href={CEH_VERIFICATION_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                  >
+                    Verify on ASPEN
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+                <Link
+                  href={CEH_VERIFICATION_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="EC-Council Certified Ethical Hacker (C|EH) Logo — Lower Right Resume Placement"
+                  className="inline-flex items-center justify-center rounded-lg border border-border/80 bg-white p-3.5 shadow-2xs"
+                >
+                  <Image
+                    src="/ceh-logo.jpg"
+                    alt="Certified Ethical Hacker (C|EH) Logo"
+                    width={110}
+                    height={82}
+                    className="h-auto w-[100px] object-contain"
+                  />
+                </Link>
+              </div>
             </div>
           </ScrollReveal>
         </div>

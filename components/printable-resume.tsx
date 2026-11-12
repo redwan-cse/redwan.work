@@ -1,4 +1,5 @@
 import React from "react"
+import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL } from "@/lib/content/site"
 
 interface PrintableResumeProps {
   personalInfo: {
@@ -850,6 +851,60 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             </div>
           </div>
         )}
+
+        {/* Official EC-Council C|EH Logo — Lower Right Resume Placement (Section 6c of EC-Council Logo Usage Guidelines) */}
+        <div
+          className="avoid-break"
+          style={{
+            marginTop: '14pt',
+            paddingTop: '10pt',
+            borderTop: '1pt solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: '10pt',
+          }}
+        >
+          <div style={{ textAlign: 'right', fontSize: '8pt', color: '#475569', lineHeight: '1.35' }}>
+            <div style={{ fontWeight: '700', color: '#0f172a' }}>
+              Certified Ethical Hacker (C|EH) — ANSI / ISO/IEC 17024 Accredited
+            </div>
+            <div>EC-Council Certification Number: {CEH_CERT_NUMBER} · Issued: 10 Nov 2026</div>
+            <div>
+              <a
+                href={CEH_VERIFICATION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#2563eb', textDecoration: 'none' }}
+              >
+                Verify Credential: aspen.eccouncil.org/VerifyBadge
+              </a>
+            </div>
+          </div>
+          <a
+            href={CEH_VERIFICATION_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-block',
+              background: '#ffffff',
+              padding: '3.5mm',
+              border: '0.5pt solid #cbd5e1',
+              borderRadius: '3pt',
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/ceh-logo.jpg"
+              alt="EC-Council Certified Ethical Hacker (C|EH)"
+              style={{
+                width: '28mm',
+                height: 'auto',
+                display: 'block',
+              }}
+            />
+          </a>
+        </div>
       </div>
     )
   }

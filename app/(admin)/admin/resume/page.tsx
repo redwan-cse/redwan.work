@@ -192,7 +192,7 @@ export default async function AdminResumeCmsPage() {
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
                   <option value="experience">Work Experience</option>
-                  <option value="vendor_certification">Vendor Certification (e.g. CCEP, CNSP, CAP)</option>
+                  <option value="vendor_certification">Vendor Certification (e.g. C|EH, CCEP, CNSP, CAP)</option>
                   <option value="professional_certificate">Professional Certificate</option>
                   <option value="research">Peer-Reviewed Research</option>
                   <option value="leadership">Leadership &amp; Volunteering</option>

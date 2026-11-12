@@ -34,26 +34,33 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(settings.email).toBe('contact@redwan.work');
 
     const serialized = JSON.stringify(settings);
-    expect(serialized).not.toMatch(/C\|EH/i);
-    expect(serialized).not.toMatch(/Certified Ethical Hacker/i);
+    expect(serialized).toMatch(/C\|EH/i);
+    expect(serialized).toMatch(/Certified Ethical Hacker/i);
 
     const codes = settings.credentials.map((c) => c.code);
+    expect(codes).toContain('C|EH');
     expect(codes).toContain('CCEP');
     expect(codes).toContain('CNSP');
     expect(codes).toContain('CAP');
-    expect(codes).not.toContain('C|EH');
 
     const layek = settings.references_list.find((r) => r.name.includes('Abu Layek'));
     expect(layek?.email).toBe('abulayek@yahoo.com');
   });
 
-  it('removes unverified C|EH vendor certification and aligns BSc graduation year to 2021 in resume_items', async () => {
-    const certs = await pg.db.query<{ section: string; title: string; organization: string }>(
-      `select section, title, organization from public.resume_items`
+  it('includes verified EC-Council C|EH vendor certification and aligns BSc graduation year to 2021 in resume_items', async () => {
+    const certs = await pg.db.query<{
+      section: string;
+      title: string;
+      organization: string;
+      verification_url: string | null;
+    }>(`select section, title, organization, verification_url from public.resume_items`);
+    const ceh = certs.rows.find(
+      (r) => r.section === 'vendor_certification' && /Certified Ethical Hacker/i.test(r.title)
     );
-    const serialized = JSON.stringify(certs.rows);
-    expect(serialized).not.toMatch(/C\|EH/i);
-    expect(serialized).not.toMatch(/Certified Ethical Hacker/i);
+    expect(ceh).toBeDefined();
+    expect(ceh?.verification_url).toBe(
+      'https://aspen.eccouncil.org/VerifyBadge?type=certification&a=DOHxj32aadzdBISA9fowYmydNqnnA7aGz7+N9haFaMg='
+    );
 
     // EC-Council Learning course certificate remains under professional_certificate
     const ecCourse = certs.rows.find((r) => r.title === 'Mastering Ethical Hacking Tools');
@@ -65,12 +72,10 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(bsc.rows[0]?.period).toBe('2021 · CGPA: 3.15/4.00');
   });
 
-  it('removes C|EH claims and unverified statistics from services and portfolio_items', async () => {
+  it('keeps portfolio_items free of fabricated legacy statistics and validates service slugs', async () => {
     const services = await pg.db.query<{ slug: string; title: string; tagline: string; description: string; highlights: string[] }>(
       `select slug, title, tagline, description, highlights from public.services`
     );
-    expect(JSON.stringify(services.rows)).not.toMatch(/C\|EH/i);
-    expect(JSON.stringify(services.rows)).not.toMatch(/Certified Ethical Hacker/i);
 
     const validSlugs = new Set(services.rows.map((s) => s.slug));
 
@@ -86,8 +91,6 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
 
     expect(portfolio.rows.length).toBeGreaterThanOrEqual(6);
     const portfolioJson = JSON.stringify(portfolio.rows);
-    expect(portfolioJson).not.toMatch(/C\|EH/i);
-    expect(portfolioJson).not.toMatch(/Certified Ethical Hacker/i);
     expect(portfolioJson).not.toContain('14 Critical/High');
     expect(portfolioJson).not.toContain('35+ Servers');
     expect(portfolioJson).not.toContain('94% Brute-Force');

@@ -168,7 +168,7 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     }
   });
 
-  test('[IDENTITY-CONSISTENCY] presents verified Md. Redwan Ahmed identity and credentials without C|EH claims or fabricated testimonials', async ({
+  test('[IDENTITY-CONSISTENCY] presents verified Md. Redwan Ahmed identity and EC-Council C|EH credential without fabricated testimonials', async ({
     page,
   }) => {
     const publicCheckRoutes = ['/', '/services', '/portfolio', '/resume', '/contact'];
@@ -177,8 +177,6 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       const html = await page.content();
 
-      expect(html).not.toContain('Certified Ethical Hacker');
-      expect(html).not.toContain('C|EH');
       expect(html).not.toContain('info@redwan.work');
       expect(html).not.toContain('Sarah Johnson');
       expect(html).not.toContain('Michael Chen');
@@ -188,6 +186,8 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const resumeText = (await page.locator('main').textContent()) ?? '';
     expect(resumeText).toContain('Md. Redwan Ahmed');
     expect(resumeText).toContain('contact@redwan.work');
+    expect(resumeText).toContain('Certified Ethical Hacker (C|EH)');
+    expect(resumeText).toContain('ECC8126370954');
     expect(resumeText).toContain('CCEP');
     expect(resumeText).toContain('CNSP');
     expect(resumeText).toContain('CAP');

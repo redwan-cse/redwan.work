@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SITE } from '@/lib/content/site';
+import { CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import { clearBlogCache, getBlogPostsPage } from '@/lib/blogger';
 import sitemap from '@/app/sitemap';
@@ -108,14 +108,21 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     }
   });
 
-  it('enforces verified identity and eliminates C|EH, info@redwan.work, and fabricated testimonials across app/components/lib', async () => {
+  it('enforces verified identity including EC-Council C|EH credential and eliminates info@redwan.work and fabricated testimonials across app/components/lib', async () => {
     expect(SITE.name).toBe('Md. Redwan Ahmed');
     expect(SITE.email).toBe('contact@redwan.work');
+    expect(SITE.credentials.map((c) => c.code)).toContain('C|EH');
 
-    const { settings } = await getSiteSettingsAndResume();
+    const { settings, items } = await getSiteSettingsAndResume();
     expect(settings.full_name).toBe('Md. Redwan Ahmed');
-    expect(JSON.stringify(settings)).not.toMatch(/C\|EH/i);
-    expect(JSON.stringify(settings)).not.toMatch(/Certified Ethical Hacker/i);
+    expect(JSON.stringify(settings)).toMatch(/C\|EH/i);
+    expect(JSON.stringify(settings)).toMatch(/Certified Ethical Hacker/i);
+
+    const cehItem = items.find(
+      (i) => i.section === 'vendor_certification' && /Certified Ethical Hacker/i.test(i.title)
+    );
+    expect(cehItem).toBeDefined();
+    expect(cehItem?.verification_url).toBe(CEH_VERIFICATION_URL);
 
     const root = process.cwd();
     const files = [
@@ -129,9 +136,6 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
       const rel = path.relative(root, file).replace(/\\/g, '/');
       if (rel === 'lib/content/testimonials.ts') continue;
       const src = fs.readFileSync(file, 'utf8');
-      if (/C\|EH/i.test(src) || /Certified Ethical Hacker/i.test(src)) {
-        violations.push(`${rel}: contains unverified C|EH claim`);
-      }
       if (/info@redwan\.work/i.test(src)) {
         violations.push(`${rel}: contains legacy info@redwan.work address`);
       }

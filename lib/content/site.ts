@@ -34,12 +34,16 @@ export interface ServiceCatalogItem {
   packages: ServicePackageSeed[];
 }
 
+export const CEH_VERIFICATION_URL =
+  'https://aspen.eccouncil.org/VerifyBadge?type=certification&a=DOHxj32aadzdBISA9fowYmydNqnnA7aGz7+N9haFaMg=';
+export const CEH_CERT_NUMBER = 'ECC8126370954';
+
 export const SITE = {
   name: 'Md. Redwan Ahmed',
   role: 'Cybersecurity Specialist, Full-Stack Engineer & Founder of Fast Cyber Defense',
   shortRole: 'Security Specialist & Full-Stack Consultant',
   tagline:
-    'Cybersecurity Specialist (CCEP, CNSP, CAP), Full-Stack Software Engineer, Cloud/DevOps Architect, and Executive Technical Consultant delivering offensive security assessments, custom software, AI pipelines, and rapid incident recovery.',
+    'Certified Ethical Hacker (C|EH, CCEP, CNSP, CAP), Full-Stack Software Engineer, Cloud/DevOps Architect, and Executive Technical Consultant delivering offensive security assessments, custom software, AI pipelines, and rapid incident recovery.',
   url: process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work',
   email: 'contact@redwan.work',
   whatsappNumber: '8801776387624',
@@ -51,6 +55,7 @@ export const SITE = {
   },
   profileImage: '/profile.jpg',
   credentials: [
+    { code: 'C|EH', label: 'Certified Ethical Hacker (EC-Council)' },
     { code: 'CCEP', label: 'Certified Cybersecurity Educator Professional' },
     { code: 'GitHub', label: 'GitHub Foundations Certified' },
     { code: 'CNSP', label: 'Certified Network Security Practitioner' },

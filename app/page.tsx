@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -28,6 +29,8 @@ import {
 } from '@/components/motion/reveal';
 import { TestimonialCarousel } from '@/components/testimonial-carousel';
 import {
+  CEH_CERT_NUMBER,
+  CEH_VERIFICATION_URL,
   SERVICE_PILLARS,
   SITE,
   type ServicePillarKey,
@@ -139,18 +142,59 @@ export default async function Home() {
                   </p>
                 </HeroRevealItem>
 
-                {/* Staggered Credentials Strip */}
+                {/* Staggered Credentials Strip & Official EC-Council C|EH Verification Showcase */}
                 <HeroRevealItem>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {SITE.credentials.map((cred) => (
-                      <div
-                        key={cred.code}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/80 px-3 py-1.5 text-xs shadow-2xs backdrop-blur-xs"
+                  <div className="space-y-3 pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      {SITE.credentials.map((cred) => (
+                        <div
+                          key={cred.code}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card/80 px-3 py-1.5 text-xs shadow-2xs backdrop-blur-xs"
+                        >
+                          <span className="font-mono font-bold text-primary">{cred.code}</span>
+                          <span className="text-muted-foreground">{cred.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Official EC-Council Logo Showcase (Compliant with EC-Council Logo Usage Guidelines Section 6d:
+                        - Original horizontal aspect ratio, no version number on ANSI credential
+                        - Clean white background with >= 0.3cm clear spacing
+                        - Smaller than candidate name) */}
+                    <div className="inline-flex flex-wrap items-center gap-3.5 rounded-xl border border-primary/25 bg-card/85 p-3 shadow-2xs backdrop-blur-xs">
+                      <a
+                        href={CEH_VERIFICATION_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Verify EC-Council Certified Ethical Hacker (C|EH) Credential on ASPEN"
+                        className="inline-flex items-center justify-center rounded-md border border-border/70 bg-white p-3.5 shadow-2xs transition-transform hover:scale-[1.02]"
                       >
-                        <span className="font-mono font-bold text-primary">{cred.code}</span>
-                        <span className="text-muted-foreground">{cred.label}</span>
+                        <Image
+                          src="/ceh-logo.jpg"
+                          alt="EC-Council Certified Ethical Hacker (C|EH) Official Logo"
+                          width={108}
+                          height={81}
+                          className="h-auto w-[96px] object-contain"
+                        />
+                      </a>
+                      <div className="space-y-0.5 text-xs">
+                        <div className="font-semibold text-foreground">
+                          Certified Ethical Hacker (C|EH) · ANSI / ISO/IEC 17024 Accredited
+                        </div>
+                        <div className="font-mono text-[11px] text-muted-foreground">
+                          EC-Council Cert #{CEH_CERT_NUMBER} · Issued Nov 2026
+                        </div>
+                        <a
+                          href={CEH_VERIFICATION_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 pt-0.5 font-medium text-primary underline underline-offset-4 hover:text-primary/80"
+                        >
+                          Verify Official Badge on EC-Council ASPEN
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </HeroRevealItem>
 

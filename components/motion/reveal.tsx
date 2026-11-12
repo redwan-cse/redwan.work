@@ -86,7 +86,7 @@ export function HeroPortrait({
   src,
   alt,
   caption,
-  badgeText = 'CCEP · CNSP · CAP',
+  badgeText = 'C|EH · CCEP · CNSP · CAP',
 }: {
   src: string;
   alt: string;

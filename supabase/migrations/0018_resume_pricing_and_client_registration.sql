@@ -186,6 +186,38 @@ begin
   set verification_url = 'https://www.upwork.com/freelancers/~01bd47ab2da223b848'
   where section = 'experience' and organization = 'Upwork';
 
+  -- Update site_settings with verified EC-Council Certified Ethical Hacker (C|EH) credential
+  update public.site_settings
+  set
+    tagline = 'Certified Ethical Hacker (C|EH, CCEP, CNSP, CAP), Full-Stack Software Engineer, Cloud/DevOps Architect, and Executive Technical Consultant delivering offensive security assessments, custom software, AI pipelines, and rapid incident recovery.',
+    credentials = '[
+      {"code": "C|EH", "label": "Certified Ethical Hacker (EC-Council)"},
+      {"code": "CCEP", "label": "Certified Cybersecurity Educator Professional"},
+      {"code": "GitHub", "label": "GitHub Foundations Certified"},
+      {"code": "CNSP", "label": "Certified Network Security Practitioner"},
+      {"code": "CAP", "label": "Certified AppSec Practitioner"},
+      {"code": "Q1 / IEEE", "label": "Published AI & Security Researcher"}
+    ]'::jsonb
+  where id = 'default';
+
+  -- Add verified Certified Ethical Hacker (C|EH) credential to resume_items (Cert #ECC8126370954)
+  delete from public.resume_items
+  where section = 'vendor_certification'
+    and (title ilike '%Certified Ethical Hacker%' or title ilike '%C|EH%');
+
+  insert into public.resume_items (
+    section, title, organization, period, verification_url, badge_label, sort_order, is_visible
+  ) values (
+    'vendor_certification',
+    'Certified Ethical Hacker (C|EH)',
+    'EC-Council (ANSI / ISO/IEC 17024 Accredited · Cert #ECC8126370954)',
+    'Nov 2026',
+    'https://aspen.eccouncil.org/VerifyBadge?type=certification&a=DOHxj32aadzdBISA9fowYmydNqnnA7aGz7+N9haFaMg=',
+    'C|EH',
+    5,
+    true
+  );
+
   -- Replace portfolio_items with the enriched 15-item portfolio spanning GitHub repos, cybersecurity engagements, and Upwork contracts
   delete from public.portfolio_items;
 

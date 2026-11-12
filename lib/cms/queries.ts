@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
+  CEH_VERIFICATION_URL,
   PORTFOLIO_ITEMS,
   SERVICE_CATALOG,
   SERVICE_PILLARS,
@@ -325,6 +326,21 @@ export async function getPublicPortfolioItems(options?: {
 
 export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
   // 1. Vendor / Exam Certifications
+  {
+    id: 'fallback-cert-ceh',
+    section: 'vendor_certification',
+    title: 'Certified Ethical Hacker (C|EH)',
+    organization: 'EC-Council (ANSI / ISO/IEC 17024 Accredited · Cert #ECC8126370954)',
+    role_type: null,
+    location: null,
+    period: 'Nov 2026',
+    description: null,
+    highlights: [],
+    verification_url: CEH_VERIFICATION_URL,
+    badge_label: 'C|EH',
+    sort_order: 5,
+    is_visible: true,
+  },
   {
     id: 'fallback-cert-ccep',
     section: 'vendor_certification',
@@ -969,6 +985,14 @@ export async function getSiteSettingsAndResume(options?: {
       itemsQuery,
     ]);
 
+    const rawCreds =
+      settingsRow && Array.isArray(settingsRow.credentials) && settingsRow.credentials.length > 0
+        ? (settingsRow.credentials as Array<{ code: string; label: string }>)
+        : defaultSettings.credentials;
+    const mergedCredentials = rawCreds.some((c) => c.code === 'C|EH')
+      ? rawCreds
+      : [{ code: 'C|EH', label: 'Certified Ethical Hacker (EC-Council)' }, ...rawCreds];
+
     const settings: SiteSettingsRecord = settingsRow
       ? {
           id: settingsRow.id,
@@ -976,7 +1000,10 @@ export async function getSiteSettingsAndResume(options?: {
           role_title: settingsRow.role_title || defaultSettings.role_title,
           short_role: settingsRow.short_role || defaultSettings.short_role,
           subtitle: settingsRow.subtitle || defaultSettings.subtitle,
-          tagline: settingsRow.tagline || defaultSettings.tagline,
+          tagline:
+            settingsRow.tagline && /C\|EH/i.test(settingsRow.tagline)
+              ? settingsRow.tagline
+              : defaultSettings.tagline,
           executive_summary: settingsRow.executive_summary || defaultSettings.executive_summary,
           email: settingsRow.email || defaultSettings.email,
           phone: settingsRow.phone || defaultSettings.phone,
@@ -989,10 +1016,7 @@ export async function getSiteSettingsAndResume(options?: {
           github_url: settingsRow.github_url || defaultSettings.github_url,
           website_url: settingsRow.website_url || defaultSettings.website_url,
           resume_pdf_url: settingsRow.resume_pdf_url || defaultSettings.resume_pdf_url,
-          credentials:
-            Array.isArray(settingsRow.credentials) && settingsRow.credentials.length > 0
-              ? (settingsRow.credentials as Array<{ code: string; label: string }>)
-              : defaultSettings.credentials,
+          credentials: mergedCredentials,
           research_interests:
             Array.isArray(settingsRow.research_interests) &&
             settingsRow.research_interests.length > 0
@@ -1057,6 +1081,15 @@ export async function getSiteSettingsAndResume(options?: {
     for (const sec of sections) {
       const secRows = dbItems.filter((item) => item.section === sec);
       if (secRows.length > 0) {
+        if (
+          sec === 'vendor_certification' &&
+          !secRows.some((item) => /Certified Ethical Hacker/i.test(item.title))
+        ) {
+          const defaultCeh = DEFAULT_RESUME_ITEMS.find((item) => item.id === 'fallback-cert-ceh');
+          if (defaultCeh) {
+            mergedItems.push(defaultCeh);
+          }
+        }
         mergedItems.push(...secRows);
       } else {
         mergedItems.push(...DEFAULT_RESUME_ITEMS.filter((item) => item.section === sec));
