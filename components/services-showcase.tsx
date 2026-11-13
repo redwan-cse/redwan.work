@@ -171,7 +171,7 @@ export function ServicesShowcase({
 
           return (
             <ScrollReveal key={service.slug}>
-              <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-6 shadow-xs sm:p-8">
+              <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/60 p-4 shadow-xs sm:p-8">
                 {/* Service Header */}
                 <div className="flex flex-col justify-between gap-4 border-b border-border/70 pb-6 lg:flex-row lg:items-start">
                   <div className="max-w-3xl space-y-2.5">
@@ -240,7 +240,7 @@ export function ServicesShowcase({
                       <InteractiveCard
                         key={pkg.tier}
                         className={cn(
-                          'flex flex-col justify-between p-6 transition-all',
+                          'flex flex-col justify-between p-4 sm:p-6 transition-all',
                           isSelected
                             ? 'border-primary bg-primary/[0.04] ring-2 ring-primary/30'
                             : pkg.popular
@@ -249,7 +249,7 @@ export function ServicesShowcase({
                         )}
                       >
                         <div>
-                          <div className="mb-3 flex items-center justify-between gap-2">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                             <span
                               className={cn(
                                 'rounded-md px-2.5 py-0.5 font-mono text-xs font-semibold uppercase',
@@ -260,7 +260,7 @@ export function ServicesShowcase({
                             >
                               {pkg.tier}
                             </span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {pkg.popular && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-primary">
                                   <Sparkles className="h-3 w-3" />
@@ -271,7 +271,7 @@ export function ServicesShowcase({
                                 type="button"
                                 onClick={() => togglePackageTier(service, pkg.tier)}
                                 className={cn(
-                                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition',
+                                  'inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition',
                                   isSelected
                                     ? 'border-primary bg-primary text-primary-foreground'
                                     : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground'
