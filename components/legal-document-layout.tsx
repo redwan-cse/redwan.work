@@ -58,7 +58,7 @@ export function LegalDocumentLayout({
           {/* Sticky CONTENTS Navigation Sidebar (stays visible throughout scroll) */}
           <aside
             aria-label="Document table of contents"
-            className="lg:sticky lg:top-24 lg:col-span-4 lg:self-start xl:col-span-3"
+            className="min-w-0 lg:sticky lg:top-24 lg:col-span-4 lg:self-start xl:col-span-3"
           >
             <div className="rounded-2xl border border-border/80 bg-card/85 p-4 shadow-2xs backdrop-blur-xs sm:p-5">
               <div className="mb-3 px-2 font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -103,12 +103,12 @@ export function LegalDocumentLayout({
           </aside>
 
           {/* Numbered Legal Document Sections */}
-          <div className="space-y-10 lg:col-span-8 xl:col-span-9">
+          <div className="min-w-0 space-y-10 lg:col-span-8 xl:col-span-9">
             {sections.map((sec) => (
               <section
                 key={sec.id}
                 id={sec.id}
-                className="scroll-mt-28 rounded-2xl border border-border/80 bg-card/75 p-6 shadow-2xs sm:p-8"
+                className="scroll-mt-28 overflow-x-hidden rounded-2xl border border-border/80 bg-card/75 p-4 shadow-2xs sm:p-8"
               >
                 <div className="mb-4 flex items-center gap-3 border-b border-border/60 pb-3.5">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/12 font-mono text-xs font-bold text-primary">
