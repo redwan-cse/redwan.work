@@ -38,7 +38,6 @@ async function signInAdminWithAal2(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL('**/mfa**');
   await page.locator('#totp-code').fill(LOOPBACK_SECRETS.totpValidCode);
-  await page.getByRole('button', { name: 'Verify & Continue' }).click();
   await page.waitForURL('**/admin**');
 }
 
