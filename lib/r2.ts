@@ -75,6 +75,7 @@ export async function listPrivateObjects(prefix: string): Promise<R2ObjectSummar
   return out;
 }
 export async function listPrivateContactObjects(): Promise<R2ObjectSummary[]> { return listPrivateObjects('contact/'); }
+export async function listPrivateVaultObjects(): Promise<R2ObjectSummary[]> { return listPrivateObjects('private/'); }
 export function staleObjectKeys(objects: R2ObjectSummary[], cutoff: Date, retainedKeys: Set<string>): string[] {
   return objects.filter(o => o.lastModified < cutoff && !retainedKeys.has(o.key)).map(o => o.key);
 }

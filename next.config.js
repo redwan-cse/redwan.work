@@ -60,8 +60,10 @@ const nextConfig = {
       { source: '/portal/:path*', headers: noindexHeader },
       { source: '/api/:path*', headers: noindexHeader },
       { source: '/login', headers: noindexHeader },
+      { source: '/register', headers: noindexHeader },
       { source: '/mfa', headers: noindexHeader },
       { source: '/reset-password', headers: noindexHeader },
+      { source: '/auth/:path*', headers: noindexHeader },
       { source: '/invite/:path*', headers: noindexHeader },
     ];
   },

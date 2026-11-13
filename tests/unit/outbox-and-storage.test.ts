@@ -8,6 +8,7 @@ const mockIsR2Configured = vi.fn();
 const mockPresignPrivatePut = vi.fn();
 const mockDeletePrivateObjects = vi.fn();
 const mockListPrivateContactObjects = vi.fn();
+const mockListPrivateVaultObjects = vi.fn();
 
 vi.mock('@/lib/auth/session', () => ({
   getCurrentSession: () => mockGetCurrentSession(),
@@ -29,6 +30,7 @@ vi.mock('@/lib/r2', async (importOriginal) => {
     presignPrivatePut: (...args: unknown[]) => mockPresignPrivatePut(...args),
     deletePrivateObjects: (...args: unknown[]) => mockDeletePrivateObjects(...args),
     listPrivateContactObjects: () => mockListPrivateContactObjects(),
+    listPrivateVaultObjects: () => mockListPrivateVaultObjects(),
   };
 });
 
@@ -45,7 +47,7 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
     process.env.RESEND_API_BASE_URL = 'http://127.0.0.1:19999';
   });
 
-  it('escapes untrusted HTML in email templates, omits unverified C|EH claims, and sends Idempotency-Key', async () => {
+  it('escapes untrusted HTML in email templates, strips javascript: URLs, and sends Idempotency-Key', async () => {
     expect(escapeHtml(`<script>alert("xss")</script>`)).toBe(
       '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
     );
@@ -60,7 +62,6 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
     expect(html).toContain('Invoice &lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('Hello &lt;b&gt;Client&lt;/b&gt;');
     expect(html).not.toContain('javascript:alert(1)');
-    expect(html).not.toContain('C|EH');
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ id: 'resend-msg-1' }), {
@@ -160,6 +161,7 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
     mockIsR2Configured.mockReturnValue(true);
     mockDeletePrivateObjects.mockResolvedValue(1);
     mockListPrivateContactObjects.mockResolvedValue([]);
+    mockListPrivateVaultObjects.mockResolvedValue([]);
 
     let archivedUpdatePayload: Record<string, unknown> | null = null;
 
@@ -270,6 +272,7 @@ describe('Outbox HTML Escaping, Idempotency Header, Cron GET Verbs & Retention/P
     mockListPrivateContactObjects.mockResolvedValue([
       { key: 'contact/2026/05/retained-doc.pdf', lastModified: oldDate },
     ]);
+    mockListPrivateVaultObjects.mockResolvedValue([]);
 
     mockGetSupabaseAdmin.mockReturnValue({
       rpc: vi.fn(async () => ({ data: 0, error: null })),

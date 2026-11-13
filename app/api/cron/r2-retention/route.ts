@@ -6,6 +6,7 @@ import {
   deletePrivateObjects,
   isR2Configured,
   listPrivateContactObjects,
+  listPrivateVaultObjects,
   staleObjectKeys,
 } from '@/lib/r2';
 
@@ -47,6 +48,7 @@ async function handleStorageRetentionCron(request: NextRequest) {
   let deletedVaultFiles = 0;
   let deletedInquiryAttachments = 0;
   let deletedOrphanContactObjects = 0;
+  let deletedOrphanPrivateObjects = 0;
 
   // 2. Purge expired vault files & unretained >90d inquiry attachments from private storage
   if (isR2Configured()) {
@@ -182,6 +184,59 @@ async function handleStorageRetentionCron(request: NextRequest) {
         }
       }
     }
+
+    // Sweep unreferenced private/* vault uploads older than 24 hours not tracked in vault_files
+    const vaultOrphanCutoff = new Date(now.getTime() - 86_400_000);
+    let privateObjects: Awaited<ReturnType<typeof listPrivateVaultObjects>> = [];
+    try {
+      privateObjects = await listPrivateVaultObjects();
+    } catch {
+      return NextResponse.json(
+        { error: 'Failed to list private vault storage objects.' },
+        { status: 503 }
+      );
+    }
+
+    const candidateOrphanPrivate = privateObjects
+      .filter(
+        (obj) =>
+          obj.key.startsWith('private/') &&
+          obj.lastModified instanceof Date &&
+          obj.lastModified.getTime() < vaultOrphanCutoff.getTime()
+      )
+      .slice(0, 100);
+
+    if (candidateOrphanPrivate.length > 0) {
+      const candidatePrivateKeys = candidateOrphanPrivate.map((obj) => obj.key);
+      const { data: trackedVaultFiles, error: trackedVaultErr } = await admin
+        .from('vault_files')
+        .select('r2_key')
+        .in('r2_key', candidatePrivateKeys);
+
+      if (trackedVaultErr || !trackedVaultFiles) {
+        return NextResponse.json(
+          { error: trackedVaultErr?.message ?? 'Could not verify retained vault files.' },
+          { status: 503 }
+        );
+      }
+
+      const trackedVaultSet = new Set(trackedVaultFiles.map((row) => row.r2_key));
+      const orphanPrivateKeys = staleObjectKeys(
+        candidateOrphanPrivate,
+        vaultOrphanCutoff,
+        trackedVaultSet
+      );
+      if (orphanPrivateKeys.length > 0) {
+        try {
+          deletedOrphanPrivateObjects = await deletePrivateObjects(orphanPrivateKeys.slice(0, 100));
+        } catch {
+          return NextResponse.json(
+            { error: 'Failed to delete orphan private objects.' },
+            { status: 503 }
+          );
+        }
+      }
+    }
   }
 
   return NextResponse.json({
@@ -190,6 +245,7 @@ async function handleStorageRetentionCron(request: NextRequest) {
     deletedVaultFiles,
     deletedInquiryAttachments,
     deletedOrphanContactObjects,
+    deletedOrphanPrivateObjects,
   });
 }
 

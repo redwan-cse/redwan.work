@@ -20,6 +20,9 @@ export default async function ClientPortalLayout({
   if (!session) {
     redirect('/login?next=/portal');
   }
+  if (session.role !== 'client') {
+    redirect(session.role === 'admin' ? '/admin' : '/login?next=/portal');
+  }
 
   const admin = getSupabaseAdmin();
   const [{ data: overviewRaw }, { data: recentNotifications }] = await Promise.all([

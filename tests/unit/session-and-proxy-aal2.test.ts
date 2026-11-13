@@ -47,6 +47,7 @@ import { signInWithPasswordAction } from '@/lib/auth/actions';
 import { proxy } from '@/proxy';
 import {
   sanitizeAdminMfaNextPath,
+  sanitizeHttpUrl,
   sanitizeRelativeRedirectPath,
   shouldUseSecureCookies,
 } from '@/lib/security/safe-redirect';
@@ -261,5 +262,58 @@ describe('Session & Proxy MFA AAL2 and Active-Account Enforcement', () => {
         siteUrl: 'http://127.0.0.1:24390',
       })
     ).toBe(false);
+
+    expect(() => sanitizeHttpUrl('javascript:alert(1)')).toThrow();
+    expect(() => sanitizeHttpUrl('data:text/html,<script>alert(1)</script>')).toThrow();
+    expect(sanitizeHttpUrl('https://redwan.work/resume')).toBe('https://redwan.work/resume');
+    expect(sanitizeHttpUrl('/resume.pdf', { allowRelative: true })).toBe('/resume.pdf');
+  });
+
+  it('requires AAL2 for admins even when mfa_enforced is false', async () => {
+    mockGetClaims.mockResolvedValueOnce({
+      data: {
+        claims: {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'admin@disposable.test',
+          aal: 'aal1',
+          app_metadata: { role: 'admin' },
+        },
+      },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        role: 'admin',
+        is_active: true,
+        mfa_enforced: false,
+        full_name: 'Admin User',
+        email: 'admin@disposable.test',
+      },
+      error: null,
+    });
+    expect(await getCurrentSession()).toBeNull();
+
+    mockGetClaims.mockResolvedValueOnce({
+      data: {
+        claims: {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'admin@disposable.test',
+          aal: 'aal1',
+          app_metadata: { role: 'admin' },
+        },
+      },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        role: 'admin',
+        is_active: true,
+        mfa_enforced: false,
+      },
+      error: null,
+    });
+    const res = await proxy(new NextRequest('http://localhost:3000/admin'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('http://localhost:3000/mfa?next=%2Fadmin');
   });
 });

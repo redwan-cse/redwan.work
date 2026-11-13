@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CheckCircle2, Loader2, UploadCloud } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { resolveMimeType } from '@/lib/mime';
 
 export function R2FileUploader({
   category,
@@ -46,15 +47,18 @@ export function R2FileUploader({
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
 
+      const effectiveMime = resolveMimeType(file.name, file.type);
+
       const presignRes = await fetch('/api/uploads/portal-presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: file.name,
-          mime: file.type || 'application/octet-stream',
+          mime: effectiveMime,
           size: file.size,
           category,
           clientId,
+          orderId: orderId || undefined,
         }),
       });
 
@@ -63,14 +67,16 @@ export function R2FileUploader({
         throw new Error(body.error || 'Could not presign R2 upload.');
       }
 
-      const { key, uploadUrl } = (await presignRes.json()) as {
+      const { key, uploadUrl, mime: resolvedMime } = (await presignRes.json()) as {
         key: string;
         uploadUrl: string;
+        mime?: string;
       };
+      const contentType = resolvedMime || effectiveMime;
 
       const putRes = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        headers: { 'Content-Type': contentType },
         body: file,
       });
 
@@ -81,7 +87,7 @@ export function R2FileUploader({
       setFileMeta({
         r2Key: key,
         filename: file.name,
-        mime: file.type || 'application/octet-stream',
+        mime: contentType,
         sizeBytes: file.size,
         sha256,
       });
@@ -101,7 +107,7 @@ export function R2FileUploader({
           type="file"
           onChange={handleFileChange}
           disabled={status === 'uploading'}
-          className="h-9 min-w-[200px] flex-1 cursor-pointer text-xs"
+          className="h-9 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer text-xs"
         />
       </div>
 

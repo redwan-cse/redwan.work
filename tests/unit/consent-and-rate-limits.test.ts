@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDisposablePostgres, type DisposablePostgres } from '../harness/disposable-pg.mjs';
 import {
@@ -19,7 +21,18 @@ const EXPECTED_RATE_LIMIT_KINDS = [
   'retry-recovery',
   'retry-invite',
   'portal-presign',
+  'password-login',
+  'register-ip',
 ] as const;
+
+function collectSourceFiles(dir: string): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  return entries.flatMap((entry) => {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) return collectSourceFiles(fullPath);
+    return /\.(?:ts|tsx)$/.test(entry.name) ? [fullPath] : [];
+  });
+}
 
 describe('Consent Policy Contract & Rate-Limit Vocabulary', () => {
   let pg: DisposablePostgres;
@@ -133,5 +146,28 @@ describe('Consent Policy Contract & Rate-Limit Vocabulary', () => {
         `select public.consume_rate_limit('unknown-rogue-kind', 'hash-rogue', 300, 1)`
       )
     ).rejects.toThrow();
+
+    // Dynamic scan across app/ and lib/ to ensure no caller uses an unconstrained kind literal
+    const sourceFiles = [
+      ...collectSourceFiles(join(process.cwd(), 'app')),
+      ...collectSourceFiles(join(process.cwd(), 'lib')),
+    ];
+    const discoveredKinds = new Set<string>();
+    for (const file of sourceFiles) {
+      const text = readFileSync(file, 'utf8');
+      for (const m of text.matchAll(/p_kind:\s*'([a-z0-9-]+)'/g)) {
+        discoveredKinds.add(m[1]);
+      }
+      for (const m of text.matchAll(/consumeRateLimit\(\s*'([a-z0-9-]+)'/g)) {
+        discoveredKinds.add(m[1]);
+      }
+    }
+    expect(discoveredKinds.size).toBeGreaterThan(0);
+    for (const discovered of discoveredKinds) {
+      expect(
+        EXPECTED_RATE_LIMIT_KINDS,
+        `Rate-limit kind literal "${discovered}" must be in EXPECTED_RATE_LIMIT_KINDS & DB check constraint`
+      ).toContain(discovered);
+    }
   });
 });

@@ -249,7 +249,11 @@ export function PortfolioShowcase({
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
                 {activeStudy.externalUrl && (
                   <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
-                    <Link href={activeStudy.externalUrl}>
+                    <Link
+                      href={activeStudy.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       View Research / Details
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Link>

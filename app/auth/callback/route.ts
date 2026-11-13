@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error) {
         if (type === 'recovery') {
-          return NextResponse.redirect(new URL('/reset-password', origin));
+          return NextResponse.redirect(new URL('/reset-password?session=1', origin));
         }
         return NextResponse.redirect(new URL(next, origin));
       }

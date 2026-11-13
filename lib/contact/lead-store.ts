@@ -103,7 +103,7 @@ export async function insertLead(
     const siteOrigin =
       process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
     const adminEmail =
-      process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work';
+      process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'contact@redwan.work';
 
     await notifyAllAdmins({
       category: 'inquiry',

@@ -67,6 +67,12 @@ export async function POST(
   if (!body) {
     return NextResponse.json({ error: 'Message body is required.' }, { status: 400 });
   }
+  if (body.length > 10000) {
+    return NextResponse.json(
+      { error: 'Message body must not exceed 10,000 characters.' },
+      { status: 400 }
+    );
+  }
 
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
@@ -139,7 +145,7 @@ export async function POST(
       });
       await enqueueTransactionalEmail({
         toEmail:
-          process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work',
+          process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'contact@redwan.work',
         template: 'order_message_admin',
         subject: `Client Message on Contract ${order.code} — ${order.title}`,
         payload: {

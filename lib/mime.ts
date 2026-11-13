@@ -10,6 +10,10 @@ export const CONTACT_ALLOWED: Record<string, readonly string[]> = {
   jpg: ['image/jpeg', 'image/jpg'],
   zip: ['application/zip', 'application/x-zip-compressed'],
 };
+export const PORTAL_ALLOWED: Record<string, readonly string[]> = {
+  ...CONTACT_ALLOWED,
+  webp: ['image/webp'],
+};
 export const ASSET_ALLOWED: Record<string, readonly string[]> = {
   png: ['image/png'],
   jpg: ['image/jpeg', 'image/jpg'],
@@ -22,6 +26,14 @@ export function extFromFilename(filename: string): string {
   const base = filename.split('/').pop() ?? filename;
   const dot = base.lastIndexOf('.');
   return dot === -1 ? '' : base.slice(dot + 1).toLowerCase();
+}
+export function resolveMimeType(filename: string, providedMime?: string | null): string {
+  const normalized = (providedMime ?? '').trim().toLowerCase().split(';')[0].trim();
+  if (normalized && normalized !== 'application/octet-stream') {
+    return normalized;
+  }
+  const ext = extFromFilename(filename);
+  return PORTAL_ALLOWED[ext]?.[0] ?? 'application/octet-stream';
 }
 export function isAllowedMime(
   ext: string,

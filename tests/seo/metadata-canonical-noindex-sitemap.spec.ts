@@ -113,8 +113,10 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       '/admin',
       '/portal',
       '/login',
+      '/register',
       '/mfa',
       '/reset-password',
+      '/auth/callback',
       '/invite/accept',
       '/api/contact',
     ];
@@ -134,7 +136,17 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const robotsRes = await request.get('/robots.txt');
     expect(robotsRes.status()).toBe(200);
     const robotsTxt = await robotsRes.text();
-    for (const disallowed of ['/admin', '/portal', '/api', '/login', '/mfa', '/reset-password', '/invite']) {
+    for (const disallowed of [
+      '/admin',
+      '/portal',
+      '/api',
+      '/auth/callback',
+      '/login',
+      '/register',
+      '/mfa',
+      '/reset-password',
+      '/invite',
+    ]) {
       expect(robotsTxt).toContain(`Disallow: ${disallowed}`);
     }
     expect(robotsTxt).toContain(`Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml`);

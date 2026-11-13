@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { SERVICE_PILLARS, type ServicePillarKey } from '@/lib/content/site';
 import { parseFormBoolean } from '@/lib/forms/boolean';
+import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
 async function requireAdmin() {
   const session = await getCurrentSession();
@@ -239,7 +240,9 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
     .filter(Boolean);
   const relatedServiceSlug =
     String(formData.get('related_service_slug') ?? '').trim() || null;
-  const externalUrl = String(formData.get('external_url') ?? '').trim() || null;
+  const externalUrl = sanitizeHttpUrl(String(formData.get('external_url') ?? '').trim(), {
+    allowRelative: true,
+  });
   const sortOrder = Number(formData.get('sort_order') ?? 10);
   const isPublished = parseFormBoolean(formData, 'is_published');
   const isFeatured = parseFormBoolean(formData, 'is_featured');
@@ -330,13 +333,26 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   const phone = String(formData.get('phone') ?? '').trim();
   const whatsappNumber = String(formData.get('whatsapp_number') ?? '').trim();
   const location = String(formData.get('location') ?? '').trim();
-  const calComUrl = String(formData.get('cal_com_url') ?? '').trim();
+  const calComUrl =
+    sanitizeHttpUrl(String(formData.get('cal_com_url') ?? '').trim(), { allowRelative: true }) ??
+    '';
   const companyName = String(formData.get('company_name') ?? '').trim();
-  const companyUrl = String(formData.get('company_url') ?? '').trim();
-  const linkedinUrl = String(formData.get('linkedin_url') ?? '').trim();
-  const githubUrl = String(formData.get('github_url') ?? '').trim();
-  const websiteUrl = String(formData.get('website_url') ?? '').trim();
-  const resumePdfUrl = String(formData.get('resume_pdf_url') ?? '/resume.pdf').trim();
+  const companyUrl =
+    sanitizeHttpUrl(String(formData.get('company_url') ?? '').trim(), { allowRelative: true }) ??
+    '';
+  const linkedinUrl =
+    sanitizeHttpUrl(String(formData.get('linkedin_url') ?? '').trim(), { allowRelative: true }) ??
+    '';
+  const githubUrl =
+    sanitizeHttpUrl(String(formData.get('github_url') ?? '').trim(), { allowRelative: true }) ??
+    '';
+  const websiteUrl =
+    sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim(), { allowRelative: true }) ??
+    '';
+  const resumePdfUrl =
+    sanitizeHttpUrl(String(formData.get('resume_pdf_url') ?? '/resume.pdf').trim(), {
+      allowRelative: true,
+    }) ?? '/resume.pdf';
 
   const researchInterests = parseLines(formData.get('research_interests'));
   const softSkills = parseLines(formData.get('soft_skills'));
@@ -412,7 +428,9 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   const location = String(formData.get('location') ?? '').trim() || null;
   const period = String(formData.get('period') ?? '').trim() || null;
   const badgeLabel = String(formData.get('badge_label') ?? '').trim() || null;
-  const verificationUrl = String(formData.get('verification_url') ?? '').trim() || null;
+  const verificationUrl = sanitizeHttpUrl(String(formData.get('verification_url') ?? '').trim(), {
+    allowRelative: true,
+  });
   const highlights = parseLines(formData.get('highlights'));
   const sortOrder = Number(formData.get('sort_order') ?? 10);
   const isVisible = parseFormBoolean(formData, 'is_visible');

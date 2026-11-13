@@ -14,6 +14,7 @@ import {
 import { type ServicePillarKey } from '@/lib/content/site';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
 import { parseFormBoolean } from '@/lib/forms/boolean';
+import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import {
   computeDepositSplit,
   computeInvoiceTotals,
@@ -99,7 +100,7 @@ async function lookupProfileEmail(userId: string): Promise<string | null> {
 }
 
 function getAdminAlertEmail(): string {
-  return process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'mail@redwan.work';
+  return process.env.CONTACT_ALERT_TO || process.env.ADMIN_ALERT_EMAIL || 'contact@redwan.work';
 }
 
 function getSiteOrigin(): string {
@@ -721,24 +722,31 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     throw new Error(delivErr?.message ?? 'Could not publish deliverable.');
   }
 
+  let insertedVaultFileId: string | null = null;
   if (r2Key && filename && sizeBytes > 0) {
     const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
-    const { error: fileErr } = await admin.from('vault_files').insert({
-      owner_client_id: clientId,
-      order_id: orderId,
-      deliverable_id: deliverable.id,
-      category: 'deliverable',
-      r2_key: r2Key,
-      filename,
-      mime_type: mime,
-      size_bytes: sizeBytes,
-      sha256_checksum: sha256Checksum,
-      retention_until: retentionUntil,
-      uploaded_by: session.userId,
-    });
-    if (fileErr) {
-      throw new Error(fileErr.message);
+    const { data: vFile, error: fileErr } = await admin
+      .from('vault_files')
+      .insert({
+        owner_client_id: clientId,
+        order_id: orderId,
+        deliverable_id: deliverable.id,
+        category: 'deliverable',
+        r2_key: r2Key,
+        filename,
+        mime_type: mime,
+        size_bytes: sizeBytes,
+        sha256_checksum: sha256Checksum,
+        retention_until: retentionUntil,
+        uploaded_by: session.userId,
+      })
+      .select('id')
+      .single();
+    if (fileErr || !vFile) {
+      await admin.from('deliverables').delete().eq('id', deliverable.id);
+      throw new Error(fileErr?.message ?? 'Could not register deliverable vault file.');
     }
+    insertedVaultFileId = vFile.id;
   }
 
   const { error: ordUpdateErr } = await admin
@@ -750,6 +758,10 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     })
     .eq('id', orderId);
   if (ordUpdateErr) {
+    if (insertedVaultFileId) {
+      await admin.from('vault_files').delete().eq('id', insertedVaultFileId);
+    }
+    await admin.from('deliverables').delete().eq('id', deliverable.id);
     throw new Error(ordUpdateErr.message);
   }
 
@@ -1528,21 +1540,42 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
   const customDeliveryDays = Number(formData.get('custom_delivery_days') ?? 7);
 
   const catalog = await getPublicServicesCatalog();
-  const serviceItem =
-    catalog.find((s) => s.slug === serviceSlug) ?? catalog[0];
+  const isOtherCustomService = serviceSlug === 'other-custom-engagement';
+  const matchedService = isOtherCustomService
+    ? undefined
+    : (catalog.find((s) => s.slug === serviceSlug) ?? catalog[0]);
 
   const isUnselectedOrCustomTier = tier === 'custom' || tier === 'unselected';
   const hasCustomBudget = Number.isFinite(customBudgetUsd) && customBudgetUsd > 0;
-  const isCustomDeal = isUnselectedOrCustomTier || hasCustomBudget;
-  const pkg = !isUnselectedOrCustomTier
-    ? serviceItem.packages.find((p) => p.tier === tier) ?? serviceItem.packages[0]
-    : undefined;
+  const isCustomDeal = isOtherCustomService || isUnselectedOrCustomTier || hasCustomBudget;
+  const pkg =
+    matchedService && !isUnselectedOrCustomTier
+      ? (matchedService.packages.find((p) => p.tier === tier) ?? matchedService.packages[0])
+      : undefined;
+
+  const baseTitle = isOtherCustomService
+    ? 'Custom Technical Engagement'
+    : (matchedService?.title ?? 'Custom Technical Engagement');
+  const baseTagline = isOtherCustomService
+    ? 'Custom cybersecurity, full-stack engineering, or technical advisory engagement.'
+    : (matchedService?.tagline ?? 'Custom technical engagement');
+  const baseStartingCents = matchedService?.startingPriceCents ?? 25000;
+  const effectiveServiceId =
+    !isOtherCustomService && matchedService && matchedService.id.length === 36
+      ? matchedService.id
+      : null;
+  const effectivePillar = isOtherCustomService
+    ? 'development'
+    : (matchedService?.pillar ?? 'development');
+  const effectiveRequiresRoe = isOtherCustomService
+    ? false
+    : (matchedService?.requiresRoe ?? false);
 
   const finalPriceCents = hasCustomBudget
     ? Math.max(2500, Math.round(customBudgetUsd * 100))
-    : isUnselectedOrCustomTier
-      ? Math.max(2500, serviceItem.startingPriceCents)
-      : (pkg?.priceCents ?? serviceItem.startingPriceCents);
+    : isOtherCustomService || isUnselectedOrCustomTier
+      ? Math.max(2500, baseStartingCents)
+      : (pkg?.priceCents ?? baseStartingCents);
 
   const finalDeliveryDays =
     Number.isFinite(customDeliveryDays) && customDeliveryDays > 0 && isCustomDeal
@@ -1555,10 +1588,10 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
   const finalTitle =
     projectTitle ||
     (pkg && hasCustomBudget
-      ? `${serviceItem.title} — ${pkg.name} (Custom Offer $${(finalPriceCents / 100).toLocaleString()})`
-      : isUnselectedOrCustomTier
-        ? `${serviceItem.title} — Custom Scope & Requirements ($${(finalPriceCents / 100).toLocaleString()})`
-        : `${serviceItem.title} — ${pkg?.name ?? 'Standard Package'}`);
+      ? `${baseTitle} — ${pkg.name} (Custom Offer $${(finalPriceCents / 100).toLocaleString()})`
+      : isOtherCustomService || isUnselectedOrCustomTier
+        ? `${baseTitle} — Custom Scope & Requirements ($${(finalPriceCents / 100).toLocaleString()})`
+        : `${baseTitle} — ${pkg?.name ?? 'Standard Package'}`);
 
   const admin = getSupabaseAdmin();
 
@@ -1573,25 +1606,27 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
 
   const initialMessageTemplate = isCustomDeal
     ? `Started Custom Deal Contract ({{ORDER_CODE}}) with proposed budget $${(finalPriceCents / 100).toLocaleString()} USD and ${finalDeliveryDays}-day timeline.\n\nScope: ${projectNotes || targetScope || finalTitle}`
-    : `Started Package Contract ({{ORDER_CODE}}): ${finalTitle}.\n\nScope: ${projectNotes || targetScope || pkg?.summary || serviceItem.tagline}`;
+    : `Started Package Contract ({{ORDER_CODE}}): ${finalTitle}.\n\nScope: ${projectNotes || targetScope || pkg?.summary || baseTagline}`;
 
   const depositItemLabel = `${isCustomDeal ? 'Custom Deal' : (pkg?.name ?? 'Package')} (${depositPercent}% Kickoff Deposit)`;
 
   const { data: rpcRes, error } = await admin.rpc('create_package_order_atomic', {
     p_client_id: session.userId,
-    p_service_id: serviceItem.id.length === 36 ? serviceItem.id : null,
+    p_service_id: effectiveServiceId,
     p_title: finalTitle,
-    p_description: projectNotes || pkg?.summary || serviceItem.tagline,
-    p_pillar: serviceItem.pillar,
+    p_description: projectNotes || pkg?.summary || baseTagline,
+    p_pillar: effectivePillar,
     p_is_custom_deal: isCustomDeal,
-    p_requires_roe: serviceItem.requiresRoe,
+    p_requires_roe: effectiveRequiresRoe,
     p_revisions_included: revisionsIncluded,
     p_total_cents: finalPriceCents,
     p_deposit_percent: depositPercent,
     p_delivery_days: finalDeliveryDays,
     p_target_scope_notes: targetScope || projectNotes,
     p_requirements_responses: {
-      service_slug: serviceItem.slug,
+      service_slug: isOtherCustomService
+        ? 'other-custom-engagement'
+        : (matchedService?.slug ?? serviceSlug),
       package_tier: isCustomDeal ? 'custom' : (pkg?.tier ?? tier),
       is_custom_deal: isCustomDeal,
       proposed_budget_cents: isCustomDeal ? finalPriceCents : null,
@@ -1657,7 +1692,9 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
     entityId: order.id,
     summary: `Client initiated ${isCustomDeal ? 'custom deal' : 'package'} contract ${order.code}: ${finalTitle}`,
     metadata: {
-      serviceSlug: serviceItem.slug,
+      serviceSlug: isOtherCustomService
+        ? 'other-custom-engagement'
+        : (matchedService?.slug ?? serviceSlug),
       tier: isCustomDeal ? 'custom' : (pkg?.tier ?? tier),
       priceCents: finalPriceCents,
       isCustomDeal,
@@ -2016,6 +2053,9 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     .select('id, code')
     .single();
   if (paymentErr || !payment) {
+    if (proofFileId) {
+      await admin.from('vault_files').delete().eq('id', proofFileId);
+    }
     throw new Error(paymentErr?.message ?? 'Could not submit payment proof.');
   }
 
@@ -2148,7 +2188,11 @@ export async function createClientTicketAction(formData: FormData): Promise<void
 export async function submitClientReviewAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
-  const ratingOverall = Math.min(5, Math.max(1, Number(formData.get('rating_overall') ?? 5)));
+  const rawRating = Number(formData.get('rating_overall') ?? 5);
+  if (!Number.isFinite(rawRating)) {
+    throw new Error('Invalid rating value.');
+  }
+  const ratingOverall = Math.min(5, Math.max(1, Math.round(rawRating)));
   const headline = String(formData.get('headline') ?? '').trim() || null;
   const reviewText = String(formData.get('review_text') ?? '').trim();
 
@@ -2216,7 +2260,7 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
   const timezone = String(formData.get('timezone') ?? 'UTC').trim() || 'UTC';
   const companyName = String(formData.get('company_name') ?? '').trim() || null;
   const companyRole = String(formData.get('company_role') ?? '').trim() || null;
-  const websiteUrl = String(formData.get('website_url') ?? '').trim() || null;
+  const websiteUrl = sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim());
   const taxId = String(formData.get('tax_id') ?? '').trim() || null;
   const preferredCurrency = String(formData.get('preferred_currency') ?? 'USD')
     .trim()

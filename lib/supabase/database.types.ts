@@ -2471,6 +2471,10 @@ export type Database = {
         Returns: Json
       }
       is_admin: { Args: never; Returns: boolean }
+      increment_vault_file_download: {
+        Args: { p_file_id: string }
+        Returns: undefined
+      }
       issue_invoice_atomic: {
         Args: {
           p_client_id: string

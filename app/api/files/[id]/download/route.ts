@@ -68,8 +68,8 @@ export async function GET(
             headers: { 'Cache-Control': 'no-store' },
           });
         }
-      } catch {
-        // fall through to 404
+      } catch (attErr) {
+        console.error('Inquiry attachment fallback lookup failed:', attErr);
       }
     }
     return NextResponse.json({ error: 'File not found.' }, { status: 404 });
@@ -105,13 +105,18 @@ export async function GET(
 
     const signedUrl = await presignPrivateGet(file.r2_key, 60);
 
-    await admin
-      .from('vault_files')
-      .update({
-        download_count: (file.download_count ?? 0) + 1,
-        last_downloaded_at: new Date().toISOString(),
-      })
-      .eq('id', file.id);
+    const { error: incErr } = await admin.rpc('increment_vault_file_download', {
+      p_file_id: file.id,
+    });
+    if (incErr) {
+      await admin
+        .from('vault_files')
+        .update({
+          download_count: (file.download_count ?? 0) + 1,
+          last_downloaded_at: new Date().toISOString(),
+        })
+        .eq('id', file.id);
+    }
 
     await recordAuditLog({
       actorId: session.userId,

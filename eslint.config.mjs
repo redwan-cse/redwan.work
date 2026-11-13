@@ -15,7 +15,7 @@ const eslintConfig = [
     ],
   },
   {
-    files: ["components/ui/**/*.tsx", "components/enhanced-contact-form.tsx"],
+    files: ["components/ui/**/*.tsx"],
     rules: {
       "react-hooks/set-state-in-effect": "off",
     },

@@ -96,7 +96,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     }
 
     const adminNeedsMfa =
-      role === 'admin' && profile.data.mfa_enforced === true && claims?.aal !== 'aal2';
+      role === 'admin' && claims?.aal !== 'aal2';
 
     if (adminNeedsMfa) {
       if (pathname === '/mfa') return withNoIndex(response);

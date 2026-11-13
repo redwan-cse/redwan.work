@@ -103,3 +103,33 @@ export function isSameOriginRequest(headers: Headers): boolean {
   const secFetchSite = headers.get('sec-fetch-site') ?? '';
   return secFetchSite === 'same-origin' || secFetchSite === 'none';
 }
+
+export function sanitizeHttpUrl(
+  raw: string | null | undefined,
+  options?: { allowRelative?: boolean }
+): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (options?.allowRelative && trimmed.startsWith('/')) {
+    const safeRel = sanitizeRelativeRedirectPath(trimmed);
+    if (!safeRel) {
+      throw new Error('Invalid relative URL path.');
+    }
+    return safeRel;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('Invalid URL format. Only http:// and https:// URLs are allowed.');
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Invalid URL scheme: only http:// and https:// URLs are allowed.');
+  }
+
+  return trimmed;
+}

@@ -356,7 +356,7 @@ export default function AdminMfaPage() {
               <input type="hidden" name="code" value={digits.join('')} />
 
               <div
-                className="grid grid-cols-6 gap-2 sm:gap-2.5"
+                className="grid grid-cols-6 gap-1.5 sm:gap-2.5"
                 role="group"
                 aria-label="6-digit authenticator code"
               >
@@ -395,7 +395,7 @@ export default function AdminMfaPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={!factorId}
+              disabled={!factorId || submitting}
               aria-label="Verify & Continue"
             >
               {submitting ? 'Verifying…' : 'Verify & Continue'}

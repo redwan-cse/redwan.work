@@ -21,9 +21,10 @@ const initial: ActionState = {};
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
   const tokenHash = searchParams?.get('token_hash') ?? '';
+  const hasSessionRecovery = searchParams?.get('session') === '1';
   const [state, submit, pending] = useActionState(setNewPasswordFromRecoveryAction, initial);
 
-  if (!tokenHash) {
+  if (!tokenHash && !hasSessionRecovery) {
     return (
       <Card>
         <CardHeader>

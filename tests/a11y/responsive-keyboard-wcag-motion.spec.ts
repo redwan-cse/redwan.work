@@ -10,7 +10,19 @@ const RESPONSIVE_VIEWPORTS = [
   { width: 1920, height: 1080 },
 ];
 
-const RESPONSIVE_ROUTES = ['/', '/services', '/portfolio', '/resume', '/contact', '/blogs', '/login'];
+const RESPONSIVE_ROUTES = [
+  '/',
+  '/services',
+  '/portfolio',
+  '/resume',
+  '/contact',
+  '/blogs',
+  '/privacy',
+  '/tos',
+  '/login',
+  '/register',
+  '/reset-password',
+];
 const WCAG_ROUTES = [
   '/',
   '/services',
@@ -21,6 +33,8 @@ const WCAG_ROUTES = [
   '/privacy',
   '/tos',
   '/login',
+  '/register',
+  '/reset-password',
 ];
 
 test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduced Motion', () => {
@@ -33,14 +47,32 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
         const resp = await page.goto(route, { waitUntil: 'domcontentloaded' });
         expect(resp?.status(), `HTTP status on ${route} @ ${vp.width}px`).toBe(200);
 
-        const metrics = await page.evaluate(() => ({
-          scrollWidth: document.documentElement.scrollWidth,
-          innerWidth: window.innerWidth,
-        }));
+        const metrics = await page.evaluate(() => {
+          const vw = window.innerWidth;
+          let maxControlRight = vw;
+          const main = document.querySelector('main');
+          if (main) {
+            for (const el of main.querySelectorAll('button, input, select, textarea, a')) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                maxControlRight = Math.max(maxControlRight, Math.ceil(rect.right));
+              }
+            }
+          }
+          return {
+            scrollWidth: document.documentElement.scrollWidth,
+            innerWidth: vw,
+            maxControlRight,
+          };
+        });
         expect(
           metrics.scrollWidth,
           `Horizontal overflow detected on ${route} at ${vp.width}px (${metrics.scrollWidth} > ${metrics.innerWidth})`
         ).toBeLessThanOrEqual(metrics.innerWidth);
+        expect(
+          metrics.maxControlRight,
+          `Interactive control overflow detected on ${route} at ${vp.width}px (${metrics.maxControlRight} > ${metrics.innerWidth + 1})`
+        ).toBeLessThanOrEqual(metrics.innerWidth + 1);
       }
     }
   });

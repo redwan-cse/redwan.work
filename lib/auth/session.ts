@@ -50,7 +50,7 @@ export async function getCurrentSession(): Promise<SessionInfo | null> {
       if (claims.app_metadata?.role !== 'admin') {
         return null;
       }
-      if (profile.mfa_enforced === true && claims.aal !== 'aal2') {
+      if (claims.aal !== 'aal2') {
         return null;
       }
     }

@@ -61,7 +61,7 @@ async function resolveCurrentPanelDestination(): Promise<
   }
 
   if (role === 'admin') {
-    if (profile.mfa_enforced === true && claims?.aal !== 'aal2') {
+    if (claims?.aal !== 'aal2') {
       return { ok: true, home: '/mfa' };
     }
     return { ok: true, home: '/admin' };
@@ -91,12 +91,48 @@ function validatePasswordPair(formData:FormData):{error:string}|{password:string
  if(password!==confirm)return {error:'Passwords do not match.'};return {password};
 }
 async function checkPasswordSignInRateLimit(email:string):Promise<boolean> {
- const salt=process.env.LEAD_IP_HASH_SALT;if(!salt)return true;
+ const salt=process.env.LEAD_IP_HASH_SALT;
+ if(!salt){
+  if(process.env.NODE_ENV==='production'){
+   console.error('Password sign-in rate control unavailable.');
+   return false;
+  }
+  return true;
+ }
  try {
   const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
   const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'password-login',p_key_hash:await sha256Hex(`${salt}:${ip}:${email}`),p_window_seconds:300,p_max_count:10});
-  if(error)return true;return data===true;
- }catch{return true;}
+  if(error){
+   console.error('Password sign-in rate limit RPC failed:',error.message);
+   return false;
+  }
+  return data===true;
+ }catch(err){
+  console.error('Password sign-in rate control error:',err);
+  return process.env.NODE_ENV!=='production'&&process.env.VITEST==='true';
+ }
+}
+async function checkRegistrationRateLimit():Promise<boolean> {
+ const salt=process.env.LEAD_IP_HASH_SALT;
+ if(!salt){
+  if(process.env.NODE_ENV==='production'){
+   console.error('Registration rate control unavailable.');
+   return false;
+  }
+  return true;
+ }
+ try {
+  const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
+  const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'register-ip',p_key_hash:await sha256Hex(`${salt}:register:${ip}`),p_window_seconds:3600,p_max_count:5});
+  if(error){
+   console.error('Registration rate limit RPC failed:',error.message);
+   return false;
+  }
+  return data===true;
+ }catch(err){
+  console.error('Registration rate control error:',err);
+  return false;
+ }
 }
 export async function signInWithPasswordAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase(),password=String(formData.get('password')??''),next=safeRelativePath(formData.get('next'));
@@ -189,7 +225,9 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
  }
  const checked=validatePasswordPair(formData);
  if('error' in checked)return checked;
- if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
+ if(!await checkRegistrationRateLimit()){
+  return {error:'Too many registration attempts from this network. Please wait and try again.'};
+ }
 
  const admin=getSupabaseAdmin();
  const {data:existingProfile}=await admin
@@ -223,7 +261,7 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
  }
 
  const userId=created.data.user.id;
- await admin.from('profiles').upsert({
+ const {error:profileErr}=await admin.from('profiles').upsert({
   id:userId,
   email,
   full_name:fullName,
@@ -231,12 +269,20 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
   role:'client',
   is_active:true,
  });
+ if(profileErr){
+  console.error('[auth] profile upsert failed during registration:',profileErr.message);
+  return {error:'Unable to initialize your client profile. Please try again.'};
+ }
 
- await admin.from('client_profiles').upsert({
+ const {error:clientProfileErr}=await admin.from('client_profiles').upsert({
   user_id:userId,
   company_name:companyName||null,
   onboarding_completed:Boolean(companyName),
  });
+ if(clientProfileErr){
+  console.error('[auth] client_profiles upsert failed during registration:',clientProfileErr.message);
+  return {error:'Unable to initialize your client profile. Please try again.'};
+ }
 
  const supabase=await createSupabaseServerClient();
  const signedIn=await supabase.auth.signInWithPassword({email,password:checked.password});
@@ -435,9 +481,24 @@ async function consumeAtomicRetryClaim(
 }
 
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
-  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
+  const tokenHash=String(formData.get('token_hash')??'');
   const checked=validatePasswordPair(formData);if('error' in checked)return checked;
   const supabase=await createSupabaseServerClient();
+
+  // PKCE callback recovery path: user already holds an active recovery session exchanged at /auth/callback
+  if(!tokenHash){
+    const {data:sessionClaims,error:sessionClaimsErr}=await supabase.auth.getClaims();
+    const sessionSub=typeof sessionClaims?.claims?.sub==='string'?sessionClaims.claims.sub:null;
+    if(sessionClaimsErr||!sessionSub)return {error:INVALID_LINK};
+    const updated=await supabase.auth.updateUser({password:checked.password});
+    if(updated.error){
+      return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
+    }
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok)return {error:destination.error};
+    redirect(destination.home);
+  }
+
   const cookieStore=await cookies();
   const retryCookieName='recovery_retry_authority';
   const existingAuthority=cookieStore.get(retryCookieName)?.value;
@@ -611,13 +672,27 @@ export async function resetUnverifiedMfaFactorsAction(): Promise<{ ok: boolean }
     if (!sub) return { ok: false };
 
     const admin = getSupabaseAdmin();
-    const { data: factorsData } = await admin.auth.admin.mfa.listFactors({ userId: sub });
+    const { data: factorsData, error: listErr } = await admin.auth.admin.mfa.listFactors({
+      userId: sub,
+    });
+    if (listErr) {
+      console.error('[auth] listFactors failed during MFA reset:', listErr.message);
+      return { ok: false };
+    }
     const unverified = (factorsData?.factors ?? []).filter((f) => f.status !== 'verified');
     for (const factor of unverified) {
-      await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId: sub });
+      const { error: delErr } = await admin.auth.admin.mfa.deleteFactor({
+        id: factor.id,
+        userId: sub,
+      });
+      if (delErr) {
+        console.error('[auth] deleteFactor failed during MFA reset:', delErr.message);
+        return { ok: false };
+      }
     }
     return { ok: true };
-  } catch {
+  } catch (err) {
+    console.error('[auth] resetUnverifiedMfaFactorsAction error:', err);
     return { ok: false };
   }
 }

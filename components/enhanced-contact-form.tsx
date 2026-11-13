@@ -334,72 +334,76 @@ export default function EnhancedContactForm({
 
   // Auto-detect timezone, country, and WhatsApp dial code on mount
   useEffect(() => {
-    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
-    // Try to find a country that uses this timezone
-    let detectedCountry: Country | undefined;
-    for (const country of countries) {
-      if (country.timezones.includes(detectedTimezone)) {
-        detectedCountry = country;
-        break;
+    const timer = window.setTimeout(() => {
+      const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+      // Try to find a country that uses this timezone
+      let detectedCountry: Country | undefined;
+      for (const country of countries) {
+        if (country.timezones.includes(detectedTimezone)) {
+          detectedCountry = country;
+          break;
+        }
       }
-    }
-    
-    if (detectedCountry) {
-      setSelectedCountryCode(detectedCountry.code);
-      setSelectedWhatsAppCountryCode(detectedCountry.code);
-      setFormData(prev => ({
-        ...prev,
-        country: detectedCountry!.name,
-        whatsAppCountryCode: detectedCountry!.phoneCode,
-        timeZone: detectedTimezone
-      }));
-    } else {
-      // Fallback: just set timezone
-      setFormData(prev => ({
-        ...prev,
-        timeZone: detectedTimezone
-      }));
-    }
 
-    // Preselect service & package tier if passed via URL query params (?service=...&tier=...)
-    if (typeof window !== 'undefined') {
-      const sp = new URLSearchParams(window.location.search);
-      const slugParam = sp.get('service');
-      const tierParam = sp.get('tier');
-      const matchedService = slugParam
-        ? initialServices.find((s) => s.slug === slugParam)
-        : undefined;
+      if (detectedCountry) {
+        setSelectedCountryCode(detectedCountry.code);
+        setSelectedWhatsAppCountryCode(detectedCountry.code);
+        setFormData((prev) => ({
+          ...prev,
+          country: detectedCountry!.name,
+          whatsAppCountryCode: detectedCountry!.phoneCode,
+          timeZone: detectedTimezone,
+        }));
+      } else {
+        // Fallback: just set timezone
+        setFormData((prev) => ({
+          ...prev,
+          timeZone: detectedTimezone,
+        }));
+      }
 
-      let resolvedTierValue = '';
-      if (matchedService && tierParam) {
-        const matchedPkg = matchedService.packages.find(
-          (p) => p.tier.toLowerCase() === tierParam.toLowerCase()
-        );
-        if (matchedPkg) {
-          const tierTitle =
-            matchedPkg.tier.charAt(0).toUpperCase() + matchedPkg.tier.slice(1);
-          resolvedTierValue = `${tierTitle}: ${matchedPkg.name} ($${(matchedPkg.priceCents / 100).toLocaleString()})`;
+      // Preselect service & package tier if passed via URL query params (?service=...&tier=...)
+      if (typeof window !== 'undefined') {
+        const sp = new URLSearchParams(window.location.search);
+        const slugParam = sp.get('service');
+        const tierParam = sp.get('tier');
+        const matchedService = slugParam
+          ? initialServices.find((s) => s.slug === slugParam)
+          : undefined;
+
+        let resolvedTierValue = '';
+        if (matchedService && tierParam) {
+          const matchedPkg = matchedService.packages.find(
+            (p) => p.tier.toLowerCase() === tierParam.toLowerCase()
+          );
+          if (matchedPkg) {
+            const tierTitle =
+              matchedPkg.tier.charAt(0).toUpperCase() + matchedPkg.tier.slice(1);
+            resolvedTierValue = `${tierTitle}: ${matchedPkg.name} ($${(matchedPkg.priceCents / 100).toLocaleString()})`;
+          } else if (tierParam === 'custom') {
+            resolvedTierValue = 'Custom Offer (Custom Budget & Scope)';
+          }
         } else if (tierParam === 'custom') {
           resolvedTierValue = 'Custom Offer (Custom Budget & Scope)';
         }
-      } else if (tierParam === 'custom') {
-        resolvedTierValue = 'Custom Offer (Custom Budget & Scope)';
-      }
 
-      if (matchedService || resolvedTierValue) {
-        setFormData((prev) => ({
-          ...prev,
-          serviceType: matchedService
-            ? [matchedService.title]
-            : prev.serviceType.length > 0
-              ? prev.serviceType
-              : ['Other'],
-          packageTier: resolvedTierValue || prev.packageTier,
-        }));
+        if (matchedService || resolvedTierValue) {
+          setFormData((prev) => ({
+            ...prev,
+            serviceType: matchedService
+              ? [matchedService.title]
+              : prev.serviceType.length > 0
+                ? prev.serviceType
+                : ['Other'],
+            packageTier: resolvedTierValue || prev.packageTier,
+          }));
+        }
       }
-    }
-    // Run once on mount: prefill from query params.
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    // Run once on mount: prefill from browser locale and query params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

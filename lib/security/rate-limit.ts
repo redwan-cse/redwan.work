@@ -8,7 +8,12 @@ export async function consumeRateLimit(
   maxCount: number,
   windowSeconds: number
 ): Promise<boolean> {
-  const salt = process.env.LEAD_IP_HASH_SALT || 'redwan-work-rate-limit';
+  const salt =
+    process.env.LEAD_IP_HASH_SALT ||
+    (process.env.NODE_ENV !== 'production' ? 'test-only-ephemeral-salt' : '');
+  if (!salt) {
+    throw new Error('LEAD_IP_HASH_SALT is required in production.');
+  }
   const keyHash = createHash('sha256').update(`${salt}:${kind}:${rawKey}`).digest('hex');
   const admin = getSupabaseAdmin();
   const { data, error } = await admin.rpc('consume_rate_limit', {
