@@ -157,26 +157,25 @@ export function BlogPreviewModal({
             </div>
           )}
 
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-            <Button asChild className="h-11 flex-1" size="lg">
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border/70 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-full border-border/80 bg-background/60 px-5 text-xs font-medium backdrop-blur-xs hover:bg-accent"
+              onClick={() => setOpen(false)}
+            >
+              Close
+            </Button>
+            <Button asChild size="sm" className="h-9 gap-1.5 rounded-full px-5 text-xs font-medium shadow-xs">
               <a
                 href={safePostUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2"
               >
                 Read Full Article
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-3.5 w-3.5" />
               </a>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 px-6"
-              size="lg"
-              onClick={() => setOpen(false)}
-            >
-              Close
             </Button>
           </div>
         </div>
