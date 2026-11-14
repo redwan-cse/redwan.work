@@ -3,6 +3,7 @@ import { Footer } from '@/components/footer';
 import { BackToTop } from '@/components/back-to-top';
 import { BlogPreloader } from '@/components/blog-preloader';
 import { CookiePreferences } from '@/components/cookie-preferences';
+import { AnalyticsScripts } from '@/components/analytics-scripts';
 
 /** Public chrome is selected by server route composition, never by auth state. */
 export function MarketingFrame({ children }: { children: React.ReactNode }) {
@@ -22,6 +23,7 @@ export function MarketingFrame({ children }: { children: React.ReactNode }) {
       <BackToTop />
       <BlogPreloader />
       <CookiePreferences />
+      <AnalyticsScripts />
     </div>
   );
 }

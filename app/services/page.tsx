@@ -7,8 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field';
 import { HeroReveal, HeroRevealItem, ScrollReveal } from '@/components/motion/reveal';
 import { ServicesShowcase } from '@/components/services-showcase';
+import { FaqSection } from '@/components/faq-section';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import {
+  buildBreadcrumbJsonLd,
+  buildFaqPageJsonLd,
+  buildServicesOfferCatalogJsonLd,
+  PUBLIC_FAQS,
+} from '@/lib/seo/structured-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +28,24 @@ export const metadata: Metadata = buildPublicMetadata({
 
 export default async function ServicesPage() {
   const services = await getPublicServicesCatalog();
+  const structuredData = [
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      { name: 'Services & Packages', path: '/services' },
+    ]),
+    buildServicesOfferCatalogJsonLd(services),
+    buildFaqPageJsonLd(PUBLIC_FAQS),
+  ];
+
   return (
       <div className="flex flex-col">
+        {structuredData.map((schema, index) => (
+          <script
+            key={`services-schema-${index}`}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
+          />
+        ))}
         {/* Hero Header */}
         <section className="relative overflow-hidden border-b border-border/70 py-16 md:py-20">
           <AntigravityHeroField />
@@ -72,6 +95,9 @@ export default async function ServicesPage() {
             </Suspense>
           </div>
         </section>
+
+        {/* AEO Direct Answers FAQ Section */}
+        <FaqSection faqs={PUBLIC_FAQS} />
 
         {/* Custom Enterprise / Retainer Banner */}
         <section className="border-t border-border/70 bg-muted/20 py-16">

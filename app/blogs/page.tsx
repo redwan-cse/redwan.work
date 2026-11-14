@@ -16,7 +16,11 @@ import {
   getBlogPostsPage,
   stripHtmlToPlainText,
 } from '@/lib/blogger';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import {
+  buildBlogsArchiveJsonLd,
+  buildBreadcrumbJsonLd,
+} from '@/lib/seo/structured-data';
 
 export async function generateMetadata({
   searchParams,
@@ -95,8 +99,26 @@ export default async function BlogsPage({
     toc: extractBlogToc(post.content),
   }));
 
+  const structuredData = [
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      {
+        name: currentPage > 1 ? `Blogs (Page ${currentPage})` : 'Blogs',
+        path: currentPage > 1 ? `/blogs?page=${currentPage}` : '/blogs',
+      },
+    ]),
+    buildBlogsArchiveJsonLd(allPosts, currentPage),
+  ];
+
   return (
     <div className="flex flex-col">
+      {structuredData.map((schema, index) => (
+        <script
+          key={`blogs-schema-${index}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
+        />
+      ))}
       {/* Antigravity Hero Header */}
       <section className="relative overflow-hidden border-b border-border/70 py-16 md:py-20">
         <AntigravityHeroField />

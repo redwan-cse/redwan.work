@@ -17,11 +17,11 @@ const supabaseWsOrigin = supabaseOrigin ? supabaseOrigin.replace(/^http/, 'ws') 
 const isDev = process.env.NODE_ENV !== 'production';
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com https://www.googletagmanager.com https://www.clarity.ms https://scripts.clarity.ms`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self' data:",
-  `connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
+  `connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.clarity.ms https://c.bing.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
   'frame-src https://challenges.cloudflare.com',
   "worker-src 'self' blob:",
   "object-src 'none'",

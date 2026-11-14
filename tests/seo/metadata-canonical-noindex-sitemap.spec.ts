@@ -314,4 +314,73 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const badPreloadRes = await request.get('/api/blogs/preload?page=0');
     expect(badPreloadRes.status()).toBe(400);
   });
+
+  test('[GEO-AND-AEO] serves /llms.txt, /llms-full.txt, AI crawler rules, and rich route-level JSON-LD + FAQ schemas without placeholder tokens', async ({
+    request,
+    page,
+  }) => {
+    // 1. /llms.txt and /llms-full.txt return clean Markdown with verified identity and DOI citations
+    const llmsRes = await request.get('/llms.txt');
+    expect(llmsRes.status()).toBe(200);
+    expect(llmsRes.headers()['content-type'] ?? '').toContain('text/markdown');
+    const llmsBody = await llmsRes.text();
+    expect(llmsBody).toContain('Md. Redwan Ahmed');
+    expect(llmsBody).toContain('ECC8126370954');
+    expect(llmsBody).toContain('10.1016/j.ijcce.2024.04.002');
+    expect(llmsBody).toContain('/llms-full.txt');
+
+    const llmsFullRes = await request.get('/llms-full.txt');
+    expect(llmsFullRes.status()).toBe(200);
+    expect(llmsFullRes.headers()['content-type'] ?? '').toContain('text/markdown');
+    const llmsFullBody = await llmsFullRes.text();
+    expect(llmsFullBody).toContain('## Service Catalog & Packages');
+    expect(llmsFullBody).toContain('## Frequently Asked Questions');
+
+    // 2. /robots.txt explicitly allows AI crawlers & llms.txt alongside private disallows
+    const robotsRes = await request.get('/robots.txt');
+    const robotsTxt = await robotsRes.text();
+    expect(robotsTxt).toContain('OAI-SearchBot');
+    expect(robotsTxt).toContain('PerplexityBot');
+    expect(robotsTxt).toContain('ClaudeBot');
+    expect(robotsTxt).toContain('Allow: /llms.txt');
+
+    // 3. Home advertises llms.txt discovery link and never emits placeholder "..." verification meta
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const llmsLinkHref = await page
+      .locator('link[rel="alternate"][type="text/markdown"]')
+      .getAttribute('href');
+    expect(llmsLinkHref).toContain('/llms.txt');
+    const googleMetaLocator = page.locator('meta[name="google-site-verification"]');
+    if ((await googleMetaLocator.count()) > 0) {
+      expect(await googleMetaLocator.getAttribute('content')).not.toBe('...');
+    }
+
+    // 4. /services renders visible FAQ section matching OfferCatalog + FAQPage + BreadcrumbList JSON-LD
+    await page.goto('/services', { waitUntil: 'domcontentloaded' });
+    await expect(
+      page.getByRole('heading', { name: 'Frequently Asked Questions' })
+    ).toBeVisible();
+    const servicesSchemas = await page
+      .locator('script[type="application/ld+json"]')
+      .allTextContents();
+    const joinedServicesSchemas = servicesSchemas.join('\n');
+    expect(joinedServicesSchemas).toContain('"OfferCatalog"');
+    expect(joinedServicesSchemas).toContain('"FAQPage"');
+    expect(joinedServicesSchemas).toContain('"BreadcrumbList"');
+
+    // 5. /resume emits ProfilePage + ScholarlyArticle DOI JSON-LD; /portfolio emits CollectionPage
+    await page.goto('/resume', { waitUntil: 'domcontentloaded' });
+    const resumeSchemas = (
+      await page.locator('script[type="application/ld+json"]').allTextContents()
+    ).join('\n');
+    expect(resumeSchemas).toContain('"ProfilePage"');
+    expect(resumeSchemas).toContain('"ScholarlyArticle"');
+    expect(resumeSchemas).toContain('10.1016/j.ijcce.2024.04.002');
+
+    await page.goto('/portfolio', { waitUntil: 'domcontentloaded' });
+    const portfolioSchemas = (
+      await page.locator('script[type="application/ld+json"]').allTextContents()
+    ).join('\n');
+    expect(portfolioSchemas).toContain('"CollectionPage"');
+  });
 });

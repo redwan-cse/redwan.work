@@ -124,10 +124,18 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
     const privacyRegion = page.getByRole('region', { name: 'Privacy & Storage Notice' });
     await expect(privacyRegion).toBeVisible();
 
-    const expSwitch = privacyRegion.getByRole('switch');
+    const expSwitch = privacyRegion.getByRole('switch', {
+      name: /Site Experience/i,
+    });
+    const analyticsSwitch = privacyRegion.getByRole('switch', {
+      name: /Google Analytics 4/i,
+    });
     await expect(expSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(analyticsSwitch).toHaveAttribute('aria-checked', 'true');
     await expSwitch.click();
+    await analyticsSwitch.click();
     await expect(expSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(analyticsSwitch).toHaveAttribute('aria-checked', 'false');
     await privacyRegion.getByRole('button', { name: 'Save Choices' }).click();
     await expect(privacyRegion).toBeHidden();
 
@@ -136,6 +144,7 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
       cookie: document.cookie,
     }));
     expect(storedConsent.ls).toContain('"experience":false');
+    expect(storedConsent.ls).toContain('"analytics":false');
     expect(storedConsent.cookie).toContain('rw_cookie_consent=essential');
 
     await privacyTrigger.focus();

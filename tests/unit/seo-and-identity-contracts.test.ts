@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import { clearBlogCache, getBlogPostsPage } from '@/lib/blogger';
+import { resolveVerificationToken } from '@/lib/seo/metadata';
+import {
+  buildFaqPageJsonLd,
+  buildRootSiteGraphJsonLd,
+  buildServicesOfferCatalogJsonLd,
+  PUBLIC_FAQS,
+} from '@/lib/seo/structured-data';
+import { getPublicServicesCatalog } from '@/lib/cms/queries';
 import sitemap from '@/app/sitemap';
 import robots from '@/app/robots';
 
@@ -60,11 +68,14 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(urls).not.toContain(`${SITE.url}/login`);
   });
 
-  it('disallows private admin, portal, auth, and API routes in robots()', () => {
+  it('disallows private admin, portal, auth, and API routes while welcoming search and AI crawlers in robots()', () => {
     const cfg = robots();
     const rules = Array.isArray(cfg.rules) ? cfg.rules : [cfg.rules];
     const disallowList = rules.flatMap((r) =>
       Array.isArray(r.disallow) ? r.disallow : r.disallow ? [r.disallow] : []
+    );
+    const userAgents = rules.flatMap((r) =>
+      Array.isArray(r.userAgent) ? r.userAgent : r.userAgent ? [r.userAgent] : []
     );
 
     expect(disallowList).toContain('/api/');
@@ -74,6 +85,34 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(disallowList).toContain('/mfa');
     expect(disallowList).toContain('/reset-password');
     expect(disallowList).toContain('/invite');
+
+    expect(userAgents).toContain('OAI-SearchBot');
+    expect(userAgents).toContain('PerplexityBot');
+    expect(userAgents).toContain('ClaudeBot');
+    expect(userAgents).toContain('Google-Extended');
+  });
+
+  it('validates search verification tokens and builds consistent AEO/GEO structured data graphs', async () => {
+    expect(resolveVerificationToken(undefined)).toBeUndefined();
+    expect(resolveVerificationToken('...')).toBeUndefined();
+    expect(resolveVerificationToken('your-google-token')).toBeUndefined();
+    expect(resolveVerificationToken('google1234567890abcdef')).toBe(
+      'google1234567890abcdef'
+    );
+
+    const rootGraph = buildRootSiteGraphJsonLd();
+    const types = rootGraph['@graph'].map((node) => node['@type']);
+    expect(types).toContain('WebSite');
+    expect(types).toContain('Person');
+    expect(types).toContain('ProfessionalService');
+
+    const faqSchema = buildFaqPageJsonLd(PUBLIC_FAQS);
+    expect(faqSchema['@type']).toBe('FAQPage');
+    expect(faqSchema.mainEntity).toHaveLength(PUBLIC_FAQS.length);
+
+    const services = await getPublicServicesCatalog();
+    const catalogSchema = buildServicesOfferCatalogJsonLd(services);
+    expect(catalogSchema.hasOfferCatalog.itemListElement.length).toBeGreaterThanOrEqual(5);
   });
 
   it('supports deterministic offline blog pagination fixtures when BLOGGER_FIXTURE_POSTS_JSON is provided', async () => {

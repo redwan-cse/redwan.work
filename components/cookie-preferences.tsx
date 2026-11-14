@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
+  BarChart3,
   ChevronDown,
   ChevronUp,
   Database,
@@ -19,9 +20,10 @@ export const OPEN_COOKIE_PREFERENCES_EVENT = 'redwan:open-cookie-preferences';
 export const COOKIE_PREFERENCES_CHANGED_EVENT = 'redwan:cookie-preferences-changed';
 
 export interface CookieConsentState {
-  version: 2;
+  version: 3;
   essential: true;
   experience: boolean;
+  analytics: boolean;
   updatedAt: string;
 }
 
@@ -51,10 +53,13 @@ export function readSavedConsentState(): CookieConsentState | null {
         typeof parsed.experience === 'boolean'
           ? parsed.experience
           : Boolean(parsed.analytics || parsed.social || parsed.marketing);
+      const analytics =
+        typeof parsed.analytics === 'boolean' ? parsed.analytics : false;
       return {
-        version: 2,
+        version: 3,
         essential: true,
         experience,
+        analytics,
         updatedAt: parsed.updatedAt,
       };
     }
@@ -73,6 +78,14 @@ export function allowsExperienceStorage(): boolean {
   return saved ? saved.experience : true;
 }
 
+/**
+ * Analytics (GA4 + Microsoft Clarity) strictly requires explicit opt-in (`analytics: true`).
+ */
+export function allowsAnalyticsStorage(): boolean {
+  const saved = readSavedConsentState();
+  return saved ? saved.analytics : false;
+}
+
 export function CookiePreferencesTrigger({ label = 'Privacy & Cookie Controls' }: { label?: string }) {
   return (
     <button
@@ -89,6 +102,7 @@ export function CookiePreferences() {
   const [visible, setVisible] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
   const [experienceEnabled, setExperienceEnabled] = React.useState(true);
+  const [analyticsEnabled, setAnalyticsEnabled] = React.useState(true);
   const lastTriggerRef = React.useRef<HTMLElement | null>(null);
   const shouldFocusCloseRef = React.useRef(false);
   const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -101,6 +115,7 @@ export function CookiePreferences() {
       timer = window.setTimeout(() => {
         const latest = readSavedConsentState();
         setExperienceEnabled(latest ? latest.experience : true);
+        setAnalyticsEnabled(latest ? latest.analytics : true);
         setVisible(true);
       }, 450);
     }
@@ -111,6 +126,7 @@ export function CookiePreferences() {
       shouldFocusCloseRef.current = true;
       const latest = readSavedConsentState();
       setExperienceEnabled(latest ? latest.experience : true);
+      setAnalyticsEnabled(latest ? latest.analytics : true);
       setExpanded(true);
       setVisible(true);
     };
@@ -151,18 +167,22 @@ export function CookiePreferences() {
     }
   }, [visible]);
 
-  const persistConsent = (nextExperience: boolean) => {
+  const persistConsent = (nextExperience: boolean, nextAnalytics: boolean) => {
     const payload: CookieConsentState = {
-      version: 2,
+      version: 3,
       essential: true,
       experience: nextExperience,
+      analytics: nextAnalytics,
       updatedAt: new Date().toISOString(),
     };
 
     try {
       window.localStorage.setItem(COOKIE_PREFERENCES_STORAGE_KEY, JSON.stringify(payload));
       const secureAttr = window.location.protocol === 'https:' ? '; Secure' : '';
-      const consentValue = nextExperience ? 'essential,experience' : 'essential';
+      const flags = ['essential'];
+      if (nextExperience) flags.push('experience');
+      if (nextAnalytics) flags.push('analytics');
+      const consentValue = flags.join(',');
       document.cookie = `rw_cookie_consent=${encodeURIComponent(
         consentValue
       )}; Max-Age=15552000; Path=/; SameSite=Lax${secureAttr}`;
@@ -176,6 +196,7 @@ export function CookiePreferences() {
     }
 
     setExperienceEnabled(nextExperience);
+    setAnalyticsEnabled(nextAnalytics);
     dismiss();
   };
 
@@ -201,7 +222,7 @@ export function CookiePreferences() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-primary">
               <ShieldCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-              Zero Ad Trackers · Local Privacy
+              Zero Ad Pixels · Privacy Controls
             </div>
             <h2
               id="rw-privacy-notice-title"
@@ -223,9 +244,9 @@ export function CookiePreferences() {
         </div>
 
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          <strong className="font-semibold text-foreground">redwan.work</strong> runs no
-          third-party advertising pixels or behavioral analytics. Only essential security/session
-          cookies and optional local experience preferences are used. Read our{' '}
+          <strong className="font-semibold text-foreground">redwan.work</strong> enforces zero
+          advertising pixels. Essential security cookies stay active, while local preferences and
+          consent-gated analytics (GA4 &amp; Microsoft Clarity) are under your control. Read our{' '}
           <Link
             href="/privacy#data-collected"
             className="font-medium text-primary underline underline-offset-4 hover:opacity-85"
@@ -247,7 +268,7 @@ export function CookiePreferences() {
           <Button
             type="button"
             size="sm"
-            onClick={() => persistConsent(true)}
+            onClick={() => persistConsent(true, true)}
             className="h-9 rounded-full px-4 text-xs font-semibold"
           >
             Accept &amp; Continue
@@ -256,7 +277,7 @@ export function CookiePreferences() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => persistConsent(false)}
+            onClick={() => persistConsent(false, false)}
             className="h-9 rounded-full px-3.5 text-xs font-medium"
           >
             Essential Only
@@ -349,6 +370,48 @@ export function CookiePreferences() {
                 </div>
               </div>
 
+              {/* Optional Analytics & UX Telemetry */}
+              <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <BarChart3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                      <span className="text-xs font-semibold text-foreground">
+                        Analytics &amp; UX Telemetry
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-border/80 bg-muted px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
+                        Optional
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Consent-gated Google Analytics 4 (<code className="font-mono text-foreground">ad_storage: denied</code>)
+                      and Microsoft Clarity on public pages for traffic &amp; usability metrics. Never loaded in Portal/Admin.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={analyticsEnabled}
+                    aria-label="Toggle optional Google Analytics 4 and Microsoft Clarity telemetry"
+                    onClick={() => setAnalyticsEnabled((prev) => !prev)}
+                    className={cn(
+                      'relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+                      analyticsEnabled
+                        ? 'border-primary bg-primary'
+                        : 'border-border bg-muted'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+                        analyticsEnabled ? 'translate-x-6' : 'translate-x-1'
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Explicit Data Collection Inventory */}
               <div className="rounded-xl border border-border/70 bg-muted/40 p-3">
                 <div className="flex items-center gap-2">
@@ -369,9 +432,8 @@ export function CookiePreferences() {
                     Row-level protected orders, messages, invoices, and deliverables.
                   </li>
                   <li>
-                    <strong className="font-medium text-foreground">Third-Party Ad Trackers:</strong>{' '}
-                    <span className="font-mono text-foreground">0 active</span> (no Google
-                    Analytics, ad pixels, or data brokers).
+                    <strong className="font-medium text-foreground">Advertising Pixels:</strong>{' '}
+                    <span className="font-mono text-foreground">0 active</span> (no ad retargeting or data brokers).
                   </li>
                 </ul>
               </div>
@@ -387,7 +449,7 @@ export function CookiePreferences() {
               <Button
                 type="button"
                 size="sm"
-                onClick={() => persistConsent(experienceEnabled)}
+                onClick={() => persistConsent(experienceEnabled, analyticsEnabled)}
                 className="h-8 rounded-full px-4 text-xs font-semibold"
               >
                 Save Choices

@@ -3,7 +3,11 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SITE } from "@/lib/content/site";
-import { serializeJsonLd } from "@/lib/seo/metadata";
+import {
+  resolveSiteVerificationMetadata,
+  serializeJsonLd,
+} from "@/lib/seo/metadata";
+import { buildRootSiteGraphJsonLd } from "@/lib/seo/structured-data";
 
 const fontSans = Inter({
   subsets: ["latin"],
@@ -15,6 +19,8 @@ const fontMono = JetBrains_Mono({
   variable: "--font-mono",
 });
 
+const verification = resolveSiteVerificationMetadata();
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
   title: {
@@ -24,6 +30,7 @@ export const metadata: Metadata = {
   description: SITE.tagline,
   keywords:
     "cybersecurity consultant, penetration testing, VAPT, OSINT investigation, Wazuh SIEM, full-stack development, Next.js, Linux hardening, AI ML pipelines, Md. Redwan Ahmed, Fast Cyber Defense",
+  ...(verification ? { verification } : {}),
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -51,42 +58,7 @@ export const metadata: Metadata = {
   },
 };
 
-const siteGraphJsonLd = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Person",
-      "@id": `${SITE.url}/#person`,
-      name: SITE.name,
-      url: SITE.url,
-      image: `${SITE.url}${SITE.profileImage}`,
-      jobTitle: SITE.role,
-      email: `mailto:${SITE.email}`,
-      worksFor: {
-        "@type": "Organization",
-        name: SITE.company.name,
-        url: SITE.company.url,
-      },
-      sameAs: Object.values(SITE.socials),
-    },
-    {
-      "@type": "ProfessionalService",
-      "@id": `${SITE.url}/#service`,
-      name: `${SITE.name} — Security & Engineering Consulting`,
-      url: SITE.url,
-      founder: { "@id": `${SITE.url}/#person` },
-      email: SITE.email,
-      areaServed: "Worldwide",
-      serviceType: [
-        "Penetration Testing & VAPT",
-        "OSINT & Digital Fraud Investigation",
-        "Wazuh SIEM & Linux Infrastructure Hardening",
-        "Full-Stack Web & Client Portal Engineering",
-        "Applied AI/ML & Incident Recovery",
-      ],
-    },
-  ],
-};
+const siteGraphJsonLd = buildRootSiteGraphJsonLd();
 
 export default function RootLayout({
   children,
@@ -98,6 +70,12 @@ export default function RootLayout({
       <head>
         <meta name="apple-mobile-web-app-title" content="Redwan" />
         <link rel="preconnect" href="https://challenges.cloudflare.com" />
+        <link
+          rel="alternate"
+          type="text/markdown"
+          href={`${SITE.url}/llms.txt`}
+          title="LLMs Context Summary"
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteGraphJsonLd) }}

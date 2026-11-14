@@ -19,7 +19,8 @@ import {
 } from '@/components/legal-document-layout';
 import { CookiePreferencesTrigger } from '@/components/cookie-preferences';
 import { SITE } from '@/lib/content/site';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
 
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Data & Privacy Policy',
@@ -221,18 +222,21 @@ export default function Privacy() {
     {
       id: 'cookies',
       number: 8,
-      title: 'Browser Storage, Cookies & Zero-Tracker Posture',
+      title: 'Browser Storage, Cookies & Privacy Posture',
       content: (
         <>
           <p>
-            <strong className="text-foreground">redwan.work</strong> operates with zero third-party advertising pixels, behavioral analytics, or session-replay trackers. Browser storage is limited strictly to security/session continuity and optional local preferences:
+            <strong className="text-foreground">redwan.work</strong> enforces zero advertising pixels (<code className="font-mono text-foreground">ad_storage: denied</code> globally) and only activates public analytics when you opt in. Browser storage falls into three clear categories:
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              <strong className="text-foreground">Essential Security &amp; Session Storage (Always Active):</strong> Strictly necessary for Client Portal authentication (<code className="font-mono text-foreground">sb-*</code>), MFA enforcement, Cloudflare Turnstile anti-bot verification on <code className="font-mono text-foreground">/contact</code>, <code className="font-mono text-foreground">/login</code>, and <code className="font-mono text-foreground">/register</code>, and persisting your privacy preference (<code className="font-mono text-foreground">rw_cookie_consent</code> / local storage).
+              <strong className="text-foreground">Essential Security &amp; Session Storage (Always Active):</strong> Strictly necessary for Client Portal authentication (<code className="font-mono text-foreground">sb-*</code>), MFA enforcement, Cloudflare Turnstile anti-bot verification on <code className="font-mono text-foreground">/contact</code>, <code className="font-mono text-foreground">/login</code>, and <code className="font-mono text-foreground">/register</code>, and persisting your privacy choice (<code className="font-mono text-foreground">rw_cookie_consent</code> / local storage).
             </li>
             <li>
-              <strong className="text-foreground">Site Experience &amp; Preloading (Optional):</strong> Enables light/dark <code className="font-mono text-foreground">theme</code> persistence and idle-time <code className="font-mono text-foreground">/blogs</code> pagination preloading for faster navigation. Selecting <strong className="text-foreground">Essential Only</strong> disables optional background blog preloading.
+              <strong className="text-foreground">Site Experience &amp; Preloading (Optional):</strong> Enables light/dark <code className="font-mono text-foreground">theme</code> persistence and idle-time <code className="font-mono text-foreground">/blogs</code> pagination preloading for faster navigation.
+            </li>
+            <li>
+              <strong className="text-foreground">Analytics &amp; UX Telemetry (Optional Opt-In):</strong> Runs strictly on public pages with Google Consent Mode v2 (GA4) and Clarity Consent v2 (Microsoft Clarity) only when you grant analytics consent via <strong className="text-foreground">Accept &amp; Continue</strong> or toggle it on below. Never loaded on <code className="font-mono text-foreground">/portal</code>, <code className="font-mono text-foreground">/admin</code>, or auth routes.
             </li>
           </ul>
           <p>
@@ -284,8 +288,17 @@ export default function Privacy() {
     },
   ];
 
+  const privacyBreadcrumb = buildBreadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Privacy Policy', path: '/privacy' },
+  ]);
+
   return (
     <div className="flex flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(privacyBreadcrumb) }}
+      />
       {/* Antigravity Hero Header */}
       <section className="relative overflow-hidden border-b border-border/70 py-14 md:py-20">
         <AntigravityHeroField />

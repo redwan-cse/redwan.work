@@ -8,7 +8,11 @@ import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field
 import { HeroReveal, HeroRevealItem, ScrollReveal } from '@/components/motion/reveal';
 import { PortfolioShowcase } from '@/components/portfolio-showcase';
 import { getPublicPortfolioItems } from '@/lib/cms/queries';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import {
+  buildBreadcrumbJsonLd,
+  buildPortfolioCollectionJsonLd,
+} from '@/lib/seo/structured-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +25,23 @@ export const metadata: Metadata = buildPublicMetadata({
 
 export default async function PortfolioPage() {
   const portfolioItems = await getPublicPortfolioItems();
+  const structuredData = [
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      { name: 'Portfolio & Case Studies', path: '/portfolio' },
+    ]),
+    buildPortfolioCollectionJsonLd(portfolioItems),
+  ];
+
   return (
       <div className="flex flex-col">
+        {structuredData.map((schema, index) => (
+          <script
+            key={`portfolio-schema-${index}`}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
+          />
+        ))}
         {/* Hero Header */}
         <section className="relative overflow-hidden border-b border-border/70 py-16 md:py-20">
           <AntigravityHeroField />

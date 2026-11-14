@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import { ResumeView } from '@/components/resume-view';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import {
+  buildBreadcrumbJsonLd,
+  buildResumeProfileJsonLd,
+} from '@/lib/seo/structured-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,5 +18,24 @@ export const metadata: Metadata = buildPublicMetadata({
 
 export default async function ResumePage() {
   const { settings, items } = await getSiteSettingsAndResume();
-  return <ResumeView settings={settings} items={items} />;
+  const structuredData = [
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      { name: 'Curriculum Vitae', path: '/resume' },
+    ]),
+    buildResumeProfileJsonLd(settings, items),
+  ];
+
+  return (
+    <>
+      {structuredData.map((schema, index) => (
+        <script
+          key={`resume-schema-${index}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
+        />
+      ))}
+      <ResumeView settings={settings} items={items} />
+    </>
+  );
 }

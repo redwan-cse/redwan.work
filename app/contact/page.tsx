@@ -26,7 +26,8 @@ import {
   ContractLiveChat,
   type ActiveContractOption,
 } from '@/components/panel/contract-live-chat';
-import { buildPublicMetadata } from '@/lib/seo/metadata';
+import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
+import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,8 +88,17 @@ export default async function Contact() {
     }
   }
 
+  const contactBreadcrumb = buildBreadcrumbJsonLd([
+    { name: 'Home', path: '/' },
+    { name: 'Contact & Project Inquiry', path: '/contact' },
+  ]);
+
   return (
     <div className="flex flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(contactBreadcrumb) }}
+      />
       {/* Antigravity Hero Header */}
       <section className="relative overflow-hidden border-b border-border/70 py-14 md:py-20">
         <AntigravityHeroField />
