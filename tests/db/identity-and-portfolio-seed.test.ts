@@ -47,13 +47,14 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(layek?.email).toBe('abulayek@yahoo.com');
   });
 
-  it('includes verified EC-Council C|EH vendor certification and aligns BSc graduation year to 2021 in resume_items', async () => {
+  it('includes verified EC-Council C|EH vendor certification, FCD Founder & CEO experience, and updated education records in resume_items', async () => {
     const certs = await pg.db.query<{
       section: string;
       title: string;
       organization: string;
       verification_url: string | null;
-    }>(`select section, title, organization, verification_url from public.resume_items`);
+      period: string | null;
+    }>(`select section, title, organization, verification_url, period from public.resume_items`);
     const ceh = certs.rows.find(
       (r) => r.section === 'vendor_certification' && /Certified Ethical Hacker/i.test(r.title)
     );
@@ -66,10 +67,24 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     const ecCourse = certs.rows.find((r) => r.title === 'Mastering Ethical Hacking Tools');
     expect(ecCourse?.section).toBe('professional_certificate');
 
-    const bsc = await pg.db.query<{ period: string }>(
-      `select period from public.resume_items where section = 'education' and title = 'BSc in Computer Science & Engineering'`
+    const fcdExp = certs.rows.find(
+      (r) => r.section === 'experience' && r.organization === 'Fast Cyber Defense'
     );
-    expect(bsc.rows[0]?.period).toBe('2021 · CGPA: 3.15/4.00');
+    expect(fcdExp?.title).toBe('Founder & CEO');
+
+    const educationRows = certs.rows.filter((r) => r.section === 'education');
+    expect(educationRows.find((r) => r.title === 'MSc in Computer Science & Engineering')?.period).toBe(
+      '2022 · CGPA: 2.88/4.0'
+    );
+    expect(educationRows.find((r) => r.title === 'BSc in Computer Science & Engineering')?.period).toBe(
+      '2020 · CGPA: 3.15/4.00'
+    );
+    expect(educationRows.find((r) => r.title === 'Higher Secondary Certificate')?.period).toBe(
+      '2016 · GPA: 4.83/5.0'
+    );
+    expect(educationRows.find((r) => r.title === 'Secondary School Certificate')?.period).toBe(
+      '2014 · GPA: 4.56/5.0'
+    );
   });
 
   it('keeps portfolio_items free of fabricated legacy statistics and validates service slugs', async () => {

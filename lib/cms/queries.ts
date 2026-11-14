@@ -546,6 +546,24 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
 
   // 4. Professional Experience
   {
+    id: 'fallback-exp-fcd',
+    section: 'experience',
+    title: 'Founder & CEO',
+    organization: 'Fast Cyber Defense',
+    role_type: 'Self-employed',
+    location: 'Dhaka, Bangladesh · Hybrid',
+    period: '10/2024 - Present',
+    description: null,
+    highlights: [
+      'Start-up Leadership — Founded and lead Fast Cyber Defense (fastcyberdefense.com), delivering penetration testing (VAPT), incident response, OSINT threat intelligence, and security engineering engagements.',
+      'Direct client security architecture, Rules of Engagement (RoE) governance, and rapid incident recovery across Bangladesh and international markets.',
+    ],
+    verification_url: 'https://fastcyberdefense.com',
+    badge_label: null,
+    sort_order: 5,
+    is_visible: true,
+  },
+  {
     id: 'fallback-exp-1',
     section: 'experience',
     title: 'Information Security Freelancer',
@@ -764,7 +782,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
     organization: 'Jagannath University',
     role_type: null,
     location: 'Dhaka, Bangladesh',
-    period: 'Ongoing',
+    period: '2022 · CGPA: 2.88/4.0',
     description: null,
     highlights: [],
     verification_url: null,
@@ -779,7 +797,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
     organization: 'Jagannath University',
     role_type: null,
     location: 'Dhaka, Bangladesh',
-    period: '2021 · CGPA: 3.15/4.00',
+    period: '2020 · CGPA: 3.15/4.00',
     description: null,
     highlights: [],
     verification_url: null,
@@ -794,7 +812,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
     organization: 'Cambrian College',
     role_type: null,
     location: 'Dhaka, Bangladesh',
-    period: '2016',
+    period: '2016 · GPA: 4.83/5.0',
     description: null,
     highlights: [],
     verification_url: null,
@@ -809,7 +827,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
     organization: 'Sonkanda Dr. M. T Hossain High School',
     role_type: null,
     location: 'Sherpur, Bangladesh',
-    period: '2014',
+    period: '2014 · GPA: 4.56/5.0',
     description: null,
     highlights: [],
     verification_url: null,
@@ -1089,6 +1107,40 @@ export async function getSiteSettingsAndResume(options?: {
           if (defaultCeh) {
             mergedItems.push(defaultCeh);
           }
+        }
+        if (
+          sec === 'experience' &&
+          !secRows.some(
+            (item) => /Fast Cyber Defense/i.test(item.organization) && /Founder/i.test(item.title)
+          )
+        ) {
+          const defaultFcd = DEFAULT_RESUME_ITEMS.find((item) => item.id === 'fallback-exp-fcd');
+          if (defaultFcd) {
+            mergedItems.push(defaultFcd);
+          }
+        }
+        if (sec === 'education') {
+          mergedItems.push(
+            ...secRows.map((item) => {
+              if (item.title === 'MSc in Computer Science & Engineering' && item.period === 'Ongoing') {
+                return { ...item, period: '2022 · CGPA: 2.88/4.0' };
+              }
+              if (
+                item.title === 'BSc in Computer Science & Engineering' &&
+                (item.period === '2021 · CGPA: 3.15/4.00' || item.period === '2020')
+              ) {
+                return { ...item, period: '2020 · CGPA: 3.15/4.00' };
+              }
+              if (item.title === 'Higher Secondary Certificate' && item.period === '2016') {
+                return { ...item, period: '2016 · GPA: 4.83/5.0' };
+              }
+              if (item.title === 'Secondary School Certificate' && item.period === '2014') {
+                return { ...item, period: '2014 · GPA: 4.56/5.0' };
+              }
+              return item;
+            })
+          );
+          continue;
         }
         mergedItems.push(...secRows);
       } else {

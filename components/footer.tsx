@@ -132,10 +132,6 @@ export function Footer() {
               </Link>
               <span aria-hidden="true">·</span>
               <CookiePreferencesTrigger />
-              <span aria-hidden="true">·</span>
-              <Link href="/admin" className="hover:text-primary hover:underline">
-                Command Center
-              </Link>
             </div>
           </div>
         </div>

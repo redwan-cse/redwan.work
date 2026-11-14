@@ -203,7 +203,15 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     expect(resumeText).toContain('CCEP');
     expect(resumeText).toContain('CNSP');
     expect(resumeText).toContain('CAP');
-    expect(resumeText).toContain('3.15/4.00');
+    expect(resumeText).toContain('Founder & CEO');
+    expect(resumeText).toContain('Fast Cyber Defense');
+    expect(resumeText).toContain('2022 · CGPA: 2.88/4.0');
+    expect(resumeText).toContain('2020 · CGPA: 3.15/4.00');
+    expect(resumeText).toContain('2016 · GPA: 4.83/5.0');
+    expect(resumeText).toContain('2014 · GPA: 4.56/5.0');
     expect(resumeText).toContain('abulayek@yahoo.com');
+
+    const footerText = (await page.locator('footer').textContent()) ?? '';
+    expect(footerText).not.toContain('Command Center');
   });
 });
