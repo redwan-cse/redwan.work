@@ -14,7 +14,7 @@ const PRIVATE_DISALLOW_PATHS = [
   '/invite',
 ];
 
-const PUBLIC_ALLOW_PATHS = ['/', '/llms.txt', '/llms-full.txt'];
+const PUBLIC_ALLOW_PATHS = ['/', '/resume.pdf', '/llms.txt', '/llms-full.txt'];
 
 export default function robots(): MetadataRoute.Robots {
   return {

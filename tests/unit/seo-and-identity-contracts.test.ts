@@ -1,8 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PDFDocument } from 'pdf-lib';
 import { CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
+import { generateResumePdf, sanitizePdfText } from '@/lib/resume/pdf';
+import {
+  allowsAnalyticsStorage,
+  allowsExperienceStorage,
+} from '@/components/cookie-preferences';
 import { clearBlogCache, getBlogPostsPage } from '@/lib/blogger';
 import { resolveVerificationToken } from '@/lib/seo/metadata';
 import {
@@ -90,6 +96,42 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(userAgents).toContain('PerplexityBot');
     expect(userAgents).toContain('ClaudeBot');
     expect(userAgents).toContain('Google-Extended');
+
+    const allowList = rules.flatMap((r) =>
+      Array.isArray(r.allow) ? r.allow : r.allow ? [r.allow] : []
+    );
+    expect(allowList).toContain('/resume.pdf');
+    expect(allowList).toContain('/llms.txt');
+  });
+
+  it('generates an up-to-date multi-page A4 resume PDF directly from live CMS data and sanitizes WinAnsi characters', async () => {
+    expect(sanitizePdfText('Security ▸ AI — Test 🚀')).toBe('Security > AI — Test');
+
+    const { settings, items } = await getSiteSettingsAndResume();
+    const logoBytes = fs.readFileSync(path.join(process.cwd(), 'public', 'ceh-logo.jpg'));
+    const generatedAt = new Date('2026-11-14T14:30:00.000Z');
+
+    const pdfBytes = await generateResumePdf({
+      settings,
+      items,
+      cehLogoBytes: new Uint8Array(logoBytes),
+      generatedAt,
+    });
+
+    const header = Buffer.from(pdfBytes.slice(0, 8)).toString('ascii');
+    expect(header.startsWith('%PDF-1.')).toBe(true);
+
+    const parsed = await PDFDocument.load(pdfBytes);
+    expect(parsed.getTitle()).toContain('Md. Redwan Ahmed');
+    expect(parsed.getAuthor()).toBe('Md. Redwan Ahmed');
+    expect(parsed.getPageCount()).toBeGreaterThanOrEqual(2);
+    expect(parsed.getCreationDate()?.toISOString()).toBe('2026-11-14T14:30:00.000Z');
+    expect(parsed.getModificationDate()).toBeInstanceOf(Date);
+  });
+
+  it('defaults experience preloading and analytics consent to enabled when no override is stored', () => {
+    expect(allowsExperienceStorage()).toBe(true);
+    expect(allowsAnalyticsStorage()).toBe(true);
   });
 
   it('validates search verification tokens and builds consistent AEO/GEO structured data graphs', async () => {

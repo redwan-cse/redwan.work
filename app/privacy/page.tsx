@@ -226,17 +226,17 @@ export default function Privacy() {
       content: (
         <>
           <p>
-            <strong className="text-foreground">redwan.work</strong> enforces zero advertising pixels (<code className="font-mono text-foreground">ad_storage: denied</code> globally) and only activates public analytics when you opt in. Browser storage falls into three clear categories:
+            <strong className="text-foreground">redwan.work</strong> enforces zero advertising pixels (<code className="font-mono text-foreground">ad_storage: denied</code> globally). All three categories below are displayed openly on your first visit so you can keep them enabled or disable optional categories at any time:
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
               <strong className="text-foreground">Essential Security &amp; Session Storage (Always Active):</strong> Strictly necessary for Client Portal authentication (<code className="font-mono text-foreground">sb-*</code>), MFA enforcement, Cloudflare Turnstile anti-bot verification on <code className="font-mono text-foreground">/contact</code>, <code className="font-mono text-foreground">/login</code>, and <code className="font-mono text-foreground">/register</code>, and persisting your privacy choice (<code className="font-mono text-foreground">rw_cookie_consent</code> / local storage).
             </li>
             <li>
-              <strong className="text-foreground">Site Experience &amp; Preloading (Optional):</strong> Enables light/dark <code className="font-mono text-foreground">theme</code> persistence and idle-time <code className="font-mono text-foreground">/blogs</code> pagination preloading for faster navigation.
+              <strong className="text-foreground">Site Experience &amp; Preloading (Enabled by Default · Optional):</strong> Active on first visit to preserve light/dark <code className="font-mono text-foreground">theme</code> preferences and idle-preload <code className="font-mono text-foreground">/blogs</code> pagination for smoother navigation; can be toggled off at any time.
             </li>
             <li>
-              <strong className="text-foreground">Analytics &amp; UX Telemetry (Optional Opt-In):</strong> Runs strictly on public pages with Google Consent Mode v2 (GA4) and Clarity Consent v2 (Microsoft Clarity) only when you grant analytics consent via <strong className="text-foreground">Accept &amp; Continue</strong> or toggle it on below. Never loaded on <code className="font-mono text-foreground">/portal</code>, <code className="font-mono text-foreground">/admin</code>, or auth routes.
+              <strong className="text-foreground">Analytics &amp; UX Telemetry (Enabled by Default · Optional Opt-Out):</strong> Runs strictly on public pages with Google Consent Mode v2 (GA4) and Clarity Consent v2 (Microsoft Clarity) and can be disabled immediately via <strong className="text-foreground">Essential Only</strong> or the telemetry switch below. Never loaded on <code className="font-mono text-foreground">/portal</code>, <code className="font-mono text-foreground">/admin</code>, or auth routes.
             </li>
           </ul>
           <p>

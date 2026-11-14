@@ -175,6 +175,9 @@ export function ResumeView({
       ? settings.research_interests
       : ['Cyber Security', 'Machine Learning', 'Artificial Intelligence'];
   const summary = settings.executive_summary;
+  const configuredPdfUrl = (settings.resume_pdf_url || '/resume.pdf').trim();
+  const resumeDownloadHref =
+    configuredPdfUrl === '/resume.pdf' ? '/resume.pdf?download=1' : configuredPdfUrl;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -290,7 +293,7 @@ export function ResumeView({
                     <div className="flex flex-col gap-2.5">
                       <Button asChild size="default" className="w-full gap-2 rounded-full">
                         <a
-                          href={settings.resume_pdf_url || '/resume.pdf'}
+                          href={resumeDownloadHref}
                           download="Md_Redwan_Ahmed_Resume.pdf"
                         >
                           <Download className="h-4 w-4" />
@@ -912,7 +915,7 @@ export function ResumeView({
               <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
                 <Button asChild size="lg" className="gap-2 rounded-full">
                   <a
-                    href={settings.resume_pdf_url || '/resume.pdf'}
+                    href={resumeDownloadHref}
                     download="Md_Redwan_Ahmed_Resume.pdf"
                   >
                     <Download className="h-5 w-5" />

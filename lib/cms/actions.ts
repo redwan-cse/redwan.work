@@ -412,6 +412,9 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
 
   revalidatePath('/');
   revalidatePath('/resume');
+  revalidatePath('/resume.pdf');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/contact');
   revalidatePath('/admin/resume');
 }
@@ -470,6 +473,9 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
 
   revalidatePath('/');
   revalidatePath('/resume');
+  revalidatePath('/resume.pdf');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');
 }
 
@@ -493,5 +499,8 @@ export async function deleteResumeItemAction(formData: FormData): Promise<void> 
 
   revalidatePath('/');
   revalidatePath('/resume');
+  revalidatePath('/resume.pdf');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');
 }

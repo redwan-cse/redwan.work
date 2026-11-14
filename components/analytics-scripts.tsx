@@ -68,7 +68,7 @@ export function AnalyticsScripts() {
   React.useEffect(() => {
     if (!gaId && !clarityId) return;
 
-    // Sync live consent changes immediately whenever the visitor saves choices
+    // Sync live consent changes immediately whenever the visitor saves or updates choices
     const onConsentChange = (event: Event) => {
       const detail = (event as CustomEvent<CookieConsentState>).detail;
       const analyticsGranted =
@@ -78,20 +78,26 @@ export function AnalyticsScripts() {
       pushConsentSignals(analyticsGranted);
     };
 
+    const onStorageChange = () => {
+      pushConsentSignals(allowsAnalyticsStorage());
+    };
+
     window.addEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onConsentChange);
+    window.addEventListener('storage', onStorageChange);
     return () => {
       window.removeEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onConsentChange);
+      window.removeEventListener('storage', onStorageChange);
     };
   }, [gaId, clarityId]);
 
   if (!gaId && !clarityId) return null;
 
   const gaBootstrapScript = gaId
-    ? `(function(){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=window.gtag||gtag;var granted=false;try{var raw=window.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);granted=Boolean(parsed&&parsed.essential===true&&parsed.analytics===true);}}catch(e){}gtag('consent','default',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('js',new Date());gtag('config',${JSON.stringify(gaId)},{anonymize_ip:true});}catch(e){}})();`
+    ? `(function(){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=window.gtag||gtag;var granted=true;try{var raw=window.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}gtag('consent','default',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('js',new Date());gtag('config',${JSON.stringify(gaId)},{anonymize_ip:true});}catch(e){}})();`
     : null;
 
   const clarityBootstrapScript = clarityId
-    ? `(function(c,l,a,r,i,t,y){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};var granted=false;try{var raw=c.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);granted=Boolean(parsed&&parsed.essential===true&&parsed.analytics===true);}}catch(e){}c[a]('consentv2',{ad_Storage:'denied',analytics_Storage:granted?'granted':'denied'});t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);}catch(e){}})(window,document,'clarity','script',${JSON.stringify(clarityId)});`
+    ? `(function(c,l,a,r,i,t,y){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};var granted=true;try{var raw=c.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}c[a]('consentv2',{ad_Storage:'denied',analytics_Storage:granted?'granted':'denied'});t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);}catch(e){}})(window,document,'clarity','script',${JSON.stringify(clarityId)});`
     : null;
 
   return (
@@ -105,11 +111,16 @@ export function AnalyticsScripts() {
             id="ga4-gtag-src"
             src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`}
             strategy="afterInteractive"
+            onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
           />
         </>
       )}
       {clarityId && clarityBootstrapScript && (
-        <Script id="ms-clarity-loader" strategy="afterInteractive">
+        <Script
+          id="ms-clarity-loader"
+          strategy="afterInteractive"
+          onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
+        >
           {clarityBootstrapScript}
         </Script>
       )}

@@ -54,7 +54,7 @@ export function readSavedConsentState(): CookieConsentState | null {
           ? parsed.experience
           : Boolean(parsed.analytics || parsed.social || parsed.marketing);
       const analytics =
-        typeof parsed.analytics === 'boolean' ? parsed.analytics : false;
+        typeof parsed.analytics === 'boolean' ? parsed.analytics : experience;
       return {
         version: 3,
         essential: true,
@@ -70,8 +70,8 @@ export function readSavedConsentState(): CookieConsentState | null {
 }
 
 /**
- * Returns true unless the visitor explicitly opted into Essential Only storage
- * (`experience: false`).
+ * Returns true by default on first visit unless the visitor disables
+ * Site Experience & Preloading or chooses Essential Only (`experience: false`).
  */
 export function allowsExperienceStorage(): boolean {
   const saved = readSavedConsentState();
@@ -79,11 +79,12 @@ export function allowsExperienceStorage(): boolean {
 }
 
 /**
- * Analytics (GA4 + Microsoft Clarity) strictly requires explicit opt-in (`analytics: true`).
+ * Public-page GA4 & Microsoft Clarity telemetry is enabled by default on first visit
+ * with visible opt-out controls (`analytics: false` when disabled or Essential Only).
  */
 export function allowsAnalyticsStorage(): boolean {
   const saved = readSavedConsentState();
-  return saved ? saved.analytics : false;
+  return saved ? saved.analytics : true;
 }
 
 export function CookiePreferencesTrigger({ label = 'Privacy & Cookie Controls' }: { label?: string }) {
@@ -116,6 +117,7 @@ export function CookiePreferences() {
         const latest = readSavedConsentState();
         setExperienceEnabled(latest ? latest.experience : true);
         setAnalyticsEnabled(latest ? latest.analytics : true);
+        setExpanded(true);
         setVisible(true);
       }, 450);
     }
@@ -206,7 +208,7 @@ export function CookiePreferences() {
     <section
       aria-labelledby="rw-privacy-notice-title"
       className={cn(
-        'print:hidden fixed inset-x-3 bottom-3 z-50 mx-auto w-auto max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-primary/25 bg-card/95 text-card-foreground shadow-2xl backdrop-blur-xl transition-all duration-200 sm:inset-x-auto sm:bottom-6 sm:left-6',
+        'print:hidden fixed inset-x-3 bottom-3 z-50 mx-auto max-h-[calc(100dvh-1.5rem)] w-auto max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-primary/25 bg-card/95 text-card-foreground shadow-2xl backdrop-blur-xl transition-all duration-200 sm:inset-x-auto sm:bottom-6 sm:left-6',
         expanded ? 'sm:w-[520px]' : 'sm:w-[420px]'
       )}
     >
@@ -245,8 +247,10 @@ export function CookiePreferences() {
 
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           <strong className="font-semibold text-foreground">redwan.work</strong> enforces zero
-          advertising pixels. Essential security cookies stay active, while local preferences and
-          consent-gated analytics (GA4 &amp; Microsoft Clarity) are under your control. Read our{' '}
+          advertising pixels. Essential security cookies stay active, while{' '}
+          <strong className="font-medium text-foreground">Site Experience &amp; Preloading</strong>{' '}
+          and <strong className="font-medium text-foreground">Analytics &amp; UX Telemetry</strong>{' '}
+          are enabled by default—keep them on or disable either option below. Read our{' '}
           <Link
             href="/privacy#data-collected"
             className="font-medium text-primary underline underline-offset-4 hover:opacity-85"
@@ -268,7 +272,7 @@ export function CookiePreferences() {
           <Button
             type="button"
             size="sm"
-            onClick={() => persistConsent(true, true)}
+            onClick={() => persistConsent(experienceEnabled, analyticsEnabled)}
             className="h-9 rounded-full px-4 text-xs font-semibold"
           >
             Accept &amp; Continue
@@ -304,7 +308,7 @@ export function CookiePreferences() {
             id="rw-privacy-storage-details"
             className="mt-4 space-y-3 border-t border-border/70 pt-3.5"
           >
-            <div className="max-h-[min(46vh,340px)] space-y-2.5 overflow-y-auto pr-1">
+            <div className="max-h-[min(38vh,300px)] space-y-2.5 overflow-y-auto pr-1">
               {/* Essential Security & Auth */}
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -337,7 +341,7 @@ export function CookiePreferences() {
                         Site Experience &amp; Preloading
                       </span>
                       <span className="inline-flex items-center rounded-full border border-border/80 bg-muted px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
-                        Optional
+                        Default On · Optional
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -380,7 +384,7 @@ export function CookiePreferences() {
                         Analytics &amp; UX Telemetry
                       </span>
                       <span className="inline-flex items-center rounded-full border border-border/80 bg-muted px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
-                        Optional
+                        Default On · Optional
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-muted-foreground">

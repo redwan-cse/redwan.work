@@ -65,6 +65,7 @@ export async function GET() {
     `- [Portfolio & Case Studies](${SITE.url}/portfolio): Production web platforms, VAPT, Wazuh SIEM, and applied AI.`,
     `- [Security & Engineering Blog](${SITE.url}/blogs): Live articles synced from blogs.redwan.work.`,
     `- [Curriculum Vitae](${SITE.url}/resume): Verified experience, education, certifications, and research.`,
+    `- [Live Resume PDF](${SITE.url}/resume.pdf): Dynamically generated A4 PDF reflecting live CMS credentials and experience.`,
     `- [Start a Project / Contact](${SITE.url}/contact): Project scope intake with encrypted attachment vault.`,
     `- [Privacy Policy](${SITE.url}/privacy) · [Terms & RoE](${SITE.url}/tos)`,
     '',

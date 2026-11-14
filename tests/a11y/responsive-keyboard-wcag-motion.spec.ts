@@ -79,6 +79,7 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
 
   test('[KEYBOARD-FOCUS] supports skip-to-content link, mobile navigation drawer Escape dismissal, and modal dialog focus/Escape', async ({
     page,
+    browser,
   }) => {
     // 1. Desktop keyboard skip-link jumps focus directly to #main-content
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -152,6 +153,43 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
     await expect(privacyRegion).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(privacyRegion).toBeHidden();
+
+    // 5. First-time human visit automatically displays expanded switches with Site Experience & Analytics enabled by default
+    const firstVisitCtx = await browser.newContext({ viewport: { width: 1280, height: 850 } });
+    await firstVisitCtx.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'webdriver', {
+        get: () => false,
+        configurable: true,
+      });
+    });
+    const firstVisitPage = await firstVisitCtx.newPage();
+    try {
+      await firstVisitPage.route(/^https:\/\/(www\.googletagmanager\.com|www\.clarity\.ms|www\.google-analytics\.com)\//, (route) =>
+        route.abort()
+      );
+      await firstVisitPage.goto('/');
+      const autoNotice = firstVisitPage.getByRole('region', { name: 'Privacy & Storage Notice' });
+      await expect(autoNotice).toBeVisible({ timeout: 5000 });
+      const autoExp = autoNotice.getByRole('switch', { name: /Site Experience/i });
+      const autoAna = autoNotice.getByRole('switch', { name: /Google Analytics 4/i });
+      await expect(autoExp).toBeVisible();
+      await expect(autoAna).toBeVisible();
+      await expect(autoExp).toHaveAttribute('aria-checked', 'true');
+      await expect(autoAna).toHaveAttribute('aria-checked', 'true');
+
+      // Toggling analytics off and clicking Accept & Continue preserves the user's customization
+      await autoAna.click();
+      await expect(autoAna).toHaveAttribute('aria-checked', 'false');
+      await autoNotice.getByRole('button', { name: /Accept & Continue/i }).click();
+      await expect(autoNotice).toBeHidden();
+      const customLs = await firstVisitPage.evaluate(() =>
+        window.localStorage.getItem('redwan_work_cookie_preferences_v1')
+      );
+      expect(customLs).toContain('"experience":true');
+      expect(customLs).toContain('"analytics":false');
+    } finally {
+      await firstVisitCtx.close();
+    }
   });
 
   test('[WCAG-AUTOMATED] passes axe-core WCAG 2.0/2.1/2.2 Level A & AA audits across light and dark themes', async ({

@@ -382,5 +382,22 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       await page.locator('script[type="application/ld+json"]').allTextContents()
     ).join('\n');
     expect(portfolioSchemas).toContain('"CollectionPage"');
+
+    // 6. Dynamic non-stale /resume.pdf endpoint generates fresh A4 PDF on every download
+    const pdfInlineRes = await request.get('/resume.pdf');
+    expect(pdfInlineRes.status()).toBe(200);
+    expect(pdfInlineRes.headers()['content-type'] ?? '').toContain('application/pdf');
+    expect(pdfInlineRes.headers()['content-disposition'] ?? '').toContain('inline; filename="Md_Redwan_Ahmed_Resume.pdf"');
+    expect(pdfInlineRes.headers()['cache-control'] ?? '').toContain('no-store');
+    expect(pdfInlineRes.headers()['x-robots-tag'] ?? '').toContain('index, follow');
+    expect(Number.isNaN(Date.parse(pdfInlineRes.headers()['x-resume-generated-at'] ?? ''))).toBe(false);
+    const pdfBuf = await pdfInlineRes.body();
+    expect(pdfBuf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    const pdfDownloadRes = await request.get('/resume.pdf?download=1');
+    expect(pdfDownloadRes.status()).toBe(200);
+    expect(pdfDownloadRes.headers()['content-disposition'] ?? '').toContain(
+      'attachment; filename="Md_Redwan_Ahmed_Resume.pdf"'
+    );
   });
 });
