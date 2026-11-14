@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Globe, Lock, Mail, MapPin, ShieldCheck } from 'lucide-react';
+import { Globe, Mail, MapPin, ShieldCheck } from 'lucide-react';
 import { SocialLinks } from '@/components/social-links';
 import { CookiePreferencesTrigger } from '@/components/cookie-preferences';
 import { SITE } from '@/lib/content/site';
@@ -65,7 +65,7 @@ export function Footer() {
           </div>
 
           {/* Services */}
-          <div className="space-y-3 lg:col-span-3">
+          <div className="space-y-3 lg:col-span-4">
             <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
               Services
             </h2>
@@ -111,7 +111,7 @@ export function Footer() {
           </div>
 
           {/* Explore */}
-          <div className="space-y-3 lg:col-span-2">
+          <div className="space-y-3 lg:col-span-3">
             <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
               Explore
             </h2>
@@ -139,39 +139,6 @@ export function Footer() {
               <li>
                 <Link href="/contact" className="transition-colors hover:text-primary">
                   Start a Project
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Client & Legal */}
-          <div className="space-y-3 lg:col-span-2">
-            <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
-              Client &amp; Legal
-            </h2>
-            <ul className="space-y-2.5 text-xs text-muted-foreground sm:text-sm">
-              <li>
-                <Link
-                  href="/portal"
-                  className="inline-flex items-center gap-1.5 font-medium text-foreground transition-colors hover:text-primary"
-                >
-                  <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  <span>Client Portal</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="transition-colors hover:text-primary">
-                  Request Proposal &amp; Scope
-                </Link>
-              </li>
-              <li>
-                <Link href="/privacy" className="transition-colors hover:text-primary">
-                  Privacy Policy
-                </Link>
-              </li>
-              <li>
-                <Link href="/tos" className="transition-colors hover:text-primary">
-                  Terms &amp; Rules of Engagement
                 </Link>
               </li>
             </ul>

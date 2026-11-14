@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   Briefcase,
+  ClipboardList,
   FileText,
   Home,
   LayoutGrid,
@@ -14,7 +15,6 @@ import {
   Menu,
   PenTool,
   Phone,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -107,12 +107,13 @@ export function Navigation() {
           <Button
             asChild
             variant="outline"
-            size="icon"
-            className="h-9 w-9 rounded-full"
-            title="Client Portal"
+            size="sm"
+            className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-medium"
+            title="Portal (Clients & Admin)"
           >
-            <Link href="/portal" aria-label="Client Portal">
-              <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
+            <Link href="/portal">
+              <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              Portal
             </Link>
           </Button>
           <Button
@@ -121,8 +122,8 @@ export function Navigation() {
             className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-semibold"
             title="Order Service"
           >
-            <Link href="/services#packages" aria-label="Order Service">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            <Link href="/services#packages">
+              <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
               Order
             </Link>
           </Button>
@@ -154,7 +155,7 @@ export function Navigation() {
                   </div>
                 </SheetTitle>
                 <SheetDescription className="sr-only">
-                  Primary site navigation and Client Portal links
+                  Primary site navigation and Portal links
                 </SheetDescription>
               </SheetHeader>
 
@@ -183,16 +184,16 @@ export function Navigation() {
               </nav>
 
               <div className="mt-auto space-y-2.5 border-t border-border p-4">
-                <Button asChild variant="outline" className="w-full justify-center gap-2">
+                <Button asChild variant="outline" className="w-full justify-center gap-2 rounded-full">
                   <Link href="/portal" onClick={() => setIsOpen(false)}>
-                    <Lock className="h-4 w-4 text-primary" />
-                    Client Portal Login
+                    <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
+                    Portal
                   </Link>
                 </Button>
-                <Button asChild className="w-full justify-center gap-2">
+                <Button asChild className="w-full justify-center gap-2 rounded-full">
                   <Link href="/services#packages" onClick={() => setIsOpen(false)}>
-                    <Sparkles className="h-4 w-4" />
-                    Order a Service
+                    <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                    Order Service
                   </Link>
                 </Button>
               </div>
