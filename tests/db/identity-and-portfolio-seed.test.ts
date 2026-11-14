@@ -137,15 +137,20 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
 
     const portfolio = await pg.db.query<{
       code: string;
+      slug: string;
+      title: string;
       headline_metric: string;
       summary: string;
       challenge: string;
       outcomes: string[];
       stack: string[];
       related_service_slug: string | null;
-    }>(`select code, headline_metric, summary, challenge, outcomes, stack, related_service_slug from public.portfolio_items order by sort_order`);
+    }>(`select code, slug, title, headline_metric, summary, challenge, outcomes, stack, related_service_slug from public.portfolio_items order by sort_order`);
 
     expect(portfolio.rows.length).toBeGreaterThanOrEqual(6);
+    expect(portfolio.rows.find((p) => p.code === 'CS-105')?.slug).toBe('sdgc-michigan-web-platform');
+    expect(portfolio.rows.find((p) => p.code === 'CS-105')?.title).toContain('Saugatuck Douglas Garden Club');
+    expect(portfolio.rows.find((p) => p.code === 'CS-110')?.title).toContain('Q1 Scopus (Elsevier)');
     const portfolioJson = JSON.stringify(portfolio.rows);
     expect(portfolioJson).not.toContain('14 Critical/High');
     expect(portfolioJson).not.toContain('35+ Servers');

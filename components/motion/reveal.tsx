@@ -114,13 +114,13 @@ export function HeroPortrait({
         />
 
         {/* Circular photograph — remains completely unchanged on hover */}
-        <div className="relative h-52 w-52 overflow-hidden rounded-full border-2 border-background bg-muted shadow-xl sm:h-72 sm:w-72">
+        <div className="relative h-56 w-56 overflow-hidden rounded-full border-2 border-background bg-muted shadow-xl sm:h-72 sm:w-72 lg:h-80 lg:w-80 xl:h-96 xl:w-96">
           <Image
             src={src}
             alt={alt}
             fill
             priority
-            sizes="(max-width: 640px) 240px, 288px"
+            sizes="(max-width: 640px) 224px, (max-width: 1024px) 288px, (max-width: 1280px) 320px, 384px"
             className="object-cover object-top"
           />
         </div>
