@@ -181,6 +181,7 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
   });
 
   test('[IDENTITY-CONSISTENCY] presents verified Md. Redwan Ahmed identity and EC-Council C|EH credential without fabricated testimonials', async ({
+    request,
     page,
   }) => {
     const publicCheckRoutes = ['/', '/services', '/portfolio', '/resume', '/contact'];
@@ -194,11 +195,23 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       expect(html).not.toContain('Michael Chen');
     }
 
+    // Home page hero CTA excludes redundant Client Portal button and showcases Q1 Scopus (no IEEE badge)
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const homeHero = page.locator('main section').first();
+    await expect(homeHero.getByRole('link', { name: /Explore Services & Packages/i })).toBeVisible();
+    await expect(homeHero.getByRole('link', { name: /Request Custom Proposal/i })).toBeVisible();
+    expect(await homeHero.getByRole('link', { name: /Client Portal/i }).count()).toBe(0);
+    expect((await homeHero.textContent()) ?? '').not.toContain('Q1 / IEEE');
+
     await page.goto('/resume', { waitUntil: 'domcontentloaded' });
     const resumeText = (await page.locator('main').textContent()) ?? '';
     expect(resumeText).toContain('Md. Redwan Ahmed');
     expect(resumeText).toContain('contact@redwan.work');
     expect(resumeText).toContain('Founder & CEO, Fast Cyber Defense');
+    expect(resumeText).toContain('Q1 Scopus Researcher');
+    expect(resumeText).not.toContain('Q1 IEEE Researcher');
+    expect(resumeText).not.toContain('Q1 Scopus & IEEE Author');
+    expect(resumeText).toContain('IEEE CS BDC SYMPOSIUM 2024');
     expect(resumeText).toContain('Certified Ethical Hacker (C|EH)');
     expect(resumeText).toContain('ECC8126370954');
     expect(resumeText).toContain('CCEP');
@@ -237,6 +250,8 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
 
     const footerText = (await page.locator('footer').textContent()) ?? '';
     expect(footerText).not.toContain('Command Center');
+    expect(footerText).toContain('Q1 Scopus Researcher');
+    expect(footerText).not.toContain('Q1 Scopus & IEEE');
 
     // Floating WhatsApp widget removed; Back-to-Top reveals after scrolling >350px
     expect(await page.locator('a[aria-label="Chat on WhatsApp"]').count()).toBe(0);
@@ -251,10 +266,11 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       )
       .toBeLessThan(50);
 
-    // /blogs page 1 fills featured + 9 grid cards, strips embedded CSS, and shows TOC in Quick Preview
+    // /blogs page 1 fills featured + 9 grid cards, strips embedded CSS and heading-anchor #, and hides intro paragraph when TOC is present
     await page.goto('/blogs', { waitUntil: 'domcontentloaded' });
     const blogsMainText = (await page.locator('main').textContent()) ?? '';
     expect(blogsMainText).not.toContain('.code-block-wrap');
+    expect(blogsMainText).not.toContain('Architecture Overview#');
     expect(blogsMainText).toContain('Showing 1–10 of 12 articles');
     expect(await page.locator('main article, main .grid > div').count()).toBeGreaterThanOrEqual(9);
 
@@ -266,7 +282,18 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     expect(dialogText).toContain('Architecture Overview');
     expect(dialogText).toContain('Key Hardening Controls');
     expect(dialogText).not.toContain('.code-block-wrap');
+    expect(dialogText).not.toContain('Practical analysis #1 covering');
     await page.keyboard.press('Escape');
     await expect(previewDialog).toBeHidden();
+
+    // /api/blogs/preload warms live blog pages with X-Robots-Tag: noindex and validates page parameter
+    const preloadRes = await request.get('/api/blogs/preload?page=1');
+    expect(preloadRes.status()).toBe(200);
+    expect(preloadRes.headers()['x-robots-tag']?.toLowerCase()).toContain('noindex');
+    const preloadJson = await preloadRes.json();
+    expect(preloadJson).toMatchObject({ ok: true, page: 1, totalItems: 12, totalPages: 2 });
+
+    const badPreloadRes = await request.get('/api/blogs/preload?page=0');
+    expect(badPreloadRes.status()).toBe(400);
   });
 });

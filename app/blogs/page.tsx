@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ExternalLink, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field';
 import { HeroReveal, HeroRevealItem } from '@/components/motion/reveal';
 import { BlogBrowser, type EnrichedBlogPost } from '@/components/blog-browser';
+import { BlogPagination } from '@/components/blog-pagination';
+import { BlogPreloader } from '@/components/blog-preloader';
 import {
   BLOG_FIRST_PAGE_COUNT,
   BLOG_GRID_PER_PAGE,
@@ -137,99 +137,17 @@ export default async function BlogsPage({
         <div className="container">
           <BlogBrowser items={enrichedPosts} currentPage={currentPage} />
 
-          {/* Server Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-14 flex flex-col items-center gap-4 border-t border-border/70 pt-8">
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button
-                  asChild={currentPage !== 1}
-                  variant="outline"
-                  disabled={currentPage === 1}
-                  className="h-9 gap-1.5 rounded-full px-4 text-xs"
-                >
-                  {currentPage === 1 ? (
-                    <span className="flex cursor-not-allowed items-center gap-1.5">
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </span>
-                  ) : (
-                    <Link href={currentPage === 2 ? '/blogs' : `/blogs?page=${currentPage - 1}`}>
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Link>
-                  )}
-                </Button>
-
-                <div className="flex items-center gap-1.5">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
-                    const show =
-                      pageNum === 1 ||
-                      pageNum === totalPages ||
-                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1);
-                    if (
-                      (pageNum === currentPage - 2 && currentPage > 3) ||
-                      (pageNum === currentPage + 2 && currentPage < totalPages - 2)
-                    ) {
-                      return (
-                        <span key={pageNum} className="px-2 text-xs text-muted-foreground">
-                          •••
-                        </span>
-                      );
-                    }
-                    if (!show) return null;
-                    return (
-                      <Button
-                        key={pageNum}
-                        asChild={pageNum !== currentPage}
-                        variant={pageNum === currentPage ? 'default' : 'ghost'}
-                        className="h-9 w-9 rounded-full font-mono text-xs"
-                      >
-                        {pageNum === currentPage ? (
-                          <span>{pageNum}</span>
-                        ) : (
-                          <Link href={pageNum === 1 ? '/blogs' : `/blogs?page=${pageNum}`}>
-                            {pageNum}
-                          </Link>
-                        )}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                <Button
-                  asChild={currentPage !== totalPages}
-                  variant="outline"
-                  disabled={currentPage === totalPages}
-                  className="h-9 gap-1.5 rounded-full px-4 text-xs"
-                >
-                  {currentPage === totalPages ? (
-                    <span className="flex cursor-not-allowed items-center gap-1.5">
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </span>
-                  ) : (
-                    <Link href={`/blogs?page=${currentPage + 1}`}>
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  )}
-                </Button>
-              </div>
-
-              <p className="font-mono text-xs text-muted-foreground">
-                {allPosts.length > 0 ? (
-                  <>
-                    Showing {startIndex + 1}–{Math.min(endIndex, totalPosts)} of{' '}
-                    {isCapped ? `${totalPosts}+` : totalPosts} articles
-                  </>
-                ) : (
-                  <>
-                    Showing 0 of {isCapped ? `${totalPosts}+` : totalPosts} articles
-                  </>
-                )}
-              </p>
-            </div>
-          )}
+          {/* Server Pagination with Instant Transition Feedback */}
+          <BlogPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalPosts={totalPosts}
+            visibleCount={allPosts.length}
+            isCapped={isCapped}
+          />
+          <BlogPreloader nextPage={currentPage < totalPages ? currentPage + 1 : null} />
         </div>
       </section>
     </div>

@@ -73,7 +73,7 @@ export function ResumeView({
     title: settings.role_title || 'Founder & CEO, Fast Cyber Defense · CSE Professional',
     subtitle:
       settings.subtitle ||
-      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher',
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 Scopus Researcher',
     email: settings.email || 'contact@redwan.work',
     phone: settings.phone || '+88017-7638-7624',
     location: settings.location || 'Dhaka, BD',
@@ -218,7 +218,7 @@ export function ResumeView({
                           CURRICULUM VITAE · C|EH · CCEP · CNSP · CAP
                         </Badge>
                         <Badge variant="secondary" className="font-mono text-xs">
-                          Q1 Scopus &amp; IEEE Author
+                          Q1 Scopus Author
                         </Badge>
                       </div>
                     </HeroRevealItem>

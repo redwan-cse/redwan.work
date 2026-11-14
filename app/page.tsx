@@ -10,7 +10,6 @@ import {
   ExternalLink,
   FileCheck2,
   LifeBuoy,
-  Lock,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -215,17 +214,6 @@ export default async function Home() {
                       className="gap-2 rounded-full px-6"
                     >
                       <Link href="/contact">Request Custom Proposal</Link>
-                    </Button>
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="lg"
-                      className="gap-2 rounded-full text-muted-foreground hover:text-foreground"
-                    >
-                      <Link href="/portal">
-                        <Lock className="h-4 w-4 text-primary" />
-                        Client Portal
-                      </Link>
                     </Button>
                   </div>
                 </HeroRevealItem>

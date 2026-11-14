@@ -60,7 +60,7 @@ export const SITE = {
     { code: 'GitHub', label: 'GitHub Foundations Certified' },
     { code: 'CNSP', label: 'Certified Network Security Practitioner' },
     { code: 'CAP', label: 'Certified AppSec Practitioner' },
-    { code: 'Q1 / IEEE', label: 'Published AI & Security Researcher' },
+    { code: 'Q1 Scopus', label: 'Published AI & Security Researcher' },
   ],
   socials: {
     github: 'https://github.com/redwan-cse',
@@ -450,7 +450,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     title: 'Applied AI/ML Systems, Threat Models & Workflow Automation',
     tagline: 'Custom machine learning pipelines, LLM integrations, and real-time anomaly/phishing detection.',
     description:
-      'Backed by Q1 Scopus and IEEE published research in machine learning and cybersecurity. Build production AI assistants, automated document/lead triage pipelines, or custom classification models.',
+      'Backed by Q1 Scopus published research in machine learning and cybersecurity. Build production AI assistants, automated document/lead triage pipelines, or custom classification models.',
     requiresRoe: false,
     startingPriceCents: 15000,
     deliveryDaysMin: 4,
@@ -896,10 +896,10 @@ export const PORTFOLIO_ITEMS: PortfolioCaseStudy[] = [
     code: 'CS-110',
     pillar: 'ai_ml',
     pillarLabel: 'Applied AI/ML & Automation',
-    title: 'Published Q1 Scopus (Elsevier) & IEEE Machine Learning Pipelines',
+    title: 'Published Q1 Scopus (Elsevier) Machine Learning Pipelines',
     clientSector: 'Academic & Applied AI Security Research',
     year: '2024–2025',
-    headlineMetric: 'Published in Q1 Scopus (Elsevier IJCCE) & IEEE CS BDC Symposium',
+    headlineMetric: 'Published in Elsevier IJCCE (Q1 Scopus) · Applied ML Pipelines',
     summary:
       'Peer-reviewed machine learning research and reproducible Python pipelines covering market-segmentation clustering and feature-engineered phishing URL detection (PhishDF).',
     challenge:
@@ -907,13 +907,13 @@ export const PORTFOLIO_ITEMS: PortfolioCaseStudy[] = [
     approach: [
       'Engineered end-to-end preprocessing, feature extraction, and clustering/classification benchmarking in Python and Scikit-Learn.',
       'Developed comprehensive URL lexical, host, and structural feature extraction pipelines for phishing detection (redwan-cse/PhishDF).',
-      'Published peer-reviewed papers in Elsevier International Journal of Cognitive Computing in Engineering (Q1 Scopus) and IEEE CS BDC Symposium 2024.',
+      'Published peer-reviewed findings in Elsevier International Journal of Cognitive Computing in Engineering (Q1 Scopus).',
     ],
     outcomes: [
-      'Two peer-reviewed publications with DOI/proceedings verification links on the public curriculum vitae.',
+      'Peer-reviewed Q1 Scopus publication with DOI verification links on the public curriculum vitae.',
       'Applied curriculum in hands-on Machine Learning with Python training for the EDGE Project at Jagannath University.',
     ],
-    stack: ['Python', 'Scikit-Learn', 'PhishDF', 'Feature Engineering', 'K-Means Clustering', 'Elsevier Q1 / IEEE'],
+    stack: ['Python', 'Scikit-Learn', 'PhishDF', 'Feature Engineering', 'K-Means Clustering', 'Elsevier Q1 Scopus'],
     relatedServiceSlug: 'ai-ml-automation',
     externalUrl: 'https://doi.org/10.1016/j.ijcce.2024.04.002',
   },

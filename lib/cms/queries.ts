@@ -840,7 +840,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
 
 const DEFAULT_ROLE_TITLE = 'Founder & CEO, Fast Cyber Defense · CSE Professional';
 const DEFAULT_RESUME_SUBTITLE =
-  'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher';
+  'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 Scopus Researcher';
 
 export const ACADEMIC_REFERENCE_SCHOLAR_URLS = {
   abuLayek: 'https://scholar.google.com/citations?user=pDEC0p4AAAAJ&hl=en',
@@ -874,11 +874,30 @@ function reconcileResumeSubtitle(rawSubtitle: string | null | undefined): string
     !value ||
     value === 'Cybersecurity Researcher | Information Security Freelancer | Educator' ||
     value ===
-      'Offensive Security & VAPT Specialist | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator'
+      'Offensive Security & VAPT Specialist | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator' ||
+    value ===
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher'
   ) {
     return DEFAULT_RESUME_SUBTITLE;
   }
   return value;
+}
+
+function reconcileCredentials(
+  rawCredentials: unknown,
+  fallback: Array<{ code: string; label: string }>
+): Array<{ code: string; label: string }> {
+  if (!Array.isArray(rawCredentials) || rawCredentials.length === 0) {
+    return fallback;
+  }
+  const normalized = (rawCredentials as Array<{ code: string; label: string }>).map((cred) =>
+    cred.code === 'Q1 / IEEE'
+      ? { code: 'Q1 Scopus', label: cred.label || 'Published AI & Security Researcher' }
+      : cred
+  );
+  return normalized.some((c) => c.code === 'C|EH')
+    ? normalized
+    : [{ code: 'C|EH', label: 'Certified Ethical Hacker (EC-Council)' }, ...normalized];
 }
 
 function reconcileTechnicalSkills(
@@ -1085,13 +1104,10 @@ export async function getSiteSettingsAndResume(options?: {
       itemsQuery,
     ]);
 
-    const rawCreds =
-      settingsRow && Array.isArray(settingsRow.credentials) && settingsRow.credentials.length > 0
-        ? (settingsRow.credentials as Array<{ code: string; label: string }>)
-        : defaultSettings.credentials;
-    const mergedCredentials = rawCreds.some((c) => c.code === 'C|EH')
-      ? rawCreds
-      : [{ code: 'C|EH', label: 'Certified Ethical Hacker (EC-Council)' }, ...rawCreds];
+    const mergedCredentials = reconcileCredentials(
+      settingsRow?.credentials,
+      defaultSettings.credentials
+    );
 
     const settings: SiteSettingsRecord = settingsRow
       ? {

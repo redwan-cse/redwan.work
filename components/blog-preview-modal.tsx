@@ -98,7 +98,7 @@ export function BlogPreviewModal({
             </div>
           </DialogHeader>
 
-          {excerpt && (
+          {toc.length === 0 && excerpt && (
             <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
               {excerpt.length > 220 ? `${excerpt.slice(0, 220).trimEnd()}...` : excerpt}
             </p>
@@ -116,7 +116,7 @@ export function BlogPreviewModal({
                 </span>
               </div>
               <nav aria-label="Article table of contents">
-                <ol className="max-h-56 space-y-1 overflow-y-auto pr-1 text-sm">
+                <ol className="max-h-64 space-y-1 overflow-y-auto pr-1 text-sm sm:max-h-72">
                   {numberedToc.map(({ item, prefix }, idx) => {
                     const sectionHref = item.id
                       ? `${safePostUrl}#${encodeURIComponent(item.id)}`

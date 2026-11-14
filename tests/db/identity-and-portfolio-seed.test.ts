@@ -34,6 +34,8 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(settings.email).toBe('contact@redwan.work');
     expect(settings.role_title).toBe('Founder & CEO, Fast Cyber Defense · CSE Professional');
     expect(settings.subtitle).toContain('Certified Ethical Hacker (C|EH)');
+    expect(settings.subtitle).toContain('Q1 Scopus Researcher');
+    expect(settings.subtitle).not.toMatch(/IEEE/i);
     expect(settings.technical_skills['Full-Stack & Programming']).toContain(
       'Next.js (App Router) & React'
     );
@@ -42,12 +44,15 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(serialized).toMatch(/C\|EH/i);
     expect(serialized).toMatch(/Certified Ethical Hacker/i);
     expect(serialized).not.toMatch(/Uzzal/i);
+    expect(serialized).not.toMatch(/IEEE/i);
 
     const codes = settings.credentials.map((c) => c.code);
     expect(codes).toContain('C|EH');
     expect(codes).toContain('CCEP');
     expect(codes).toContain('CNSP');
     expect(codes).toContain('CAP');
+    expect(codes).toContain('Q1 Scopus');
+    expect(codes).not.toContain('Q1 / IEEE');
 
     const layek = settings.references_list.find((r) => r.name.includes('Abu Layek'));
     expect(layek?.email).toBe('abulayek@yahoo.com');
@@ -68,9 +73,13 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
       section: string;
       title: string;
       organization: string;
+      badge_label: string | null;
+      highlights: string[] | null;
       verification_url: string | null;
       period: string | null;
-    }>(`select section, title, organization, verification_url, period from public.resume_items`);
+    }>(
+      `select section, title, organization, badge_label, highlights, verification_url, period from public.resume_items`
+    );
     const ceh = certs.rows.find(
       (r) => r.section === 'vendor_certification' && /Certified Ethical Hacker/i.test(r.title)
     );
@@ -101,6 +110,13 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(educationRows.find((r) => r.title === 'Secondary School Certificate')?.period).toBe(
       '2014 · GPA: 4.56/5.0'
     );
+
+    // IEEE CS BDC Symposium paper stays inside resume_items research section alongside Q1 Elsevier paper
+    const researchRows = certs.rows.filter((r) => r.section === 'research');
+    expect(researchRows.some((r) => /IEEE/i.test(JSON.stringify(r)))).toBe(true);
+    expect(
+      certs.rows.some((r) => r.section === 'vendor_certification' && /CCEP|CNSP|CAP/i.test(`${r.title} ${r.badge_label ?? ''}`))
+    ).toBe(true);
   });
 
   it('keeps portfolio_items free of fabricated legacy statistics and validates service slugs', async () => {

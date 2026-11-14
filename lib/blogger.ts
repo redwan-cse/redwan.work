@@ -24,37 +24,51 @@ export interface BlogPostsPage {
 }
 
 /**
- * Module-level TTL cache for Blogger responses.
+ * Module-level TTL + Stale-While-Revalidate cache for Blogger responses.
  *
- * NOTE: each serverless instance keeps its own cache, so the Blogger API
- * may be hit once per TTL per instance — still a massive improvement over
- * fetching on every request. unstable_cache is intentionally avoided here
- * (it breaks with googleapis/gaxios under Next.js 16 + Turbopack).
+ * Keeps /blogs dynamically rendered so new posts sync in real time without static builds:
+ * - Within FRESH_TTL (60s): served immediately from memory.
+ * - Between FRESH_TTL (60s) and STALE_TTL (10m): served immediately while a non-blocking
+ *   background refresh fetches the latest Blogger posts for subsequent visits.
+ *
+ * NOTE: unstable_cache is intentionally avoided here (it breaks with googleapis/gaxios
+ * under Next.js 16 + Turbopack).
  */
-const BLOGGER_CACHE_TTL_MS = 60_000;
+const BLOGGER_FRESH_TTL_MS = 60_000;
+const BLOGGER_STALE_TTL_MS = 10 * 60_000;
 const MAX_CACHE_ENTRIES = 50;
 
 interface CacheEntry {
   data: BlogPostsPage;
   expiresAt: number;
+  version: number;
+}
+
+interface RawSnapshot {
+  items: BloggerPostItem[];
+  totalItems: number;
+  isCapped: boolean;
+  freshUntil: number;
+  staleUntil: number;
 }
 
 const blogCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<BlogPostsPage>>();
 let cacheGeneration = 0;
+let snapshotVersion = 0;
 
-let rawPostsSnapshot: { items: BloggerPostItem[]; totalItems: number; isCapped: boolean; expiresAt: number } | null = null;
+let rawPostsSnapshot: RawSnapshot | null = null;
 let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> | null = null;
 
 function sweepExpiredCache(now: number) {
   for (const [key, entry] of blogCache.entries()) {
-    if (entry.expiresAt <= now) {
+    if (entry.expiresAt <= now || entry.version !== snapshotVersion) {
       blogCache.delete(key);
     }
   }
 }
 
-function setCacheEntry(key: string, data: BlogPostsPage, now: number) {
+function setCacheEntry(key: string, data: BlogPostsPage, now: number, version: number) {
   sweepExpiredCache(now);
   if (blogCache.size >= MAX_CACHE_ENTRIES) {
     const oldestKey = blogCache.keys().next().value;
@@ -62,12 +76,13 @@ function setCacheEntry(key: string, data: BlogPostsPage, now: number) {
       blogCache.delete(oldestKey);
     }
   }
-  blogCache.set(key, { data, expiresAt: now + BLOGGER_CACHE_TTL_MS });
+  blogCache.set(key, { data, expiresAt: now + BLOGGER_FRESH_TTL_MS, version });
 }
 
 /** Drop all cached blog pages (called after on-demand revalidation). */
 export function clearBlogCache() {
   cacheGeneration++;
+  snapshotVersion++;
   blogCache.clear();
   inFlightRequests.clear();
   rawPostsSnapshot = null;
@@ -172,6 +187,12 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
   let pageToken: string | undefined;
   let isCapped = false;
 
+  // Fetch blog metadata in parallel with page 1 of posts.list to save a network RTT.
+  const blogMetaPromise =
+    typeof client.blogger.blogs?.get === 'function'
+      ? client.blogger.blogs.get({ blogId: client.blogId }).catch(() => null)
+      : Promise.resolve(null);
+
   do {
     const remaining = MAX_POSTS_FETCH - allItems.length;
     if (remaining <= 0) break;
@@ -195,47 +216,62 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
   } while (pageToken);
 
   let totalItems = allItems.length;
-  if (typeof client.blogger.blogs?.get === 'function') {
-    try {
-      const blogMeta = await client.blogger.blogs.get({ blogId: client.blogId });
-      const metaCount = Number(blogMeta?.data?.posts?.totalItems);
-      if (Number.isSafeInteger(metaCount) && metaCount > 0) {
-        if (metaCount > MAX_POSTS_FETCH) {
-          isCapped = true;
-          totalItems = MAX_POSTS_FETCH;
-        } else {
-          totalItems = Math.max(allItems.length, metaCount);
-        }
-      }
-    } catch {
-      // Graceful fallback to allItems.length
+  const blogMeta = await blogMetaPromise;
+  const metaCount = Number(blogMeta?.data?.posts?.totalItems);
+  if (Number.isSafeInteger(metaCount) && metaCount > 0) {
+    if (metaCount > MAX_POSTS_FETCH) {
+      isCapped = true;
+      totalItems = MAX_POSTS_FETCH;
+    } else {
+      totalItems = Math.max(allItems.length, metaCount);
     }
   }
 
   return { items: allItems, totalItems, isCapped };
 }
 
-async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
-  const now = Date.now();
-  if (rawPostsSnapshot && rawPostsSnapshot.expiresAt > now) {
-    return rawPostsSnapshot;
-  }
+function startRawPostsRefresh(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
   if (rawPostsInFlight) {
     return rawPostsInFlight;
   }
   const generation = cacheGeneration;
-  const request = fetchAllBloggerPosts().then(result => {
-    if (generation === cacheGeneration) {
-      rawPostsSnapshot = { ...result, expiresAt: Date.now() + BLOGGER_CACHE_TTL_MS };
-    }
-    return result;
-  });
+  const request = fetchAllBloggerPosts()
+    .then(result => {
+      if (generation === cacheGeneration) {
+        const completedAt = Date.now();
+        rawPostsSnapshot = {
+          ...result,
+          freshUntil: completedAt + BLOGGER_FRESH_TTL_MS,
+          staleUntil: completedAt + BLOGGER_STALE_TTL_MS,
+        };
+        snapshotVersion++;
+        blogCache.clear();
+      }
+      return result;
+    })
+    .finally(() => {
+      if (rawPostsInFlight === request) rawPostsInFlight = null;
+    });
   rawPostsInFlight = request;
-  try {
-    return await request;
-  } finally {
-    if (rawPostsInFlight === request) rawPostsInFlight = null;
+  return request;
+}
+
+async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
+  // Deterministic offline fixtures always evaluate immediately without stale caching.
+  if (process.env.BLOGGER_FIXTURE_POSTS_JSON) {
+    return fetchAllBloggerPosts();
   }
+
+  const now = Date.now();
+  if (rawPostsSnapshot && rawPostsSnapshot.freshUntil > now) {
+    return rawPostsSnapshot;
+  }
+  if (rawPostsSnapshot && rawPostsSnapshot.staleUntil > now) {
+    // Serve warm posts immediately and revalidate in the background for real-time Blogger updates.
+    void startRawPostsRefresh().catch(() => undefined);
+    return rawPostsSnapshot;
+  }
+  return startRawPostsRefresh();
 }
 
 export const BLOG_GRID_PER_PAGE = 9;
@@ -310,11 +346,17 @@ export async function getBlogPostsPage(
 
   const key = `p${safePage}-n${safePerPage}-f${safeFirstPage}`;
   const now = Date.now();
+  const isFixtureMode = Boolean(process.env.BLOGGER_FIXTURE_POSTS_JSON);
 
-  sweepExpiredCache(now);
-  const hit = blogCache.get(key);
-  if (hit && hit.expiresAt > now) {
-    return hit.data;
+  if (!isFixtureMode) {
+    sweepExpiredCache(now);
+    const hit = blogCache.get(key);
+    if (hit && hit.expiresAt > now && hit.version === snapshotVersion) {
+      if (rawPostsSnapshot && now >= rawPostsSnapshot.freshUntil && rawPostsSnapshot.staleUntil > now) {
+        void startRawPostsRefresh().catch(() => undefined);
+      }
+      return hit.data;
+    }
   }
 
   const inFlight = inFlightRequests.get(key);
@@ -324,8 +366,8 @@ export async function getBlogPostsPage(
 
   const generation = cacheGeneration;
   const promise = fetchBlogPostsPage(safePage, safePerPage, safeFirstPage).then(data => {
-    if (generation === cacheGeneration) {
-      setCacheEntry(key, data, Date.now());
+    if (generation === cacheGeneration && !isFixtureMode) {
+      setCacheEntry(key, data, Date.now(), snapshotVersion);
     }
     return data;
   });
@@ -372,6 +414,7 @@ const NON_PROSE_BLOCK_PATTERNS: RegExp[] = [
   /<svg\b[^>]*>[\s\S]*?<\/svg>/gi,
   /<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>[\s\S]*?<\/nav>/gi,
   /<div\b[^>]*class=["'][^"']*code-block-header[^"']*["'][^>]*>[\s\S]*?<\/div>/gi,
+  /<a\b[^>]*class=["'][^"']*heading-anchor[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
 ];
 
 function stripNonProseBlocks(html: string, includeTocNav: boolean = true): string {

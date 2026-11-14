@@ -81,7 +81,7 @@ export function Navigation() {
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'relative rounded-full px-4 py-1.5 text-sm font-medium transition-colors duration-200',
+                  'relative rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 xl:px-3.5',
                   isActive ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
@@ -102,18 +102,28 @@ export function Navigation() {
         </nav>
 
         {/* Desktop Actions */}
-        <div className="hidden items-center gap-2.5 lg:flex">
+        <div className="hidden shrink-0 items-center gap-2 lg:flex">
           <ModeToggle />
-          <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
-            <Link href="/portal">
-              <Lock className="h-3.5 w-3.5 text-primary" />
-              Client Portal
+          <Button
+            asChild
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 rounded-full"
+            title="Client Portal"
+          >
+            <Link href="/portal" aria-label="Client Portal">
+              <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
             </Link>
           </Button>
-          <Button asChild size="sm" className="gap-1.5 rounded-full">
-            <Link href="/services#packages">
-              <Sparkles className="h-3.5 w-3.5" />
-              Order Service
+          <Button
+            asChild
+            size="sm"
+            className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-semibold"
+            title="Order Service"
+          >
+            <Link href="/services#packages" aria-label="Order Service">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Order
             </Link>
           </Button>
         </div>

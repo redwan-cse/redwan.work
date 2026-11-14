@@ -44,7 +44,7 @@ describe('blogger HTML-to-plaintext sanitization (CodeQL Alert #1)', () => {
         <h2>Table of Contents</h2>
         <a href="#intro">Introduction</a>
       </nav>
-      <h2>Introduction</h2>
+      <h2>Introduction <a class="heading-anchor" href="#intro">#</a></h2>
       <p>Hardening Linux <strong>ksmbd</strong> endpoints against pre-auth remote execution.</p>
       <div class="code-block-header"><span>bash</span><button>Copy</button></div>
       <script>console.log('ignored');</script>
@@ -54,6 +54,8 @@ describe('blogger HTML-to-plaintext sanitization (CodeQL Alert #1)', () => {
     expect(plain).not.toContain('margin:');
     expect(plain).not.toContain('Copy');
     expect(plain).not.toContain('console.log');
+    expect(plain).not.toContain('Introduction#');
+    expect(plain).not.toContain('Introduction #');
     expect(plain).toContain('Hardening Linux ksmbd endpoints against pre-auth remote execution.');
   });
 

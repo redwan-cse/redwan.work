@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Portfolio & Case Studies — VAPT, Full-Stack Platforms, SIEM & AI Research',
   description:
-    'Explore offensive security assessments, production full-stack applications, Wazuh SIEM deployments, and peer-reviewed Q1 Scopus / IEEE machine learning research by Md. Redwan Ahmed.',
+    'Explore offensive security assessments, production full-stack applications, Wazuh SIEM deployments, and peer-reviewed Q1 Scopus machine learning research by Md. Redwan Ahmed.',
   path: '/portfolio',
 });
 
