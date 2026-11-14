@@ -114,6 +114,35 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
     await expect(caseModal).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(caseModal).toBeHidden();
+
+    // 4. Privacy & Storage Notice opens via footer trigger, persists custom choice, and closes on Escape
+    await page.goto('/privacy');
+    const privacyTrigger = page.getByRole('button', { name: 'Privacy & Cookie Controls' }).first();
+    await privacyTrigger.focus();
+    await page.keyboard.press('Enter');
+
+    const privacyRegion = page.getByRole('region', { name: 'Privacy & Storage Notice' });
+    await expect(privacyRegion).toBeVisible();
+
+    const expSwitch = privacyRegion.getByRole('switch');
+    await expect(expSwitch).toHaveAttribute('aria-checked', 'true');
+    await expSwitch.click();
+    await expect(expSwitch).toHaveAttribute('aria-checked', 'false');
+    await privacyRegion.getByRole('button', { name: 'Save Choices' }).click();
+    await expect(privacyRegion).toBeHidden();
+
+    const storedConsent = await page.evaluate(() => ({
+      ls: window.localStorage.getItem('redwan_work_cookie_preferences_v1'),
+      cookie: document.cookie,
+    }));
+    expect(storedConsent.ls).toContain('"experience":false');
+    expect(storedConsent.cookie).toContain('rw_cookie_consent=essential');
+
+    await privacyTrigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(privacyRegion).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(privacyRegion).toBeHidden();
   });
 
   test('[WCAG-AUTOMATED] passes axe-core WCAG 2.0/2.1/2.2 Level A & AA audits across light and dark themes', async ({
@@ -133,6 +162,12 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
       try {
         for (const route of WCAG_ROUTES) {
           await page.goto(route, { waitUntil: 'networkidle' });
+          if (route === '/privacy') {
+            await page.getByRole('button', { name: 'Privacy & Cookie Controls' }).first().click();
+            await expect(
+              page.getByRole('region', { name: 'Privacy & Storage Notice' })
+            ).toBeVisible();
+          }
           const results = await new AxeBuilder({ page })
             .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
             .analyze();

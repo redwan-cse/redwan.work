@@ -2,6 +2,20 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  allowsExperienceStorage,
+  COOKIE_PREFERENCES_CHANGED_EVENT,
+} from '@/components/cookie-preferences';
+
+function subscribeConsentChange(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, callback);
+  window.addEventListener('storage', callback);
+  return () => {
+    window.removeEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, callback);
+    window.removeEventListener('storage', callback);
+  };
+}
 
 const PRELOAD_COOLDOWN_MS = 45_000;
 const preloadedPages = new Map<number, number>();
@@ -12,6 +26,7 @@ interface NetworkInformationLike {
 
 function shouldSkipPreload(): boolean {
   if (typeof navigator === 'undefined') return true;
+  if (!allowsExperienceStorage()) return true;
   const conn = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
   return Boolean(conn?.saveData);
 }
@@ -25,9 +40,14 @@ function shouldSkipPreload(): boolean {
 export function BlogPreloader({ nextPage = null }: { nextPage?: number | null }) {
   const pathname = usePathname();
   const router = useRouter();
+  const experienceAllowed = React.useSyncExternalStore(
+    subscribeConsentChange,
+    allowsExperienceStorage,
+    () => true
+  );
 
   React.useEffect(() => {
-    if (shouldSkipPreload()) return;
+    if (!experienceAllowed || shouldSkipPreload()) return;
 
     const isBlogsRoute = pathname === '/blogs';
     const targetPage = isBlogsRoute ? nextPage : 1;
@@ -99,7 +119,7 @@ export function BlogPreloader({ nextPage = null }: { nextPage?: number | null })
         window.clearTimeout(timerId);
       }
     };
-  }, [pathname, nextPage, router]);
+  }, [pathname, nextPage, router, experienceAllowed]);
 
   return null;
 }

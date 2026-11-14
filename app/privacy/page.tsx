@@ -221,22 +221,22 @@ export default function Privacy() {
     {
       id: 'cookies',
       number: 8,
-      title: 'Cookie Policy & Preferences',
+      title: 'Browser Storage, Cookies & Zero-Tracker Posture',
       content: (
         <>
           <p>
-            We use cookies and local storage to ensure our website works properly and to respect your privacy choices:
+            <strong className="text-foreground">redwan.work</strong> operates with zero third-party advertising pixels, behavioral analytics, or session-replay trackers. Browser storage is limited strictly to security/session continuity and optional local preferences:
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              <strong className="text-foreground">Essential Cookies (Required):</strong> Strictly necessary for Client Portal authentication sessions, MFA enforcement, Turnstile anti-bot verification, and storing your cookie consent state.
+              <strong className="text-foreground">Essential Security &amp; Session Storage (Always Active):</strong> Strictly necessary for Client Portal authentication (<code className="font-mono text-foreground">sb-*</code>), MFA enforcement, Cloudflare Turnstile anti-bot verification on <code className="font-mono text-foreground">/contact</code>, <code className="font-mono text-foreground">/login</code>, and <code className="font-mono text-foreground">/register</code>, and persisting your privacy preference (<code className="font-mono text-foreground">rw_cookie_consent</code> / local storage).
             </li>
             <li>
-              <strong className="text-foreground">Analytics, Marketing &amp; Social/Embeds (Optional):</strong> Disabled by default unless you opt in via our Cookie Preferences manager.
+              <strong className="text-foreground">Site Experience &amp; Preloading (Optional):</strong> Enables light/dark <code className="font-mono text-foreground">theme</code> persistence and idle-time <code className="font-mono text-foreground">/blogs</code> pagination preloading for faster navigation. Selecting <strong className="text-foreground">Essential Only</strong> disables optional background blog preloading.
             </li>
           </ul>
           <p>
-            You can review or update your cookie choices at any time by clicking <CookiePreferencesTrigger /> in the site footer.
+            You can inspect or update your privacy and browser storage controls at any time via <CookiePreferencesTrigger /> here or in the site footer.
           </p>
         </>
       ),
