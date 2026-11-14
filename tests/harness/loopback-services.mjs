@@ -85,7 +85,7 @@ export const BLOGGER_FIXTURE_POSTS = Array.from({ length: 12 }, (_, idx) => {
     published: new Date(Date.UTC(2026, 9, 28 - idx, 12, 0, 0)).toISOString(),
     updated: new Date(Date.UTC(2026, 9, 28 - idx, 12, 0, 0)).toISOString(),
     url: `https://redwan-cse.blogspot.com/2026/10/field-note-${num}.html`,
-    content: `<p>Practical analysis #${num} covering OWASP ASVS verification, defense-in-depth architecture, and PostgreSQL row-level security hardening.</p>`,
+    content: `<style>/* Clean Code Block Window */ .code-block-wrap { margin: 24px 0 !important; border: 1px solid #d0d7de; }</style><h2 id="overview-${num}">Architecture Overview</h2><p>Practical analysis #${num} covering OWASP ASVS verification, defense-in-depth architecture, and PostgreSQL row-level security hardening.</p><div class="code-block-header"><span>bash</span><button type="button">Copy</button></div><h3 id="controls-${num}">Key Hardening Controls</h3><p>Verified control checklist for production services.</p>`,
     labels: num % 2 === 0 ? ['Cybersecurity', 'Architecture'] : ['DevSecOps', 'PostgreSQL'],
     author: { displayName: 'Md. Redwan Ahmed' },
   };

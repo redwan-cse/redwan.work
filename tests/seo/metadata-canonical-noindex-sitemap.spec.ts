@@ -90,7 +90,7 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       expect(robots.toLowerCase()).not.toContain('noindex');
     }
 
-    // Page 2 (12 fixture posts -> 9 on page 1, 3 on page 2) self-canonicalizes to /blogs?page=2
+    // Page 2 (12 fixture posts -> 10 on page 1 [1 featured + 9 grid], 2 on page 2) self-canonicalizes to /blogs?page=2
     await page.goto('/blogs?page=2', { waitUntil: 'domcontentloaded' });
     const page2Canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
     expect(page2Canonical).toBe(`${CANONICAL_ORIGIN}/blogs?page=2`);
@@ -198,6 +198,7 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const resumeText = (await page.locator('main').textContent()) ?? '';
     expect(resumeText).toContain('Md. Redwan Ahmed');
     expect(resumeText).toContain('contact@redwan.work');
+    expect(resumeText).toContain('Founder & CEO, Fast Cyber Defense');
     expect(resumeText).toContain('Certified Ethical Hacker (C|EH)');
     expect(resumeText).toContain('ECC8126370954');
     expect(resumeText).toContain('CCEP');
@@ -210,8 +211,62 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     expect(resumeText).toContain('2016 · GPA: 4.83/5.0');
     expect(resumeText).toContain('2014 · GPA: 4.56/5.0');
     expect(resumeText).toContain('abulayek@yahoo.com');
+    expect(resumeText).toContain('Dr. Md. Manowarul Islam');
+    expect(resumeText).toContain('manowar@cse.jnu.ac.bd');
+    expect(resumeText).not.toContain('Uzzal');
+    // Scholar URLs are rendered purely as hyperlinks on professor names, never printed visibly
+    expect(resumeText).not.toContain('scholar.google.com');
+
+    // Resume <main> has no Upwork link while academic reference names link cleanly to Google Scholar
+    const resumeUpworkLinks = await page
+      .locator('main a[href*="upwork.com"]')
+      .count();
+    expect(resumeUpworkLinks).toBe(0);
+    await expect(
+      page.getByRole('link', { name: 'Prof. Dr. Md. Abu Layek — Google Scholar Profile' })
+    ).toHaveAttribute(
+      'href',
+      'https://scholar.google.com/citations?user=pDEC0p4AAAAJ&hl=en'
+    );
+    await expect(
+      page.getByRole('link', { name: 'Dr. Md. Manowarul Islam — Google Scholar Profile' })
+    ).toHaveAttribute(
+      'href',
+      'https://scholar.google.com/citations?user=MBF7Y_4AAAAJ&hl=en'
+    );
 
     const footerText = (await page.locator('footer').textContent()) ?? '';
     expect(footerText).not.toContain('Command Center');
+
+    // Floating WhatsApp widget removed; Back-to-Top reveals after scrolling >350px
+    expect(await page.locator('a[aria-label="Chat on WhatsApp"]').count()).toBe(0);
+    await page.evaluate(() => window.scrollTo(0, 800));
+    const backToTopBtn = page.getByRole('button', { name: 'Back to top' });
+    await expect(backToTopBtn).toBeVisible();
+    await backToTopBtn.click();
+    await expect
+      .poll(
+        async () => page.evaluate(() => Math.round(window.scrollY)),
+        { timeout: 10000 }
+      )
+      .toBeLessThan(50);
+
+    // /blogs page 1 fills featured + 9 grid cards, strips embedded CSS, and shows TOC in Quick Preview
+    await page.goto('/blogs', { waitUntil: 'domcontentloaded' });
+    const blogsMainText = (await page.locator('main').textContent()) ?? '';
+    expect(blogsMainText).not.toContain('.code-block-wrap');
+    expect(blogsMainText).toContain('Showing 1–10 of 12 articles');
+    expect(await page.locator('main article, main .grid > div').count()).toBeGreaterThanOrEqual(9);
+
+    await page.getByRole('button', { name: /Quick Preview/i }).first().click();
+    const previewDialog = page.getByRole('dialog');
+    await expect(previewDialog).toBeVisible();
+    const dialogText = (await previewDialog.textContent()) ?? '';
+    expect(dialogText).toContain('Table of Contents');
+    expect(dialogText).toContain('Architecture Overview');
+    expect(dialogText).toContain('Key Hardening Controls');
+    expect(dialogText).not.toContain('.code-block-wrap');
+    await page.keyboard.press('Escape');
+    await expect(previewDialog).toBeHidden();
   });
 });

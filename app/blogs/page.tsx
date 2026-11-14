@@ -7,14 +7,16 @@ import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field
 import { HeroReveal, HeroRevealItem } from '@/components/motion/reveal';
 import { BlogBrowser, type EnrichedBlogPost } from '@/components/blog-browser';
 import {
+  BLOG_FIRST_PAGE_COUNT,
+  BLOG_GRID_PER_PAGE,
+  extractBlogToc,
   extractExcerpt,
   extractFirstImage,
+  getBlogPaginationMeta,
   getBlogPostsPage,
   stripHtmlToPlainText,
 } from '@/lib/blogger';
 import { buildPublicMetadata } from '@/lib/seo/metadata';
-
-const POSTS_PER_PAGE = 9;
 
 export async function generateMetadata({
   searchParams,
@@ -26,8 +28,12 @@ export async function generateMetadata({
   const parsedPage = rawPage !== undefined ? Number(rawPage) : 1;
   const isPositiveInt = Number.isSafeInteger(parsedPage) && parsedPage > 0;
 
-  const { totalItems } = await getBlogPostsPage(1, POSTS_PER_PAGE);
-  const totalPages = Math.max(1, Math.ceil(totalItems / POSTS_PER_PAGE));
+  const { totalItems } = await getBlogPostsPage(
+    1,
+    BLOG_GRID_PER_PAGE,
+    BLOG_FIRST_PAGE_COUNT
+  );
+  const { totalPages } = getBlogPaginationMeta(totalItems, 1);
 
   const isInvalidOrOutOfRange =
     rawPage !== undefined && (!isPositiveInt || parsedPage > totalPages);
@@ -76,17 +82,17 @@ export default async function BlogsPage({
     posts: allPosts,
     totalItems: totalPosts,
     isCapped,
-  } = await getBlogPostsPage(currentPage, POSTS_PER_PAGE);
+  } = await getBlogPostsPage(currentPage, BLOG_GRID_PER_PAGE, BLOG_FIRST_PAGE_COUNT);
 
-  const totalPages = Math.ceil(totalPosts / POSTS_PER_PAGE);
-  const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
+  const { totalPages, startIndex } = getBlogPaginationMeta(totalPosts, currentPage);
   const endIndex = startIndex + allPosts.length;
 
   const enrichedPosts: EnrichedBlogPost[] = allPosts.map((post) => ({
     post,
     imageUrl: extractFirstImage(post.content),
-    excerpt: extractExcerpt(post.content, 260),
+    excerpt: extractExcerpt(post.content, 240),
     readingMinutes: estimateReadingMinutes(post.content),
+    toc: extractBlogToc(post.content),
   }));
 
   return (
@@ -147,7 +153,7 @@ export default async function BlogsPage({
                       Previous
                     </span>
                   ) : (
-                    <Link href={`/blogs?page=${currentPage - 1}`}>
+                    <Link href={currentPage === 2 ? '/blogs' : `/blogs?page=${currentPage - 1}`}>
                       <ChevronLeft className="h-4 w-4" />
                       Previous
                     </Link>
@@ -181,7 +187,9 @@ export default async function BlogsPage({
                         {pageNum === currentPage ? (
                           <span>{pageNum}</span>
                         ) : (
-                          <Link href={`/blogs?page=${pageNum}`}>{pageNum}</Link>
+                          <Link href={pageNum === 1 ? '/blogs' : `/blogs?page=${pageNum}`}>
+                            {pageNum}
+                          </Link>
                         )}
                       </Button>
                     );

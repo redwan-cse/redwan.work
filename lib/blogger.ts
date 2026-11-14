@@ -11,6 +11,12 @@ export interface BlogPost {
   labels?: string[];
 }
 
+export interface BlogTocItem {
+  level: 2 | 3;
+  id: string;
+  text: string;
+}
+
 export interface BlogPostsPage {
   posts: BlogPost[];
   totalItems: number;
@@ -68,6 +74,29 @@ export function clearBlogCache() {
   rawPostsInFlight = null;
 }
 
+export function createBloggerAuthFromBase64(encodedCredentials: string) {
+  const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
+  const credentials = JSON.parse(credentialsJSON) as {
+    client_email?: unknown;
+    private_key?: unknown;
+  };
+
+  const clientEmail =
+    typeof credentials?.client_email === "string" ? credentials.client_email.trim() : "";
+  const privateKey =
+    typeof credentials?.private_key === "string" ? credentials.private_key : "";
+
+  if (!clientEmail || !privateKey) {
+    return null;
+  }
+
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
+  });
+}
+
 function createBloggerClient() {
   const BLOG_ID = process.env.BLOGGER_BLOG_ID || process.env.BLOGGER_ID;
   const encodedCredentials = process.env.GOOGLE_CREDENTIALS_B64;
@@ -76,13 +105,10 @@ function createBloggerClient() {
     return null;
   }
 
-  const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
-  const credentials = JSON.parse(credentialsJSON);
-
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
-  });
+  const auth = createBloggerAuthFromBase64(encodedCredentials);
+  if (!auth) {
+    return null;
+  }
 
   return {
     blogId: BLOG_ID,
@@ -212,13 +238,45 @@ async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalI
   }
 }
 
-async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
+export const BLOG_GRID_PER_PAGE = 9;
+export const BLOG_FIRST_PAGE_COUNT = 10; // 1 featured dispatch + 9 grid cards
+
+export function getBlogPaginationMeta(
+  totalItems: number,
+  currentPage: number,
+  gridPerPage: number = BLOG_GRID_PER_PAGE,
+  firstPageCount: number = BLOG_FIRST_PAGE_COUNT
+) {
+  const safeTotal = Math.max(0, totalItems);
+  const safeGrid = Math.max(1, gridPerPage);
+  const safeFirst = Math.max(1, firstPageCount);
+  const totalPages =
+    safeTotal <= safeFirst
+      ? 1
+      : 1 + Math.ceil((safeTotal - safeFirst) / safeGrid);
+  const safePage = Math.max(1, Math.floor(currentPage));
+  const startIndex = safePage === 1 ? 0 : safeFirst + (safePage - 2) * safeGrid;
+  const pageSize = safePage === 1 ? safeFirst : safeGrid;
+
+  return { totalPages, startIndex, pageSize };
+}
+
+async function fetchBlogPostsPage(
+  page: number,
+  perPage: number,
+  firstPageCount?: number
+): Promise<BlogPostsPage> {
   try {
     const snapshot = await getRawPostsSnapshot();
-    const startIndex = (page - 1) * perPage;
+    const { startIndex, pageSize } = getBlogPaginationMeta(
+      snapshot.totalItems,
+      page,
+      perPage,
+      firstPageCount ?? perPage
+    );
     const posts =
       startIndex < snapshot.items.length
-        ? snapshot.items.slice(startIndex, startIndex + perPage).map(mapPost)
+        ? snapshot.items.slice(startIndex, startIndex + pageSize).map(mapPost)
         : [];
 
     return {
@@ -235,14 +293,22 @@ async function fetchBlogPostsPage(page: number, perPage: number): Promise<BlogPo
 /**
  * Fetch one page of blog posts, backed by the module TTL cache and in-flight deduplication.
  *
- * Each (page, perPage) combination is cached for BLOGGER_CACHE_TTL_MS,
+ * Each (page, perPage, firstPageCount) combination is cached for BLOGGER_CACHE_TTL_MS,
  * bounded by MAX_CACHE_ENTRIES with insertion-order eviction and in-flight request coalescing.
  */
-export async function getBlogPostsPage(page: number, perPage: number): Promise<BlogPostsPage> {
+export async function getBlogPostsPage(
+  page: number,
+  perPage: number,
+  firstPageCount?: number
+): Promise<BlogPostsPage> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safePerPage = Number.isFinite(perPage) && perPage > 0 ? Math.floor(perPage) : 9;
+  const safePerPage = Number.isFinite(perPage) && perPage > 0 ? Math.floor(perPage) : BLOG_GRID_PER_PAGE;
+  const safeFirstPage =
+    firstPageCount !== undefined && Number.isFinite(firstPageCount) && firstPageCount > 0
+      ? Math.floor(firstPageCount)
+      : safePerPage;
 
-  const key = `p${safePage}-n${safePerPage}`;
+  const key = `p${safePage}-n${safePerPage}-f${safeFirstPage}`;
   const now = Date.now();
 
   sweepExpiredCache(now);
@@ -257,7 +323,7 @@ export async function getBlogPostsPage(page: number, perPage: number): Promise<B
   }
 
   const generation = cacheGeneration;
-  const promise = fetchBlogPostsPage(safePage, safePerPage).then(data => {
+  const promise = fetchBlogPostsPage(safePage, safePerPage, safeFirstPage).then(data => {
     if (generation === cacheGeneration) {
       setCacheEntry(key, data, Date.now());
     }
@@ -299,14 +365,61 @@ export function extractFirstImage(content: string): string {
  * neither encoded tags (`&lt;script&gt;`) nor nested fragments (`<scr<script>ipt>`)
  * can survive as markup, while `&amp;lt;` remains literal `&lt;`.
  */
-export function stripHtmlToPlainText(content: string): string {
-  const preDecoded = content
-    .replace(/&nbsp;/g, " ")
+const NON_PROSE_BLOCK_PATTERNS: RegExp[] = [
+  /<style\b[^>]*>[\s\S]*?<\/style>/gi,
+  /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+  /<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi,
+  /<svg\b[^>]*>[\s\S]*?<\/svg>/gi,
+  /<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>[\s\S]*?<\/nav>/gi,
+  /<div\b[^>]*class=["'][^"']*code-block-header[^"']*["'][^>]*>[\s\S]*?<\/div>/gi,
+];
+
+function stripNonProseBlocks(html: string, includeTocNav: boolean = true): string {
+  let cleaned = html;
+  const patterns = includeTocNav
+    ? NON_PROSE_BLOCK_PATTERNS
+    : NON_PROSE_BLOCK_PATTERNS.slice(0, 4);
+
+  for (let pass = 0; pass < 20; pass += 1) {
+    let next = cleaned;
+    for (const pattern of patterns) {
+      next = next.replace(pattern, " ");
+    }
+    if (next === cleaned) break;
+    cleaned = next;
+  }
+  return cleaned;
+}
+
+function decodeHtmlEntitiesBeforeTagRemoval(text: string): string {
+  return text
+    .replace(/&nbsp;|&#160;/gi, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&hellip;/g, "...");
+    .replace(/&#39;|&#x27;|&apos;/gi, "'")
+    .replace(/&rsquo;|&#8217;/gi, "'")
+    .replace(/&lsquo;|&#8216;/gi, "'")
+    .replace(/&rdquo;|&#8221;/gi, '"')
+    .replace(/&ldquo;|&#8220;/gi, '"')
+    .replace(/&mdash;|&#8212;/gi, "—")
+    .replace(/&ndash;|&#8211;/gi, "–")
+    .replace(/&hellip;|&#8230;/gi, "...");
+}
+
+/**
+ * Strip embedded CSS/scripts, HTML tags, and residual angle brackets into safe plain text.
+ * Removes `<style>/<script>/<noscript>/<svg>`, TOC navs, and code-block chrome iteratively before
+ * decoding markup entities and stripping tags char-by-char (with `&amp;` decoded last so
+ * neither encoded tags (`&lt;script&gt;`) nor nested fragments (`<scr<script>ipt>`)
+ * survive as markup, while `&amp;lt;` remains literal `&lt;`).
+ */
+export function stripHtmlToPlainText(content: string): string {
+  const withoutNonProse = stripNonProseBlocks(content)
+    .replace(/<\/(?:p|div|li|blockquote|pre|tr|h[1-6])>/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ");
+
+  const preDecoded = decodeHtmlEntitiesBeforeTagRemoval(withoutNonProse);
 
   let out = "";
   let inTag = false;
@@ -337,4 +450,71 @@ export function stripHtmlToPlainText(content: string): string {
 export function extractExcerpt(content: string, maxLength: number = 200): string {
   const text = stripHtmlToPlainText(content);
   return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function slugifyHeading(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "section"
+  );
+}
+
+/**
+ * Extract structured Table of Contents items (`h2` / `h3`, matching `blogs.redwan.work`)
+ * from a Blogger HTML article for Quick Preview display.
+ */
+export function extractBlogToc(content: string, maxItems: number = 40): BlogTocItem[] {
+  const withoutScripts = stripNonProseBlocks(content, false)
+    .replace(/<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>[\s\S]*?<\/nav>/gi, " ");
+
+  const items: BlogTocItem[] = [];
+  const usedIds = new Map<string, number>();
+
+  const pushUnique = (level: 2 | 3, rawId: string | undefined, rawText: string) => {
+    const cleanText = rawText.replace(/^[\s#§]+|[\s#§]+$/g, "").trim();
+    if (!cleanText || /^table of contents$/i.test(cleanText)) return;
+
+    const baseId = rawId?.trim() || slugifyHeading(cleanText);
+    const seen = usedIds.get(baseId) ?? 0;
+    usedIds.set(baseId, seen + 1);
+    const uniqueId = seen === 0 ? baseId : `${baseId}-${seen + 1}`;
+    items.push({ level, id: uniqueId, text: cleanText });
+  };
+
+  const headingRegex = /<(h[23])\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = headingRegex.exec(withoutScripts)) !== null) {
+    if (items.length >= maxItems) break;
+    const tag = match[1].toLowerCase();
+    const attrs = match[2] ?? "";
+    const innerHtml = match[3] ?? "";
+
+    if (/(?:toc-title|related-posts-title|post-title)/i.test(attrs)) continue;
+
+    const strippedInner = innerHtml.replace(
+      /<a\b[^>]*class=["'][^"']*heading-anchor[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
+      " "
+    );
+    const text = stripHtmlToPlainText(strippedInner);
+    const idMatch = attrs.match(/\bid\s*=\s*["']([^"']+)["']/i);
+    pushUnique(tag === "h3" ? 3 : 2, idMatch?.[1], text);
+  }
+
+  if (items.length > 0) return items;
+
+  // Fallback for posts that only embed a static <nav class="table-of-contents"> list
+  const navMatch = stripNonProseBlocks(content, false).match(
+    /<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>([\s\S]*?)<\/nav>/i
+  );
+  if (!navMatch) return items;
+
+  const linkRegex = /<a\b[^>]*href=["']#([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  while ((match = linkRegex.exec(navMatch[1])) !== null) {
+    if (items.length >= maxItems) break;
+    pushUnique(2, match[1], stripHtmlToPlainText(match[2]));
+  }
+
+  return items;
 }

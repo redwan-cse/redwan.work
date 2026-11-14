@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { BlogPreviewModal } from '@/components/blog-preview-modal';
 import { InteractiveCard, ScrollReveal } from '@/components/motion/reveal';
 import { isDirectBlogImage } from '@/lib/blog-image-policy';
-import type { BlogPost } from '@/lib/blogger';
+import type { BlogPost, BlogTocItem } from '@/lib/blogger';
 import { cn } from '@/lib/utils';
 
 export interface EnrichedBlogPost {
@@ -29,6 +29,7 @@ export interface EnrichedBlogPost {
   imageUrl: string;
   excerpt: string;
   readingMinutes: number;
+  toc: BlogTocItem[];
 }
 
 export function BlogBrowser({
@@ -140,6 +141,8 @@ export function BlogBrowser({
                 post={featuredItem.post}
                 imageUrl={featuredItem.imageUrl}
                 excerpt={featuredItem.excerpt}
+                readingMinutes={featuredItem.readingMinutes}
+                toc={featuredItem.toc}
               >
                 <button
                   type="button"
@@ -185,6 +188,8 @@ export function BlogBrowser({
                       post={featuredItem.post}
                       imageUrl={featuredItem.imageUrl}
                       excerpt={featuredItem.excerpt}
+                      readingMinutes={featuredItem.readingMinutes}
+                      toc={featuredItem.toc}
                     >
                       <button
                         type="button"
@@ -218,6 +223,8 @@ export function BlogBrowser({
                     post={featuredItem.post}
                     imageUrl={featuredItem.imageUrl}
                     excerpt={featuredItem.excerpt}
+                    readingMinutes={featuredItem.readingMinutes}
+                    toc={featuredItem.toc}
                   >
                     <Button variant="default" size="sm" className="gap-1.5 rounded-full">
                       <BookOpen className="h-3.5 w-3.5" />
@@ -245,11 +252,17 @@ export function BlogBrowser({
       {/* Articles Grid */}
       {gridItems.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {gridItems.map(({ post, imageUrl, excerpt, readingMinutes }, index) => (
+          {gridItems.map(({ post, imageUrl, excerpt, readingMinutes, toc }, index) => (
             <ScrollReveal key={post.id} delay={(index % 3) * 0.05}>
               <InteractiveCard className="flex h-full flex-col justify-between overflow-hidden p-0">
                 <div>
-                  <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
+                  <BlogPreviewModal
+                    post={post}
+                    imageUrl={imageUrl}
+                    excerpt={excerpt}
+                    readingMinutes={readingMinutes}
+                    toc={toc}
+                  >
                     <button
                       type="button"
                       className="relative block h-52 w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -292,7 +305,13 @@ export function BlogBrowser({
                     </div>
 
                     <h3 className="line-clamp-2 text-lg font-bold leading-snug">
-                      <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
+                      <BlogPreviewModal
+                    post={post}
+                    imageUrl={imageUrl}
+                    excerpt={excerpt}
+                    readingMinutes={readingMinutes}
+                    toc={toc}
+                  >
                         <button
                           type="button"
                           className="cursor-pointer text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
@@ -309,7 +328,13 @@ export function BlogBrowser({
                 </div>
 
                 <div className="flex items-center justify-between gap-2 border-t border-border/60 px-6 py-4">
-                  <BlogPreviewModal post={post} imageUrl={imageUrl} excerpt={excerpt}>
+                  <BlogPreviewModal
+                    post={post}
+                    imageUrl={imageUrl}
+                    excerpt={excerpt}
+                    readingMinutes={readingMinutes}
+                    toc={toc}
+                  >
                     <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs">
                       Quick Read
                     </Button>

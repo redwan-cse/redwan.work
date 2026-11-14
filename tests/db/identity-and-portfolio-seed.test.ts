@@ -25,17 +25,23 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
       email: string;
       credentials: Array<{ code: string; label: string }>;
       technical_skills: Record<string, string[]>;
-      references_list: Array<{ name: string; email: string }>;
+      references_list: Array<{ name: string; email: string; phone?: string; scholarUrl?: string }>;
     }>(`select * from public.site_settings where id = 'default'`);
 
     expect(res.rows).toHaveLength(1);
     const settings = res.rows[0];
     expect(settings.full_name).toBe('Md. Redwan Ahmed');
     expect(settings.email).toBe('contact@redwan.work');
+    expect(settings.role_title).toBe('Founder & CEO, Fast Cyber Defense · CSE Professional');
+    expect(settings.subtitle).toContain('Certified Ethical Hacker (C|EH)');
+    expect(settings.technical_skills['Full-Stack & Programming']).toContain(
+      'Next.js (App Router) & React'
+    );
 
     const serialized = JSON.stringify(settings);
     expect(serialized).toMatch(/C\|EH/i);
     expect(serialized).toMatch(/Certified Ethical Hacker/i);
+    expect(serialized).not.toMatch(/Uzzal/i);
 
     const codes = settings.credentials.map((c) => c.code);
     expect(codes).toContain('C|EH');
@@ -45,6 +51,16 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
 
     const layek = settings.references_list.find((r) => r.name.includes('Abu Layek'));
     expect(layek?.email).toBe('abulayek@yahoo.com');
+    expect(layek?.scholarUrl).toBe(
+      'https://scholar.google.com/citations?user=pDEC0p4AAAAJ&hl=en'
+    );
+
+    const manowarul = settings.references_list.find((r) => r.name.includes('Manowarul'));
+    expect(manowarul?.email).toBe('manowar@cse.jnu.ac.bd');
+    expect(manowarul?.phone).toMatch(/1717-?816554/);
+    expect(manowarul?.scholarUrl).toBe(
+      'https://scholar.google.com/citations?user=MBF7Y_4AAAAJ&hl=en'
+    );
   });
 
   it('includes verified EC-Council C|EH vendor certification, FCD Founder & CEO experience, and updated education records in resume_items', async () => {

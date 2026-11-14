@@ -35,6 +35,7 @@ import {
 import { PrintableResume } from '@/components/printable-resume';
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import type { ResumeItemRecord, SiteSettingsRecord } from '@/lib/cms/queries';
+import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
 export function ResumeView({
   settings,
@@ -69,10 +70,10 @@ export function ResumeView({
 
   const personalInfo = {
     name: settings.full_name || 'Md. Redwan Ahmed',
-    title: 'Computer Science & Engineering Professional',
+    title: settings.role_title || 'Founder & CEO, Fast Cyber Defense · CSE Professional',
     subtitle:
       settings.subtitle ||
-      'Cybersecurity Researcher | Information Security Freelancer | Educator',
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher',
     email: settings.email || 'contact@redwan.work',
     phone: settings.phone || '+88017-7638-7624',
     location: settings.location || 'Dhaka, BD',
@@ -279,16 +280,6 @@ export function ResumeView({
                         >
                           <GithubIcon className="h-4 w-4 text-primary" />
                           <span>GitHub</span>
-                        </a>
-                        <Separator orientation="vertical" className="hidden h-4 sm:block" />
-                        <a
-                          href={SITE.socials.upwork}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
-                        >
-                          <Briefcase className="h-4 w-4 text-primary" />
-                          <span>Upwork</span>
                         </a>
                       </div>
                     </HeroRevealItem>
@@ -853,13 +844,35 @@ export function ResumeView({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
-                  {references.map((refItem, index) => (
-                    <div
-                      key={index}
-                      className="space-y-1 rounded-xl border border-border/80 bg-background/60 p-4 transition-colors hover:border-primary/40"
-                    >
-                      <h3 className="font-semibold text-foreground">{refItem.name}</h3>
-                      <p className="text-xs font-medium text-primary">{refItem.title}</p>
+                  {references.map((refItem, index) => {
+                    const scholarHref = refItem.scholarUrl
+                      ? sanitizeHttpUrl(refItem.scholarUrl)
+                      : null;
+                    return (
+                      <div
+                        key={index}
+                        className="space-y-1 rounded-xl border border-border/80 bg-background/60 p-4 transition-colors hover:border-primary/40"
+                      >
+                        <h3 className="font-semibold text-foreground">
+                          {scholarHref ? (
+                            <a
+                              href={scholarHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`${refItem.name} — Google Scholar Profile`}
+                              className="inline-flex items-center gap-1.5 transition-colors hover:text-primary hover:underline"
+                            >
+                              <span>{refItem.name}</span>
+                              <ExternalLink
+                                className="h-3.5 w-3.5 shrink-0 text-primary/80"
+                                aria-hidden="true"
+                              />
+                            </a>
+                          ) : (
+                            refItem.name
+                          )}
+                        </h3>
+                        <p className="text-xs font-medium text-primary">{refItem.title}</p>
                       <p className="text-xs text-muted-foreground">{refItem.institution}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 pt-2 text-xs text-muted-foreground">
                         <a href={`mailto:${refItem.email}`} className="hover:text-primary">
@@ -868,7 +881,8 @@ export function ResumeView({
                         <span>{refItem.phone}</span>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </InteractiveCard>
             </ScrollReveal>

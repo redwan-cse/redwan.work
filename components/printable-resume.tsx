@@ -1,5 +1,6 @@
 import React from "react"
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL } from "@/lib/content/site"
+import { sanitizeHttpUrl } from "@/lib/security/safe-redirect"
 
 interface PrintableResumeProps {
   personalInfo: {
@@ -72,6 +73,7 @@ interface PrintableResumeProps {
     institution: string
     email: string
     phone: string
+    scholarUrl?: string
   }>
 }
 
@@ -789,7 +791,9 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
           <div className="section">
             <h2 className="section-header">References</h2>
             <div className="two-col" style={{ gap: '8pt' }}>
-              {references.map((ref, index) => (
+              {references.map((ref, index) => {
+                const scholarHref = ref.scholarUrl ? sanitizeHttpUrl(ref.scholarUrl) : null
+                return (
                 <div key={index} className="avoid-break" style={{
                   padding: '6pt',
                   background: '#f8fafc',
@@ -802,7 +806,23 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
                     color: '#0f172a',
                     marginBottom: '2pt'
                   }}>
-                    {ref.name}
+                    {scholarHref ? (
+                      <a
+                        href={scholarHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          color: '#0f172a',
+                          textDecoration: 'underline',
+                          textDecorationColor: '#94a3b8',
+                          textUnderlineOffset: '2pt',
+                        }}
+                      >
+                        {ref.name}
+                      </a>
+                    ) : (
+                      ref.name
+                    )}
                   </div>
                   <div style={{
                     fontSize: '8.5pt',
@@ -847,7 +867,8 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
                     <span>{ref.phone}</span>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

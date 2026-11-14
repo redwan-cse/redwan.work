@@ -64,6 +64,7 @@ export interface SiteSettingsRecord {
     institution: string;
     email: string;
     phone: string;
+    scholarUrl?: string;
   }>;
 }
 
@@ -837,6 +838,96 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
   },
 ];
 
+const DEFAULT_ROLE_TITLE = 'Founder & CEO, Fast Cyber Defense · CSE Professional';
+const DEFAULT_RESUME_SUBTITLE =
+  'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher';
+
+export const ACADEMIC_REFERENCE_SCHOLAR_URLS = {
+  abuLayek: 'https://scholar.google.com/citations?user=pDEC0p4AAAAJ&hl=en',
+  manowarulIslam: 'https://scholar.google.com/citations?user=MBF7Y_4AAAAJ&hl=en',
+} as const;
+
+const MANOWARUL_ISLAM_REFERENCE: SiteSettingsRecord['references_list'][number] = {
+  name: 'Dr. Md. Manowarul Islam',
+  title: 'Professor, Department of Computer Science and Engineering',
+  institution: 'Jagannath University, Dhaka-1100, Bangladesh',
+  email: 'manowar@cse.jnu.ac.bd',
+  phone: '+880 1717-816554',
+  scholarUrl: ACADEMIC_REFERENCE_SCHOLAR_URLS.manowarulIslam,
+};
+
+function reconcileRoleTitle(rawRoleTitle: string | null | undefined): string {
+  const value = (rawRoleTitle ?? '').trim();
+  if (
+    !value ||
+    value === 'Computer Science & Engineering Professional' ||
+    value === 'Cybersecurity Specialist, Full-Stack Engineer & Founder of Fast Cyber Defense'
+  ) {
+    return DEFAULT_ROLE_TITLE;
+  }
+  return value;
+}
+
+function reconcileResumeSubtitle(rawSubtitle: string | null | undefined): string {
+  const value = (rawSubtitle ?? '').trim();
+  if (
+    !value ||
+    value === 'Cybersecurity Researcher | Information Security Freelancer | Educator' ||
+    value ===
+      'Offensive Security & VAPT Specialist | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator'
+  ) {
+    return DEFAULT_RESUME_SUBTITLE;
+  }
+  return value;
+}
+
+function reconcileTechnicalSkills(
+  rawSkills: unknown,
+  fallback: Record<string, string[]>
+): Record<string, string[]> {
+  if (!rawSkills || typeof rawSkills !== 'object' || Array.isArray(rawSkills)) {
+    return fallback;
+  }
+  const record = rawSkills as Record<string, string[]>;
+  const keys = Object.keys(record);
+  if (keys.length === 0) {
+    return fallback;
+  }
+  const hasLegacyStack =
+    (keys.includes('Tools & Cloud') || keys.includes('Networking & Systems')) &&
+    !Object.values(record).some(
+      (list) => Array.isArray(list) && list.includes('Next.js (App Router) & React')
+    );
+  return hasLegacyStack ? fallback : record;
+}
+
+function reconcileReferencesList(
+  rawRefs: unknown,
+  fallback: SiteSettingsRecord['references_list']
+): SiteSettingsRecord['references_list'] {
+  if (!Array.isArray(rawRefs) || rawRefs.length === 0) {
+    return fallback;
+  }
+  return (rawRefs as SiteSettingsRecord['references_list']).map((ref) => {
+    if (/Uzzal/i.test(ref.name)) {
+      return MANOWARUL_ISLAM_REFERENCE;
+    }
+    if (/Abu Layek/i.test(ref.name)) {
+      return {
+        ...ref,
+        scholarUrl: ref.scholarUrl || ACADEMIC_REFERENCE_SCHOLAR_URLS.abuLayek,
+      };
+    }
+    if (/Manowarul/i.test(ref.name)) {
+      return {
+        ...ref,
+        scholarUrl: ref.scholarUrl || ACADEMIC_REFERENCE_SCHOLAR_URLS.manowarulIslam,
+      };
+    }
+    return ref;
+  });
+}
+
 export async function getSiteSettingsAndResume(options?: {
   includeHidden?: boolean;
 }): Promise<{
@@ -846,9 +937,9 @@ export async function getSiteSettingsAndResume(options?: {
   const defaultSettings: SiteSettingsRecord = {
     id: 'default',
     full_name: 'Md. Redwan Ahmed',
-    role_title: 'Computer Science & Engineering Professional',
+    role_title: DEFAULT_ROLE_TITLE,
     short_role: SITE.shortRole,
-    subtitle: 'Cybersecurity Researcher | Information Security Freelancer | Educator',
+    subtitle: DEFAULT_RESUME_SUBTITLE,
     tagline: SITE.tagline,
     executive_summary:
       "Computer Science & Engineering professional developing practical skills in information security, cyber defense, and system administration, with growing experience as a freelancer and trainer. I am actively building my expertise through hands-on security work, teaching activities, and continuous self-learning, with a focus on applying Machine Learning and Artificial Intelligence to real-world security problems. I'm particularly interested in roles and environments that allow me to strengthen my technical foundations, contribute to secure system design, support others through mentoring and training, and gradually transition into more advanced responsibilities in both the information security industry and research.",
@@ -870,59 +961,55 @@ export async function getSiteSettingsAndResume(options?: {
       'Artificial Intelligence',
     ],
     technical_skills: {
-      Cybersecurity: [
-        'Ethical Hacking',
-        'Vulnerability Assessment & Penetration Testing',
+      'Cybersecurity & Offensive Security': [
+        'Penetration Testing & Ethical Hacking (C|EH)',
+        'Vulnerability Assessment & Penetration Testing (VAPT)',
+        'Active Directory & AD CS Hardening',
         'Open-Source Intelligence (OSINT)',
-        'Network Security',
-        'Cryptography (fundamentals)',
+        'Web, Network & API Security',
+        'OWASP Top 10 & Cryptography',
       ],
-      Networking: [
-        'Cyber Security & Networking',
-        'Networking Protocols & Standards',
-        'Network Troubleshooting',
-      ],
-      'Tools & Cloud': [
-        'Burp Suite',
+      'Security, SIEM & Assessment Tooling': [
+        'Burp Suite Pro',
         'OWASP ZAP',
+        'Wazuh (SIEM / XDR)',
         'Nmap',
         'Nessus',
         'OpenVAS',
         'Metasploit',
         'SQLmap',
         'Hydra',
-        'gobuster',
-        'wpscan',
-        'Postman (API testing)',
-        'Wazuh (SIEM)',
+        'Gobuster',
+        'WPScan',
+        'Postman (API Security)',
       ],
-      'System Administration': [
-        'System Administration',
-        'Linux System Administration (Ubuntu, CentOS)',
-        'Virtualization & Containerization',
-        'Configuration Management',
-        'Backup & Recovery',
-      ],
-      'Dev & Scripting': [
-        'AWS',
-        'Azure IAM',
-        'DigitalOcean',
-        'EC2',
-        'Docker',
-        'CI/CD (Jenkins, GitHub Actions)',
-        'Kubernetes (basics)',
-        'Git',
-      ],
-      'Programming & Scripting': [
-        'Python',
-        'C/C++',
+      'Full-Stack & Programming': [
+        'TypeScript / JavaScript',
+        'Next.js (App Router) & React',
+        'Tailwind CSS & shadcn/ui',
+        'Python (FastAPI / Django)',
+        'PostgreSQL & Row Level Security (RLS)',
+        'C / C++',
         'Java',
-        'PHP',
-        'C#',
         'MySQL',
-        'Shell Scripting',
-        'PowerShell Scripting',
-        'Batch Scripting',
+        'Shell / PowerShell Scripting',
+      ],
+      'Cloud, Edge & DevOps': [
+        'Linux Administration (Ubuntu, Debian, RHEL)',
+        'Supabase & Auth Architecture',
+        'Cloudflare (R2, Turnstile, WAF & Edge)',
+        'Vercel & DigitalOcean',
+        'AWS (EC2, IAM) & Azure IAM',
+        'Docker & Containerization',
+        'CI/CD (GitHub Actions)',
+        'Git & Disaster Recovery',
+      ],
+      'Applied AI & Systems Engineering': [
+        'AI Workflow & LLM Agent Integration',
+        'Applied Machine Learning & Deep Learning',
+        'Network Architecture & Troubleshooting',
+        'Digital Forensics & Incident Response',
+        'Backup & Business Continuity',
       ],
     },
     soft_skills: [
@@ -976,14 +1063,9 @@ export async function getSiteSettingsAndResume(options?: {
         institution: 'Jagannath University, Dhaka-1100, Bangladesh',
         email: 'abulayek@yahoo.com',
         phone: '+880 1841-465733',
+        scholarUrl: ACADEMIC_REFERENCE_SCHOLAR_URLS.abuLayek,
       },
-      {
-        name: 'Prof. Dr. Uzzal Kumar Acharjee',
-        title: 'Professor, Department of Computer Science and Engineering',
-        institution: 'Jagannath University, Dhaka-1100, Bangladesh',
-        email: 'uzzal@cse.jnu.ac.bd',
-        phone: '+880 1625-099037',
-      },
+      MANOWARUL_ISLAM_REFERENCE,
     ],
   };
 
@@ -1015,9 +1097,7 @@ export async function getSiteSettingsAndResume(options?: {
       ? {
           id: settingsRow.id,
           full_name: settingsRow.full_name || defaultSettings.full_name,
-          role_title: settingsRow.role_title || defaultSettings.role_title,
           short_role: settingsRow.short_role || defaultSettings.short_role,
-          subtitle: settingsRow.subtitle || defaultSettings.subtitle,
           tagline:
             settingsRow.tagline && /C\|EH/i.test(settingsRow.tagline)
               ? settingsRow.tagline
@@ -1034,19 +1114,18 @@ export async function getSiteSettingsAndResume(options?: {
           github_url: settingsRow.github_url || defaultSettings.github_url,
           website_url: settingsRow.website_url || defaultSettings.website_url,
           resume_pdf_url: settingsRow.resume_pdf_url || defaultSettings.resume_pdf_url,
+          role_title: reconcileRoleTitle(settingsRow.role_title),
+          subtitle: reconcileResumeSubtitle(settingsRow.subtitle),
           credentials: mergedCredentials,
           research_interests:
             Array.isArray(settingsRow.research_interests) &&
             settingsRow.research_interests.length > 0
               ? settingsRow.research_interests
               : defaultSettings.research_interests,
-          technical_skills:
-            settingsRow.technical_skills &&
-            typeof settingsRow.technical_skills === 'object' &&
-            !Array.isArray(settingsRow.technical_skills) &&
-            Object.keys(settingsRow.technical_skills as Record<string, unknown>).length > 0
-              ? (settingsRow.technical_skills as Record<string, string[]>)
-              : defaultSettings.technical_skills,
+          technical_skills: reconcileTechnicalSkills(
+            settingsRow.technical_skills,
+            defaultSettings.technical_skills
+          ),
           soft_skills:
             Array.isArray(settingsRow.soft_skills) && settingsRow.soft_skills.length > 0
               ? settingsRow.soft_skills
@@ -1059,10 +1138,10 @@ export async function getSiteSettingsAndResume(options?: {
             Array.isArray(settingsRow.hobbies) && settingsRow.hobbies.length > 0
               ? (settingsRow.hobbies as Array<{ name: string; description: string }>)
               : defaultSettings.hobbies,
-          references_list:
-            Array.isArray(settingsRow.references_list) && settingsRow.references_list.length > 0
-              ? (settingsRow.references_list as SiteSettingsRecord['references_list'])
-              : defaultSettings.references_list,
+          references_list: reconcileReferencesList(
+            settingsRow.references_list,
+            defaultSettings.references_list
+          ),
         }
       : defaultSettings;
 
