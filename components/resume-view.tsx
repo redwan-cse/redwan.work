@@ -73,7 +73,7 @@ export function ResumeView({
     title: settings.role_title || 'Founder & CEO, Fast Cyber Defense · CSE Professional',
     subtitle:
       settings.subtitle ||
-      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 Scopus Researcher',
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Researcher',
     email: settings.email || 'contact@redwan.work',
     phone: settings.phone || '+88017-7638-7624',
     location: settings.location || 'Dhaka, BD',
@@ -482,36 +482,6 @@ export function ResumeView({
                     </div>
                   </div>
                 ))}
-
-                {softSkills.length > 0 && (
-                  <div className="pt-2">
-                    <h3 className="mb-2.5 text-sm font-semibold text-primary sm:text-base">
-                      Soft Skills
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {softSkills.map((skill) => (
-                        <Badge key={skill} variant="outline" className="px-3 py-1 text-xs">
-                          {skill}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {otherSkills.length > 0 && (
-                  <div className="pt-2">
-                    <h3 className="mb-2.5 text-sm font-semibold text-primary sm:text-base">
-                      Other Skills
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {otherSkills.map((skill) => (
-                        <Badge key={skill} variant="outline" className="px-3 py-1 text-xs">
-                          {skill}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </InteractiveCard>
           </ScrollReveal>
@@ -784,7 +754,55 @@ export function ResumeView({
             </InteractiveCard>
           </ScrollReveal>
 
-          {/* 10. Languages */}
+          {/* 10. Soft & Workplace Skills */}
+          {(softSkills.length > 0 || otherSkills.length > 0) && (
+            <ScrollReveal delay={0.19}>
+              <InteractiveCard
+                id="additional-skills"
+                className="scroll-mt-24 border-l-4 border-l-primary"
+              >
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
+                    <Award className="h-5 w-5 text-primary" />
+                    Additional Skills
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-6 md:grid-cols-2">
+                  {softSkills.length > 0 && (
+                    <div>
+                      <h3 className="mb-2.5 text-sm font-semibold text-primary sm:text-base">
+                        Soft &amp; Leadership Skills
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {softSkills.map((skill) => (
+                          <Badge key={skill} variant="outline" className="px-3 py-1 text-xs">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {otherSkills.length > 0 && (
+                    <div>
+                      <h3 className="mb-2.5 text-sm font-semibold text-primary sm:text-base">
+                        Workplace &amp; Productivity Tools
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {otherSkills.map((skill) => (
+                          <Badge key={skill} variant="outline" className="px-3 py-1 text-xs">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </InteractiveCard>
+            </ScrollReveal>
+          )}
+
+          {/* 11. Languages */}
           <ScrollReveal delay={0.2}>
             <InteractiveCard className="border-l-4 border-l-primary">
               <CardHeader>

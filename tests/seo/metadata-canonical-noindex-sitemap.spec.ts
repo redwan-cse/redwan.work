@@ -207,11 +207,29 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const resumeText = (await page.locator('main').textContent()) ?? '';
     expect(resumeText).toContain('Md. Redwan Ahmed');
     expect(resumeText).toContain('contact@redwan.work');
-    expect(resumeText).toContain('Founder & CEO, Fast Cyber Defense');
-    expect(resumeText).toContain('Q1 Scopus Researcher');
-    expect(resumeText).not.toContain('Q1 IEEE Researcher');
-    expect(resumeText).not.toContain('Q1 Scopus & IEEE Author');
-    expect(resumeText).toContain('IEEE CS BDC SYMPOSIUM 2024');
+    const resumeMainText = await page.locator('main').innerText();
+    expect(resumeMainText).toContain('Founder & CEO, Fast Cyber Defense');
+    expect(resumeMainText).toContain(
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Researcher'
+    );
+    expect(resumeMainText).not.toContain('Q1 Scopus Researcher');
+    expect(resumeMainText).not.toContain('Q1 IEEE Researcher');
+    expect(resumeMainText).not.toContain('Q1 Scopus & IEEE Author');
+    expect(resumeMainText).toContain('IEEE CS BDC SYMPOSIUM 2024');
+
+    const techSkillsText = await page.locator('#skills').innerText();
+    expect(techSkillsText).toContain('Full-Stack, Databases & Programming');
+    expect(techSkillsText).toContain('Linux System & Server Administration (Ubuntu, CentOS)');
+    expect(techSkillsText).toContain('Nginx & Heroku');
+    expect(techSkillsText).not.toContain('Soft Skills');
+    expect(techSkillsText).not.toContain('Other Skills');
+    expect(resumeText).toContain('CentOS Linux system and server administration');
+
+    const additionalSkillsText = await page.locator('#additional-skills').innerText();
+    expect(additionalSkillsText).toContain('Additional Skills');
+    expect(additionalSkillsText).toContain('Soft & Leadership Skills');
+    expect(additionalSkillsText).toContain('Workplace & Productivity Tools');
+    expect(additionalSkillsText).toContain('Microsoft Office Suite (Word, Excel, PowerPoint)');
     expect(resumeText).toContain('Certified Ethical Hacker (C|EH)');
     expect(resumeText).toContain('ECC8126370954');
     expect(resumeText).toContain('CCEP');

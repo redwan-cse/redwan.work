@@ -25,6 +25,8 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
       email: string;
       credentials: Array<{ code: string; label: string }>;
       technical_skills: Record<string, string[]>;
+      soft_skills: string[];
+      other_skills: string[];
       references_list: Array<{ name: string; email: string; phone?: string; scholarUrl?: string }>;
     }>(`select * from public.site_settings where id = 'default'`);
 
@@ -33,12 +35,19 @@ describe('Database Seed Identity & Portfolio Truthfulness', () => {
     expect(settings.full_name).toBe('Md. Redwan Ahmed');
     expect(settings.email).toBe('contact@redwan.work');
     expect(settings.role_title).toBe('Founder & CEO, Fast Cyber Defense · CSE Professional');
-    expect(settings.subtitle).toContain('Certified Ethical Hacker (C|EH)');
-    expect(settings.subtitle).toContain('Q1 Scopus Researcher');
+    expect(settings.subtitle).toBe(
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Researcher'
+    );
     expect(settings.subtitle).not.toMatch(/IEEE/i);
-    expect(settings.technical_skills['Full-Stack & Programming']).toContain(
+    expect(settings.technical_skills['Full-Stack, Databases & Programming']).toContain(
       'Next.js (App Router) & React'
     );
+    expect(settings.technical_skills['Cloud, Linux & DevSecOps']).toContain(
+      'Linux System & Server Administration (Ubuntu, CentOS)'
+    );
+    expect(settings.technical_skills['Cloud, Linux & DevSecOps']).toContain('Nginx & Heroku');
+    expect(settings.soft_skills).toContain('Technical Training & Mentorship (CCEP / EDGE)');
+    expect(settings.other_skills).toContain('Microsoft Office Suite (Word, Excel, PowerPoint)');
 
     const serialized = JSON.stringify(settings);
     expect(serialized).toMatch(/C\|EH/i);

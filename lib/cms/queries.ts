@@ -642,15 +642,15 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
   {
     id: 'fallback-exp-5',
     section: 'experience',
-    title: 'Assistant Trainer',
+    title: 'Assistant Trainer (Linux Server Administration)',
     organization: 'AsiaInfo Innovation Technologies (Nanjing) Co. Ltd.',
     role_type: 'Contract',
     location: 'Dhaka',
     period: '04/2024 - 04/2024',
     description: null,
     highlights: [
-      'Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on Linux system and server administration.',
-      'Covered system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).',
+      'Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on CentOS Linux system and server administration.',
+      'Covered CentOS system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).',
       'Credential: Certificate of completion received for the module delivered.',
     ],
     verification_url: null,
@@ -840,7 +840,7 @@ export const DEFAULT_RESUME_ITEMS: ResumeItemRecord[] = [
 
 const DEFAULT_ROLE_TITLE = 'Founder & CEO, Fast Cyber Defense · CSE Professional';
 const DEFAULT_RESUME_SUBTITLE =
-  'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 Scopus Researcher';
+  'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Researcher';
 
 export const ACADEMIC_REFERENCE_SCHOLAR_URLS = {
   abuLayek: 'https://scholar.google.com/citations?user=pDEC0p4AAAAJ&hl=en',
@@ -876,7 +876,9 @@ function reconcileResumeSubtitle(rawSubtitle: string | null | undefined): string
     value ===
       'Offensive Security & VAPT Specialist | Full-Stack & Cloud Consultant | Q1 Scopus & IEEE Researcher | Educator' ||
     value ===
-      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher'
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 IEEE Researcher' ||
+    value ===
+      'Certified Ethical Hacker (C|EH) · Offensive Security & Full-Stack/Cloud Architect · Q1 Scopus Researcher'
   ) {
     return DEFAULT_RESUME_SUBTITLE;
   }
@@ -917,7 +919,29 @@ function reconcileTechnicalSkills(
     !Object.values(record).some(
       (list) => Array.isArray(list) && list.includes('Next.js (App Router) & React')
     );
-  return hasLegacyStack ? fallback : record;
+  const hasUnalignedV1Skills =
+    keys.includes('Cloud, Edge & DevOps') &&
+    Array.isArray(record['Cloud, Edge & DevOps']) &&
+    record['Cloud, Edge & DevOps'].includes('AWS (EC2, IAM) & Azure IAM');
+  return hasLegacyStack || hasUnalignedV1Skills ? fallback : record;
+}
+
+function reconcileStringList(
+  rawList: unknown,
+  legacyValues: string[],
+  fallback: string[]
+): string[] {
+  if (!Array.isArray(rawList) || rawList.length === 0) {
+    return fallback;
+  }
+  const normalized = rawList.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+  if (normalized.length === 0) {
+    return fallback;
+  }
+  const matchesLegacy =
+    normalized.length === legacyValues.length &&
+    normalized.every((item, idx) => item === legacyValues[idx]);
+  return matchesLegacy ? fallback : normalized;
 }
 
 function reconcileReferencesList(
@@ -983,65 +1007,71 @@ export async function getSiteSettingsAndResume(options?: {
       'Cybersecurity & Offensive Security': [
         'Penetration Testing & Ethical Hacking (C|EH)',
         'Vulnerability Assessment & Penetration Testing (VAPT)',
-        'Active Directory & AD CS Hardening',
+        'Web & Application Security / OWASP Top 10 (CAP)',
+        'Network & Protocol Security (CNSP)',
         'Open-Source Intelligence (OSINT)',
-        'Web, Network & API Security',
-        'OWASP Top 10 & Cryptography',
+        'Active Directory & AD CS Hardening',
+        'SOC, Incident Response & Threat Analysis (IBM / Wazuh)',
       ],
       'Security, SIEM & Assessment Tooling': [
         'Burp Suite Pro',
         'OWASP ZAP',
         'Wazuh (SIEM / XDR)',
+        'Kali Linux',
         'Nmap',
+        'Metasploit',
         'Nessus',
         'OpenVAS',
-        'Metasploit',
         'SQLmap',
         'Hydra',
         'Gobuster',
         'WPScan',
-        'Postman (API Security)',
       ],
-      'Full-Stack & Programming': [
+      'Full-Stack, Databases & Programming': [
         'TypeScript / JavaScript',
         'Next.js (App Router) & React',
         'Tailwind CSS & shadcn/ui',
-        'Python (FastAPI / Django)',
+        'Python (Django & Security/ML Scripting)',
         'PostgreSQL & Row Level Security (RLS)',
+        'MySQL',
         'C / C++',
         'Java',
-        'MySQL',
-        'Shell / PowerShell Scripting',
+        'REST APIs & Zod Validation',
+        'Bash & PowerShell Scripting',
       ],
-      'Cloud, Edge & DevOps': [
-        'Linux Administration (Ubuntu, Debian, RHEL)',
-        'Supabase & Auth Architecture',
+      'Cloud, Linux & DevSecOps': [
+        'Linux System & Server Administration (Ubuntu, CentOS)',
+        'AWS & DigitalOcean',
+        'Nginx & Heroku',
+        'Vercel & Edge Runtime',
+        'Supabase (Postgres, Auth, Storage)',
         'Cloudflare (R2, Turnstile, WAF & Edge)',
-        'Vercel & DigitalOcean',
-        'AWS (EC2, IAM) & Azure IAM',
-        'Docker & Containerization',
+        'Git & GitHub (GitHub Foundations)',
         'CI/CD (GitHub Actions)',
-        'Git & Disaster Recovery',
+        'Docker & Containerization',
       ],
-      'Applied AI & Systems Engineering': [
+      'Applied AI, Machine Learning & CS Foundations': [
+        'Machine Learning & Clustering (Scikit-Learn)',
+        'Feature Engineering & Classification',
+        'Data Analysis (Pandas & NumPy)',
         'AI Workflow & LLM Agent Integration',
-        'Applied Machine Learning & Deep Learning',
-        'Network Architecture & Troubleshooting',
-        'Digital Forensics & Incident Response',
-        'Backup & Business Continuity',
+        'Computer Networks & TCP/IP',
+        'Data Structures, Algorithms & OOP',
+        'Backup & Disaster Recovery',
       ],
     },
     soft_skills: [
-      'Analytical Thinking',
-      'Communication',
-      'Team Collaboration & Leadership',
-      'Public Speaking',
+      'Analytical Thinking & Problem Solving',
+      'Technical Training & Mentorship (CCEP / EDGE)',
+      'Executive & Client Communication',
+      'Team Leadership & Coordination',
+      'Public Speaking & Workshops',
     ],
     other_skills: [
-      'Technical Documentation',
-      'MS Office 365',
-      'Google Workspace',
-      'Tech Support',
+      'Security & Technical Documentation',
+      'Microsoft Office Suite (Word, Excel, PowerPoint)',
+      'Google Workspace Administration',
+      'Executive Tech Support & Account Recovery',
     ],
     hobbies: [
       {
@@ -1142,14 +1172,26 @@ export async function getSiteSettingsAndResume(options?: {
             settingsRow.technical_skills,
             defaultSettings.technical_skills
           ),
-          soft_skills:
-            Array.isArray(settingsRow.soft_skills) && settingsRow.soft_skills.length > 0
-              ? settingsRow.soft_skills
-              : defaultSettings.soft_skills,
-          other_skills:
-            Array.isArray(settingsRow.other_skills) && settingsRow.other_skills.length > 0
-              ? settingsRow.other_skills
-              : defaultSettings.other_skills,
+          soft_skills: reconcileStringList(
+            settingsRow.soft_skills,
+            [
+              'Analytical Thinking',
+              'Executive Communication',
+              'Team Collaboration & Leadership',
+              'Public Speaking & Technical Training',
+            ],
+            defaultSettings.soft_skills
+          ),
+          other_skills: reconcileStringList(
+            settingsRow.other_skills,
+            [
+              'Technical & Security Documentation',
+              'MS Office 365',
+              'Google Workspace',
+              'Executive Tech Support & Incident Recovery',
+            ],
+            defaultSettings.other_skills
+          ),
           hobbies:
             Array.isArray(settingsRow.hobbies) && settingsRow.hobbies.length > 0
               ? (settingsRow.hobbies as Array<{ name: string; description: string }>)
@@ -1203,16 +1245,49 @@ export async function getSiteSettingsAndResume(options?: {
             mergedItems.push(defaultCeh);
           }
         }
-        if (
-          sec === 'experience' &&
-          !secRows.some(
-            (item) => /Fast Cyber Defense/i.test(item.organization) && /Founder/i.test(item.title)
-          )
-        ) {
-          const defaultFcd = DEFAULT_RESUME_ITEMS.find((item) => item.id === 'fallback-exp-fcd');
-          if (defaultFcd) {
-            mergedItems.push(defaultFcd);
+        if (sec === 'experience') {
+          if (
+            !secRows.some(
+              (item) => /Fast Cyber Defense/i.test(item.organization) && /Founder/i.test(item.title)
+            )
+          ) {
+            const defaultFcd = DEFAULT_RESUME_ITEMS.find((item) => item.id === 'fallback-exp-fcd');
+            if (defaultFcd) {
+              mergedItems.push(defaultFcd);
+            }
           }
+          mergedItems.push(
+            ...secRows.map((item) => {
+              if (/AsiaInfo Innovation Technologies/i.test(item.organization)) {
+                return {
+                  ...item,
+                  title:
+                    item.title === 'Assistant Trainer'
+                      ? 'Assistant Trainer (Linux Server Administration)'
+                      : item.title,
+                  highlights: item.highlights.map((hl) => {
+                    if (
+                      hl ===
+                      'Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on Linux system and server administration.'
+                    ) {
+                      return 'Trained Bangladesh Telecommunications Company Limited (BTCL) billing staff on CentOS Linux system and server administration.';
+                    }
+                    if (
+                      hl ===
+                        'Covered system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies).' ||
+                      hl ===
+                        'Covered system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).'
+                    ) {
+                      return 'Covered CentOS system configuration, user management, and service hardening (on behalf of AsiaInfo Innovation Technologies (Nanjing) Co. Ltd).';
+                    }
+                    return hl;
+                  }),
+                };
+              }
+              return item;
+            })
+          );
+          continue;
         }
         if (sec === 'education') {
           mergedItems.push(
