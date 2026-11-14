@@ -1,10 +1,12 @@
 import { Plus, Save, Trash2, UserCheck } from 'lucide-react';
+import { ResumePdfManager } from '@/components/admin/resume-pdf-manager';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import {
   deleteResumeItemAction,
   updateSiteSettingsAction,
   upsertResumeItemAction,
 } from '@/lib/cms/actions';
+import { isPublicR2Configured } from '@/lib/r2';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +32,12 @@ export default async function AdminResumeCmsPage() {
           Update your personal profile, executive summary, skill matrices, certifications, peer-reviewed research, work experience, and education. Changes update `/resume`, `/contact`, and `/` immediately.
         </p>
       </div>
+
+      {/* 0. Downloadable Resume PDF (Cloudflare R2 Public Bucket) */}
+      <ResumePdfManager
+        initialUrl={settings.resume_pdf_url}
+        r2Configured={isPublicR2Configured()}
+      />
 
       {/* 1. Site Settings & Skills Matrix */}
       <Card className="border-primary/35 bg-card/90">
@@ -110,6 +118,15 @@ export default async function AdminResumeCmsPage() {
                 <Label className="text-xs">Company URL</Label>
                 <Input name="company_url" defaultValue={settings.company_url} className="h-9 font-mono text-xs" />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Resume PDF URL (R2 Public Bucket URL or `/resume.pdf`)</Label>
+              <Input
+                name="resume_pdf_url"
+                defaultValue={settings.resume_pdf_url}
+                className="h-9 font-mono text-xs"
+              />
             </div>
 
             <div className="space-y-1">

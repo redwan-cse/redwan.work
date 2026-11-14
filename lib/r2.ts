@@ -156,6 +156,19 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
 }
 export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'svg', 'avif', 'pdf'] as const;
 export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
+export const RESUME_ASSET_KEY = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
+export const RESUME_PDF_MAX_BYTES = 10 * 1024 * 1024;
+
+export function isPublicR2Configured(): boolean {
+  return Boolean(
+    process.env.R2_ENDPOINT &&
+      process.env.R2_PUBLIC_BUCKET &&
+      process.env.R2_PUBLIC_ACCESS_KEY_ID &&
+      process.env.R2_PUBLIC_SECRET_ACCESS_KEY &&
+      process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL
+  );
+}
+
 export function makeAssetKey(ext: string): string {
   const clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
   if (!(ASSET_ALLOWED_EXT as readonly string[]).includes(clean)) throw new Error('Invalid asset extension.');
@@ -175,11 +188,99 @@ function publicClient(): S3Client {
   return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
 }
 function assertValidAssetKey(key: string): void {
-  if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..')) throw new Error('Invalid asset key.');
+  if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..') || key.includes('\\') || key.includes('//')) {
+    throw new Error('Invalid asset key.');
+  }
 }
-export async function putPublicObject(key: string, body: Buffer, contentType: string): Promise<void> {
+export function extractPublicAssetKeyFromUrl(urlOrKey?: string | null): string | null {
+  if (typeof urlOrKey !== 'string') return null;
+  const trimmed = urlOrKey.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('assets/')) {
+    const cleanKey = trimmed.split('?')[0].split('#')[0];
+    try {
+      assertValidAssetKey(cleanKey);
+      return cleanKey;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const parsed = new URL(trimmed);
+    const idx = parsed.pathname.indexOf('/assets/');
+    if (idx === -1) return null;
+    const candidate = decodeURIComponent(parsed.pathname.slice(idx + 1));
+    assertValidAssetKey(candidate);
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+export function validateResumePdfUpload(input: {
+  filename: string;
+  mime: string;
+  size: number;
+  bytes: Buffer;
+}): { ok: true } | { ok: false; error: string } {
+  if (!input || typeof input.filename !== 'string' || !input.filename.trim() || input.filename.length > 255) {
+    return { ok: false, error: 'Please select a valid PDF file.' };
+  }
+  const parts = input.filename.trim().toLowerCase().split('.');
+  const ext = parts.length > 1 ? parts[parts.length - 1] : '';
+  if (ext !== 'pdf') {
+    return { ok: false, error: 'Only .pdf files are supported for the resume.' };
+  }
+  const normalizedMime = (input.mime ?? '').trim().toLowerCase().split(';')[0].trim();
+  if (normalizedMime && normalizedMime !== 'application/pdf' && normalizedMime !== 'application/octet-stream') {
+    return { ok: false, error: 'File MIME type must be application/pdf.' };
+  }
+  if (
+    !Number.isSafeInteger(input.size) ||
+    input.size < 1 ||
+    input.size > RESUME_PDF_MAX_BYTES ||
+    !Buffer.isBuffer(input.bytes) ||
+    input.bytes.byteLength !== input.size
+  ) {
+    return { ok: false, error: 'Resume PDF must be between 1 byte and 10 MB.' };
+  }
+  if (input.bytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
+    return { ok: false, error: 'Uploaded file does not have a valid %PDF- header.' };
+  }
+  return { ok: true };
+}
+export async function putPublicObject(
+  key: string,
+  body: Buffer,
+  contentType: string,
+  options?: { contentDisposition?: string; cacheControl?: string }
+): Promise<void> {
   assertValidAssetKey(key);
-  await publicClient().send(new PutObjectCommand({ Bucket: process.env.R2_PUBLIC_BUCKET, Key: key, Body: body, ContentType: contentType }));
+  await publicClient().send(
+    new PutObjectCommand({
+      Bucket: process.env.R2_PUBLIC_BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      ...(options?.contentDisposition ? { ContentDisposition: options.contentDisposition } : {}),
+      ...(options?.cacheControl ? { CacheControl: options.cacheControl } : {}),
+    })
+  );
+}
+export async function getPublicObjectBytes(key: string): Promise<Buffer | null> {
+  assertValidAssetKey(key);
+  try {
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const response = await publicClient().send(
+      new GetObjectCommand({ Bucket: process.env.R2_PUBLIC_BUCKET, Key: key })
+    );
+    const bytes = await response.Body?.transformToByteArray();
+    return bytes ? Buffer.from(bytes) : null;
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'NotFound' || error.name === 'NoSuchKey')) {
+      return null;
+    }
+    throw error;
+  }
 }
 export async function deletePublicObject(key: string): Promise<void> {
   assertValidAssetKey(key);

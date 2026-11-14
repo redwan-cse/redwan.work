@@ -1,41 +1,58 @@
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
 import type { NextRequest } from 'next/server';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
-import { generateResumePdf } from '@/lib/resume/pdf';
+import {
+  RESUME_ASSET_KEY,
+  extractPublicAssetKeyFromUrl,
+  getPublicObjectBytes,
+} from '@/lib/r2';
+import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
-let cachedCehLogoBytes: Uint8Array | null | undefined;
-
-async function loadCehLogoBytes(): Promise<Uint8Array | null> {
-  if (cachedCehLogoBytes !== undefined) {
-    return cachedCehLogoBytes;
-  }
-  try {
-    const logoPath = path.join(process.cwd(), 'public', 'ceh-logo.jpg');
-    const bytes = await fs.readFile(logoPath);
-    cachedCehLogoBytes = new Uint8Array(bytes);
-  } catch {
-    cachedCehLogoBytes = null;
-  }
-  return cachedCehLogoBytes;
-}
-
-export async function serveDynamicResumePdf(
+export async function serveStoredResumePdf(
   request: NextRequest,
   options?: { robotsTag?: string }
 ): Promise<Response> {
-  const [{ settings, items }, cehLogoBytes] = await Promise.all([
-    getSiteSettingsAndResume(),
-    loadCehLogoBytes(),
-  ]);
+  const { settings } = await getSiteSettingsAndResume();
+  const configuredUrl = (settings.resume_pdf_url || '').trim();
+  const assetKey = extractPublicAssetKeyFromUrl(configuredUrl) ?? RESUME_ASSET_KEY;
 
-  const generatedAt = new Date();
-  const pdfBytes = await generateResumePdf({
-    settings,
-    items,
-    cehLogoBytes,
-    generatedAt,
-  });
+  let pdfBytes: Buffer | null = null;
+
+  if (
+    process.env.R2_ENDPOINT &&
+    process.env.R2_PUBLIC_BUCKET &&
+    process.env.R2_PUBLIC_ACCESS_KEY_ID &&
+    process.env.R2_PUBLIC_SECRET_ACCESS_KEY
+  ) {
+    try {
+      pdfBytes = await getPublicObjectBytes(assetKey);
+      if (!pdfBytes && assetKey !== RESUME_ASSET_KEY) {
+        pdfBytes = await getPublicObjectBytes(RESUME_ASSET_KEY);
+      }
+    } catch {
+      pdfBytes = null;
+    }
+  }
+
+  if (!pdfBytes) {
+    const safeRemoteUrl = sanitizeHttpUrl(configuredUrl);
+    if (safeRemoteUrl) {
+      try {
+        const res = await fetch(safeRemoteUrl, { cache: 'no-store' });
+        if (res.ok) {
+          pdfBytes = Buffer.from(await res.arrayBuffer());
+        }
+      } catch {
+        pdfBytes = null;
+      }
+    }
+  }
+
+  if (!pdfBytes || pdfBytes.byteLength === 0) {
+    return new Response('Resume PDF is not found in R2 public storage.', {
+      status: 404,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
 
   const url = new URL(request.url);
   const downloadParam = url.searchParams.get('download');
@@ -50,17 +67,16 @@ export async function serveDynamicResumePdf(
     'Content-Type': 'application/pdf',
     'Content-Disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
     'Content-Length': String(pdfBytes.byteLength),
-    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-    'CDN-Cache-Control': 'no-store',
+    'Cache-Control': 'public, max-age=300, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
-    'X-Resume-Generated-At': generatedAt.toISOString(),
+    'X-Resume-Storage': 'r2-public',
   });
 
   if (options?.robotsTag) {
     headers.set('X-Robots-Tag', options.robotsTag);
   }
 
-  return new Response(Buffer.from(pdfBytes), {
+  return new Response(new Uint8Array(pdfBytes), {
     status: 200,
     headers,
   });

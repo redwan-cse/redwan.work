@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
 import { CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
-import { generateResumePdf, sanitizePdfText } from '@/lib/resume/pdf';
+import {
+  RESUME_ASSET_KEY,
+  extractPublicAssetKeyFromUrl,
+  validateResumePdfUpload,
+} from '@/lib/r2';
 import {
   allowsAnalyticsStorage,
   allowsExperienceStorage,
@@ -106,29 +109,44 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(allowList).toContain('/llms.txt');
   });
 
-  it('generates an up-to-date multi-page A4 resume PDF directly from live CMS data and sanitizes WinAnsi characters', async () => {
-    expect(sanitizePdfText('Security ▸ AI — Test 🚀')).toBe('Security > AI — Test');
+  it('validates R2 public bucket resume PDF uploads and resolves public asset keys without runtime PDF generation', () => {
+    expect(RESUME_ASSET_KEY).toBe('assets/resume/Md_Redwan_Ahmed_Resume.pdf');
+    expect(
+      extractPublicAssetKeyFromUrl(
+        'https://cdn.redwan.work/assets/resume/Md_Redwan_Ahmed_Resume.pdf?v=1763139000'
+      )
+    ).toBe('assets/resume/Md_Redwan_Ahmed_Resume.pdf');
+    expect(extractPublicAssetKeyFromUrl('/resume.pdf')).toBeNull();
+    expect(extractPublicAssetKeyFromUrl('assets/../secret.pdf')).toBeNull();
 
-    const { settings, items } = await getSiteSettingsAndResume();
-    const logoBytes = fs.readFileSync(path.join(process.cwd(), 'public', 'ceh-logo.jpg'));
-    const generatedAt = new Date('2026-11-14T14:30:00.000Z');
+    const validPdfBytes = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n', 'ascii');
+    expect(
+      validateResumePdfUpload({
+        filename: 'Md_Redwan_Ahmed_Resume.pdf',
+        mime: 'application/pdf',
+        size: validPdfBytes.byteLength,
+        bytes: validPdfBytes,
+      })
+    ).toEqual({ ok: true });
 
-    const pdfBytes = await generateResumePdf({
-      settings,
-      items,
-      cehLogoBytes: new Uint8Array(logoBytes),
-      generatedAt,
-    });
+    const fakePdfBytes = Buffer.from('NOT-A-PDF-FILE', 'ascii');
+    expect(
+      validateResumePdfUpload({
+        filename: 'resume.pdf',
+        mime: 'application/pdf',
+        size: fakePdfBytes.byteLength,
+        bytes: fakePdfBytes,
+      }).ok
+    ).toBe(false);
 
-    const header = Buffer.from(pdfBytes.slice(0, 8)).toString('ascii');
-    expect(header.startsWith('%PDF-1.')).toBe(true);
-
-    const parsed = await PDFDocument.load(pdfBytes);
-    expect(parsed.getTitle()).toContain('Md. Redwan Ahmed');
-    expect(parsed.getAuthor()).toBe('Md. Redwan Ahmed');
-    expect(parsed.getPageCount()).toBeGreaterThanOrEqual(2);
-    expect(parsed.getCreationDate()?.toISOString()).toBe('2026-11-14T14:30:00.000Z');
-    expect(parsed.getModificationDate()).toBeInstanceOf(Date);
+    expect(
+      validateResumePdfUpload({
+        filename: 'resume.docx',
+        mime: 'application/pdf',
+        size: validPdfBytes.byteLength,
+        bytes: validPdfBytes,
+      }).ok
+    ).toBe(false);
   });
 
   it('defaults experience preloading and analytics consent to enabled when no override is stored', () => {

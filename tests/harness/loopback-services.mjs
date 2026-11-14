@@ -1459,6 +1459,18 @@ export async function startLoopbackServices(options = {}) {
 
   // 2. Loopback S3 / Cloudflare R2 Server (Path-style buckets)
   const r2Store = new Map(); // `${bucket}/${key}` -> { bucket, key, body: Buffer, contentType, lastModified: Date }
+  const defaultResumeKey = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
+  const defaultResumeBody = Buffer.from(
+    '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>\nendobj\nxref\n0 4\n0000000000 65535 f \ntrailer\n<< /Root 1 0 R /Size 4 >>\nstartxref\n180\n%%EOF\n',
+    'ascii'
+  );
+  r2Store.set(`${LOOPBACK_SECRETS.r2PublicBucket}/${defaultResumeKey}`, {
+    bucket: LOOPBACK_SECRETS.r2PublicBucket,
+    key: defaultResumeKey,
+    body: defaultResumeBody,
+    contentType: 'application/pdf',
+    lastModified: new Date('2026-11-14T16:00:00.000Z'),
+  });
 
   const r2Server = http.createServer(async (req, res) => {
     setCorsHeaders(res);
@@ -1579,7 +1591,7 @@ export async function startLoopbackServices(options = {}) {
       }
       res.writeHead(200, {
         'Content-Length': String(obj.body.length),
-        'Content-Type': 'application/octet-stream',
+        'Content-Type': obj.contentType || 'application/octet-stream',
         'X-Content-Type-Options': 'nosniff',
         'Last-Modified': obj.lastModified.toUTCString(),
         ETag: '"loopback-etag"',
@@ -1598,7 +1610,7 @@ export async function startLoopbackServices(options = {}) {
       }
       res.writeHead(200, {
         'Content-Length': String(obj.body.length),
-        'Content-Type': 'application/octet-stream',
+        'Content-Type': obj.contentType || 'application/octet-stream',
         'X-Content-Type-Options': 'nosniff',
         'Last-Modified': obj.lastModified.toUTCString(),
         ETag: '"loopback-etag"',

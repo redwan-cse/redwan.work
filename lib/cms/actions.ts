@@ -6,6 +6,13 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { SERVICE_PILLARS, type ServicePillarKey } from '@/lib/content/site';
 import { parseFormBoolean } from '@/lib/forms/boolean';
+import {
+  RESUME_ASSET_KEY,
+  assetUrl,
+  isPublicR2Configured,
+  putPublicObject,
+  validateResumePdfUpload,
+} from '@/lib/r2';
 import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
 async function requireAdmin() {
@@ -349,10 +356,11 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   const websiteUrl =
     sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim(), { allowRelative: true }) ??
     '';
+  const rawResumePdfUrl = formData.get('resume_pdf_url');
   const resumePdfUrl =
-    sanitizeHttpUrl(String(formData.get('resume_pdf_url') ?? '/resume.pdf').trim(), {
-      allowRelative: true,
-    }) ?? '/resume.pdf';
+    typeof rawResumePdfUrl === 'string' && rawResumePdfUrl.trim()
+      ? sanitizeHttpUrl(rawResumePdfUrl.trim(), { allowRelative: true })
+      : undefined;
 
   const researchInterests = parseLines(formData.get('research_interests'));
   const softSkills = parseLines(formData.get('soft_skills'));
@@ -388,11 +396,14 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
     linkedin_url: linkedinUrl,
     github_url: githubUrl,
     website_url: websiteUrl,
-    resume_pdf_url: resumePdfUrl,
     research_interests: researchInterests,
     soft_skills: softSkills,
     other_skills: otherSkills,
   };
+
+  if (resumePdfUrl) {
+    updatePayload.resume_pdf_url = resumePdfUrl;
+  }
 
   if (technicalSkills) {
     updatePayload.technical_skills = technicalSkills;
@@ -417,6 +428,84 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   revalidatePath('/llms-full.txt');
   revalidatePath('/contact');
   revalidatePath('/admin/resume');
+}
+
+export async function uploadResumePdfAction(formData: FormData): Promise<{
+  ok: boolean;
+  url?: string;
+  size?: number;
+  uploadedAt?: string;
+  error?: string;
+}> {
+  try {
+    const session = await requireAdmin();
+    if (!isPublicR2Configured()) {
+      return { ok: false, error: 'Cloudflare R2 public bucket storage is not configured.' };
+    }
+
+    const fileEntry = formData.get('resume_pdf');
+    if (!(fileEntry instanceof File) || fileEntry.size < 1) {
+      return { ok: false, error: 'Please select a PDF file to upload.' };
+    }
+
+    const bytes = Buffer.from(await fileEntry.arrayBuffer());
+    const validation = validateResumePdfUpload({
+      filename: fileEntry.name,
+      mime: fileEntry.type,
+      size: fileEntry.size,
+      bytes,
+    });
+
+    if (!validation.ok) {
+      return { ok: false, error: validation.error };
+    }
+
+    await putPublicObject(RESUME_ASSET_KEY, bytes, 'application/pdf', {
+      contentDisposition: 'attachment; filename="Md_Redwan_Ahmed_Resume.pdf"',
+      cacheControl: 'public, max-age=300, must-revalidate',
+    });
+
+    const uploadedAt = new Date().toISOString();
+    const versionedUrl = `${assetUrl(RESUME_ASSET_KEY)}?v=${Date.now()}`;
+
+    const admin = getSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from('site_settings')
+      .update({ resume_pdf_url: versionedUrl })
+      .eq('id', 'default');
+
+    if (dbError) {
+      return { ok: false, error: `Uploaded to R2, but failed to update site_settings: ${dbError.message}` };
+    }
+
+    await recordAuditLog({
+      actorId: session.userId,
+      actorRole: 'admin',
+      action: 'cms.resume_pdf_uploaded',
+      entityType: 'site_settings',
+      entityId: null,
+      summary: `Uploaded resume PDF (${bytes.byteLength} bytes) to R2 public bucket (${RESUME_ASSET_KEY})`,
+    });
+
+    revalidatePath('/');
+    revalidatePath('/resume');
+    revalidatePath('/resume.pdf');
+    revalidatePath('/llms.txt');
+    revalidatePath('/llms-full.txt');
+    revalidatePath('/admin/resume');
+
+    return {
+      ok: true,
+      url: versionedUrl,
+      size: bytes.byteLength,
+      uploadedAt,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Failed to upload resume PDF to R2.',
+    };
+  }
 }
 
 export async function upsertResumeItemAction(formData: FormData): Promise<void> {

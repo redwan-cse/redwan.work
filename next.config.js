@@ -39,7 +39,7 @@ const securityHeaders = [
 ];
 const nextConfig = {
   // Framework limit only. The hosting platform has a separate request ceiling.
-  experimental: { serverActions: { bodySizeLimit: '6mb' } },
+  experimental: { serverActions: { bodySizeLimit: '12mb' } },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },

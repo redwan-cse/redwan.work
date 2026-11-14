@@ -54,3 +54,6 @@ Thumbs.db
 /playwright-report/
 /test-results/
 /coverage/
+
+# Resume PDF is stored in R2 public bucket, not in repository source.
+/public/resume.pdf

@@ -384,14 +384,13 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     ).join('\n');
     expect(portfolioSchemas).toContain('"CollectionPage"');
 
-    // 6. Dynamic non-stale /resume.pdf endpoint generates fresh A4 PDF on every download
+    // 6. R2-backed /resume.pdf endpoint serves the stored PDF from R2 public bucket without runtime generation
     const pdfInlineRes = await request.get('/resume.pdf');
     expect(pdfInlineRes.status()).toBe(200);
     expect(pdfInlineRes.headers()['content-type'] ?? '').toContain('application/pdf');
     expect(pdfInlineRes.headers()['content-disposition'] ?? '').toContain('inline; filename="Md_Redwan_Ahmed_Resume.pdf"');
-    expect(pdfInlineRes.headers()['cache-control'] ?? '').toContain('no-store');
     expect(pdfInlineRes.headers()['x-robots-tag'] ?? '').toContain('index, follow');
-    expect(Number.isNaN(Date.parse(pdfInlineRes.headers()['x-resume-generated-at'] ?? ''))).toBe(false);
+    expect(pdfInlineRes.headers()['x-resume-storage']).toBe('r2-public');
     const pdfBuf = await pdfInlineRes.body();
     expect(pdfBuf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
 
