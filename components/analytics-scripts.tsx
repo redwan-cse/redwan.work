@@ -93,7 +93,7 @@ export function AnalyticsScripts() {
   if (!gaId && !clarityId) return null;
 
   const gaBootstrapScript = gaId
-    ? `(function(){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=window.gtag||gtag;var granted=true;try{var raw=window.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}gtag('consent','default',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('js',new Date());gtag('config',${JSON.stringify(gaId)},{anonymize_ip:true});}catch(e){}})();`
+    ? `(function(){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=window.gtag||gtag;var granted=true;try{var raw=window.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}gtag('consent','default',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('js',new Date());gtag('config',${JSON.stringify(gaId)},{});}catch(e){}})();`
     : null;
 
   const clarityBootstrapScript = clarityId

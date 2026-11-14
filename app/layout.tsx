@@ -40,8 +40,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: SITE.profileImage,
-        width: 800,
-        height: 800,
+        width: 584,
+        height: 584,
         alt: SITE.name,
       },
     ],

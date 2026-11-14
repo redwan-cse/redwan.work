@@ -95,6 +95,8 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(userAgents).toContain('OAI-SearchBot');
     expect(userAgents).toContain('PerplexityBot');
     expect(userAgents).toContain('ClaudeBot');
+    expect(userAgents).toContain('Claude-SearchBot');
+    expect(userAgents).toContain('Perplexity-User');
     expect(userAgents).toContain('Google-Extended');
 
     const allowList = rules.flatMap((r) =>

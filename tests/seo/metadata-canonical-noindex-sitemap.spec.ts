@@ -340,6 +340,7 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const robotsRes = await request.get('/robots.txt');
     const robotsTxt = await robotsRes.text();
     expect(robotsTxt).toContain('OAI-SearchBot');
+    expect(robotsTxt).toContain('Claude-SearchBot');
     expect(robotsTxt).toContain('PerplexityBot');
     expect(robotsTxt).toContain('ClaudeBot');
     expect(robotsTxt).toContain('Allow: /llms.txt');
