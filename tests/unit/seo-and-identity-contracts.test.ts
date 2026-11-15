@@ -168,6 +168,22 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(types).toContain('Person');
     expect(types).toContain('ProfessionalService');
 
+    const websiteNode = rootGraph['@graph'].find((n) => n['@type'] === 'WebSite') as
+      | { name?: string; alternateName?: string[] }
+      | undefined;
+    expect(websiteNode?.name).toBe('Md. Redwan Ahmed');
+    expect(websiteNode?.alternateName).toContain('Md Redwan Ahmed');
+    expect(websiteNode?.alternateName).toContain('redwancse');
+
+    const personNode = rootGraph['@graph'].find((n) => n['@type'] === 'Person') as
+      | { description?: string; sameAs?: string[] }
+      | undefined;
+    expect(personNode?.description).toContain('Certified Ethical Hacker');
+    expect(personNode?.sameAs).toContain('https://scholar.google.com/citations?user=QKjhR4wAAAAJ&hl=en');
+    expect(personNode?.sameAs).toContain('https://orcid.org/0009-0001-9419-4760');
+    expect(personNode?.sameAs).toContain('https://www.upwork.com/freelancers/~01bd47ab2da223b848');
+    expect(personNode?.sameAs).not.toContain('https://fastcyberdefense.com');
+
     const faqSchema = buildFaqPageJsonLd(PUBLIC_FAQS);
     expect(faqSchema['@type']).toBe('FAQPage');
     expect(faqSchema.mainEntity).toHaveLength(PUBLIC_FAQS.length);

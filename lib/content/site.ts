@@ -37,6 +37,7 @@ export interface ServiceCatalogItem {
 export const CEH_VERIFICATION_URL =
   'https://aspen.eccouncil.org/VerifyBadge?type=certification&a=DOHxj32aadzdBISA9fowYmydNqnnA7aGz7+N9haFaMg=';
 export const CEH_CERT_NUMBER = 'ECC8126370954';
+export const ORCID_ID = '0009-0001-9419-4760';
 
 export const SITE = {
   name: 'Md. Redwan Ahmed',
@@ -65,11 +66,13 @@ export const SITE = {
   socials: {
     github: 'https://github.com/redwan-cse',
     linkedin: 'https://linkedin.com/in/redwancse',
-    twitter: 'https://twitter.com/redwancse',
-    facebook: 'https://facebook.com/redwancse',
-    instagram: 'https://instagram.com/redwancse',
+    googleScholar: 'https://scholar.google.com/citations?user=QKjhR4wAAAAJ&hl=en',
+    orcid: 'https://orcid.org/0009-0001-9419-4760',
     upwork: 'https://www.upwork.com/freelancers/~01bd47ab2da223b848',
     fiverr: 'https://www.fiverr.com/redwancse',
+    twitter: 'https://x.com/redwancse',
+    facebook: 'https://facebook.com/redwancse',
+    instagram: 'https://instagram.com/redwancse',
   },
 } as const;
 

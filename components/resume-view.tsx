@@ -20,7 +20,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { GithubIcon, LinkedinIcon } from '@/components/social-links';
+import { GithubIcon, LinkedinIcon, OrcidIcon } from '@/components/social-links';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -268,7 +268,7 @@ export function ResumeView({
                         <a
                           href={personalInfo.linkedin}
                           target="_blank"
-                          rel="noopener noreferrer"
+                          rel="me noopener noreferrer"
                           className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
                         >
                           <LinkedinIcon className="h-4 w-4 text-primary" />
@@ -278,11 +278,31 @@ export function ResumeView({
                         <a
                           href={personalInfo.github}
                           target="_blank"
-                          rel="noopener noreferrer"
+                          rel="me noopener noreferrer"
                           className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
                         >
                           <GithubIcon className="h-4 w-4 text-primary" />
                           <span>GitHub</span>
+                        </a>
+                        <Separator orientation="vertical" className="hidden h-4 sm:block" />
+                        <a
+                          href={SITE.socials.googleScholar}
+                          target="_blank"
+                          rel="me noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
+                        >
+                          <GraduationCap className="h-4 w-4 text-primary" />
+                          <span>Google Scholar</span>
+                        </a>
+                        <Separator orientation="vertical" className="hidden h-4 sm:block" />
+                        <a
+                          href={SITE.socials.orcid}
+                          target="_blank"
+                          rel="me noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
+                        >
+                          <OrcidIcon className="h-4 w-4 text-primary" />
+                          <span>ORCID</span>
                         </a>
                       </div>
                     </HeroRevealItem>

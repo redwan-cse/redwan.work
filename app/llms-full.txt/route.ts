@@ -97,6 +97,8 @@ export async function GET() {
     `- C|EH Verification (#${CEH_CERT_NUMBER}): ${CEH_VERIFICATION_URL}`,
     `- Technical Blog: https://blogs.redwan.work (${SITE.url}/blogs)`,
     `- GitHub: ${SITE.socials.github} · LinkedIn: ${SITE.socials.linkedin}`,
+    `- Google Scholar: ${SITE.socials.googleScholar} · ORCID: ${SITE.socials.orcid}`,
+    `- Upwork: ${SITE.socials.upwork} · Fiverr: ${SITE.socials.fiverr}`,
     '',
     '## Service Catalog & Packages',
     '',

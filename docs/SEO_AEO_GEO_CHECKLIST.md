@@ -23,20 +23,19 @@
 
 ## 2. Webmaster Consoles & Indexing Pipelines (External Manual Steps)
 
-- [ ] **Google Search Console (GSC) Verification**:
-  - Recommended: Add Domain property `redwan.work` in GSC using the Cloudflare DNS `TXT` record (`google-site-verification=...`), OR set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` in Vercel + `.env.local` (meta tag emission is already built into `app/layout.tsx` via `resolveSiteVerificationMetadata()`).
-- [ ] **Submit Sitemap in GSC**: Submit `https://redwan.work/sitemap.xml` under **GSC → Sitemaps** and run **URL Inspection → Request Indexing** on `/`, `/services`, `/portfolio`, `/resume`, and `/blogs`.
+- [x] **Google Search Console (GSC) Verification**: Domain property `redwan.work` verified in Google Search Console.
+- [x] **Submit Sitemap in GSC**: `https://redwan.work/sitemap.xml` submitted under **GSC → Sitemaps** (`Success`, all 8 public routes discovered), alongside `blogs.redwan.work` feeds (`atom.xml` & `sitemap-pages.xml`).
 - [ ] **Link GSC ↔ GA4**: In **GA4 Admin → Product Links → Search Console Links**, connect `redwan.work` GSC property to stream `G-4DPLP68YNS` so Search Console queries & CTR appear inside GA4.
-- [ ] **Bing Webmaster Tools Import**: Sign into [Bing Webmasters](https://www.bing.com/webmasters) and click **Import from Google Search Console** (auto-verifies domain & imports `sitemap.xml`), OR set `NEXT_PUBLIC_BING_SITE_VERIFICATION` (`msvalidate.01`). *(Important for Bing Search and Copilot; ChatGPT Search is reported to rely partly on Bing's index, but this is not guaranteed.)* Note: `NEXT_PUBLIC_*` verification tags are baked in at build time, so redeploy after adding them.
+- [x] **Bing Webmaster Tools Import**: `https://redwan.work/sitemap.xml` and `blogs.redwan.work` sitemaps submitted & verified in Bing Webmasters (`Success`, 172 total URLs discovered, 0 errors).
 - [ ] **Link GA4 → Microsoft Clarity**: In **Clarity → Setup → Google Analytics Integration**, connect `G-4DPLP68YNS`.
-- [ ] **External `robots.txt` & `sitemap` Check on `blogs.redwan.work`**: Verify `https://blogs.redwan.work/robots.txt` allows Googlebot/Bingbot/OAI-SearchBot/PerplexityBot and submits its own Blogger sitemap to the same Domain GSC property.
+- [x] **External `robots.txt` & `sitemap` Check on `blogs.redwan.work`**: `blogs.redwan.work` sitemaps verified and indexed in Google Search Console and Bing Webmaster Tools.
 
 ---
 
 ## 3. Technical SEO (Google & Bing Ranking Signals)
 
 - [x] **Unique Titles, Descriptions, Self-Referencing Canonicals & OpenGraph URLs** across all 8 indexable routes (`/`, `/services`, `/portfolio`, `/blogs`, `/resume`, `/contact`, `/privacy`, `/tos`).
-- [x] **Deterministic `sitemap.xml`** (`app/sitemap.ts`) with zero wall-clock drift: `/`, `/services`, `/portfolio`, `/resume`, and `/contact` use CMS `updated_at` timestamps; `/blogs`, `/privacy`, and `/tos` use a fixed `FALLBACK_LAST_MODIFIED` constant (bump it manually whenever those pages change, or Google will treat them as stale).
+- [x] **Deterministic `sitemap.xml`** (`app/sitemap.ts`) with zero wall-clock drift: `/`, `/services`, `/portfolio`, `/resume`, and `/contact` use CMS `updated_at` timestamps; `/blogs` tracks the newest Blogger post timestamp; `/privacy` and `/tos` use `FALLBACK_LAST_MODIFIED`.
 - [x] **Strict Private Route Protection**: `/admin`, `/portal`, `/login`, `/register`, `/mfa`, `/reset-password`, `/invite`, and `/api/*` emit `X-Robots-Tag: noindex, nofollow` and are disallowed in `robots.txt`.
 - [x] **BreadcrumbList JSON-LD** across `/services`, `/portfolio`, `/blogs`, `/resume`, `/contact`, `/privacy`, and `/tos`.
 - [x] **Schema.org `Service` + `OfferCatalog` (`/services`)**, **`CollectionPage` (`/portfolio`)**, **`ProfilePage` + `ScholarlyArticle` (`/resume`)**, and **`Blog` + `BlogPosting` (`/blogs`)** (`lib/seo/structured-data.ts`).
@@ -65,12 +64,10 @@
 - [x] **`/llms-full.txt`**: Complete live Markdown knowledge dump (`app/llms-full.txt/route.ts`) including full package tiers, deposit terms, portfolio outcomes/stacks, CV timeline, FAQs, and latest 10 live blog summaries.
 - [x] **HTML `<link rel="alternate" type="text/markdown" href="https://redwan.work/llms.txt">`** advertised in `<head>` of `app/layout.tsx`.
 - [x] **Explicit AI Crawler Rules (`app/robots.ts`)**: Permits `OAI-SearchBot`, `GPTBot`, `ChatGPT-User`, `PerplexityBot`, `ClaudeBot`, `anthropic-ai`, `Google-Extended`, `Applebot-Extended`, `Bingbot`, and `Googlebot` across public routes and `/llms*.txt` while blocking private/portal/admin routes.
-- [x] **Enriched Entity Knowledge `@graph` (`lib/seo/structured-data.ts`)**: Links `WebSite`, `Person` (`hasCredential`, `alumniOf`, `knowsAbout`, `sameAs`), `ProfessionalService`, and verified research citations via stable `@id` URIs.
-- [ ] **Next-Phase Growth Gap — Author Entity Authority & Off-Site Co-Citations**:
-  - Ensure GitHub (`github.com/redwan-cse`), LinkedIn (`linkedin.com/in/redwancse`), Fast Cyber Defense (`fastcyberdefense.com`), and `blogs.redwan.work` all explicitly link back to **`https://redwan.work`** (bi-directional `sameAs` verification strengthens Google Knowledge Graph & LLM entity confidence).
-  - Add your own Google Scholar author profile URL / ORCID iD to `SITE.socials` once published so `sameAs` connects academic citations directly to `#person`.
+- [x] **Enriched Entity Knowledge `@graph` (`lib/seo/structured-data.ts`)**: Links `WebSite` (`name: "Md. Redwan Ahmed"` + `alternateName` variants), `Person` (`description`, `identifier` with ORCID `0009-0001-9419-4760`, `hasCredential`, `alumniOf`, `knowsAbout`, and personal-only `sameAs`), `ProfessionalService`, and verified research citations via stable `@id` URIs.
+- [x] **Author Entity Authority & Academic Profiles (`SITE.socials`, `components/social-links.tsx`, `/resume`, `/llms*.txt`)**:
+  - Connected Google Scholar (`https://scholar.google.com/citations?user=QKjhR4wAAAAJ&hl=en`), ORCID (`https://orcid.org/0009-0001-9419-4760`), GitHub, LinkedIn, Upwork, Fiverr, X (`x.com/redwancse`), Facebook, Instagram, and `blogs.redwan.work` across `Person.sameAs`, `rel="me"` footer icons (theme-matched), `/resume` header pills, and `/llms*.txt`. *(Keep personal profiles and `blogs.redwan.work` linking back to `https://redwan.work`; `fastcyberdefense.com` is intentionally excluded from personal backlinks as a multi-shareholder startup.)*
 - [x] **Robots tokens refreshed (`app/robots.ts`)**: added `Claude-SearchBot`, `Claude-User`, and `Perplexity-User` (note `Google-Extended`/`Applebot-Extended` are control tokens, not crawlers); covered by unit + SEO tests.
 - [ ] **Next-Phase Growth Gap — Entity & off-site authority**: Create/claim a Google Business Profile (if service-area eligible), a Wikidata item (only if notability sources exist), and earn genuine backlinks (guest posts, Scholar/ORCID, GitHub READMEs). Do **not** add `Review`/`AggregateRating` schema without real, verifiable reviews.
-- [x] **Minor cleanup**: removed the no-op `anonymize_ip` from the GA4 config call.
-- [ ] **Next-Phase Growth Gap — Minor cleanups**: `lastModified` for `/blogs` should track the newest Blogger post.
+- [x] **Minor cleanups**: removed the no-op `anonymize_ip` from the GA4 config call, and updated `/blogs` `lastModified` in `app/sitemap.ts` to track the newest Blogger post.
 - [ ] **Next-Phase Growth Gap — Monthly AI Brand Prompt Audit**: Test monthly prompts across **ChatGPT Search**, **Perplexity**, **Claude**, and **Google AI Overviews** (e.g., *"Who is Md. Redwan Ahmed cybersecurity consultant?"*, *"Recommended freelance penetration tester in Bangladesh with C|EH and Q1 Scopus research"*, *"Fast Cyber Defense founder"*) and track citation accuracy & referral traffic in GA4.
