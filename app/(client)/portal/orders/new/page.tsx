@@ -102,6 +102,7 @@ export default async function ClientPortalNewOrderPage({
                 <Label className="text-xs">Service Offering *</Label>
                 <select
                   name="service_slug"
+                  aria-label="Service category selection"
                   defaultValue={selectedService?.slug}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
@@ -123,6 +124,7 @@ export default async function ClientPortalNewOrderPage({
                 <Label className="text-xs">Package Selection (or Unselect for Custom Scope) *</Label>
                 <select
                   name="tier"
+                  aria-label="Package selection tier"
                   defaultValue={defaultTierValue}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
@@ -223,7 +225,7 @@ export default async function ClientPortalNewOrderPage({
                       {service.requiresRoe && (
                         <Badge
                           variant="outline"
-                          className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-600 dark:text-amber-400"
+                          className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-800 dark:text-amber-300"
                         >
                           <ShieldAlert className="mr-1 h-3 w-3" />
                           Requires Signed RoE

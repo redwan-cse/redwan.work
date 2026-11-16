@@ -17,7 +17,7 @@ import {
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
-import { ContractLiveChat } from '@/components/panel/contract-live-chat';
+import { OrderLiveChatServer } from '@/components/panel/order-live-chat-server';
 import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -221,6 +221,7 @@ export default async function AdminOrderDetailPage({
                 <Label className="text-[11px]">Order Status</Label>
                 <select
                   name="status"
+                  aria-label="Order lifecycle status"
                   defaultValue={order.status}
                   className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs"
                 >
@@ -368,7 +369,7 @@ export default async function AdminOrderDetailPage({
                                 {dlv.status}
                               </Badge>
                               {dlv.auto_accept_at && dlv.status === 'submitted' && (
-                                <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400">
+                                <span className="font-mono text-[10px] text-amber-800 dark:text-amber-300">
                                   Auto-accept {new Date(dlv.auto_accept_at).toLocaleDateString()}
                                 </span>
                               )}
@@ -445,7 +446,7 @@ export default async function AdminOrderDetailPage({
                   Rules of Engagement &amp; NDA Evidence
                 </CardTitle>
                 <Badge variant={roe ? 'default' : 'outline'} className="font-mono text-[10px]">
-                  {roe ? 'SIGNED & VERIFIED' : order.requires_roe ? 'SIGNATURE REQUIRED' : 'OPTIONAL'}
+                  {roe ? 'EXECUTED & VERIFIED' : order.requires_roe ? 'SIGNATURE REQUIRED' : 'OPTIONAL'}
                 </Badge>
               </div>
             </CardHeader>
@@ -453,7 +454,7 @@ export default async function AdminOrderDetailPage({
               <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
                 <span className="font-semibold">Confidentiality NDA: </span>
                 {order.nda_accepted_at ? (
-                  <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                  <span className="font-mono text-emerald-800 dark:text-emerald-300">
                     Executed on {new Date(order.nda_accepted_at).toLocaleString()}
                   </span>
                 ) : (
@@ -670,6 +671,7 @@ export default async function AdminOrderDetailPage({
                         <input type="hidden" name="order_id" value={order.id} />
                         <select
                           name="status"
+                          aria-label="Milestone status"
                           defaultValue={ms.status}
                           className="h-7 rounded border border-border bg-background px-2 text-[11px]"
                         >
@@ -928,17 +930,13 @@ export default async function AdminOrderDetailPage({
 
       {/* TAB 5: CONTEXTUAL THREAD & INTERNAL NOTES */}
       {activeTab === 'thread' && (
-        <ContractLiveChat
+        <OrderLiveChatServer
+          orderId={order.id}
+          orderCode={order.code}
+          orderTitle={order.title}
+          orderStatus={order.status}
           viewerId={session.userId}
           viewerRole="admin"
-          contracts={[
-            {
-              id: order.id,
-              code: order.code,
-              title: order.title,
-              status: order.status,
-            },
-          ]}
         />
       )}
     </div>

@@ -113,6 +113,7 @@ export async function EmailsConsoleView({
         />
         <select
           name="status"
+          aria-label="Filter outbox by status"
           defaultValue={statusFilter}
           className="h-8 rounded-md border border-input bg-background px-2 text-xs"
         >

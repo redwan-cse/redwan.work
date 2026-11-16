@@ -101,6 +101,7 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -126,6 +127,7 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -192,6 +194,7 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -217,6 +220,7 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -305,6 +309,7 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
 
   revalidatePath('/');
   revalidatePath('/portfolio');
+  revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
 }
 
@@ -328,6 +333,7 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
 
   revalidatePath('/');
   revalidatePath('/portfolio');
+  revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
 }
 

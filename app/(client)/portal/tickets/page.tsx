@@ -69,6 +69,7 @@ export default async function ClientTicketsPage() {
                   <Label className="mb-auto text-xs">Priority</Label>
                   <select
                     name="priority"
+                    aria-label="Ticket priority"
                     defaultValue="medium"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
@@ -83,6 +84,7 @@ export default async function ClientTicketsPage() {
                   <Label className="mb-auto text-xs">Category</Label>
                   <select
                     name="category"
+                    aria-label="Ticket category"
                     defaultValue="general"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
@@ -100,6 +102,7 @@ export default async function ClientTicketsPage() {
                 <Label className="text-xs">Related Order (Optional)</Label>
                 <select
                   name="order_id"
+                  aria-label="Related order"
                   defaultValue=""
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >

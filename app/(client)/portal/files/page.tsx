@@ -71,6 +71,7 @@ export default async function ClientVaultFilesPage({
           </div>
           <select
             name="category"
+            aria-label="Filter vault files by category"
             defaultValue={categoryFilter}
             className="h-8 rounded-md border border-input bg-background px-2 text-xs"
           >

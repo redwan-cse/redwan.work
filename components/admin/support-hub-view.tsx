@@ -88,6 +88,7 @@ export async function SupportHubView({
               {basePath === '/admin/support' && <input type="hidden" name="tab" value="tickets" />}
               <select
                 name="status"
+                aria-label="Filter tickets by status"
                 defaultValue={statusFilter}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
               >
@@ -101,6 +102,7 @@ export async function SupportHubView({
               </select>
               <select
                 name="priority"
+                aria-label="Filter tickets by priority"
                 defaultValue={priorityFilter}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
               >

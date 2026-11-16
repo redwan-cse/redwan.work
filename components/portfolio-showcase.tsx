@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
   Bot,
@@ -96,7 +96,7 @@ export function PortfolioShowcase({
                 (prefersReducedMotion ? (
                   <span className="absolute inset-0 rounded-full bg-primary" />
                 ) : (
-                  <motion.span
+                  <m.span
                     layoutId="portfolio-filter-pill"
                     transition={{ type: 'spring', stiffness: 360, damping: 30 }}
                     className="absolute inset-0 rounded-full bg-primary"

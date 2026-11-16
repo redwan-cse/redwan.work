@@ -6,9 +6,15 @@ export const dynamic = 'force-dynamic';
 export default async function AdminOpsHubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; q?: string }>;
+  searchParams: Promise<{ action?: string; q?: string; page?: string }>;
 }) {
   await requireAdminSession();
   const params = await searchParams;
-  return <OpsHubView actionFilter={params.action ?? ''} qFilter={params.q ?? ''} />;
+  return (
+    <OpsHubView
+      actionFilter={params.action ?? ''}
+      qFilter={params.q ?? ''}
+      pageParam={params.page}
+    />
+  );
 }

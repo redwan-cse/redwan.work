@@ -65,7 +65,6 @@ export function ActionFeedbackForm({
   return (
     <form
       ref={formRef}
-      action={action}
       onSubmit={handleSubmit}
       aria-busy={isPending}
       className={cn(className)}

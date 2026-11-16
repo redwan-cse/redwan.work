@@ -219,6 +219,7 @@ export default async function AdminClientDetailPage({
                     <Label className="text-xs">Client Tier</Label>
                     <select
                       name="tier"
+                      aria-label="Client CRM tier"
                       defaultValue={crm?.tier ?? 'standard'}
                       className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
                     >
@@ -542,6 +543,7 @@ export default async function AdminClientDetailPage({
                     <Label className="text-xs">Note Type</Label>
                     <select
                       name="note_type"
+                      aria-label="Client CRM note type"
                       defaultValue="general"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >

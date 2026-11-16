@@ -14,7 +14,7 @@ import {
   buildPortfolioCollectionJsonLd,
 } from '@/lib/seo/structured-data';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Portfolio & Case Studies — VAPT, Full-Stack Platforms, SIEM & AI Research',

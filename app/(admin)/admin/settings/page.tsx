@@ -76,6 +76,7 @@ export default async function AdminSettingsPage() {
                   <Label className="text-xs">Canonical Legal Consent Text *</Label>
                   <Textarea
                     name="canonical"
+                    aria-label="Canonical legal consent policy text"
                     rows={4}
                     required
                     defaultValue={

@@ -4,7 +4,7 @@ import type { ReactNode, MouseEvent } from 'react';
 import { useRef } from 'react';
 import Image from 'next/image';
 import {
-  motion,
+  m,
   useMotionTemplate,
   useMotionValue,
   useReducedMotion,
@@ -32,7 +32,7 @@ export function HeroReveal({
   }
 
   return (
-    <motion.div
+    <m.div
       initial="hidden"
       animate="visible"
       variants={{
@@ -47,7 +47,7 @@ export function HeroReveal({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -65,7 +65,7 @@ export function HeroRevealItem({
   }
 
   return (
-    <motion.div
+    <m.div
       variants={{
         hidden: { opacity: 0, y: 16, filter: 'blur(4px)' },
         visible: {
@@ -78,7 +78,7 @@ export function HeroRevealItem({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -96,7 +96,7 @@ export function HeroPortrait({
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <motion.div
+    <m.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: prefersReducedMotion ? 0 : 0.68, delay: prefersReducedMotion ? 0 : 0.14, ease: EASE_OUT_EXPO }}
@@ -135,7 +135,7 @@ export function HeroPortrait({
       {caption ? (
         <p className="mt-5 text-center text-xs text-muted-foreground">{caption}</p>
       ) : null}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -185,7 +185,7 @@ export function InteractiveCard({
   };
 
   return (
-    <motion.div
+    <m.div
       id={id}
       ref={ref}
       onMouseMove={handleMouseMove}
@@ -206,13 +206,13 @@ export function InteractiveCard({
         className
       )}
     >
-      <motion.div
+      <m.div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{ background: borderHighlight }}
       />
       <div className="relative z-10 flex h-full w-full flex-col justify-between">{children}</div>
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -232,7 +232,7 @@ export function ScrollReveal({
   }
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 18 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-60px' }}
@@ -240,6 +240,6 @@ export function ScrollReveal({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

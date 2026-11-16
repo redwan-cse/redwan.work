@@ -62,7 +62,7 @@ export default async function ClientProposalDetailPage({
               {proposal.status}
             </Badge>
             {proposal.requires_roe && (
-              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-600 dark:text-amber-400">
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-800 dark:text-amber-300">
                 <ShieldAlert className="mr-1 h-3 w-3" />
                 Requires Signed RoE
               </Badge>

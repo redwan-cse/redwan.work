@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,10 +39,12 @@ export async function BillingHubView({
   activeTab,
   statusFilter = '',
   basePath = '/admin/billing',
+  pageParam,
 }: {
   activeTab: 'invoices' | 'retainers';
   statusFilter?: string;
   basePath?: string;
+  pageParam?: string;
 }) {
   const admin = getSupabaseAdmin();
   const [
@@ -51,7 +54,7 @@ export async function BillingHubView({
     { data: clients },
     { data: orders },
   ] = await Promise.all([
-    admin.from('invoices').select('*').order('created_at', { ascending: false }).limit(80),
+    admin.from('invoices').select('*').order('created_at', { ascending: false }).limit(250),
     admin
       .from('payments')
       .select('*')
@@ -69,6 +72,7 @@ export async function BillingHubView({
   const filteredInvoices = (invoices ?? []).filter(
     (inv) => !statusFilter || inv.status === statusFilter
   );
+  const pagedInvoices = paginateItems(filteredInvoices, pageParam);
 
   const openInvoiceCount = (invoices ?? []).filter(
     (i) => i.status === 'issued' || i.status === 'partially_paid' || i.status === 'overdue'
@@ -213,6 +217,7 @@ export async function BillingHubView({
                   <Label className="text-xs">Client *</Label>
                   <select
                     name="client_id"
+                    aria-label="Invoice client"
                     required
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
                   >
@@ -229,6 +234,7 @@ export async function BillingHubView({
                   <Label className="text-xs">Link to Order (Optional)</Label>
                   <select
                     name="order_id"
+                    aria-label="Linked order"
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
                   >
                     <option value="">— Standalone Invoice —</option>
@@ -255,6 +261,7 @@ export async function BillingHubView({
                     <Label className="text-xs">Currency</Label>
                     <select
                       name="currency"
+                      aria-label="Invoice currency"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >
                       <option value="USD">USD</option>
@@ -267,6 +274,7 @@ export async function BillingHubView({
                     <Label className="text-xs">Amount *</Label>
                     <Input
                       name="amount_major"
+                      aria-label="Invoice amount"
                       type="number"
                       required
                       min="1"
@@ -278,6 +286,7 @@ export async function BillingHubView({
                     <Label className="text-xs">FX→USD</Label>
                     <Input
                       name="fx_rate_to_usd"
+                      aria-label="Exchange rate to USD"
                       type="number"
                       step="0.0001"
                       defaultValue="1.0"
@@ -291,6 +300,7 @@ export async function BillingHubView({
                     <Label className="text-xs">Discount</Label>
                     <Input
                       name="discount_major"
+                      aria-label="Discount amount"
                       type="number"
                       min="0"
                       defaultValue="0"
@@ -301,6 +311,7 @@ export async function BillingHubView({
                     <Label className="text-xs">Tax bps</Label>
                     <Input
                       name="tax_rate_bps"
+                      aria-label="Tax rate in basis points"
                       type="number"
                       defaultValue="0"
                       className="h-9 font-mono text-xs"
@@ -310,6 +321,7 @@ export async function BillingHubView({
                     <Label className="text-xs">Due Days</Label>
                     <Input
                       name="due_days"
+                      aria-label="Due days"
                       type="number"
                       defaultValue="7"
                       className="h-9 font-mono text-xs"
@@ -341,6 +353,7 @@ export async function BillingHubView({
                 {basePath === '/admin/billing' && <input type="hidden" name="tab" value="invoices" />}
                 <select
                   name="status"
+                  aria-label="Filter invoices by status"
                   defaultValue={statusFilter}
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                 >
@@ -371,7 +384,7 @@ export async function BillingHubView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredInvoices.map((inv) => {
+                    {pagedInvoices.items.map((inv) => {
                       const dueCents = Math.max(
                         0,
                         inv.total_cents - inv.amount_paid_cents - inv.credited_cents
@@ -433,6 +446,18 @@ export async function BillingHubView({
                   No invoices match the selected filter.
                 </p>
               )}
+              <AdminPagination
+                basePath={basePath}
+                page={pagedInvoices.page}
+                totalPages={pagedInvoices.totalPages}
+                totalItems={pagedInvoices.totalItems}
+                startIndex={pagedInvoices.startIndex}
+                endIndex={pagedInvoices.endIndex}
+                query={{
+                  tab: basePath === '/admin/billing' ? 'invoices' : undefined,
+                  status: statusFilter || undefined,
+                }}
+              />
             </CardContent>
           </Card>
         </div>
@@ -456,6 +481,7 @@ export async function BillingHubView({
                   <Label className="text-xs">Client *</Label>
                   <select
                     name="client_id"
+                    aria-label="Retainer client"
                     required
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
                   >
@@ -471,6 +497,7 @@ export async function BillingHubView({
                   <Label className="text-xs">Retainer Plan Title *</Label>
                   <Input
                     name="title"
+                    aria-label="Retainer plan title"
                     required
                     defaultValue="Dedicated Security & Engineering Retainer"
                     className="h-9 text-xs"
@@ -479,11 +506,11 @@ export async function BillingHubView({
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Monthly Rate (USD)</Label>
-                    <Input name="monthly_usd" type="number" defaultValue="750" className="h-9 font-mono text-xs" />
+                    <Input name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Hours / Month</Label>
-                    <Input name="hours_included" type="number" defaultValue="10" className="h-9 font-mono text-xs" />
+                    <Input name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full gap-1.5 rounded-full">
@@ -540,6 +567,7 @@ export async function BillingHubView({
                           </Label>
                           <Input
                             name="hours_used_current_period"
+                            aria-label="Hours used in current period"
                             type="number"
                             step="0.5"
                             defaultValue={ret.hours_used_current_period}
@@ -550,6 +578,7 @@ export async function BillingHubView({
                           <Label className="text-[11px]">Status</Label>
                           <select
                             name="status"
+                            aria-label="Retainer status"
                             defaultValue={ret.status}
                             className="h-8 rounded-md border border-border bg-background px-2 text-xs"
                           >

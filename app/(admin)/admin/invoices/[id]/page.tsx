@@ -164,7 +164,7 @@ export default async function AdminInvoiceDetailPage({
                 <span>{formatMoney(invoice.total_cents, invoice.currency)}</span>
               </div>
               {invoice.credited_cents > 0 && (
-                <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                <div className="flex justify-between text-amber-800 dark:text-amber-300">
                   <span>Credit Notes Applied:</span>
                   <span>-{formatMoney(invoice.credited_cents, invoice.currency)}</span>
                 </div>
@@ -241,6 +241,7 @@ export default async function AdminInvoiceDetailPage({
                           <input type="hidden" name="decision" value="confirmed" />
                           <Input
                             name="fx_rate"
+                            aria-label="Exchange rate to USD"
                             type="number"
                             step="0.0001"
                             defaultValue={pay.currency === 'USD' ? '1.0' : '0.0083'}
@@ -293,6 +294,7 @@ export default async function AdminInvoiceDetailPage({
                       <Label className="text-xs">Method</Label>
                       <select
                         name="method"
+                        aria-label="Payment method"
                         defaultValue="manual"
                         className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                       >
@@ -309,6 +311,7 @@ export default async function AdminInvoiceDetailPage({
                       <Label className="text-xs">Amount ({invoice.currency}) *</Label>
                       <Input
                         name="amount_major"
+                        aria-label="Manual payment amount"
                         type="number"
                         step="0.01"
                         min="0.01"
@@ -332,6 +335,7 @@ export default async function AdminInvoiceDetailPage({
                       <Label className="text-xs">FX → USD</Label>
                       <Input
                         name="fx_rate"
+                        aria-label="Payment exchange rate to USD"
                         type="number"
                         step="0.0001"
                         defaultValue={invoice.fx_rate_to_usd}

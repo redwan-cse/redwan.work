@@ -17,7 +17,7 @@ import {
   PUBLIC_FAQS,
 } from '@/lib/seo/structured-data';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Services & Tiered Packages — Cybersecurity, Full-Stack, Cloud & AI',

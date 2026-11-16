@@ -189,13 +189,13 @@ export default async function ClientInvoiceDetailPage({
                   <span>{formatMoney(invoice.total_cents, invoice.currency)}</span>
                 </div>
                 {creditedCents > 0 && (
-                  <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                  <div className="flex justify-between text-amber-800 dark:text-amber-300">
                     <span>Credit Notes Applied:</span>
                     <span>-{formatMoney(creditedCents, invoice.currency)}</span>
                   </div>
                 )}
                 {confirmedCents > 0 && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
                     <span>Verified Payments:</span>
                     <span>-{formatMoney(confirmedCents, invoice.currency)}</span>
                   </div>
@@ -345,6 +345,7 @@ export default async function ClientInvoiceDetailPage({
                     <Label className="text-xs">Payment Method *</Label>
                     <select
                       name="method"
+                      aria-label="Payment proof method"
                       defaultValue="bank_transfer"
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >

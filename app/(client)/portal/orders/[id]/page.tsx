@@ -26,7 +26,7 @@ import {
 } from '@/lib/crm/actions';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
-import { ContractLiveChat } from '@/components/panel/contract-live-chat';
+import { OrderLiveChatServer } from '@/components/panel/order-live-chat-server';
 import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -195,7 +195,7 @@ export default async function ClientOrderDetailPage({
                   <div className="text-muted-foreground">
                     {roeRecord.signer_full_name} ({roeRecord.signer_title || 'Authorized Representative'})
                   </div>
-                  <div className="mt-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <div className="mt-1 font-mono text-[11px] text-emerald-800 dark:text-emerald-300">
                     Signed {new Date(roeRecord.signed_at).toLocaleString()}
                   </div>
                 </div>
@@ -338,7 +338,7 @@ export default async function ClientOrderDetailPage({
                       </div>
 
                       {del.auto_accept_at && del.status === 'submitted' && (
-                        <div className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] text-amber-600 dark:text-amber-400">
+                        <div className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] text-amber-800 dark:text-amber-300">
                           <Clock className="h-3 w-3" />
                           Auto-accept deadline: {new Date(del.auto_accept_at).toLocaleDateString()}
                         </div>
@@ -576,17 +576,13 @@ export default async function ClientOrderDetailPage({
 
         {/* Right 5 Cols */}
         <div className="space-y-6 lg:col-span-5">
-          <ContractLiveChat
+          <OrderLiveChatServer
+            orderId={order.id}
+            orderCode={order.code ?? 'ORD-XXXX'}
+            orderTitle={order.title}
+            orderStatus={order.status}
             viewerId={session.userId}
             viewerRole={session.role === 'admin' ? 'admin' : 'client'}
-            contracts={[
-              {
-                id: order.id,
-                code: order.code,
-                title: order.title,
-                status: order.status,
-              },
-            ]}
           />
 
           {/* Client Review & Testimonial */}
@@ -609,6 +605,7 @@ export default async function ClientOrderDetailPage({
                     <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
                     <select
                       name="rating_overall"
+                      aria-label="Overall rating"
                       defaultValue={String(existingReview?.rating_overall ?? 5)}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >

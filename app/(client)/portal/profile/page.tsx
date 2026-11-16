@@ -66,6 +66,7 @@ export default async function ClientProfilePage() {
                 <Label className="text-xs">Full Name</Label>
                 <Input
                   name="full_name"
+                  aria-label="Full Name"
                   defaultValue={profile?.full_name ?? session.fullName ?? ''}
                   className="h-9 text-xs"
                 />
@@ -73,6 +74,7 @@ export default async function ClientProfilePage() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Account Email (Verified)</Label>
                 <Input
+                  aria-label="Account Email"
                   value={session.email}
                   disabled
                   className="h-9 font-mono text-xs opacity-70"
@@ -145,6 +147,7 @@ export default async function ClientProfilePage() {
                 <Label className="mb-auto text-xs">Preferred Billing Currency</Label>
                 <select
                   name="preferred_currency"
+                  aria-label="Preferred billing currency"
                   defaultValue={clientProfile?.preferred_currency ?? 'USD'}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >

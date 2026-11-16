@@ -89,6 +89,7 @@ export function MultiLineInvoiceComposer({
               <Label className="text-xs">Client *</Label>
               <select
                 name="client_id"
+                aria-label="Invoice client"
                 required
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
@@ -107,6 +108,7 @@ export function MultiLineInvoiceComposer({
               <Label className="text-xs">Linked Order (Optional)</Label>
               <select
                 name="order_id"
+                aria-label="Linked order"
                 defaultValue={defaultOrderId}
                 className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
               >
@@ -123,6 +125,7 @@ export function MultiLineInvoiceComposer({
               <Label className="text-xs">Currency</Label>
               <select
                 name="currency"
+                aria-label="Invoice currency"
                 value={currency}
                 onChange={(e) => {
                   const next = e.target.value;

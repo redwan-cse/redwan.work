@@ -93,79 +93,79 @@ export async function ContentHubView({
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Full Name *</Label>
-                    <Input name="full_name" defaultValue={resumeData.settings.full_name} required className="h-9 text-xs" />
+                    <Input name="full_name" aria-label="Full Name" defaultValue={resumeData.settings.full_name} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Role Title *</Label>
-                    <Input name="role_title" defaultValue={resumeData.settings.role_title} required className="h-9 text-xs" />
+                    <Input name="role_title" aria-label="Role Title" defaultValue={resumeData.settings.role_title} required className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Short Role</Label>
-                    <Input name="short_role" defaultValue={resumeData.settings.short_role} className="h-9 text-xs" />
+                    <Input name="short_role" aria-label="Short Role" defaultValue={resumeData.settings.short_role} className="h-9 text-xs" />
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Subtitle</Label>
-                    <Input name="subtitle" defaultValue={resumeData.settings.subtitle} className="h-9 text-xs" />
+                    <Input name="subtitle" aria-label="Subtitle" defaultValue={resumeData.settings.subtitle} className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Tagline</Label>
-                    <Input name="tagline" defaultValue={resumeData.settings.tagline} className="h-9 text-xs" />
+                    <Input name="tagline" aria-label="Tagline" defaultValue={resumeData.settings.tagline} className="h-9 text-xs" />
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-4">
                   <div className="space-y-1">
                     <Label className="text-xs">Email *</Label>
-                    <Input name="email" defaultValue={resumeData.settings.email} required className="h-9 font-mono text-xs" />
+                    <Input name="email" aria-label="Public Email" defaultValue={resumeData.settings.email} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Phone *</Label>
-                    <Input name="phone" defaultValue={resumeData.settings.phone} required className="h-9 font-mono text-xs" />
+                    <Input name="phone" aria-label="Phone Number" defaultValue={resumeData.settings.phone} required className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">WhatsApp</Label>
-                    <Input name="whatsapp_number" defaultValue={resumeData.settings.whatsapp_number} className="h-9 font-mono text-xs" />
+                    <Input name="whatsapp_number" aria-label="WhatsApp Number" defaultValue={resumeData.settings.whatsapp_number} className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Location *</Label>
-                    <Input name="location" defaultValue={resumeData.settings.location} required className="h-9 text-xs" />
+                    <Input name="location" aria-label="Location" defaultValue={resumeData.settings.location} required className="h-9 text-xs" />
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   <div className="space-y-1">
                     <Label className="text-xs">Cal.com URL</Label>
-                    <Input name="cal_com_url" defaultValue={resumeData.settings.cal_com_url} className="h-9 font-mono text-xs" />
+                    <Input name="cal_com_url" aria-label="Cal.com URL" defaultValue={resumeData.settings.cal_com_url} className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">LinkedIn URL</Label>
-                    <Input name="linkedin_url" defaultValue={resumeData.settings.linkedin_url} className="h-9 font-mono text-xs" />
+                    <Input name="linkedin_url" aria-label="LinkedIn URL" defaultValue={resumeData.settings.linkedin_url} className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">GitHub URL</Label>
-                    <Input name="github_url" defaultValue={resumeData.settings.github_url} className="h-9 font-mono text-xs" />
+                    <Input name="github_url" aria-label="GitHub URL" defaultValue={resumeData.settings.github_url} className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Company Name</Label>
-                    <Input name="company_name" defaultValue={resumeData.settings.company_name} className="h-9 text-xs" />
+                    <Input name="company_name" aria-label="Company Name" defaultValue={resumeData.settings.company_name} className="h-9 text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Company URL</Label>
-                    <Input name="company_url" defaultValue={resumeData.settings.company_url} className="h-9 font-mono text-xs" />
+                    <Input name="company_url" aria-label="Company URL" defaultValue={resumeData.settings.company_url} className="h-9 font-mono text-xs" />
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <Label className="text-xs">Resume PDF URL</Label>
-                  <Input name="resume_pdf_url" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
+                  <Input name="resume_pdf_url" aria-label="Resume PDF URL" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
                 </div>
 
                 <div className="space-y-1">
                   <Label className="text-xs">Executive Bio *</Label>
-                  <Textarea name="executive_summary" rows={3} defaultValue={resumeData.settings.executive_summary} required className="text-xs" />
+                  <Textarea name="executive_summary" aria-label="Executive Bio" rows={3} defaultValue={resumeData.settings.executive_summary} required className="text-xs" />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -173,6 +173,7 @@ export async function ContentHubView({
                     <Label className="text-xs">Research Interests</Label>
                     <Textarea
                       name="research_interests"
+                      aria-label="Research Interests"
                       rows={3}
                       defaultValue={(resumeData.settings.research_interests ?? []).join('\n')}
                       className="font-mono text-xs"
@@ -182,6 +183,7 @@ export async function ContentHubView({
                     <Label className="text-xs">Soft Skills</Label>
                     <Textarea
                       name="soft_skills"
+                      aria-label="Soft Skills"
                       rows={3}
                       defaultValue={(resumeData.settings.soft_skills ?? []).join('\n')}
                       className="font-mono text-xs"
@@ -191,6 +193,7 @@ export async function ContentHubView({
                     <Label className="text-xs">Other Skills</Label>
                     <Textarea
                       name="other_skills"
+                      aria-label="Other Skills"
                       rows={3}
                       defaultValue={(resumeData.settings.other_skills ?? []).join('\n')}
                       className="font-mono text-xs"
@@ -202,6 +205,7 @@ export async function ContentHubView({
                   <Label className="text-xs">Technical Skills Categories (JSON Map)</Label>
                   <Textarea
                     name="technical_skills_json"
+                    aria-label="Technical Skills Categories JSON Map"
                     rows={4}
                     defaultValue={JSON.stringify(resumeData.settings.technical_skills ?? {}, null, 2)}
                     className="font-mono text-xs"

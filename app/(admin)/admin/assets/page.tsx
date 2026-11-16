@@ -82,8 +82,9 @@ export default async function AdminPublicAssetsPage() {
                 className="space-y-3.5"
               >
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Select Asset File (PNG / JPG / WebP / PDF / ZIP) *</Label>
+                  <Label htmlFor="public-asset-file" className="text-xs">Select Asset File (PNG / JPG / WebP / PDF / ZIP) *</Label>
                   <Input
+                    id="public-asset-file"
                     type="file"
                     name="asset_file"
                     required

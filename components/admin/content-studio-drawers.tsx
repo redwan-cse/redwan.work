@@ -174,7 +174,7 @@ export function ServicesStudioTable({
                       {svc.requiresRoe && (
                         <Badge
                           variant="outline"
-                          className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-600 dark:text-amber-400"
+                          className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-800 dark:text-amber-300"
                         >
                           <ShieldAlert className="mr-1 h-2.5 w-2.5" />
                           RoE
@@ -261,6 +261,7 @@ export function ServicesStudioTable({
                   <Label className="text-xs">Pillar *</Label>
                   <select
                     name="pillar"
+                    aria-label="Service or study pillar"
                     defaultValue={editing?.pillar ?? 'cybersecurity'}
                     className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
                   >
@@ -363,7 +364,7 @@ export function ServicesStudioTable({
                       type="checkbox"
                       name="requires_roe"
                       defaultChecked={editing?.requiresRoe ?? false}
-                      className="h-4 w-4 rounded"
+                      className="h-6 w-6 rounded accent-primary"
                     />
                     Requires RoE
                   </label>
@@ -372,7 +373,7 @@ export function ServicesStudioTable({
                       type="checkbox"
                       name="is_featured"
                       defaultChecked={editing ? editing.isFeatured : true}
-                      className="h-4 w-4 rounded"
+                      className="h-6 w-6 rounded accent-primary"
                     />
                     Featured
                   </label>
@@ -381,7 +382,7 @@ export function ServicesStudioTable({
                       type="checkbox"
                       name="is_public"
                       defaultChecked={editing ? editing.isPublic : true}
-                      className="h-4 w-4 rounded"
+                      className="h-6 w-6 rounded accent-primary"
                     />
                     Public
                   </label>
@@ -542,6 +543,7 @@ export function ServicesStudioTable({
                   <div className="grid gap-2 sm:grid-cols-3">
                     <select
                       name="tier_name"
+                      aria-label="Package tier name"
                       defaultValue="Standard"
                       className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                     >
@@ -718,6 +720,7 @@ export function PortfolioStudioTable({
                 <Label className="text-xs">Pillar *</Label>
                 <select
                   name="pillar"
+                  aria-label="Case study pillar"
                   defaultValue={editing?.pillar ?? 'cybersecurity'}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
                 >
@@ -828,7 +831,7 @@ export function PortfolioStudioTable({
                     type="checkbox"
                     name="is_featured"
                     defaultChecked={editing ? editing.isFeatured : true}
-                    className="h-4 w-4 rounded"
+                    className="h-6 w-6 rounded accent-primary"
                   />
                   Featured
                 </label>
@@ -837,7 +840,7 @@ export function PortfolioStudioTable({
                     type="checkbox"
                     name="is_published"
                     defaultChecked={editing ? editing.isPublished : true}
-                    className="h-4 w-4 rounded"
+                    className="h-6 w-6 rounded accent-primary"
                   />
                   Published
                 </label>
@@ -969,6 +972,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                 <Label className="text-xs">Section *</Label>
                 <select
                   name="section"
+                  aria-label="Resume section category"
                   defaultValue={editing?.section ?? 'experience'}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
                 >
@@ -1051,7 +1055,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                     type="checkbox"
                     name="is_visible"
                     defaultChecked={editing ? editing.is_visible : true}
-                    className="h-4 w-4 rounded"
+                    className="h-6 w-6 rounded accent-primary"
                   />
                   Visible on /resume
                 </label>

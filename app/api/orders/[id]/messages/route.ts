@@ -34,14 +34,15 @@ export async function GET(
     .from('order_messages')
     .select('id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)')
     .eq('order_id', id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   if (session.role !== 'admin') {
     query = query.eq('is_internal_note', false);
   }
 
   const { data: messages } = await query;
-  return NextResponse.json({ messages: messages ?? [] });
+  return NextResponse.json({ messages: [...(messages ?? [])].reverse() });
 }
 
 export async function POST(

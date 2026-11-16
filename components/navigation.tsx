@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import {
   Briefcase,
   ClipboardList,
@@ -89,7 +89,7 @@ export function Navigation() {
                   (prefersReducedMotion ? (
                     <span className="absolute inset-0 rounded-full bg-primary shadow-xs" />
                   ) : (
-                    <motion.span
+                    <m.span
                       layoutId="active-nav-pill"
                       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                       className="absolute inset-0 rounded-full bg-primary shadow-xs"

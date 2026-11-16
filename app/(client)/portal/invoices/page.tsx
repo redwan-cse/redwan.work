@@ -67,7 +67,7 @@ export default async function ClientInvoicesListPage() {
                       <span>Due: {new Date(inv.due_at).toLocaleDateString()}</span>
                     )}
                     {inv.paid_at && (
-                      <span className="text-emerald-600 dark:text-emerald-400">
+                      <span className="text-emerald-800 dark:text-emerald-300">
                         Paid: {new Date(inv.paid_at).toLocaleDateString()}
                       </span>
                     )}

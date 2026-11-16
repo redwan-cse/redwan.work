@@ -95,8 +95,8 @@ export function OrdersKanbanBoard({ orders }: { orders: OrderBoardItem[] }) {
                           <span
                             className={
                               ord.roe_signed_at
-                                ? 'inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400'
-                                : 'text-amber-600 dark:text-amber-400'
+                                ? 'inline-flex items-center gap-0.5 text-emerald-800 dark:text-emerald-300'
+                                : 'text-amber-800 dark:text-amber-300'
                             }
                           >
                             <ShieldCheck className="h-3 w-3" />

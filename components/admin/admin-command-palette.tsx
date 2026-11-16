@@ -142,11 +142,13 @@ export function AdminCommandPalette() {
         size="sm"
         onClick={() => setOpen(true)}
         className="h-8 gap-2 rounded-full px-3 text-xs text-muted-foreground hover:text-foreground"
-        aria-label="Open admin command palette"
       >
         <Search className="h-3.5 w-3.5" aria-hidden="true" />
-        <span className="hidden md:inline">Quick Jump...</span>
-        <kbd className="hidden rounded border border-border/80 bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
+        <span className="sr-only md:not-sr-only">Quick Jump...</span>
+        <kbd
+          aria-hidden="true"
+          className="hidden rounded border border-border/80 bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline"
+        >
           Ctrl K
         </kbd>
       </Button>

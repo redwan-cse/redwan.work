@@ -937,6 +937,17 @@ export async function startLoopbackServices(options = {}) {
           sendJson(res, 200, { rows: match ? [{ tokenHash: match.tokenHash }] : [] });
           return;
         }
+        if (op === 'getLatestInviteTokenForEmail') {
+          const email = String(body.email || '').trim().toLowerCase();
+          const user = usersByEmail.get(email);
+          const match = user
+            ? Array.from(oneTimeTokens.values()).find(
+                (t) => t.userId === user.id && t.type === 'invite' && !t.consumed
+              )
+            : null;
+          sendJson(res, 200, { rows: match ? [{ tokenHash: match.tokenHash }] : [] });
+          return;
+        }
         sendJson(res, 400, { error: 'Unsupported fixture operation' });
         return;
       }
@@ -1236,6 +1247,15 @@ export async function startLoopbackServices(options = {}) {
               JSON.stringify({ full_name: user.fullName }),
             ]
           );
+        }
+        if (pathname === '/auth/v1/invite') {
+          const tokenHash = `invite_${crypto.randomUUID().replace(/-/g, '')}`;
+          oneTimeTokens.set(tokenHash, {
+            tokenHash,
+            userId: user.id,
+            type: 'invite',
+            consumed: false,
+          });
         }
         sendJson(res, 200, serializeUser(user));
         return;

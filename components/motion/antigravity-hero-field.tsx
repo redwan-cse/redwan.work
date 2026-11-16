@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import {
-  motion,
+  m,
   useMotionTemplate,
   useMotionValue,
   useReducedMotion,
@@ -248,7 +248,7 @@ export function AntigravityHeroField() {
       className="pointer-events-none absolute inset-0 overflow-hidden select-none"
     >
       {!prefersReducedMotion && (
-        <motion.div
+        <m.div
           className="absolute inset-0 transition-opacity duration-500"
           style={{ background: ambientSpotlight }}
         />

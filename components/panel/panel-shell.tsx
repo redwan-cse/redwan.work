@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import {
   Activity,
   Bell,
@@ -149,7 +149,7 @@ export function PanelShell({
               (prefersReducedMotion ? (
                 <span className="absolute inset-0 rounded-lg bg-primary shadow-2xs" />
               ) : (
-                <motion.span
+                <m.span
                   layoutId="panel-sidebar-active"
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   className="absolute inset-0 rounded-lg bg-primary shadow-2xs"

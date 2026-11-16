@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { OrdersKanbanBoard } from '@/components/admin/orders-kanban-view';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,7 +55,7 @@ export default async function AdminOrdersPage({
         'id, code, client_id, title, pillar, status, progress_percent, requires_roe, roe_signed_at, total_cents, currency, due_at, created_at'
       )
       .order('created_at', { ascending: false })
-      .limit(80),
+      .limit(250),
     admin
       .from('profiles')
       .select('id, full_name, email')
@@ -190,6 +191,7 @@ export default async function AdminOrdersPage({
         />
         <select
           name="status"
+          aria-label="Filter orders by status"
           defaultValue={statusFilter}
           className="h-8 rounded-md border border-input bg-background px-2.5 text-xs"
         >
@@ -232,6 +234,7 @@ export default async function AdminOrdersPage({
                   <Label className="text-xs">Client *</Label>
                   <select
                     name="client_id"
+                    aria-label="Order client"
                     required
                     className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
                   >
@@ -259,6 +262,7 @@ export default async function AdminOrdersPage({
                     <Label className="text-xs">Service Pillar</Label>
                     <select
                       name="pillar"
+                      aria-label="Order service pillar"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >
                       <option value="cybersecurity">Cybersecurity &amp; VAPT</option>
@@ -272,6 +276,7 @@ export default async function AdminOrdersPage({
                     <Label className="text-xs">Currency</Label>
                     <select
                       name="currency"
+                      aria-label="Order currency"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >
                       <option value="USD">USD</option>
@@ -285,15 +290,15 @@ export default async function AdminOrdersPage({
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Total *</Label>
-                    <Input name="total_usd" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
+                    <Input name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Deposit %</Label>
-                    <Input name="deposit_percent" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
+                    <Input name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Due Days</Label>
-                    <Input name="due_days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
+                    <Input name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
 
@@ -307,8 +312,8 @@ export default async function AdminOrdersPage({
                   />
                 </div>
 
-                <label className="flex items-center gap-2 text-xs font-medium">
-                  <input type="checkbox" name="requires_roe" className="h-4 w-4 rounded border-border" />
+                <label className="flex items-center gap-2.5 text-xs font-medium">
+                  <input type="checkbox" name="requires_roe" className="h-6 w-6 rounded border-border accent-primary" />
                   Require Rules of Engagement Signature
                 </label>
 
@@ -321,6 +326,12 @@ export default async function AdminOrdersPage({
           </Card>
 
           {/* Compact Orders Table */}
+          {(() => {
+            const pagedOrders = paginateItems(
+              filteredOrders,
+              (params as Record<string, string | undefined>).page
+            );
+            return (
           <Card className="xl:col-span-8">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Orders Pipeline ({filteredOrders.length})</CardTitle>
@@ -338,7 +349,7 @@ export default async function AdminOrdersPage({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.map((ord) => (
+                    {pagedOrders.items.map((ord) => (
                       <TableRow key={ord.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -397,8 +408,23 @@ export default async function AdminOrdersPage({
                   No orders match the current filter.
                 </p>
               )}
+              <AdminPagination
+                basePath="/admin/orders"
+                page={pagedOrders.page}
+                totalPages={pagedOrders.totalPages}
+                totalItems={pagedOrders.totalItems}
+                startIndex={pagedOrders.startIndex}
+                endIndex={pagedOrders.endIndex}
+                query={{
+                  view: viewMode,
+                  status: statusFilter || undefined,
+                  q: params.q || undefined,
+                }}
+              />
             </CardContent>
           </Card>
+            );
+          })()}
         </div>
       )}
     </div>

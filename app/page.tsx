@@ -41,7 +41,7 @@ import {
 } from '@/lib/cms/queries';
 import { buildPublicMetadata } from '@/lib/seo/metadata';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: `${SITE.name} — ${SITE.shortRole}`,

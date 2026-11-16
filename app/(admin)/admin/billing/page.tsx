@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminBillingHubPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; status?: string }>;
+  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
 }) {
   await requireAdminSession();
   const params = await searchParams;
@@ -16,6 +16,7 @@ export default async function AdminBillingHubPage({
       activeTab={activeTab}
       statusFilter={params.status ?? ''}
       basePath="/admin/billing"
+      pageParam={params.page}
     />
   );
 }

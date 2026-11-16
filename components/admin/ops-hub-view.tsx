@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { Activity, FolderLock, Mail, Settings } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,9 +20,11 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 export async function OpsHubView({
   actionFilter = '',
   qFilter = '',
+  pageParam,
 }: {
   actionFilter?: string;
   qFilter?: string;
+  pageParam?: string;
 }) {
   const admin = getSupabaseAdmin();
   const [
@@ -30,7 +33,7 @@ export async function OpsHubView({
     { count: failedEmailsCount },
     { count: vaultCount },
   ] = await Promise.all([
-    admin.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(120),
+    admin.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250),
     admin.from('email_outbox').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     admin.from('email_outbox').select('id', { count: 'exact', head: true }).in('status', ['failed', 'dead_letter']),
     admin.from('vault_files').select('id', { count: 'exact', head: true }).is('deleted_from_r2_at', null),
@@ -45,6 +48,8 @@ export async function OpsHubView({
     }
     return true;
   });
+
+  const pagedLogs = paginateItems(filteredLogs, pageParam);
 
   const uniqueActions = Array.from(new Set((logs ?? []).map((l) => l.action))).slice(0, 30);
 
@@ -147,6 +152,7 @@ export async function OpsHubView({
             />
             <select
               name="action"
+              aria-label="Filter by audit action"
               defaultValue={actionFilter}
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             >
@@ -174,7 +180,7 @@ export async function OpsHubView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.map((entry) => (
+                {pagedLogs.items.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>
                       <Badge variant="outline" className="font-mono text-[10px]">
@@ -199,6 +205,15 @@ export async function OpsHubView({
               No audit events match the selected filter.
             </p>
           )}
+          <AdminPagination
+            basePath="/admin/ops"
+            page={pagedLogs.page}
+            totalPages={pagedLogs.totalPages}
+            totalItems={pagedLogs.totalItems}
+            startIndex={pagedLogs.startIndex}
+            endIndex={pagedLogs.endIndex}
+            query={{ action: actionFilter || undefined, q: qFilter || undefined }}
+          />
         </CardContent>
       </Card>
     </div>

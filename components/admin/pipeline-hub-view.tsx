@@ -208,6 +208,7 @@ export async function PipelineHubView({
                       <input type="hidden" name="inquiry_id" value={inq.id} />
                       <select
                         name="status"
+                        aria-label="Update inquiry status"
                         defaultValue={inq.status}
                         className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs"
                       >
@@ -291,6 +292,7 @@ export async function PipelineHubView({
                   <Label className="text-xs">Portal Client (or auto-match by email)</Label>
                   <select
                     name="client_id"
+                    aria-label="Portal client"
                     defaultValue={prefill?.converted_client_id ?? ''}
                     className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
                   >
@@ -345,6 +347,7 @@ export async function PipelineHubView({
                     <Label className="text-xs">Pillar</Label>
                     <select
                       name="pillar"
+                      aria-label="Service pillar"
                       defaultValue={prefill?.service_pillar ?? 'cybersecurity'}
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >
@@ -359,6 +362,7 @@ export async function PipelineHubView({
                     <Label className="text-xs">Total (USD) *</Label>
                     <Input
                       name="total_usd"
+                      aria-label="Proposal total in USD"
                       type="number"
                       required
                       min="1"
@@ -370,6 +374,7 @@ export async function PipelineHubView({
                     <Label className="text-xs">Deposit %</Label>
                     <Input
                       name="deposit_percent"
+                      aria-label="Proposal deposit percentage"
                       type="number"
                       defaultValue="50"
                       className="h-9 font-mono text-xs"
@@ -382,17 +387,18 @@ export async function PipelineHubView({
                     <Label className="text-xs">Est. Delivery Days</Label>
                     <Input
                       name="estimated_delivery_days"
+                      aria-label="Estimated delivery days"
                       type="number"
                       defaultValue="10"
                       className="h-9 font-mono text-xs"
                     />
                   </div>
-                  <label className="mt-5 flex items-center gap-2 text-xs font-medium">
+                  <label className="mt-5 flex items-center gap-2.5 text-xs font-medium">
                     <input
                       type="checkbox"
                       name="requires_roe"
                       defaultChecked={prefill?.nda_required ?? false}
-                      className="h-4 w-4 rounded border-border"
+                      className="h-6 w-6 rounded border-border accent-primary"
                     />
                     Requires RoE Signature
                   </label>

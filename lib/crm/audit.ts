@@ -111,23 +111,6 @@ export async function enqueueTransactionalEmail(input: QueueEmailInput): Promise
     });
     if (error) {
       console.error('Failed to enqueue transactional email:', error.message);
-      return;
-    }
-
-    if (process.env.RESEND_API_KEY) {
-      try {
-        const { after } = await import('next/server');
-        after(async () => {
-          try {
-            const { drainEmailOutbox } = await import('@/lib/email/outbox');
-            await drainEmailOutbox(10);
-          } catch {
-            // Defer cleanly to scheduled email-outbox cron on transient error
-          }
-        });
-      } catch {
-        // Non-request context (e.g., CLI/unit tests): cron/drain will pick up queued row
-      }
     }
   } catch (err) {
     console.error('Failed to enqueue transactional email:', err);

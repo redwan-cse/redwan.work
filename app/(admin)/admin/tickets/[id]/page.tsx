@@ -88,6 +88,7 @@ export default async function AdminTicketDetailPage({
           <input type="hidden" name="ticket_id" value={ticket.id} />
           <select
             name="status"
+            aria-label="Ticket status"
             defaultValue={ticket.status}
             className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
           >
@@ -132,7 +133,7 @@ export default async function AdminTicketDetailPage({
                     <span className="font-semibold text-foreground">
                       {msg.author_id === ticket.client_id ? 'Client' : 'Admin (Md Redwan Ahmed)'}
                       {msg.is_internal_note && (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                        <span className="ml-2 inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-300">
                           <Lock className="h-2.5 w-2.5" />
                           Internal Note
                         </span>

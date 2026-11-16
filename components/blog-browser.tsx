@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
+import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import {
   ArrowRight,
   BookOpen,
@@ -41,6 +42,7 @@ export function BlogBrowser({
 }) {
   const [query, setQuery] = useState('');
   const [selectedLabel, setSelectedLabel] = useState<string>('All');
+  const [previewItem, setPreviewItem] = useState<EnrichedBlogPost | null>(null);
 
   const allLabels = useMemo(() => {
     const counts = new Map<string, number>();
@@ -118,7 +120,7 @@ export function BlogBrowser({
                   )}
                 >
                   {active && (
-                    <motion.span
+                    <m.span
                       layoutId="blog-tag-pill"
                       transition={{ type: 'spring', stiffness: 360, damping: 30 }}
                       className="absolute inset-0 rounded-full bg-primary"
@@ -137,33 +139,26 @@ export function BlogBrowser({
         <ScrollReveal>
           <InteractiveCard enableTilt={false} className="overflow-hidden p-0">
             <div className="grid gap-0 lg:grid-cols-12">
-              <BlogPreviewModal
-                post={featuredItem.post}
-                imageUrl={featuredItem.imageUrl}
-                excerpt={featuredItem.excerpt}
-                readingMinutes={featuredItem.readingMinutes}
-                toc={featuredItem.toc}
+              <button
+                type="button"
+                onClick={() => setPreviewItem(featuredItem)}
+                className="relative block min-h-[260px] w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:col-span-6 lg:min-h-[340px]"
               >
-                <button
-                  type="button"
-                  className="relative block min-h-[260px] w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:col-span-6 lg:min-h-[340px]"
-                >
-                  <Image
-                    src={featuredItem.imageUrl}
-                    alt={featuredItem.post.title}
-                    fill
-                    priority
-                    unoptimized={isDirectBlogImage(featuredItem.imageUrl)}
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute top-4 left-4 flex items-center gap-2">
-                    <Badge className="gap-1 bg-primary text-primary-foreground shadow-sm">
-                      <Sparkles className="h-3 w-3" />
-                      Featured Dispatch
-                    </Badge>
-                  </div>
-                </button>
-              </BlogPreviewModal>
+                <Image
+                  src={featuredItem.imageUrl}
+                  alt={featuredItem.post.title}
+                  fill
+                  priority
+                  unoptimized={isDirectBlogImage(featuredItem.imageUrl)}
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute top-4 left-4 flex items-center gap-2">
+                  <Badge className="gap-1 bg-primary text-primary-foreground shadow-sm">
+                    <Sparkles className="h-3 w-3" />
+                    Featured Dispatch
+                  </Badge>
+                </div>
+              </button>
 
               <div className="flex flex-col justify-between p-6 sm:p-8 lg:col-span-6">
                 <div className="space-y-4">
@@ -184,20 +179,13 @@ export function BlogBrowser({
                   </div>
 
                   <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                    <BlogPreviewModal
-                      post={featuredItem.post}
-                      imageUrl={featuredItem.imageUrl}
-                      excerpt={featuredItem.excerpt}
-                      readingMinutes={featuredItem.readingMinutes}
-                      toc={featuredItem.toc}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewItem(featuredItem)}
+                      className="cursor-pointer rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <button
-                        type="button"
-                        className="cursor-pointer text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                      >
-                        {featuredItem.post.title}
-                      </button>
-                    </BlogPreviewModal>
+                      {featuredItem.post.title}
+                    </button>
                   </h2>
 
                   <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -219,22 +207,20 @@ export function BlogBrowser({
                 </div>
 
                 <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-border/60 pt-5">
-                  <BlogPreviewModal
-                    post={featuredItem.post}
-                    imageUrl={featuredItem.imageUrl}
-                    excerpt={featuredItem.excerpt}
-                    readingMinutes={featuredItem.readingMinutes}
-                    toc={featuredItem.toc}
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => setPreviewItem(featuredItem)}
+                    className="gap-1.5 rounded-full"
                   >
-                    <Button variant="default" size="sm" className="gap-1.5 rounded-full">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Quick Preview
-                    </Button>
-                  </BlogPreviewModal>
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Quick Preview
+                  </Button>
 
                   <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
                     <Link
-                      href={featuredItem.post.url}
+                      href={sanitizeHttpUrl(featuredItem.post.url) ?? 'https://blogs.redwan.work'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -252,41 +238,36 @@ export function BlogBrowser({
       {/* Articles Grid */}
       {gridItems.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {gridItems.map(({ post, imageUrl, excerpt, readingMinutes, toc }, index) => (
+          {gridItems.map((item, index) => {
+            const { post, imageUrl, excerpt, readingMinutes } = item;
+            return (
             <ScrollReveal key={post.id} delay={(index % 3) * 0.05}>
               <InteractiveCard className="flex h-full flex-col justify-between overflow-hidden p-0">
                 <div>
-                  <BlogPreviewModal
-                    post={post}
-                    imageUrl={imageUrl}
-                    excerpt={excerpt}
-                    readingMinutes={readingMinutes}
-                    toc={toc}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(item)}
+                    className="relative block h-52 w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <button
-                      type="button"
-                      className="relative block h-52 w-full cursor-pointer overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Image
-                        src={imageUrl}
-                        alt={post.title}
-                        fill
-                        unoptimized={isDirectBlogImage(imageUrl)}
-                        className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        loading={index < 3 ? 'eager' : 'lazy'}
-                      />
-                      {post.labels && post.labels.length > 0 && (
-                        <div className="absolute top-3 right-3">
-                          <Badge
-                            variant="secondary"
-                            className="bg-background/90 font-mono text-[11px] backdrop-blur-sm"
-                          >
-                            {post.labels[0]}
-                          </Badge>
-                        </div>
-                      )}
-                    </button>
-                  </BlogPreviewModal>
+                    <Image
+                      src={imageUrl}
+                      alt={post.title}
+                      fill
+                      unoptimized={isDirectBlogImage(imageUrl)}
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading={index < 3 ? 'eager' : 'lazy'}
+                    />
+                    {post.labels && post.labels.length > 0 && (
+                      <div className="absolute top-3 right-3">
+                        <Badge
+                          variant="secondary"
+                          className="bg-background/90 font-mono text-[11px] backdrop-blur-sm"
+                        >
+                          {post.labels[0]}
+                        </Badge>
+                      </div>
+                    )}
+                  </button>
 
                   <div className="p-6 pb-4">
                     <div className="mb-2.5 flex items-center justify-between font-mono text-xs text-muted-foreground">
@@ -305,20 +286,13 @@ export function BlogBrowser({
                     </div>
 
                     <h3 className="line-clamp-2 text-lg font-bold leading-snug">
-                      <BlogPreviewModal
-                    post={post}
-                    imageUrl={imageUrl}
-                    excerpt={excerpt}
-                    readingMinutes={readingMinutes}
-                    toc={toc}
-                  >
-                        <button
-                          type="button"
-                          className="cursor-pointer text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                        >
-                          {post.title}
-                        </button>
-                      </BlogPreviewModal>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewItem(item)}
+                        className="cursor-pointer rounded-sm text-left transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {post.title}
+                      </button>
                     </h3>
 
                     <p className="mt-2.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
@@ -328,19 +302,21 @@ export function BlogBrowser({
                 </div>
 
                 <div className="flex items-center justify-between gap-2 border-t border-border/60 px-6 py-4">
-                  <BlogPreviewModal
-                    post={post}
-                    imageUrl={imageUrl}
-                    excerpt={excerpt}
-                    readingMinutes={readingMinutes}
-                    toc={toc}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPreviewItem(item)}
+                    className="h-8 rounded-full px-3 text-xs"
                   >
-                    <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-xs">
-                      Quick Read
-                    </Button>
-                  </BlogPreviewModal>
+                    Quick Read
+                  </Button>
                   <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
-                    <Link href={post.url} target="_blank" rel="noopener noreferrer">
+                    <Link
+                      href={sanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       Full Post
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
@@ -348,7 +324,8 @@ export function BlogBrowser({
                 </div>
               </InteractiveCard>
             </ScrollReveal>
-          ))}
+            );
+          })}
         </div>
       ) : (
         !featuredItem && (
@@ -378,6 +355,20 @@ export function BlogBrowser({
             )}
           </div>
         )
+      )}
+
+      {previewItem && (
+        <BlogPreviewModal
+          post={previewItem.post}
+          imageUrl={previewItem.imageUrl}
+          excerpt={previewItem.excerpt}
+          readingMinutes={previewItem.readingMinutes}
+          toc={previewItem.toc}
+          open={Boolean(previewItem)}
+          onOpenChange={(open) => {
+            if (!open) setPreviewItem(null);
+          }}
+        />
       )}
     </div>
   );

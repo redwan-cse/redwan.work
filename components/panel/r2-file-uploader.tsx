@@ -106,6 +106,7 @@ export function R2FileUploader({
         <UploadCloud className="h-5 w-5 shrink-0 text-primary" />
         <Input
           type="file"
+          aria-label={label}
           onChange={handleFileChange}
           disabled={status === 'uploading'}
           className="h-9 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer text-xs"

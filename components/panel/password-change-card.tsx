@@ -79,7 +79,7 @@ export function PasswordChangeCard() {
             </p>
           )}
           {state.notice && (
-            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
               {state.notice}
             </p>
           )}

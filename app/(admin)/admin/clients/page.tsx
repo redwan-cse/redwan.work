@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Search, UserPlus } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -107,6 +108,7 @@ export default async function AdminClientsPage({
                   <Label className="text-xs">Relationship Tier</Label>
                   <select
                     name="tier"
+                    aria-label="Client invite tier"
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
                   >
                     <option value="standard">standard</option>
@@ -145,6 +147,7 @@ export default async function AdminClientsPage({
               </div>
               <select
                 name="tier"
+                aria-label="Filter clients by tier"
                 defaultValue={tierFilter}
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs"
               >
@@ -160,7 +163,13 @@ export default async function AdminClientsPage({
             </form>
           </CardHeader>
           <CardContent className="p-0">
-            {filteredClients.length > 0 ? (
+            {filteredClients.length > 0 ? (() => {
+              const pagedClients = paginateItems(
+                filteredClients,
+                (params as Record<string, string | undefined>).page
+              );
+              return (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -172,7 +181,7 @@ export default async function AdminClientsPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredClients.map((client) => {
+                  {pagedClients.items.map((client) => {
                     const crm = crmMap.get(client.id);
                     return (
                       <TableRow key={client.id}>
@@ -218,7 +227,21 @@ export default async function AdminClientsPage({
                   })}
                 </TableBody>
               </Table>
-            ) : (
+              <AdminPagination
+                basePath="/admin/clients"
+                page={pagedClients.page}
+                totalPages={pagedClients.totalPages}
+                totalItems={pagedClients.totalItems}
+                startIndex={pagedClients.startIndex}
+                endIndex={pagedClients.endIndex}
+                query={{
+                  tier: tierFilter || undefined,
+                  q: params.q || undefined,
+                }}
+              />
+              </>
+              );
+            })() : (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 No clients match the current filter.
               </p>
