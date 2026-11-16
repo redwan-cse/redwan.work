@@ -295,3 +295,27 @@ export async function deletePublicObject(key: string): Promise<void> {
   assertValidAssetKey(key);
   await publicClient().send(new DeleteObjectCommand({ Bucket: process.env.R2_PUBLIC_BUCKET, Key: key }));
 }
+export async function listPublicObjects(prefix = 'assets/'): Promise<R2ObjectSummary[]> {
+  const client = publicClient();
+  const out: R2ObjectSummary[] = [];
+  const tokens = new Set<string>();
+  let token: string | undefined;
+  do {
+    const response = await client.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.R2_PUBLIC_BUCKET,
+        Prefix: prefix,
+        ContinuationToken: token,
+      })
+    );
+    for (const obj of response.Contents ?? []) {
+      if (!obj.Key || !obj.LastModified) continue;
+      out.push({ key: obj.Key, lastModified: obj.LastModified, size: obj.Size ?? 0 });
+    }
+    if (!response.IsTruncated) break;
+    token = response.NextContinuationToken;
+    if (!token || tokens.has(token)) break;
+    tokens.add(token);
+  } while (token);
+  return out;
+}

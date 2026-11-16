@@ -777,7 +777,7 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
     .from('orders')
-    .select('code, auto_accept_days, client_id')
+    .select('code, pillar, auto_accept_days, client_id')
     .eq('id', orderId)
     .maybeSingle();
 
@@ -821,7 +821,8 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
 
   let insertedVaultFileId: string | null = null;
   if (r2Key && filename && sizeBytes > 0) {
-    const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
+    const retentionDays = order.pillar === 'cybersecurity' ? 90 : 365;
+    const retentionUntil = new Date(Date.now() + retentionDays * 86400 * 1000).toISOString();
     const { data: vFile, error: fileErr } = await admin
       .from('vault_files')
       .insert({
