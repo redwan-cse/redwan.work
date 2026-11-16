@@ -1567,9 +1567,9 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
   const effectivePillar = isOtherCustomService
     ? 'development'
     : (matchedService?.pillar ?? 'development');
-  const effectiveRequiresRoe = isOtherCustomService
-    ? false
-    : (matchedService?.requiresRoe ?? false);
+  const effectiveRequiresRoe =
+    effectivePillar === 'cybersecurity' ||
+    (!isOtherCustomService && Boolean(matchedService?.requiresRoe));
 
   const finalPriceCents = hasCustomBudget
     ? Math.max(2500, Math.round(customBudgetUsd * 100))
@@ -1594,6 +1594,74 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
         : `${baseTitle} — ${pkg?.name ?? 'Standard Package'}`);
 
   const admin = getSupabaseAdmin();
+
+  if (isCustomDeal) {
+    if (hasCustomBudget && customBudgetUsd < 25) {
+      throw new Error('Custom quote budgets must be at least USD 25.');
+    }
+    const { data: inquiry, error: inqErr } = await admin
+      .from('inquiries')
+      .insert({
+        name: session.fullName || session.email,
+        email: session.email,
+        service_pillar: effectivePillar,
+        services: [baseTitle],
+        project_summary: `${finalTitle}\n\n${projectNotes || targetScope || baseTagline}`,
+        is_custom_deal: true,
+        proposed_budget_cents: finalPriceCents,
+        proposed_delivery_days: finalDeliveryDays,
+        selected_service_slug: isOtherCustomService
+          ? 'other-custom-engagement'
+          : (matchedService?.slug ?? serviceSlug),
+        selected_package_tier: 'Custom',
+        converted_client_id: session.userId,
+        status: 'new',
+      })
+      .select('id, code')
+      .single();
+
+    if (inqErr || !inquiry) {
+      throw new Error(inqErr?.message ?? 'Could not submit custom quote request.');
+    }
+
+    await notifyAllAdmins({
+      category: 'inquiry',
+      title: `Custom Quote Request ${inquiry.code}`,
+      body: `${session.fullName || session.email} requested a custom proposal for "${finalTitle}" ($${(finalPriceCents / 100).toLocaleString()} USD).`,
+      href: `/admin/inquiries`,
+    });
+
+    await enqueueTransactionalEmail({
+      toEmail: session.email,
+      template: 'custom_quote_submitted',
+      subject: `Custom Quote Request ${inquiry.code} Received`,
+      payload: {
+        message: `Your custom quote request (${inquiry.code}: ${finalTitle}) has been queued for administrator scoping and proposal issuance.`,
+        actionUrl: `${getSiteOrigin()}/portal/proposals`,
+      },
+      entityType: 'inquiry',
+      entityId: inquiry.id,
+    });
+
+    await recordAuditLog({
+      actorId: session.userId,
+      actorRole: 'client',
+      clientId: session.userId,
+      action: 'inquiry.custom_quote_submitted',
+      entityType: 'inquiry',
+      entityId: inquiry.id,
+      summary: `Submitted custom quote request ${inquiry.code}: ${finalTitle}`,
+      metadata: {
+        priceCents: finalPriceCents,
+        deliveryDays: finalDeliveryDays,
+      },
+    });
+
+    revalidatePath('/admin/inquiries');
+    revalidatePath('/portal/orders/new');
+    revalidatePath('/portal/proposals');
+    redirect('/portal/orders/new?quote_submitted=1');
+  }
 
   const milestoneFeatures =
     pkg && pkg.features.length > 0
@@ -1805,10 +1873,13 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
 
   if (authorizedTargets.length === 0) return;
 
+  const testingWindowStartRaw = String(formData.get('testing_window_start') ?? '').trim();
+  const testingWindowEndRaw = String(formData.get('testing_window_end') ?? '').trim();
+
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
     .from('orders')
-    .select('id, client_id, code, status')
+    .select('id, client_id, code, status, roe_signed_at')
     .eq('id', orderId)
     .maybeSingle();
 
@@ -1816,26 +1887,54 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     throw new Error('Forbidden.');
   }
 
-  const nowIso = new Date().toISOString();
-  const windowEnd = new Date(Date.now() + 21 * 86400 * 1000).toISOString();
+  if (order.roe_signed_at) {
+    throw new Error('Rules of Engagement have already been signed for this engagement.');
+  }
 
-  const { error: roeErr } = await admin.from('engagement_authorizations').upsert(
-    {
-      order_id: orderId,
-      client_id: session.userId,
-      authorized_targets: authorizedTargets,
-      excluded_systems: excludedSystems,
-      testing_window_start: nowIso,
-      testing_window_end: windowEnd,
-      emergency_contact_name: emergencyName,
-      emergency_contact_phone: emergencyPhone,
-      signer_full_name: signerFullName,
-      signer_title: signerTitle,
-      ownership_attested: true,
-      signed_at: nowIso,
-    },
-    { onConflict: 'order_id' }
-  );
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const parsedStart = testingWindowStartRaw ? new Date(testingWindowStartRaw) : new Date(nowMs);
+  const parsedEnd = testingWindowEndRaw
+    ? new Date(testingWindowEndRaw)
+    : new Date(nowMs + 21 * 86400 * 1000);
+  const startIso = Number.isNaN(parsedStart.getTime()) ? nowIso : parsedStart.toISOString();
+  const endIso =
+    Number.isNaN(parsedEnd.getTime()) || parsedEnd.getTime() <= new Date(startIso).getTime()
+      ? new Date(new Date(startIso).getTime() + 21 * 86400 * 1000).toISOString()
+      : parsedEnd.toISOString();
+
+  let signerIpHash: string | null = null;
+  try {
+    const { headers } = await import('next/headers');
+    const { createHash } = await import('node:crypto');
+    const hdrs = await headers();
+    const rawIp =
+      hdrs.get('cf-connecting-ip') ||
+      hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      hdrs.get('x-real-ip') ||
+      'unknown';
+    signerIpHash = createHash('sha256')
+      .update(`${process.env.LEAD_IP_HASH_SALT ?? 'redwan-roe'}:${rawIp}`)
+      .digest('hex');
+  } catch {
+    signerIpHash = null;
+  }
+
+  const { error: roeErr } = await admin.from('engagement_authorizations').insert({
+    order_id: orderId,
+    client_id: session.userId,
+    authorized_targets: authorizedTargets,
+    excluded_systems: excludedSystems,
+    testing_window_start: startIso,
+    testing_window_end: endIso,
+    emergency_contact_name: emergencyName,
+    emergency_contact_phone: emergencyPhone,
+    signer_full_name: signerFullName,
+    signer_title: signerTitle,
+    signer_ip_hash: signerIpHash,
+    ownership_attested: true,
+    signed_at: nowIso,
+  });
   if (roeErr) {
     throw new Error(roeErr.message);
   }
@@ -1844,7 +1943,6 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     .from('orders')
     .update({
       roe_signed_at: nowIso,
-      nda_accepted_at: nowIso,
       status: order.status === 'pending_requirements' ? 'in_progress' : order.status,
     })
     .eq('id', orderId);
@@ -1958,10 +2056,22 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   const amountMajor = Number(formData.get('amount_major') ?? 0);
   const r2Key = String(formData.get('r2_key') ?? '').trim();
   const filename = String(formData.get('filename') ?? '').trim();
-  const mime = String(formData.get('mime') ?? 'application/pdf').trim();
+  const providedMime = String(formData.get('mime') || formData.get('mime_type') || '').trim();
   const sizeBytes = Number(formData.get('size_bytes') ?? 0);
+  const declaredSha256 = String(formData.get('sha256_checksum') ?? '').trim().toLowerCase() || null;
 
   if (!invoiceId || !reference || amountMajor <= 0) return;
+
+  const { PORTAL_ALLOWED, extFromFilename, isAllowedMime, resolveMimeType, validateMagicBytes } = await import('@/lib/mime');
+  const { createHash } = await import('node:crypto');
+
+  if (r2Key && filename) {
+    const proofExt = extFromFilename(filename);
+    const resolvedProofMime = resolveMimeType(filename, providedMime);
+    if (!proofExt || !isAllowedMime(proofExt, resolvedProofMime, PORTAL_ALLOWED)) {
+      throw new Error('Unsupported payment proof MIME type or file extension.');
+    }
+  }
 
   const admin = getSupabaseAdmin();
   const { data: invoice } = await admin
@@ -2002,14 +2112,25 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
 
   let proofFileId: string | null = null;
   if (r2Key && filename && sizeBytes > 0) {
+    const resolvedProofMime = resolveMimeType(filename, providedMime);
     const expectedPrefix = `private/${session.userId}/payment_proof/`;
     if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
       throw new Error('Invalid payment proof storage key prefix.');
     }
+    let verifiedSha256: string | null =
+      declaredSha256 && /^[a-f0-9]{64}$/.test(declaredSha256) ? declaredSha256 : null;
     if (isR2Configured()) {
       const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
       if (!okSize) {
         throw new Error('Uploaded payment proof object could not be verified in private storage.');
+      }
+      if (sizeBytes <= 10 * 1024 * 1024) {
+        const { getPrivateObjectBytes } = await import('@/lib/r2');
+        const proofBytes = await getPrivateObjectBytes(r2Key);
+        if (!validateMagicBytes(proofBytes, resolvedProofMime)) {
+          throw new Error('Uploaded payment proof file signature does not match its declared MIME type.');
+        }
+        verifiedSha256 = createHash('sha256').update(proofBytes).digest('hex');
       }
     }
 
@@ -2023,8 +2144,9 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
         category: 'payment_proof',
         r2_key: r2Key,
         filename,
-        mime_type: mime,
+        mime_type: resolvedProofMime,
         size_bytes: sizeBytes,
+        sha256_checksum: verifiedSha256,
         retention_until: retentionUntil,
         uploaded_by: session.userId,
       })

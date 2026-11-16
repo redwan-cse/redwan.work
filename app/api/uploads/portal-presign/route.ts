@@ -145,6 +145,30 @@ export async function POST(request: NextRequest) {
     }
 
     const r2Key = makeVaultFileKey(ownerClientId, category, ext);
+
+    if (typeof admin.rpc === 'function') {
+      const { data: reservedOk, error: reserveErr } = await admin.rpc('reserve_vault_upload_quota', {
+        p_client_id: ownerClientId,
+        p_r2_key: r2Key,
+        p_size_bytes: size,
+        p_ttl_seconds: 900,
+      });
+
+      if (reserveErr) {
+        return NextResponse.json(
+          { error: 'Vault storage quota verification is temporarily unavailable.' },
+          { status: 503 }
+        );
+      }
+
+      if (!reservedOk) {
+        return NextResponse.json(
+          { error: 'Client active vault storage quota (500 MB) exceeded.' },
+          { status: 413 }
+        );
+      }
+    }
+
     const uploadUrl = await presignPrivatePut(r2Key, mime, size, 600);
 
     return NextResponse.json(

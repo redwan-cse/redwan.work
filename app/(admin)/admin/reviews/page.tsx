@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { toggleReviewPublicApprovalAction } from '@/lib/crm/actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminReviewsPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const { data: reviews } = await admin
     .from('client_reviews')

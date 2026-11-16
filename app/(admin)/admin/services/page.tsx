@@ -13,9 +13,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+import { requireAdminSession } from '@/lib/auth/session';
+
 export const dynamic = 'force-dynamic';
 
 export default async function AdminServicesCmsPage() {
+  await requireAdminSession();
   const serviceList = await getPublicServicesCatalog({ includeHidden: true });
 
   return (

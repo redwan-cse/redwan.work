@@ -448,7 +448,7 @@ export async function startLoopbackServices(options = {}) {
       aud: 'authenticated',
       role: 'authenticated',
       email: user.email,
-      email_confirmed_at: '2026-11-04T00:00:00.000Z',
+      email_confirmed_at: user.emailConfirmed === false ? null : '2026-11-04T00:00:00.000Z',
       phone: '',
       app_metadata: {
         provider: 'email',
@@ -926,6 +926,17 @@ export async function startLoopbackServices(options = {}) {
           sendJson(res, 200, { rows: result.rows });
           return;
         }
+        if (op === 'getLatestSignupTokenForEmail') {
+          const email = String(body.email || '').trim().toLowerCase();
+          const user = usersByEmail.get(email);
+          const match = user
+            ? Array.from(oneTimeTokens.values()).find(
+                (t) => t.userId === user.id && t.type === 'signup' && !t.consumed
+              )
+            : null;
+          sendJson(res, 200, { rows: match ? [{ tokenHash: match.tokenHash }] : [] });
+          return;
+        }
         sendJson(res, 400, { error: 'Unsupported fixture operation' });
         return;
       }
@@ -964,6 +975,15 @@ export async function startLoopbackServices(options = {}) {
             });
             return;
           }
+          if (user.emailConfirmed === false) {
+            sendJson(res, 400, {
+              code: 'email_not_confirmed',
+              error_code: 'email_not_confirmed',
+              msg: 'Email not confirmed',
+              message: 'Email not confirmed',
+            });
+            return;
+          }
           const session = createSession(user, 'aal1', 'password');
           sendJson(res, 200, signSessionTokens(session, user));
           return;
@@ -987,6 +1007,60 @@ export async function startLoopbackServices(options = {}) {
         return;
       }
 
+      if (pathname === '/auth/v1/signup' && req.method === 'POST') {
+        const body = await readJsonBody(req);
+        const email = String(body.email || '').trim().toLowerCase();
+        const password = String(body.password || '');
+        const existing = usersByEmail.get(email);
+        if (existing) {
+          sendJson(res, 200, {
+            user: {
+              ...serializeUser(existing),
+              id: crypto.randomUUID(),
+              identities: [],
+            },
+            session: null,
+          });
+          return;
+        }
+        const newUser = {
+          id: crypto.randomUUID(),
+          email,
+          password,
+          fullName: body.data?.full_name || body.user_metadata?.full_name || email,
+          appRole: 'client',
+          emailConfirmed: false,
+          factors: [],
+        };
+        usersById.set(newUser.id, newUser);
+        usersByEmail.set(email, newUser);
+        await pg.db.query(
+          `INSERT INTO auth.users (id, email, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+           VALUES ($1::uuid, $2, null, $3::jsonb, $4::jsonb)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            newUser.id,
+            newUser.email,
+            JSON.stringify({ role: 'client' }),
+            JSON.stringify({
+              full_name: newUser.fullName,
+              company: body.data?.company || null,
+            }),
+          ]
+        );
+        const tokenHash = `signup_${crypto.randomUUID().replace(/-/g, '')}`;
+        oneTimeTokens.set(tokenHash, {
+          tokenHash,
+          userId: newUser.id,
+          type: 'signup',
+          consumed: false,
+        });
+        const serialized = serializeUser(newUser);
+        serialized.identities = [{ id: newUser.id, user_id: newUser.id, provider: 'email' }];
+        sendJson(res, 200, { user: serialized, session: null });
+        return;
+      }
+
       if (pathname === '/auth/v1/verify' && req.method === 'POST') {
         const body = await readJsonBody(req);
         const tokenHash = String(body.token_hash || body.token || '').trim();
@@ -1002,6 +1076,12 @@ export async function startLoopbackServices(options = {}) {
         }
         record.consumed = true;
         const user = usersById.get(record.userId);
+        if (record.type === 'signup' && user) {
+          user.emailConfirmed = true;
+          await pg.db.query('UPDATE auth.users SET email_confirmed_at = now() WHERE id = $1::uuid', [
+            user.id,
+          ]);
+        }
         const session = createSession(user, 'aal1', record.type || 'otp');
         sendJson(res, 200, signSessionTokens(session, user));
         return;
@@ -1169,6 +1249,17 @@ export async function startLoopbackServices(options = {}) {
           return;
         }
         sendJson(res, 200, serializeUser(user));
+        return;
+      }
+
+      if (adminUserMatch && req.method === 'DELETE') {
+        const user = usersById.get(adminUserMatch[1]);
+        if (user) {
+          usersById.delete(user.id);
+          usersByEmail.delete(user.email);
+          await pg.db.query('DELETE FROM auth.users WHERE id = $1::uuid', [user.id]);
+        }
+        sendJson(res, 200, {});
         return;
       }
 

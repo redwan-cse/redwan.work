@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import {
   inviteOrProvisionClientAction,
   updateInquiryStatusAction,
@@ -13,6 +14,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export default async function AdminInquiriesPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const { data: inquiries } = await admin
     .from('inquiries')

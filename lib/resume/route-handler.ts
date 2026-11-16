@@ -37,9 +37,25 @@ export async function serveStoredResumePdf(
     const safeRemoteUrl = sanitizeHttpUrl(configuredUrl);
     if (safeRemoteUrl) {
       try {
-        const res = await fetch(safeRemoteUrl, { cache: 'no-store' });
-        if (res.ok) {
-          pdfBytes = Buffer.from(await res.arrayBuffer());
+        const res = await fetch(safeRemoteUrl, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(8000),
+        });
+        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+        const declaredLen = Number(res.headers.get('content-length') ?? 0);
+        if (
+          res.ok &&
+          contentType.includes('application/pdf') &&
+          (!Number.isFinite(declaredLen) || declaredLen <= 10 * 1024 * 1024)
+        ) {
+          const buf = Buffer.from(await res.arrayBuffer());
+          if (
+            buf.byteLength > 0 &&
+            buf.byteLength <= 10 * 1024 * 1024 &&
+            buf.subarray(0, 5).toString('ascii') === '%PDF-'
+          ) {
+            pdfBytes = buf;
+          }
         }
       } catch {
         pdfBytes = null;

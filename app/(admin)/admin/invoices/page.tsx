@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { createAndIssueInvoiceAction, reviewPaymentProofAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminInvoicesPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const [
     { data: invoices },

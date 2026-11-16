@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { getCurrentSession } from '@/lib/auth/session';
+import { requireAdminSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
   addOrderTaskAction,
@@ -38,7 +38,7 @@ export default async function AdminOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await getCurrentSession();
+  const session = await requireAdminSession();
   const admin = getSupabaseAdmin();
 
   const [

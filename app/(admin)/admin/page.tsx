@@ -16,11 +16,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOverviewPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const [
     { data: metricsRaw },

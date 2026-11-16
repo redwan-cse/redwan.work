@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PrintInvoiceButton } from '@/components/panel/print-invoice-button';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { reviewPaymentProofAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
@@ -18,6 +19,7 @@ export default async function AdminInvoiceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
 
   const [{ data: invoice }, { data: items }, { data: payments }] = await Promise.all([

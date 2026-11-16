@@ -1619,6 +1619,7 @@ export type Database = {
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           timezone: string | null
+          tokens_valid_after: number
           updated_at: string
           whatsapp: string | null
         }
@@ -1636,6 +1637,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           timezone?: string | null
+          tokens_valid_after?: number
           updated_at?: string
           whatsapp?: string | null
         }
@@ -1653,6 +1655,7 @@ export type Database = {
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           timezone?: string | null
+          tokens_valid_after?: number
           updated_at?: string
           whatsapp?: string | null
         }
@@ -2406,6 +2409,38 @@ export type Database = {
           },
         ]
       }
+      vault_upload_reservations: {
+        Row: {
+          client_id: string
+          created_at: string
+          expires_at: string
+          r2_key: string
+          size_bytes: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          expires_at?: string
+          r2_key: string
+          size_bytes: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          expires_at?: string
+          r2_key?: string
+          size_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_upload_reservations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2470,7 +2505,10 @@ export type Database = {
         }
         Returns: Json
       }
+      is_active_client: { Args: never; Returns: boolean }
+      is_active_user: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
+      current_account_role: { Args: never; Returns: string | null }
       increment_vault_file_download: {
         Args: { p_file_id: string }
         Returns: undefined
@@ -2490,6 +2528,16 @@ export type Database = {
           p_tax_rate_bps: number
         }
         Returns: Json
+      }
+      mark_overdue_invoices_atomic: { Args: never; Returns: number }
+      reserve_vault_upload_quota: {
+        Args: {
+          p_client_id: string
+          p_r2_key: string
+          p_size_bytes: number
+          p_ttl_seconds?: number
+        }
+        Returns: boolean
       }
       review_invoice_payment: {
         Args: {
@@ -2511,6 +2559,14 @@ export type Database = {
         Returns: Json
       }
       run_auto_accept_deliverables: { Args: never; Returns: number }
+      send_draft_invoice_atomic: {
+        Args: { p_admin_id?: string | null; p_invoice_id: string }
+        Returns: Json
+      }
+      void_invoice_atomic: {
+        Args: { p_admin_id?: string | null; p_invoice_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       client_tier: "standard" | "vip" | "retainer" | "enterprise"

@@ -8,12 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { createOrderFromAdminAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminOrdersPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const [{ data: orders }, { data: clients }] = await Promise.all([
     admin

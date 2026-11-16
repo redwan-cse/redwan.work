@@ -66,7 +66,30 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       return withNoIndex(carry(response, NextResponse.redirect(login)));
     }
 
-    if (pathname === '/reset-password' || pathname.startsWith('/invite/')) {
+    if (pathname === '/reset-password') {
+      if (request.nextUrl.searchParams.get('session') !== '1') {
+        return withNoIndex(response);
+      }
+      const amr = (claims as { amr?: Array<{ method?: string }> } | undefined)?.amr;
+      const hasRecoveryAmr =
+        Array.isArray(amr) && amr.some((entry) => entry && entry.method === 'recovery');
+      if (!hasRecoveryAmr) {
+        const forgotUrl = new URL('/login', request.url);
+        forgotUrl.searchParams.set('mode', 'forgot');
+        return withNoIndex(carry(response, NextResponse.redirect(forgotUrl)));
+      }
+      const recProfile = await supabase
+        .from('profiles')
+        .select('role, is_active')
+        .eq('id', userId)
+        .maybeSingle();
+      if (recProfile.error || !recProfile.data || recProfile.data.is_active !== true) {
+        const logoutUrl = new URL('/api/auth/logout?reason=deactivated', request.url);
+        return withNoIndex(carry(response, NextResponse.redirect(logoutUrl)));
+      }
+      return withNoIndex(response);
+    }
+    if (pathname.startsWith('/invite/')) {
       return withNoIndex(response);
     }
 
@@ -120,6 +143,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       return withNoIndex(carry(response, NextResponse.redirect(new URL(home, request.url))));
     }
 
+    if (pathname.startsWith('/admin') || pathname.startsWith('/portal') || pathname === '/mfa') {
+      response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+    }
     return withNoIndex(response);
   } catch {
     console.error('Route authority check unavailable.');

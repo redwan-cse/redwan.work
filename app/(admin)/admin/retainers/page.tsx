@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { createRetainerPlanAction, updateRetainerPlanAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminRetainersPage() {
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
   const [{ data: retainers }, { data: clients }] = await Promise.all([
     admin.from('retainer_plans').select('*').order('created_at', { ascending: false }),

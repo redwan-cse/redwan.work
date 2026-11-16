@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import {
   toggleClientActiveStatusAction,
   updateClientCrmAndNoteAction,
@@ -23,6 +24,7 @@ export default async function AdminClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
 
   const [

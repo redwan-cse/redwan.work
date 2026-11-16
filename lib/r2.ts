@@ -138,10 +138,19 @@ export async function verifyStoredPortalObjectSize(key: string, declared: number
   if (!isPortalKey(key) || !Number.isSafeInteger(declared) || declared < 1 || declared > ARCHIVE_MAX_BYTES) return false;
   return await getPrivateObjectSize(key) === declared;
 }
-export async function presignPrivateGet(key: string, expiresIn = 60): Promise<string> {
+export async function presignPrivateGet(key: string, expiresIn = 60, filename?: string): Promise<string> {
   if (!isPortalKey(key) && !isValidContactKey(key)) throw new Error('Invalid private key.');
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
-  return getSignedUrl(privateClient(), new GetObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key }), { expiresIn });
+  const safeName = filename ? filename.replace(/[\r\n"\\/]+/g, '_').slice(0, 180) : undefined;
+  return getSignedUrl(
+    privateClient(),
+    new GetObjectCommand({
+      Bucket: process.env.R2_PRIVATE_BUCKET,
+      Key: key,
+      ResponseContentDisposition: safeName ? `attachment; filename="${safeName}"` : 'attachment',
+    }),
+    { expiresIn }
+  );
 }
 export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
   if (!isPortalKey(key)) throw new Error('Invalid portal key.');
@@ -154,7 +163,7 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
   const { Upload } = await import('@aws-sdk/lib-storage');
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }
-export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'svg', 'avif', 'pdf'] as const;
+export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'avif', 'pdf'] as const;
 export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
 export const RESUME_ASSET_KEY = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
 export const RESUME_PDF_MAX_BYTES = 10 * 1024 * 1024;

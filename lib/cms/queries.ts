@@ -263,16 +263,11 @@ export async function getPublicPortfolioItems(options?: {
 > {
   try {
     const admin = getSupabaseAdmin();
-    let query = admin
+    const { data, error } = await admin
       .from('portfolio_items')
       .select('*')
       .order('sort_order', { ascending: true });
 
-    if (!options?.includeUnpublished) {
-      query = query.eq('is_published', true);
-    }
-
-    const { data, error } = await query;
     const fallbackMapped = PORTFOLIO_ITEMS.map((item, idx) => ({
       ...item,
       dbId: item.id,
@@ -306,13 +301,14 @@ export async function getPublicPortfolioItems(options?: {
       sortOrder: row.sort_order ?? 0,
     }));
 
+    const visibleDbMapped = dbMapped.filter((item) => item.isPublished);
     if (options?.includeUnpublished) {
       return dbMapped;
     }
-
-    const existingSlugs = new Set(dbMapped.map((item) => item.slug));
-    const additionalItems = fallbackMapped.filter((item) => !existingSlugs.has(item.slug));
-    return [...dbMapped, ...additionalItems];
+    if (dbMapped.length > 0) {
+      return visibleDbMapped;
+    }
+    return fallbackMapped;
   } catch {
     return PORTFOLIO_ITEMS.map((item, idx) => ({
       ...item,

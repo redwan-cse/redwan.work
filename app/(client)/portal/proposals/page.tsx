@@ -21,6 +21,7 @@ export default async function ClientProposalsPage() {
       'id, code, title, pillar, scope_summary, status, requires_roe, estimated_days, deposit_percent, total_cents, currency, valid_until, accepted_at, created_at, proposal_milestones(id, title, description, amount_cents, weight_percent, due_days_offset)'
     )
     .eq('client_id', session.userId)
+    .neq('status', 'draft')
     .order('created_at', { ascending: false });
 
   return (

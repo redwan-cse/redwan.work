@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type AppRole = 'admin' | 'client';
@@ -109,4 +110,26 @@ export async function getPendingMfaAdminSession(): Promise<{
   } catch {
     return null;
   }
+}
+
+export async function requireAdminSession(): Promise<SessionInfo> {
+  const session = await getCurrentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.role !== 'admin') {
+    redirect('/portal');
+  }
+  return session;
+}
+
+export async function requireClientSession(): Promise<SessionInfo> {
+  const session = await getCurrentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.role !== 'client') {
+    redirect('/admin');
+  }
+  return session;
 }

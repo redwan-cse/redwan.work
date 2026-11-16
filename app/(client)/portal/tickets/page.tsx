@@ -86,10 +86,11 @@ export default async function ClientTicketsPage() {
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
                     <option value="general">General Support</option>
+                    <option value="technical_support">Technical Support / Outage</option>
                     <option value="security_incident">Security Incident / VAPT</option>
-                    <option value="server_outage">Server / Cloud Outage</option>
-                    <option value="bug_report">Bug Report / Patch</option>
+                    <option value="order_question">Order Question / Bug Report</option>
                     <option value="billing">Billing &amp; Invoices</option>
+                    <option value="retainer_request">Retainer Request</option>
                   </select>
                 </div>
               </div>

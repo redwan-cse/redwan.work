@@ -103,7 +103,7 @@ export async function GET(
       return NextResponse.json({ error: 'Stored file object not found.' }, { status: 404 });
     }
 
-    const signedUrl = await presignPrivateGet(file.r2_key, 60);
+    const signedUrl = await presignPrivateGet(file.r2_key, 60, file.filename);
 
     const { error: incErr } = await admin.rpc('increment_vault_file_download', {
       p_file_id: file.id,

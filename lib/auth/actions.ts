@@ -74,10 +74,20 @@ const INVALID_LINK='This link is invalid or has expired. Ask for a new one.';
 const SPENT_RECOVERY_LINK='Could not update your password. This reset link is no longer valid. Please request a new password reset link.';
 const SPENT_INVITE_LINK='Could not save your password. This invitation link is no longer valid. Please ask an administrator to send a new invitation.';
 const OTP_RATE_MESSAGE='Too many requests. Please try again later.';
+async function resolveTrustedClientIp():Promise<string>{
+ const h=await headers();
+ return (
+  h.get('x-vercel-forwarded-for')?.split(',').pop()?.trim()||
+  h.get('cf-connecting-ip')?.trim()||
+  h.get('x-real-ip')?.trim()||
+  h.get('x-forwarded-for')?.split(',').pop()?.trim()||
+  'unknown'
+ );
+}
 async function checkOtpRateLimit():Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;if(!salt){console.error('OTP configuration unavailable.');return false;}
  try {
-  const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
+  const ip=await resolveTrustedClientIp();
   const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'otp-ip',p_key_hash:await sha256Hex(salt+ip),p_window_seconds:300,p_max_count:5});
   if(error){console.error('OTP rate control unavailable.');return false;}return data===true;
  }catch{console.error('OTP rate control unavailable.');return false;}
@@ -90,7 +100,7 @@ function validatePasswordPair(formData:FormData):{error:string}|{password:string
  if(password.length<MIN_PASSWORD)return {error:`Password must be at least ${MIN_PASSWORD} characters.`};
  if(password!==confirm)return {error:'Passwords do not match.'};return {password};
 }
-async function checkPasswordSignInRateLimit(email:string):Promise<boolean> {
+async function checkPasswordSignInRateLimit(_email?:string):Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;
  if(!salt){
   if(process.env.NODE_ENV==='production'){
@@ -100,8 +110,8 @@ async function checkPasswordSignInRateLimit(email:string):Promise<boolean> {
   return true;
  }
  try {
-  const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
-  const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'password-login',p_key_hash:await sha256Hex(`${salt}:${ip}:${email}`),p_window_seconds:300,p_max_count:10});
+  const ip=await resolveTrustedClientIp();
+  const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'password-login',p_key_hash:await sha256Hex(`${salt}:login:${ip}`),p_window_seconds:300,p_max_count:15});
   if(error){
    console.error('Password sign-in rate limit RPC failed:',error.message);
    return false;
@@ -122,7 +132,7 @@ async function checkRegistrationRateLimit():Promise<boolean> {
   return true;
  }
  try {
-  const h=await headers();const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
+  const ip=await resolveTrustedClientIp();
   const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'register-ip',p_key_hash:await sha256Hex(`${salt}:register:${ip}`),p_window_seconds:3600,p_max_count:5});
   if(error){
    console.error('Registration rate limit RPC failed:',error.message);
@@ -141,35 +151,6 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  const supabase=await createSupabaseServerClient();
  const {error}=await supabase.auth.signInWithPassword({email,password});
  if(error){
-  let existsInProfiles: boolean | null = null;
-  try {
-   const {data:existing} = await getSupabaseAdmin()
-    .from('profiles')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-   existsInProfiles = Boolean(existing?.id);
-  } catch {
-   existsInProfiles = null;
-  }
-  if(existsInProfiles === false){
-   const regParams = new URLSearchParams({email});
-   if(next) regParams.set('next', next);
-   return {
-    error:'Sign-in blocked: no active account was found for this email. Please create a client account first to continue.',
-    linkHref:`/register?${regParams.toString()}`,
-    linkText:'Create a client account first',
-   };
-  }
-  if(existsInProfiles === true){
-   const resetParams = new URLSearchParams({mode:'forgot',email});
-   if(next) resetParams.set('next', next);
-   return {
-    error:'Invalid password for this registered account. Please try again or reset your password.',
-    linkHref:`/login?${resetParams.toString()}`,
-    linkText:'Reset password',
-   };
-  }
   return {error:'Invalid email or password.'};
  }
  const destination=await resolveCurrentPanelDestination();
@@ -187,31 +168,11 @@ export async function signInWithPasswordAction(_prev:ActionState,formData:FormDa
  }
  redirect(home);
 }
-export async function checkClientEmailRegistrationAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
- const email=String(formData.get('email')??'').trim().toLowerCase();
- const next=safeRelativePath(formData.get('next'));
- if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-  return {error:'Please enter a valid email address.'};
- }
- if(!await checkPasswordSignInRateLimit(email))return {error:OTP_RATE_MESSAGE};
- let exists = false;
- try {
-  const {data} = await getSupabaseAdmin()
-   .from('profiles')
-   .select('id')
-   .eq('email', email)
-   .maybeSingle();
-  exists = Boolean(data?.id);
- } catch {
-  return {error:'Unable to verify account status right now. Please sign in or register directly.'};
- }
- const params = new URLSearchParams({email});
- if(next) params.set('next', next);
- if(exists){
-  params.set('registered', '1');
-  redirect(`/login?${params.toString()}`);
- }
- redirect(`/register?${params.toString()}`);
+export async function checkClientEmailRegistrationAction(
+ _prev: ActionState | string = {},
+ _formData?: FormData
+): Promise<{ registered: boolean }> {
+ return { registered: false };
 }
 export async function registerClientAccountAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const fullName=String(formData.get('full_name')??'').trim();
@@ -229,105 +190,79 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
   return {error:'Too many registration attempts from this network. Please wait and try again.'};
  }
 
- const admin=getSupabaseAdmin();
- const {data:existingProfile}=await admin
-  .from('profiles')
-  .select('id')
-  .eq('email',email)
-  .maybeSingle();
+ const genericConfirmNotice =
+  'If this email is eligible, a confirmation link has been sent to your inbox. Please verify your email address before signing in to the Client Portal.';
 
- if(existingProfile?.id){
-  const loginParams=new URLSearchParams({email,registered:'1'});
-  if(next)loginParams.set('next',next);
-  redirect(`/login?${loginParams.toString()}`);
- }
+ const origin=credentialEmailOrigin();
+ const callbackUrl=origin
+  ?`${origin}/auth/callback${next?`?next=${encodeURIComponent(next)}`:''}`
+  :undefined;
 
- const created=await admin.auth.admin.createUser({
+ const supabase=await createSupabaseServerClient();
+ const {data:signUpData,error:signUpError}=await supabase.auth.signUp({
   email,
   password:checked.password,
-  email_confirm:true,
-  user_metadata:{full_name:fullName},
-  app_metadata:{role:'client'},
+  options:{
+   emailRedirectTo:callbackUrl,
+   data:{
+    full_name:fullName,
+    company:companyName||null,
+    phone:phone||null,
+   },
+  },
  });
 
- if(created.error||!created.data?.user?.id){
-  const msg=(created.error?.message??'').toLowerCase();
+ if(signUpError){
+  const msg=(signUpError.message??'').toLowerCase();
   if(msg.includes('already')||msg.includes('registered')||msg.includes('exists')){
-   const loginParams=new URLSearchParams({email,registered:'1'});
-   if(next)loginParams.set('next',next);
-   redirect(`/login?${loginParams.toString()}`);
+   return {notice:genericConfirmNotice};
   }
   return {error:'Could not create your client account. Please try again.'};
  }
 
- const userId=created.data.user.id;
+ const createdUserId=signUpData?.user?.id;
+ const isFreshIdentity=Boolean(createdUserId&&Array.isArray(signUpData.user?.identities)&&signUpData.user.identities.length>0);
+ if(!isFreshIdentity||!createdUserId){
+  return {notice:genericConfirmNotice};
+ }
+
+ const admin=getSupabaseAdmin();
  const {error:profileErr}=await admin.from('profiles').upsert({
-  id:userId,
+  id:createdUserId,
   email,
   full_name:fullName,
   phone:phone||null,
+  company:companyName||null,
   role:'client',
   is_active:true,
  });
  if(profileErr){
   console.error('[auth] profile upsert failed during registration:',profileErr.message);
+  await admin.auth.admin.deleteUser(createdUserId);
   return {error:'Unable to initialize your client profile. Please try again.'};
  }
 
  const {error:clientProfileErr}=await admin.from('client_profiles').upsert({
-  user_id:userId,
+  user_id:createdUserId,
   company_name:companyName||null,
-  onboarding_completed:Boolean(companyName),
  });
  if(clientProfileErr){
   console.error('[auth] client_profiles upsert failed during registration:',clientProfileErr.message);
+  await admin.auth.admin.deleteUser(createdUserId);
   return {error:'Unable to initialize your client profile. Please try again.'};
  }
 
- const supabase=await createSupabaseServerClient();
- const signedIn=await supabase.auth.signInWithPassword({email,password:checked.password});
- if(signedIn.error){
-  const loginParams=new URLSearchParams({email,registered:'1'});
-  if(next)loginParams.set('next',next);
-  redirect(`/login?${loginParams.toString()}`);
- }
-
- if(next){
-  const pathname=decodeURIComponent(new URL(next,'https://return-path.invalid').pathname);
-  if(pathname.startsWith('/portal'))redirect(next);
- }
- redirect('/portal');
+ return {notice:genericConfirmNotice};
 }
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  const next=safeRelativePath(formData.get('next'));
  if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
- let existsInProfiles: boolean | null = null;
- try {
-  const {data:existing} = await getSupabaseAdmin()
-   .from('profiles')
-   .select('id')
-   .eq('email', email)
-   .maybeSingle();
-  existsInProfiles = Boolean(existing?.id);
- } catch {
-  existsInProfiles = null;
- }
- if(existsInProfiles === false){
-  const regParams = new URLSearchParams({email});
-  if(next) regParams.set('next', next);
-  return {
-   error:'Sign-in link blocked: no active account was found for this email. Please create a client account first to continue.',
-   linkHref:`/register?${regParams.toString()}`,
-   linkText:'Create a client account first',
-  };
- }
  const origin=credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
- // Preserve the documented token-hash flow; /login does not exchange PKCE codes.
- // Supabase's Site URL and Magic Link template must also match docs/auth/README.md.
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:origin+'/login'}});
+ const redirectTarget=next?`${origin}/login?next=${encodeURIComponent(next)}`:`${origin}/login`;
+ const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTarget}});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
- return {notice:'If that address has an account, a sign-in link is on its way.'};
+ return {notice:'If an account matches that email, a one-time sign-in link has been sent.'};
 }
 export async function requestPasswordResetAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
@@ -488,14 +423,22 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   // PKCE callback recovery path: user already holds an active recovery session exchanged at /auth/callback
   if(!tokenHash){
     const {data:sessionClaims,error:sessionClaimsErr}=await supabase.auth.getClaims();
-    const sessionSub=typeof sessionClaims?.claims?.sub==='string'?sessionClaims.claims.sub:null;
-    if(sessionClaimsErr||!sessionSub)return {error:INVALID_LINK};
+    const claims = sessionClaims?.claims as Record<string, unknown> | undefined;
+    const sessionSub=typeof claims?.sub==='string'?claims.sub:null;
+    const amrEntries=Array.isArray(claims?.amr)?claims.amr:[];
+    const hasRecoveryAmr=amrEntries.some((entry)=>typeof entry==='object'&&entry!==null&&(entry as Record<string, unknown>).method==='recovery');
+    if(sessionClaimsErr||!sessionSub||!hasRecoveryAmr)return {error:INVALID_LINK};
+
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok){
+      await supabase.auth.signOut().catch(()=>{});
+      return {error:destination.error};
+    }
+
     const updated=await supabase.auth.updateUser({password:checked.password});
     if(updated.error){
       return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
     }
-    const destination=await resolveCurrentPanelDestination();
-    if(!destination.ok)return {error:destination.error};
     redirect(destination.home);
   }
 
@@ -660,18 +603,41 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
   if(!destination.ok)return {error:destination.error};
   redirect(destination.home);
 }
-export async function consumeMagicLinkTokenAction(tokenHash:string):Promise<{ok:true;home:string}|{ok:false;error:string}> {
- if(!tokenHash)return {ok:false,error:INVALID_LINK};if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});if(error)return {ok:false,error:INVALID_LINK};const destination=await resolveCurrentPanelDestination();if(!destination.ok)return {ok:false,error:destination.error};return {ok:true,home:destination.home};
+export async function consumeMagicLinkTokenAction(tokenHash:string, rawNext?: string | null):Promise<{ok:true;home:string}|{ok:false;error:string}> {
+ if(!tokenHash)return {ok:false,error:INVALID_LINK};
+ if(!await checkOtpRateLimit())return {ok:false,error:OTP_RATE_MESSAGE};
+ const supabase=await createSupabaseServerClient();
+ const {error}=await supabase.auth.verifyOtp({type:'magiclink',token_hash:tokenHash});
+ if(error)return {ok:false,error:INVALID_LINK};
+ const destination=await resolveCurrentPanelDestination();
+ if(!destination.ok)return {ok:false,error:destination.error};
+ const safeNext=safeRelativePath(rawNext??null);
+ if(safeNext){
+  const pathname=decodeURIComponent(new URL(safeNext,'https://return-path.invalid').pathname);
+  if(destination.home==='/mfa')return {ok:true,home:`/mfa?next=${encodeURIComponent(safeNext)}`};
+  if((pathname.startsWith('/admin')&&destination.home==='/admin')||(pathname.startsWith('/portal')&&destination.home==='/portal')){
+   return {ok:true,home:safeNext};
+  }
+ }
+ return {ok:true,home:destination.home};
 }
 
 export async function resetUnverifiedMfaFactorsAction(): Promise<{ ok: boolean }> {
   try {
     const supabase = await createSupabaseServerClient();
     const { data: claimsData } = await supabase.auth.getClaims();
-    const sub = typeof claimsData?.claims?.sub === 'string' ? claimsData.claims.sub : null;
+    const claims = claimsData?.claims as Record<string, unknown> | undefined;
+    const sub = typeof claims?.sub === 'string' ? claims.sub : null;
     if (!sub) return { ok: false };
 
     const admin = getSupabaseAdmin();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('is_active, role')
+      .eq('id', sub)
+      .maybeSingle();
+    if (!profile?.is_active) return { ok: false };
+
     const { data: factorsData, error: listErr } = await admin.auth.admin.mfa.listFactors({
       userId: sub,
     });

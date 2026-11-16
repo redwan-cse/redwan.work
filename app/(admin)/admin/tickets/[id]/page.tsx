@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { replyTicketAction, updateTicketStatusAction } from '@/lib/crm/actions';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,7 @@ export default async function AdminTicketDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  await requireAdminSession();
   const admin = getSupabaseAdmin();
 
   const [{ data: ticket }, { data: messages }] = await Promise.all([

@@ -44,6 +44,7 @@ export default async function ClientPortalOverviewPage() {
       .from('proposals')
       .select('id, code, title, pillar, status, total_cents, currency, valid_until')
       .eq('client_id', session.userId)
+      .neq('status', 'draft')
       .order('created_at', { ascending: false })
       .limit(4),
     admin

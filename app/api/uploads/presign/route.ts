@@ -255,6 +255,11 @@ export async function POST(request: NextRequest) {
 
         clearTimeout(timeoutId);
 
+        if (!turnstileResponse.ok) {
+          console.warn('Contact presign verification upstream error:', turnstileResponse.status);
+          return jsonError('Verification service temporarily unavailable. Please try again.', 503);
+        }
+
         const turnstileResult: TurnstileValidationResponse = await turnstileResponse.json();
 
         if (!turnstileResult.success) {
