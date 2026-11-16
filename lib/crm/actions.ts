@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { isR2Configured, verifyStoredPortalObjectSize } from '@/lib/r2';
+import { deletePrivateObjects, isR2Configured, verifyStoredPortalObjectSize } from '@/lib/r2';
 import {
   createInAppNotification,
   enqueueTransactionalEmail,
@@ -20,7 +20,7 @@ import {
   computeInvoiceTotals,
   validatePaymentSubmission,
 } from '@/lib/finance/invariants';
-import type { Database } from '@/lib/supabase/database.types';
+import type { Database, Json } from '@/lib/supabase/database.types';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 type InquiryStatus = Database['public']['Enums']['inquiry_status'];
@@ -105,6 +105,64 @@ function getAdminAlertEmail(): string {
 
 function getSiteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
+}
+
+async function registerVaultAttachmentFromForm(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  opts: {
+    formData: FormData;
+    ownerClientId: string;
+    uploadedBy: string;
+    category: 'order_attachment' | 'requirement_attachment' | 'ticket_attachment' | 'roe_document';
+    orderId?: string | null;
+    ticketId?: string | null;
+    retentionDays?: number;
+  }
+): Promise<string | null> {
+  const r2Key = String(opts.formData.get('r2_key') ?? '').trim();
+  const filename = String(opts.formData.get('filename') ?? '').trim();
+  const mime = String(opts.formData.get('mime') ?? '').trim();
+  const sizeBytes = Number(opts.formData.get('size_bytes') ?? 0);
+  const sha256Checksum = String(opts.formData.get('sha256_checksum') ?? '').trim() || null;
+
+  if (!r2Key || !filename || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return null;
+  }
+
+  const expectedPrefix = `private/${opts.ownerClientId}/${opts.category}/`;
+  if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
+    throw new Error('Invalid vault attachment storage prefix.');
+  }
+  if (isR2Configured()) {
+    const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
+    if (!okSize) {
+      throw new Error('Uploaded attachment could not be verified in private storage.');
+    }
+  }
+
+  const retentionDays = opts.retentionDays ?? 365;
+  const retentionUntil = new Date(Date.now() + retentionDays * 86400 * 1000).toISOString();
+  const { data: vFile, error: fileErr } = await admin
+    .from('vault_files')
+    .insert({
+      owner_client_id: opts.ownerClientId,
+      order_id: opts.orderId ?? null,
+      ticket_id: opts.ticketId ?? null,
+      category: opts.category,
+      r2_key: r2Key,
+      filename,
+      mime_type: mime || 'application/octet-stream',
+      size_bytes: Math.round(sizeBytes),
+      sha256_checksum: sha256Checksum,
+      retention_until: retentionUntil,
+      uploaded_by: opts.uploadedBy,
+    })
+    .select('id')
+    .single();
+  if (fileErr || !vFile) {
+    throw new Error(fileErr?.message ?? 'Could not register uploaded attachment.');
+  }
+  return vFile.id;
 }
 
 // =============================================================================
@@ -283,6 +341,9 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
   const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+  const rawPropStatus = String(formData.get('proposal_status') ?? 'sent').trim();
+  const proposalStatus = rawPropStatus === 'draft' ? 'draft' : 'sent';
+  const milestonesJsonRaw = String(formData.get('milestones_json') ?? '').trim();
   let clientId = String(formData.get('client_id') ?? '').trim() || null;
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim() || null;
 
@@ -295,6 +356,29 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean);
+
+  interface DraftMilestoneInput {
+    title: string;
+    amount_usd: number;
+    due_days_offset?: number;
+  }
+  let parsedCustomMilestones: Array<{ title: string; amount_cents: number; due_days_offset: number }> = [];
+  if (milestonesJsonRaw) {
+    try {
+      const parsed = JSON.parse(milestonesJsonRaw) as DraftMilestoneInput[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsedCustomMilestones = parsed
+          .map((m, idx) => ({
+            title: String(m.title ?? '').trim() || `Milestone ${idx + 1}`,
+            amount_cents: Math.max(0, Math.round(Number(m.amount_usd ?? 0) * 100)),
+            due_days_offset: Math.max(1, Math.round(Number(m.due_days_offset ?? (idx + 1) * 7))),
+          }))
+          .filter((m) => m.amount_cents > 0);
+      }
+    } catch {
+      throw new Error('Invalid custom milestone schedule JSON.');
+    }
+  }
 
   const admin = getSupabaseAdmin();
   if (!clientId) {
@@ -368,7 +452,7 @@ export async function createProposalAction(formData: FormData): Promise<void> {
       subtotal_cents: totalCents,
       total_cents: totalCents,
       deposit_percent: Math.min(100, Math.max(0, depositPercent)),
-      status: 'sent',
+      status: proposalStatus,
       valid_until: new Date(Date.now() + 14 * 86400 * 1000).toISOString().slice(0, 10),
       created_by: session.userId,
     })
@@ -378,66 +462,79 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     throw new Error(propErr?.message ?? 'Could not create proposal.');
   }
 
-  // Default 2 milestones (Kickoff & Final Delivery)
+  // Custom milestones or default 2 milestones (Kickoff & Final Delivery)
   const boundedDepositPercent = Math.min(100, Math.max(0, Math.round(depositPercent)));
   const { depositCents, balanceCents } = computeDepositSplit(totalCents, boundedDepositPercent);
-  const { error: msErr } = await admin.from('proposal_milestones').insert([
-    {
-      proposal_id: proposal.id,
-      position: 0,
-      title: 'Phase 1: Kickoff, Architecture & Initial Execution',
-      amount_cents: depositCents,
-      due_days_offset: Math.max(1, Math.floor(deliveryDays / 2)),
-    },
-    {
-      proposal_id: proposal.id,
-      position: 1,
-      title: 'Phase 2: Final Deliverables, Verification & Handover',
-      amount_cents: balanceCents,
-      due_days_offset: deliveryDays,
-    },
-  ]);
+  const milestonesToInsert =
+    parsedCustomMilestones.length > 0
+      ? parsedCustomMilestones.map((m, index) => ({
+          proposal_id: proposal.id,
+          position: index,
+          title: m.title,
+          amount_cents: m.amount_cents,
+          due_days_offset: m.due_days_offset,
+        }))
+      : [
+          {
+            proposal_id: proposal.id,
+            position: 0,
+            title: 'Phase 1: Kickoff, Architecture & Initial Execution',
+            amount_cents: depositCents,
+            due_days_offset: Math.max(1, Math.floor(deliveryDays / 2)),
+          },
+          {
+            proposal_id: proposal.id,
+            position: 1,
+            title: 'Phase 2: Final Deliverables, Verification & Handover',
+            amount_cents: balanceCents,
+            due_days_offset: deliveryDays,
+          },
+        ];
+
+  const { error: msErr } = await admin.from('proposal_milestones').insert(milestonesToInsert);
   if (msErr) {
     throw new Error(msErr.message);
   }
 
   if (proposal) {
+    if (proposalStatus === 'sent') {
+      if (clientId) {
+        await createInAppNotification({
+          recipientId: clientId,
+          category: 'proposal',
+          title: `New Proposal ${proposal.code ?? ''}: ${title}`,
+          body: 'Review and accept your project proposal in the Client Portal.',
+          href: `/portal/proposals/${proposal.id}`,
+        });
+      }
 
-    if (clientId) {
-      await createInAppNotification({
-        recipientId: clientId,
-        category: 'proposal',
-        title: `New Proposal ${proposal.code ?? ''}: ${title}`,
-        body: 'Review and accept your project proposal in the Client Portal.',
-        href: '/portal/proposals',
+      await enqueueTransactionalEmail({
+        toEmail: recipientEmail,
+        template: 'proposal_sent',
+        subject: `Proposal ${proposal.code ?? ''} — ${title}`,
+        payload: {
+          message: `Hi ${recipientName}, a new project proposal (${proposal.code ?? ''}: ${title}) for $${totalUsd.toLocaleString()} USD is ready for your review in the redwan.work Client Portal.`,
+          actionUrl: `${getSiteOrigin()}/portal/proposals/${proposal.id}`,
+        },
+        entityType: 'proposal',
+        entityId: proposal.id,
       });
     }
-
-    await enqueueTransactionalEmail({
-      toEmail: recipientEmail,
-      template: 'proposal_sent',
-      subject: `Proposal ${proposal.code ?? ''} — ${title}`,
-      payload: {
-        message: `Hi ${recipientName}, a new project proposal (${proposal.code ?? ''}: ${title}) for $${totalUsd.toLocaleString()} USD is ready for your review in the redwan.work Client Portal.`,
-        actionUrl: `${process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work'}/portal/proposals`,
-      },
-      entityType: 'proposal',
-      entityId: proposal.id,
-    });
 
     await recordAuditLog({
       actorId: session.userId,
       actorRole: 'admin',
       clientId,
-      action: 'proposal.sent',
+      action: proposalStatus === 'draft' ? 'proposal.draft_saved' : 'proposal.sent',
       entityType: 'proposal',
       entityId: proposal.id,
-      summary: `Sent proposal ${proposal.code ?? ''} (${title}) to ${recipientEmail}`,
-      metadata: { totalCents, pillar },
+      summary: `${proposalStatus === 'draft' ? 'Saved draft' : 'Sent'} proposal ${proposal.code ?? ''} (${title}) for ${recipientEmail}`,
+      metadata: { totalCents, pillar, status: proposalStatus },
     });
   }
 
   revalidatePath('/admin/proposals');
+  revalidatePath('/admin/pipeline');
   revalidatePath('/portal/proposals');
 }
 
@@ -826,11 +923,20 @@ export async function postOrderMessageAction(formData: FormData): Promise<void> 
     throw new Error('Forbidden.');
   }
 
+  const fileId = await registerVaultAttachmentFromForm(admin, {
+    formData,
+    ownerClientId: order.client_id,
+    uploadedBy: session.userId,
+    category: 'order_attachment',
+    orderId,
+  });
+
   const { error: msgErr } = await admin.from('order_messages').insert({
     order_id: orderId,
     author_id: session.userId,
     body,
     is_internal_note: isInternalNote,
+    attachment_file_ids: fileId ? [fileId] : [],
   });
   if (msgErr) {
     throw new Error(msgErr.message);
@@ -1076,6 +1182,7 @@ export async function reviewPaymentProofAction(formData: FormData): Promise<void
     revalidatePath(`/portal/invoices/${paymentMeta.invoice_id}`);
   }
   revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
   revalidatePath('/admin');
   revalidatePath('/portal/invoices');
   revalidatePath('/portal/orders');
@@ -1177,11 +1284,20 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
     throw new Error('Forbidden.');
   }
 
+  const fileId = await registerVaultAttachmentFromForm(admin, {
+    formData,
+    ownerClientId: ticket.client_id,
+    uploadedBy: session.userId,
+    category: 'ticket_attachment',
+    ticketId,
+  });
+
   const { error: msgErr } = await admin.from('ticket_messages').insert({
     ticket_id: ticketId,
     author_id: session.userId,
     body,
     is_internal_note: isInternalNote,
+    attachment_file_ids: fileId ? [fileId] : [],
   });
   if (msgErr) throw new Error(msgErr.message);
 
@@ -1456,8 +1572,25 @@ export async function markAllNotificationsReadAction(): Promise<void> {
     .eq('recipient_id', session.userId)
     .eq('is_read', false);
 
-  revalidatePath('/admin');
-  revalidatePath('/portal');
+  revalidatePath('/admin', 'layout');
+  revalidatePath('/portal', 'layout');
+}
+
+export async function markNotificationReadAction(formData: FormData): Promise<void> {
+  const session = await requireAuthenticatedSession();
+  const notificationId = String(formData.get('notification_id') ?? '').trim();
+  if (!notificationId) return;
+
+  const admin = getSupabaseAdmin();
+  await admin
+    .from('notifications')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('id', notificationId)
+    .eq('recipient_id', session.userId)
+    .eq('is_read', false);
+
+  revalidatePath('/admin', 'layout');
+  revalidatePath('/portal', 'layout');
 }
 
 // =============================================================================
@@ -2261,11 +2394,21 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     throw new Error(ticketErr?.message ?? 'Could not create support ticket.');
   }
 
+  const ticketFileId = await registerVaultAttachmentFromForm(admin, {
+    formData,
+    ownerClientId: session.userId,
+    uploadedBy: session.userId,
+    category: 'ticket_attachment',
+    orderId,
+    ticketId: ticket.id,
+  });
+
   const { error: msgErr } = await admin.from('ticket_messages').insert({
     ticket_id: ticket.id,
     author_id: session.userId,
     body,
     is_internal_note: false,
+    attachment_file_ids: ticketFileId ? [ticketFileId] : [],
   });
   if (msgErr) {
     throw new Error(msgErr.message);
@@ -2388,6 +2531,16 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     .trim()
     .toUpperCase();
 
+  const billingAddress = {
+    line1: String(formData.get('billing_line1') ?? '').trim(),
+    line2: String(formData.get('billing_line2') ?? '').trim(),
+    city: String(formData.get('billing_city') ?? '').trim(),
+    state: String(formData.get('billing_state') ?? '').trim(),
+    postal_code: String(formData.get('billing_postal_code') ?? '').trim(),
+    country: String(formData.get('billing_country') ?? '').trim(),
+  };
+  const hasBillingFields = Object.values(billingAddress).some(Boolean);
+
   const admin = getSupabaseAdmin();
   const { error: profErr } = await admin
     .from('profiles')
@@ -2401,14 +2554,19 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     .eq('id', session.userId);
   if (profErr) throw new Error(profErr.message);
 
-  const { error: cpErr } = await admin.from('client_profiles').upsert({
+  const upsertPayload: Database['public']['Tables']['client_profiles']['Insert'] = {
     user_id: session.userId,
     company_name: companyName,
     company_role: companyRole,
     website_url: websiteUrl,
     tax_id: taxId,
     preferred_currency: preferredCurrency,
-  });
+  };
+  if (hasBillingFields || formData.has('billing_line1')) {
+    upsertPayload.billing_address = billingAddress as Json;
+  }
+
+  const { error: cpErr } = await admin.from('client_profiles').upsert(upsertPayload);
   if (cpErr) throw new Error(cpErr.message);
 
   await recordAuditLog({
@@ -2419,8 +2577,1230 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     entityType: 'client',
     entityId: session.userId,
     summary: 'Updated client billing and organization profile',
-    metadata: { companyName, preferredCurrency, timezone },
+    metadata: { companyName, preferredCurrency, timezone, hasBillingAddress: hasBillingFields },
   });
 
   revalidatePath('/portal/profile');
+  revalidatePath('/portal/invoices');
+}
+
+
+// =============================================================================
+// 5. PHASE 2 LIFECYCLE WORKFLOWS (MULTI-LINE INVOICE, CREDIT NOTES, NDA, CANCEL, RETAINERS)
+// =============================================================================
+
+export async function sendDraftProposalAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const proposalId = String(formData.get('proposal_id') ?? '').trim();
+  if (!proposalId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: proposal, error: fetchErr } = await admin
+    .from('proposals')
+    .select('id, code, title, client_id, recipient_name, recipient_email, total_cents, currency, status')
+    .eq('id', proposalId)
+    .maybeSingle();
+
+  if (fetchErr || !proposal) {
+    throw new Error('Proposal not found.');
+  }
+  if (proposal.status !== 'draft') {
+    throw new Error(`Only draft proposals can be sent (current status: ${proposal.status}).`);
+  }
+
+  const { error: updErr } = await admin
+    .from('proposals')
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .eq('id', proposalId)
+    .eq('status', 'draft');
+  if (updErr) throw new Error(updErr.message);
+
+  if (proposal.client_id) {
+    await createInAppNotification({
+      recipientId: proposal.client_id,
+      category: 'proposal',
+      title: `Proposal ${proposal.code ?? ''}: ${proposal.title}`,
+      body: 'A project proposal is ready for your review in the Client Portal.',
+      href: `/portal/proposals/${proposal.id}`,
+    });
+  }
+
+  const totalDisplay = (proposal.total_cents / 100).toLocaleString();
+  await enqueueTransactionalEmail({
+    toEmail: proposal.recipient_email,
+    template: 'proposal_sent',
+    subject: `Proposal ${proposal.code ?? ''} — ${proposal.title}`,
+    payload: {
+      message: `Hi ${proposal.recipient_name}, proposal ${proposal.code ?? ''} (${proposal.title}) for ${proposal.currency} ${totalDisplay} is ready for your review.`,
+      actionUrl: `${getSiteOrigin()}/portal/proposals/${proposal.id}`,
+    },
+    entityType: 'proposal',
+    entityId: proposal.id,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: proposal.client_id,
+    action: 'proposal.sent',
+    entityType: 'proposal',
+    entityId: proposal.id,
+    summary: `Sent previously drafted proposal ${proposal.code ?? ''}`,
+    metadata: { proposalId },
+  });
+
+  revalidatePath('/admin/proposals');
+  revalidatePath('/admin/pipeline');
+  revalidatePath('/portal/proposals');
+  revalidatePath(`/portal/proposals/${proposalId}`);
+}
+
+export async function issueCreditNoteAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invoiceId = String(formData.get('invoice_id') ?? '').trim();
+  const amountMajor = Number(formData.get('amount_major') ?? 0);
+  const rawCents = Number(formData.get('amount_cents') ?? 0);
+  const amountCents =
+    Number.isFinite(rawCents) && rawCents > 0
+      ? Math.round(rawCents)
+      : Math.round(amountMajor * 100);
+  const reason = String(formData.get('reason') ?? '').trim();
+
+  if (!invoiceId || !Number.isFinite(amountCents) || amountCents <= 0 || !reason) {
+    throw new Error('Invoice ID, positive credit amount, and reason are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: rpcRes, error } = await admin.rpc('create_credit_note_atomic', {
+    p_invoice_id: invoiceId,
+    p_admin_id: session.userId,
+    p_amount_cents: amountCents,
+    p_reason: reason,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const resultObj =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { code?: string; new_status?: string })
+      : null;
+
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('client_id, code, currency, order_id')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (invoice?.client_id) {
+    const displayAmount = (amountCents / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: invoice.client_id,
+      category: 'invoice',
+      title: `Credit Note ${resultObj?.code ?? ''} Issued`,
+      body: `Applied ${invoice.currency} ${displayAmount} credit to invoice ${invoice.code ?? ''}.`,
+      href: `/portal/invoices/${invoiceId}`,
+    });
+
+    const clientEmail = await lookupProfileEmail(invoice.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_credit_note',
+        subject: `Credit Note ${resultObj?.code ?? ''} Applied — Invoice ${invoice.code ?? ''}`,
+        payload: {
+          message: `A credit note (${resultObj?.code ?? ''}) for ${invoice.currency} ${displayAmount} has been applied to your invoice ${invoice.code ?? ''}. Reason: ${reason}`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${invoiceId}`,
+        },
+        entityType: 'invoice',
+        entityId: invoiceId,
+      });
+    }
+  }
+
+  revalidatePath('/admin/invoices');
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+  revalidatePath(`/portal/invoices/${invoiceId}`);
+  if (invoice?.order_id) {
+    revalidatePath(`/admin/orders/${invoice.order_id}`);
+    revalidatePath(`/portal/orders/${invoice.order_id}`);
+  }
+}
+
+export async function createMultiLineInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const clientId = String(formData.get('client_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim() || null;
+  const milestoneId = String(formData.get('milestone_id') ?? '').trim() || null;
+  const currency = (String(formData.get('currency') ?? 'USD').trim() || 'USD').toUpperCase();
+  const fxRate = Math.max(0.0001, Number(formData.get('fx_rate_to_usd') ?? 1) || 1);
+  const discountMajor = Math.max(0, Number(formData.get('discount_major') ?? 0) || 0);
+  const taxRateBps = Math.max(0, Math.round(Number(formData.get('tax_rate_bps') ?? 0) || 0));
+  const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 7) || 7));
+  const paymentInstructions = String(formData.get('payment_instructions') ?? '').trim() || null;
+  const notes = String(formData.get('notes') ?? '').trim() || null;
+  const issueImmediately = parseFormBoolean(formData, 'issue_immediately');
+  const redirectToInvoice = parseFormBoolean(formData, 'redirect_to_invoice');
+
+  if (!clientId) {
+    throw new Error('Client selection is required.');
+  }
+
+  interface RawLineItem {
+    description?: string;
+    quantity?: number;
+    unit_price_major?: number;
+    unit_price_cents?: number;
+  }
+
+  let items: Array<{ description: string; quantity: number; unit_price_cents: number }> = [];
+  const itemsJsonRaw = String(formData.get('items_json') ?? '').trim();
+  if (itemsJsonRaw) {
+    let parsed: RawLineItem[] = [];
+    try {
+      parsed = JSON.parse(itemsJsonRaw) as RawLineItem[];
+    } catch {
+      throw new Error('Invalid invoice line items JSON.');
+    }
+    if (Array.isArray(parsed)) {
+      items = parsed
+        .map((row) => {
+          const desc = String(row.description ?? '').trim();
+          const qty = Math.max(1, Math.round(Number(row.quantity ?? 1) || 1));
+          const cents =
+            typeof row.unit_price_cents === 'number' && row.unit_price_cents > 0
+              ? Math.round(row.unit_price_cents)
+              : Math.round(Number(row.unit_price_major ?? 0) * 100);
+          return { description: desc, quantity: qty, unit_price_cents: cents };
+        })
+        .filter((row) => row.description && row.unit_price_cents > 0);
+    }
+  } else {
+    const descriptions = formData.getAll('item_description').map((v) => String(v ?? '').trim());
+    const quantities = formData.getAll('item_quantity').map((v) => Number(v ?? 1));
+    const unitPrices = formData.getAll('item_unit_price_major').map((v) => Number(v ?? 0));
+
+    if (descriptions.length > 0) {
+      items = descriptions
+        .map((desc, i) => ({
+          description: desc,
+          quantity: Math.max(1, Math.round(quantities[i] || 1)),
+          unit_price_cents: Math.round((unitPrices[i] || 0) * 100),
+        }))
+        .filter((row) => row.description && row.unit_price_cents > 0);
+    } else {
+      const singleDesc = String(formData.get('description') ?? '').trim();
+      const singleAmount = Number(formData.get('amount_major') ?? 0);
+      if (singleDesc && singleAmount > 0) {
+        items = [
+          {
+            description: singleDesc,
+            quantity: 1,
+            unit_price_cents: Math.round(singleAmount * 100),
+          },
+        ];
+      }
+    }
+  }
+
+  if (items.length === 0) {
+    throw new Error('Add at least one billable invoice line item.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: rpcRes, error } = await admin.rpc('create_draft_invoice_multi_atomic', {
+    p_client_id: clientId,
+    p_order_id: orderId,
+    p_milestone_id: milestoneId,
+    p_currency: currency,
+    p_fx_rate_to_usd: fxRate,
+    p_discount_cents: Math.round(discountMajor * 100),
+    p_tax_rate_bps: taxRateBps,
+    p_due_days: dueDays,
+    p_payment_instructions: paymentInstructions,
+    p_notes: notes,
+    p_items: items as unknown as Json,
+    p_issue_immediately: issueImmediately,
+    p_admin_id: session.userId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const created =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { invoice_id?: string; code?: string; total_cents?: number })
+      : null;
+
+  if (created?.invoice_id && issueImmediately) {
+    const totalDisplay = ((created.total_cents ?? 0) / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: clientId,
+      category: 'invoice',
+      title: `Invoice Issued: ${created.code ?? ''}`,
+      body: `${items[0].description}${items.length > 1 ? ` +${items.length - 1} items` : ''} (${currency} ${totalDisplay})`,
+      href: `/portal/invoices/${created.invoice_id}`,
+    });
+    const clientEmail = await lookupProfileEmail(clientId);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_issued',
+        subject: `Invoice ${created.code ?? ''} Issued (${currency} ${totalDisplay})`,
+        payload: {
+          message: `Invoice ${created.code ?? ''} for ${currency} ${totalDisplay} is now available in your Client Portal.`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${created.invoice_id}`,
+        },
+        entityType: 'invoice',
+        entityId: created.invoice_id,
+      });
+    }
+  }
+
+  revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+  if (orderId) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/portal/orders/${orderId}`);
+  }
+  if (redirectToInvoice && created?.invoice_id) {
+    redirect(`/admin/invoices/${created.invoice_id}`);
+  }
+}
+
+export async function sendDraftInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invoiceId = String(formData.get('invoice_id') ?? '').trim();
+  if (!invoiceId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.rpc('send_draft_invoice_atomic', {
+    p_invoice_id: invoiceId,
+    p_admin_id: session.userId,
+  });
+  if (error) throw new Error(error.message);
+
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('client_id, code, currency, total_cents, order_id')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (invoice?.client_id) {
+    const displayTotal = (invoice.total_cents / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: invoice.client_id,
+      category: 'invoice',
+      title: `Invoice Issued: ${invoice.code ?? ''}`,
+      body: `Amount due: ${invoice.currency} ${displayTotal}`,
+      href: `/portal/invoices/${invoiceId}`,
+    });
+    const clientEmail = await lookupProfileEmail(invoice.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_issued',
+        subject: `Invoice ${invoice.code ?? ''} Issued (${invoice.currency} ${displayTotal})`,
+        payload: {
+          message: `Draft invoice ${invoice.code ?? ''} (${invoice.currency} ${displayTotal}) has now been officially issued to your Client Portal.`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${invoiceId}`,
+        },
+        entityType: 'invoice',
+        entityId: invoiceId,
+      });
+    }
+  }
+
+  revalidatePath('/admin/invoices');
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+  revalidatePath(`/portal/invoices/${invoiceId}`);
+}
+
+export async function voidInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invoiceId = String(formData.get('invoice_id') ?? '').trim();
+  if (!invoiceId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.rpc('void_invoice_atomic', {
+    p_invoice_id: invoiceId,
+    p_admin_id: session.userId,
+  });
+  if (error) throw new Error(error.message);
+
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('client_id, code, order_id')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (invoice?.client_id) {
+    await createInAppNotification({
+      recipientId: invoice.client_id,
+      category: 'invoice',
+      title: `Invoice ${invoice.code ?? ''} Voided`,
+      body: 'This invoice has been voided by the administrator and no payment is due.',
+      href: `/portal/invoices/${invoiceId}`,
+    });
+  }
+
+  revalidatePath('/admin/invoices');
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+  revalidatePath(`/portal/invoices/${invoiceId}`);
+}
+
+export async function recordManualPaymentAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invoiceId = String(formData.get('invoice_id') ?? '').trim();
+  const rawMethod = String(formData.get('method') ?? 'manual').trim();
+  const method: PaymentMethod = ALLOWED_PAYMENT_METHODS.has(rawMethod as PaymentMethod)
+    ? (rawMethod as PaymentMethod)
+    : 'manual';
+  const amountMajor = Number(formData.get('amount_major') ?? 0);
+  const amountCents = Math.round(amountMajor * 100);
+  const reference = String(formData.get('reference') ?? '').trim();
+  const rawFxRate = formData.get('fx_rate');
+  const parsedFxRate = rawFxRate !== null && String(rawFxRate).trim() !== '' ? Number(rawFxRate) : null;
+
+  if (!invoiceId || !Number.isFinite(amountCents) || amountCents <= 0 || !reference) {
+    throw new Error('Invoice, positive payment amount, and transaction reference are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.rpc('record_manual_payment_atomic', {
+    p_invoice_id: invoiceId,
+    p_admin_id: session.userId,
+    p_method: method,
+    p_amount_cents: amountCents,
+    p_reference: reference,
+    p_fx_rate: parsedFxRate && parsedFxRate > 0 ? parsedFxRate : null,
+  });
+  if (error) throw new Error(error.message);
+
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('client_id, code, currency, order_id')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (invoice?.client_id) {
+    const displayAmount = (amountCents / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: invoice.client_id,
+      category: 'payment',
+      title: `Payment Recorded on ${invoice.code ?? ''}`,
+      body: `Verified manual payment (${method}) of ${invoice.currency} ${displayAmount}.`,
+      href: `/portal/invoices/${invoiceId}`,
+    });
+    const clientEmail = await lookupProfileEmail(invoice.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'payment_confirmed',
+        subject: `Payment Recorded for Invoice ${invoice.code ?? ''}`,
+        payload: {
+          message: `We recorded a verified payment of ${invoice.currency} ${displayAmount} (${method}, Ref: ${reference}) against Invoice ${invoice.code ?? ''}.`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${invoiceId}`,
+        },
+        entityType: 'invoice',
+        entityId: invoiceId,
+      });
+    }
+  }
+
+  revalidatePath('/admin/invoices');
+  revalidatePath(`/admin/invoices/${invoiceId}`);
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+  revalidatePath(`/portal/invoices/${invoiceId}`);
+  if (invoice?.order_id) {
+    revalidatePath(`/admin/orders/${invoice.order_id}`);
+    revalidatePath(`/portal/orders/${invoice.order_id}`);
+  }
+}
+
+export async function createPaidRevisionInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const extraRevisions = Math.max(1, Math.round(Number(formData.get('extra_revisions') ?? 1) || 1));
+  const feeMajor = Number(formData.get('fee_major') ?? 0);
+  const feeCents = Math.round(feeMajor * 100);
+  const summary = String(formData.get('summary') ?? '').trim();
+
+  if (!orderId || !Number.isFinite(feeCents) || feeCents <= 0 || !summary) {
+    throw new Error('Order ID, positive fee, and revision scope summary are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: rpcRes, error } = await admin.rpc('create_paid_revision_invoice_atomic', {
+    p_order_id: orderId,
+    p_admin_id: session.userId,
+    p_extra_revisions: extraRevisions,
+    p_fee_cents: feeCents,
+    p_summary: summary,
+  });
+  if (error) throw new Error(error.message);
+
+  const created =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { invoice_id?: string; invoice_code?: string })
+      : null;
+
+  const { data: order } = await admin
+    .from('orders')
+    .select('client_id, code, currency')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (order?.client_id) {
+    const displayFee = (feeCents / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: order.client_id,
+      category: 'invoice',
+      title: `Revision Addendum Issued (${order.code})`,
+      body: `+${extraRevisions} revision round(s) · ${order.currency ?? 'USD'} ${displayFee}`,
+      href: created?.invoice_id ? `/portal/invoices/${created.invoice_id}` : `/portal/orders/${orderId}`,
+    });
+    const clientEmail = await lookupProfileEmail(order.client_id);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_issued',
+        subject: `Paid Revision Addendum Invoice — ${order.code}`,
+        payload: {
+          message: `A paid revision addendum (+${extraRevisions} revision round(s) upon payment) for ${order.currency ?? 'USD'} ${displayFee} has been issued for order ${order.code}: ${summary}`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${created?.invoice_id ?? ''}`,
+        },
+        entityType: 'invoice',
+        entityId: created?.invoice_id ?? orderId,
+      });
+    }
+  }
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+}
+
+export async function declineProposalClientAction(formData: FormData): Promise<void> {
+  const session = await requireClientSession();
+  const proposalId = String(formData.get('proposal_id') ?? '').trim();
+  const reason = String(formData.get('decline_reason') ?? formData.get('reason') ?? '').trim() || null;
+  if (!proposalId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.rpc('decline_proposal_client_atomic', {
+    p_proposal_id: proposalId,
+    p_actor_id: session.userId,
+    p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+
+  await notifyAllAdmins({
+    category: 'proposal',
+    title: 'Proposal Declined by Client',
+    body: reason ? `${session.email}: ${reason}` : `${session.email} declined proposal ${proposalId}.`,
+    href: '/admin/proposals',
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'proposal_declined_admin',
+    subject: `Client Declined Proposal — ${session.email}`,
+    payload: {
+      message: `${session.email} declined proposal ${proposalId}.${reason ? `\n\nReason: ${reason}` : ''}`,
+      actionUrl: `${getSiteOrigin()}/admin/proposals`,
+    },
+    entityType: 'proposal',
+    entityId: proposalId,
+  });
+
+  revalidatePath('/portal/proposals');
+  revalidatePath(`/portal/proposals/${proposalId}`);
+  revalidatePath('/admin/proposals');
+  revalidatePath('/admin/pipeline');
+}
+
+export async function acceptOrderNdaAction(formData: FormData): Promise<void> {
+  const session = await requireClientSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  if (!orderId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.rpc('accept_order_nda_atomic', {
+    p_order_id: orderId,
+    p_actor_id: session.userId,
+  });
+  if (error) throw new Error(error.message);
+
+  const { data: order } = await admin
+    .from('orders')
+    .select('code, title')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  await notifyAllAdmins({
+    category: 'order',
+    title: `NDA Accepted on ${order?.code ?? 'Order'}`,
+    body: `${session.email} executed confidentiality NDA agreement.`,
+    href: `/admin/orders/${orderId}`,
+  });
+
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/portal/orders');
+  revalidatePath('/admin/orders');
+}
+
+export async function submitCancellationRequestAction(formData: FormData): Promise<void> {
+  const session = await requireClientSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const reason = String(formData.get('reason') ?? '').trim();
+  if (!orderId || reason.length < 5) {
+    throw new Error('Provide a cancellation reason of at least 5 characters.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: order } = await admin
+    .from('orders')
+    .select('id, code, client_id, status')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (!order || order.client_id !== session.userId) {
+    throw new Error('Forbidden: order does not belong to your account.');
+  }
+  if (order.status === 'cancelled' || order.status === 'completed') {
+    throw new Error(`Order is already ${order.status}.`);
+  }
+
+  const { data: created, error } = await admin
+    .from('cancellation_requests')
+    .insert({
+      order_id: orderId,
+      requested_by: session.userId,
+      reason,
+      status: 'pending',
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+
+  await notifyAllAdmins({
+    category: 'order',
+    title: `Cancellation Request on ${order.code}`,
+    body: reason.slice(0, 140),
+    href: `/admin/orders/${orderId}`,
+  });
+
+  await enqueueTransactionalEmail({
+    toEmail: getAdminAlertEmail(),
+    template: 'order_cancellation_requested',
+    subject: `[${order.code}] Client Submitted Cancellation Request`,
+    payload: {
+      message: `${session.email} requested cancellation of ${order.code}.\n\nReason: ${reason}`,
+      actionUrl: `${getSiteOrigin()}/admin/orders/${orderId}`,
+    },
+    entityType: 'order',
+    entityId: orderId,
+  });
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'client',
+    clientId: session.userId,
+    orderId,
+    action: 'order.cancellation_requested',
+    entityType: 'cancellation_request',
+    entityId: created?.id ?? orderId,
+    summary: `Client requested cancellation on ${order.code}`,
+    metadata: { reason },
+  });
+
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/orders');
+}
+
+export async function resolveCancellationRequestAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const requestId = String(formData.get('request_id') ?? '').trim();
+  const rawDecision = String(formData.get('decision') ?? '').trim();
+  const decision = rawDecision === 'approved' ? 'approved' : 'rejected';
+  const notes = String(formData.get('resolution_notes') ?? '').trim() || null;
+
+  if (!requestId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: reqRow } = await admin
+    .from('cancellation_requests')
+    .select('order_id, requested_by')
+    .eq('id', requestId)
+    .maybeSingle();
+
+  const { error } = await admin.rpc('resolve_order_cancellation_atomic', {
+    p_request_id: requestId,
+    p_admin_id: session.userId,
+    p_decision: decision,
+    p_resolution_notes: notes,
+  });
+  if (error) throw new Error(error.message);
+
+  if (reqRow?.requested_by && reqRow.order_id) {
+    await createInAppNotification({
+      recipientId: reqRow.requested_by,
+      category: 'order',
+      title: `Cancellation Request ${decision === 'approved' ? 'Approved' : 'Rejected'}`,
+      body: notes || `Your order cancellation request was ${decision}.`,
+      href: `/portal/orders/${reqRow.order_id}`,
+    });
+    const clientEmail = await lookupProfileEmail(reqRow.requested_by);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'order_cancellation_resolved',
+        subject: `Order Cancellation Request ${decision === 'approved' ? 'Approved' : 'Declined'}`,
+        payload: {
+          message: `Your cancellation request has been ${decision}.${notes ? `\n\nNotes: ${notes}` : ''}`,
+          actionUrl: `${getSiteOrigin()}/portal/orders/${reqRow.order_id}`,
+        },
+        entityType: 'order',
+        entityId: reqRow.order_id,
+      });
+    }
+  }
+
+  revalidatePath('/admin/orders');
+  revalidatePath('/portal/orders');
+  if (reqRow?.order_id) {
+    revalidatePath(`/admin/orders/${reqRow.order_id}`);
+    revalidatePath(`/portal/orders/${reqRow.order_id}`);
+  }
+}
+
+export async function renewRetainerCycleAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const retainerId = String(formData.get('retainer_id') ?? '').trim();
+  if (!retainerId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: rpcRes, error } = await admin.rpc('renew_retainer_cycle_atomic', {
+    p_retainer_id: retainerId,
+    p_admin_id: session.userId,
+  });
+  if (error) throw new Error(error.message);
+
+  const resultObj =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { invoice_id?: string; invoice_code?: string; period_start?: string })
+      : null;
+
+  const { data: ret } = await admin
+    .from('retainer_plans')
+    .select('client_id, title, currency, monthly_fee_cents')
+    .eq('id', retainerId)
+    .maybeSingle();
+
+  if (ret?.client_id) {
+    const displayFee = (ret.monthly_fee_cents / 100).toLocaleString();
+    await createInAppNotification({
+      recipientId: ret.client_id,
+      category: 'invoice',
+      title: `Retainer Renewed: ${ret.title}`,
+      body: resultObj?.invoice_code
+        ? `Issued ${resultObj.invoice_code} (${ret.currency} ${displayFee})`
+        : 'Cycle hours reset for the new billing period.',
+      href: resultObj?.invoice_id ? `/portal/invoices/${resultObj.invoice_id}` : '/portal/retainers',
+    });
+    const clientEmail = await lookupProfileEmail(ret.client_id);
+    if (clientEmail && resultObj?.invoice_id) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'invoice_issued',
+        subject: `Retainer Cycle Invoice ${resultObj.invoice_code ?? ''} — ${ret.title}`,
+        payload: {
+          message: `Your retainer (${ret.title}) rolled into the new cycle (${resultObj.period_start ?? 'today'}) and invoice ${resultObj.invoice_code ?? ''} for ${ret.currency} ${displayFee} has been issued.`,
+          actionUrl: `${getSiteOrigin()}/portal/invoices/${resultObj.invoice_id}`,
+        },
+        entityType: 'invoice',
+        entityId: resultObj.invoice_id,
+      });
+    }
+  }
+
+  revalidatePath('/admin/retainers');
+  revalidatePath('/admin/billing');
+  revalidatePath('/admin/invoices');
+  revalidatePath('/portal/retainers');
+  revalidatePath('/portal/invoices');
+}
+
+const ALLOWED_MILESTONE_STATUSES = new Set(['pending', 'in_progress', 'delivered', 'approved']);
+
+export async function addOrderMilestoneAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const title = String(formData.get('title') ?? '').trim();
+  const description = String(formData.get('description') ?? '').trim() || null;
+  const amountUsd = Math.max(0, Number(formData.get('amount_usd') ?? 0) || 0);
+  const dueDate = String(formData.get('due_date') ?? '').trim() || null;
+  const weightPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('weight_percent') ?? 0) || 0)));
+
+  if (!orderId || !title) {
+    throw new Error('Order ID and milestone title are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: order } = await admin
+    .from('orders')
+    .select('client_id, currency')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  const { count } = await admin
+    .from('order_milestones')
+    .select('id', { count: 'exact', head: true })
+    .eq('order_id', orderId);
+
+  const { error } = await admin.from('order_milestones').insert({
+    order_id: orderId,
+    position: count ?? 0,
+    title,
+    description,
+    amount_cents: Math.round(amountUsd * 100),
+    currency: order?.currency ?? 'USD',
+    due_date: dueDate,
+    weight_percent: weightPercent,
+    status: 'pending',
+  });
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: order?.client_id ?? null,
+    orderId,
+    action: 'order.milestone_added',
+    entityType: 'order_milestone',
+    summary: `Added milestone "${title}"`,
+    metadata: { amountUsd },
+  });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+}
+
+export async function updateOrderMilestoneAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const milestoneId = String(formData.get('milestone_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const rawStatus = String(formData.get('status') ?? 'pending').trim();
+  const status = ALLOWED_MILESTONE_STATUSES.has(rawStatus) ? rawStatus : 'pending';
+  const title = String(formData.get('title') ?? '').trim();
+
+  if (!milestoneId || !orderId) return;
+
+  const updates: Database['public']['Tables']['order_milestones']['Update'] = {
+    status,
+    completed_at: status === 'approved' ? new Date().toISOString() : null,
+  };
+  if (title) updates.title = title;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('order_milestones')
+    .update(updates)
+    .eq('id', milestoneId)
+    .eq('order_id', orderId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId,
+    action: 'order.milestone_updated',
+    entityType: 'order_milestone',
+    entityId: milestoneId,
+    summary: `Updated milestone status to ${status}`,
+    metadata: { status },
+  });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+}
+
+export async function deleteOrderMilestoneAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const milestoneId = String(formData.get('milestone_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  if (!milestoneId || !orderId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: linkedInv } = await admin
+    .from('invoices')
+    .select('id')
+    .eq('milestone_id', milestoneId)
+    .neq('status', 'void')
+    .limit(1);
+  if (linkedInv && linkedInv.length > 0) {
+    throw new Error('Cannot delete a milestone with an active linked invoice.');
+  }
+
+  const { error } = await admin
+    .from('order_milestones')
+    .delete()
+    .eq('id', milestoneId)
+    .eq('order_id', orderId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId,
+    action: 'order.milestone_deleted',
+    entityType: 'order_milestone',
+    entityId: milestoneId,
+    summary: 'Removed milestone from order',
+  });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+}
+
+export async function generateMilestoneInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const milestoneId = String(formData.get('milestone_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  if (!milestoneId || !orderId) return;
+
+  const admin = getSupabaseAdmin();
+  const [{ data: milestone }, { data: order }, { data: existingInv }] = await Promise.all([
+    admin.from('order_milestones').select('*').eq('id', milestoneId).eq('order_id', orderId).maybeSingle(),
+    admin.from('orders').select('id, code, client_id, currency').eq('id', orderId).maybeSingle(),
+    admin
+      .from('invoices')
+      .select('id, code')
+      .eq('milestone_id', milestoneId)
+      .neq('status', 'void')
+      .limit(1),
+  ]);
+
+  if (!milestone || !order) {
+    throw new Error('Milestone or parent order not found.');
+  }
+  if (existingInv && existingInv.length > 0) {
+    throw new Error(`Milestone already invoiced (${existingInv[0].code ?? existingInv[0].id}).`);
+  }
+  if (milestone.amount_cents <= 0) {
+    throw new Error('Milestone amount must be greater than zero to generate an invoice.');
+  }
+
+  const { data: rpcRes, error } = await admin.rpc('create_draft_invoice_multi_atomic', {
+    p_client_id: order.client_id,
+    p_order_id: order.id,
+    p_milestone_id: milestone.id,
+    p_currency: milestone.currency || order.currency || 'USD',
+    p_fx_rate_to_usd: 1,
+    p_discount_cents: 0,
+    p_tax_rate_bps: 0,
+    p_due_days: 7,
+    p_payment_instructions: null,
+    p_notes: `Milestone invoice for ${order.code}: ${milestone.title}`,
+    p_items: [
+      {
+        description: `${order.code} — ${milestone.title}`,
+        quantity: 1,
+        unit_price_cents: milestone.amount_cents,
+      },
+    ] as unknown as Json,
+    p_issue_immediately: true,
+    p_admin_id: session.userId,
+  });
+  if (error) throw new Error(error.message);
+
+  const created =
+    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
+      ? (rpcRes as { invoice_id?: string; code?: string })
+      : null;
+
+  const displayAmount = (milestone.amount_cents / 100).toLocaleString();
+  await createInAppNotification({
+    recipientId: order.client_id,
+    category: 'invoice',
+    title: `Milestone Invoice Issued: ${created?.code ?? ''}`,
+    body: `${milestone.title} (${milestone.currency} ${displayAmount})`,
+    href: `/portal/invoices/${created?.invoice_id ?? ''}`,
+  });
+
+  const clientEmail = await lookupProfileEmail(order.client_id);
+  if (clientEmail && created?.invoice_id) {
+    await enqueueTransactionalEmail({
+      toEmail: clientEmail,
+      template: 'invoice_issued',
+      subject: `Milestone Invoice ${created.code ?? ''} — ${milestone.title}`,
+      payload: {
+        message: `An invoice (${created.code ?? ''}) for milestone "${milestone.title}" (${milestone.currency} ${displayAmount}) on order ${order.code} is ready in your Client Portal.`,
+        actionUrl: `${getSiteOrigin()}/portal/invoices/${created.invoice_id}`,
+      },
+      entityType: 'invoice',
+      entityId: created.invoice_id,
+    });
+  }
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal/invoices');
+}
+
+export async function toggleOrderRequirementsLockAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const lock = parseFormBoolean(formData, 'lock');
+  if (!orderId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: order } = await admin
+    .from('orders')
+    .select('client_id, code')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (!order) throw new Error('Order not found.');
+
+  const verifiedAt = lock ? new Date().toISOString() : null;
+  const { data: existing } = await admin
+    .from('order_requirements')
+    .select('id')
+    .eq('order_id', orderId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await admin
+      .from('order_requirements')
+      .update({ verified_by_admin_at: verifiedAt })
+      .eq('id', existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from('order_requirements').insert({
+      order_id: orderId,
+      client_id: order.client_id,
+      verified_by_admin_at: verifiedAt,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: order.client_id,
+    orderId,
+    action: lock ? 'order.requirements_locked' : 'order.requirements_unlocked',
+    entityType: 'order_requirements',
+    summary: `${lock ? 'Locked and verified' : 'Unlocked'} order ${order.code} requirements`,
+  });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+}
+
+export async function attachOrderRequirementFileAction(formData: FormData): Promise<void> {
+  const session = await requireAuthenticatedSession();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  if (!orderId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: order } = await admin
+    .from('orders')
+    .select('client_id, code')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (!order) throw new Error('Order not found.');
+  if (session.role !== 'admin' && order.client_id !== session.userId) {
+    throw new Error('Forbidden.');
+  }
+
+  if (session.role !== 'admin') {
+    const { data: req } = await admin
+      .from('order_requirements')
+      .select('verified_by_admin_at')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (req?.verified_by_admin_at) {
+      throw new Error('Verified requirements are locked and cannot receive new uploads.');
+    }
+  }
+
+  const fileId = await registerVaultAttachmentFromForm(admin, {
+    formData,
+    ownerClientId: order.client_id,
+    uploadedBy: session.userId,
+    category: 'requirement_attachment',
+    orderId,
+  });
+  if (!fileId) {
+    throw new Error('Select and finish uploading a file first.');
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: session.role === 'admin' ? 'admin' : 'client',
+    clientId: order.client_id,
+    orderId,
+    action: 'order.requirement_file_attached',
+    entityType: 'vault_file',
+    entityId: fileId,
+    summary: `Attached file to ${order.code} requirements`,
+  });
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/portal/orders/${orderId}`);
+  revalidatePath('/portal/files');
+}
+
+export async function deleteOrderTaskAction(formData: FormData): Promise<void> {
+  await requireAdminSession();
+  const taskId = String(formData.get('task_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  if (!taskId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.from('order_tasks').delete().eq('id', taskId);
+  if (error) throw new Error(error.message);
+
+  if (orderId) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/portal/orders/${orderId}`);
+  }
+}
+
+export async function deleteDeliverableOrVaultFileAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const deliverableId = String(formData.get('deliverable_id') ?? '').trim() || null;
+  const vaultFileId = String(formData.get('vault_file_id') ?? '').trim() || null;
+  const orderId = String(formData.get('order_id') ?? '').trim() || null;
+
+  if (!deliverableId && !vaultFileId) return;
+
+  const admin = getSupabaseAdmin();
+  const keysToDelete: string[] = [];
+
+  if (deliverableId) {
+    const { data: deliv } = await admin
+      .from('deliverables')
+      .select('id, status, order_id, title')
+      .eq('id', deliverableId)
+      .maybeSingle();
+    if (!deliv) throw new Error('Deliverable not found.');
+    if (deliv.status === 'accepted') {
+      throw new Error('Client-accepted deliverables cannot be deleted.');
+    }
+
+    const { data: files } = await admin
+      .from('vault_files')
+      .select('id, r2_key')
+      .eq('deliverable_id', deliverableId);
+    for (const f of files ?? []) {
+      keysToDelete.push(f.r2_key);
+    }
+
+    if (keysToDelete.length > 0 && isR2Configured()) {
+      await deletePrivateObjects(keysToDelete);
+    }
+
+    await admin.from('vault_files').delete().eq('deliverable_id', deliverableId);
+    const { error } = await admin.from('deliverables').delete().eq('id', deliverableId);
+    if (error) throw new Error(error.message);
+
+    await recordAuditLog({
+      actorId: session.userId,
+      actorRole: 'admin',
+      orderId: deliv.order_id,
+      action: 'deliverable.deleted',
+      entityType: 'deliverable',
+      entityId: deliverableId,
+      summary: `Deleted unaccepted deliverable "${deliv.title}"`,
+    });
+  } else if (vaultFileId) {
+    const { data: vFile } = await admin
+      .from('vault_files')
+      .select('id, r2_key, filename, order_id, deliverable_id, owner_client_id')
+      .eq('id', vaultFileId)
+      .maybeSingle();
+    if (!vFile) throw new Error('Vault file not found.');
+    if (vFile.deliverable_id) {
+      throw new Error('Delete the parent deliverable instead of detaching its file directly.');
+    }
+
+    if (isR2Configured()) {
+      await deletePrivateObjects([vFile.r2_key]);
+    }
+    const { error } = await admin.from('vault_files').delete().eq('id', vaultFileId);
+    if (error) throw new Error(error.message);
+
+    await recordAuditLog({
+      actorId: session.userId,
+      actorRole: 'admin',
+      clientId: vFile.owner_client_id,
+      orderId: vFile.order_id,
+      action: 'vault_file.deleted',
+      entityType: 'vault_file',
+      entityId: vaultFileId,
+      summary: `Deleted vault file "${vFile.filename}"`,
+    });
+  }
+
+  if (orderId) {
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/portal/orders/${orderId}`);
+  }
+  revalidatePath('/admin/recovery');
+  revalidatePath('/portal/files');
+}
+
+const ALLOWED_NOTE_TYPES = new Set(['general', 'call', 'followup', 'risk', 'win']);
+
+export async function addTypedClientNoteAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const clientId = String(formData.get('client_id') ?? '').trim();
+  const body = String(formData.get('body') ?? '').trim();
+  const rawNoteType = String(formData.get('note_type') ?? 'general').trim();
+  const noteType = ALLOWED_NOTE_TYPES.has(rawNoteType) ? rawNoteType : 'general';
+  const isPinned = parseFormBoolean(formData, 'is_pinned');
+  const followupDate = String(formData.get('followup_date') ?? '').trim() || null;
+
+  if (!clientId || !body) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.from('client_notes').insert({
+    client_id: clientId,
+    author_id: session.userId,
+    body,
+    note_type: noteType,
+    is_pinned: isPinned,
+    followup_date: followupDate,
+  });
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId,
+    action: 'client.note_added',
+    entityType: 'client_note',
+    summary: `Added ${noteType} note on client record`,
+    metadata: { noteType, isPinned, followupDate },
+  });
+
+  revalidatePath(`/admin/clients/${clientId}`);
 }

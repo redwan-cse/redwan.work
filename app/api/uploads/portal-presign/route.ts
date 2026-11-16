@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_CATEGORIES = new Set([
   'deliverable',
+  'order_attachment',
   'requirement_attachment',
   'ticket_attachment',
   'payment_proof',

@@ -1,12 +1,19 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CheckCircle2, FileSpreadsheet, ShieldAlert } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { acceptProposalClientAction } from '@/lib/crm/actions';
+import {
+  acceptProposalClientAction,
+  declineProposalClientAction,
+} from '@/lib/crm/actions';
+import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { SERVICE_PILLARS, type ServicePillarKey } from '@/lib/content/site';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +25,7 @@ export default async function ClientProposalsPage() {
   const { data: proposals } = await admin
     .from('proposals')
     .select(
-      'id, code, title, pillar, scope_summary, status, requires_roe, estimated_days, deposit_percent, total_cents, currency, valid_until, accepted_at, created_at, proposal_milestones(id, title, description, amount_cents, weight_percent, due_days_offset)'
+      'id, code, title, pillar, scope_summary, status, requires_roe, estimated_days, deposit_percent, total_cents, currency, valid_until, accepted_at, declined_reason, converted_order_id, created_at, proposal_milestones(id, title, description, amount_cents, weight_percent, due_days_offset)'
     )
     .eq('client_id', session.userId)
     .neq('status', 'draft')
@@ -36,18 +43,24 @@ export default async function ClientProposalsPage() {
       <div className="space-y-4">
         {(proposals ?? []).map((prp) => {
           const pillarMeta = SERVICE_PILLARS[prp.pillar as ServicePillarKey];
-          const canAccept = prp.status === 'sent' || prp.status === 'viewed';
+          const canRespond = prp.status === 'sent' || prp.status === 'viewed';
           const items = Array.isArray(prp.proposal_milestones) ? prp.proposal_milestones : [];
 
           return (
             <Card key={prp.id} className="border-border/80 bg-card/85">
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-primary">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/portal/proposals/${prp.id}`}
+                      className="font-mono text-xs font-bold text-primary hover:underline"
+                    >
                       {prp.code}
-                    </span>
-                    <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                    </Link>
+                    <Badge
+                      variant={prp.status === 'declined' ? 'destructive' : 'outline'}
+                      className="font-mono text-[10px] uppercase"
+                    >
                       {prp.status}
                     </Badge>
                     <Badge variant="secondary" className="text-xs">
@@ -67,17 +80,27 @@ export default async function ClientProposalsPage() {
                     {prp.currency} {(prp.total_cents / 100).toLocaleString()}
                   </div>
                 </div>
-                <CardTitle className="mt-2 text-lg font-bold">{prp.title}</CardTitle>
+                <CardTitle className="mt-2 text-lg font-bold">
+                  <Link href={`/portal/proposals/${prp.id}`} className="hover:text-primary">
+                    {prp.title}
+                  </Link>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
                   {prp.scope_summary}
                 </p>
 
+                {prp.declined_reason && (
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    Decline feedback: {prp.declined_reason}
+                  </p>
+                )}
+
                 {items.length > 0 && (
                   <div className="rounded-xl border border-border/70 bg-background/60 p-3.5">
                     <div className="mb-2 font-mono text-[11px] font-semibold uppercase text-muted-foreground">
-                      Deliverable Line Items & Milestones
+                      Deliverable Line Items &amp; Milestones
                     </div>
                     <div className="space-y-2">
                       {items.map((item) => (
@@ -111,17 +134,58 @@ export default async function ClientProposalsPage() {
                         Valid Until: {new Date(prp.valid_until).toLocaleDateString()}
                       </span>
                     )}
+                    <Link
+                      href={`/portal/proposals/${prp.id}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      Open Full Brief →
+                    </Link>
                   </div>
 
-                  {canAccept && (
-                    <form action={acceptProposalClientAction}>
-                      <input type="hidden" name="proposal_id" value={prp.id} />
-                      <Button type="submit" size="sm" className="gap-1.5">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Accept Proposal & Start Order
+                  <div className="flex flex-wrap items-center gap-2">
+                    {prp.converted_order_id && (
+                      <Button asChild size="sm" variant="secondary" className="text-xs">
+                        <Link href={`/portal/orders/${prp.converted_order_id}`}>
+                          Open Order Workspace →
+                        </Link>
                       </Button>
-                    </form>
-                  )}
+                    )}
+
+                    {canRespond && (
+                      <>
+                        <ConfirmActionButton
+                          action={declineProposalClientAction}
+                          hiddenFields={{ proposal_id: prp.id }}
+                          triggerLabel="Decline"
+                          confirmTitle={`Decline proposal ${prp.code}?`}
+                          confirmDescription="Optionally share feedback (e.g., timeline or budget adjustment) so we can revise the quote."
+                          confirmLabel="Decline Proposal"
+                          successMessage="Proposal declined."
+                          destructive
+                          variant="outline"
+                          extraContent={
+                            <div className="space-y-1">
+                              <Label className="text-xs">Reason / Feedback (Optional)</Label>
+                              <Textarea
+                                name="decline_reason"
+                                rows={3}
+                                placeholder="Budget target, timing shift, or different scope needed..."
+                                className="text-xs"
+                              />
+                            </div>
+                          }
+                        />
+
+                        <form action={acceptProposalClientAction}>
+                          <input type="hidden" name="proposal_id" value={prp.id} />
+                          <Button type="submit" size="sm" className="gap-1.5">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Accept Proposal &amp; Start Order
+                          </Button>
+                        </form>
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

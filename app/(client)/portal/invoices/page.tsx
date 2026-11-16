@@ -27,7 +27,7 @@ export default async function ClientInvoicesListPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Invoices & Billing</h1>
         <p className="text-sm text-muted-foreground">
-          View itemized multi-currency invoices (`USD`, `BDT`, `EUR`, `GBP`) and submit payment transfer proofs for verification.
+          View itemized multi-currency invoices (USD, BDT, EUR, GBP) and submit payment transfer proofs for verification.
         </p>
       </div>
 

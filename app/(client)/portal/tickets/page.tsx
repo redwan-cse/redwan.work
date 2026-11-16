@@ -4,6 +4,7 @@ import { ArrowRight, LifeBuoy, Plus } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createClientTicketAction } from '@/lib/crm/actions';
+import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,6 +122,11 @@ export default async function ClientTicketsPage() {
                   className="text-xs"
                 />
               </div>
+
+              <R2FileUploader
+                category="ticket_attachment"
+                label="Attach Logs / Screenshot / Evidence (Optional)"
+              />
 
               <Button type="submit" className="w-full">
                 Submit Support Ticket

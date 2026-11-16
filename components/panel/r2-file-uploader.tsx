@@ -14,6 +14,7 @@ export function R2FileUploader({
 }: {
   category:
     | 'deliverable'
+    | 'order_attachment'
     | 'requirement_attachment'
     | 'ticket_attachment'
     | 'payment_proof'

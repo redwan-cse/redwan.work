@@ -945,6 +945,8 @@ export type Database = {
           order_id: string | null
           paid_at: string | null
           payment_instructions: string | null
+          revision_grant_count: number
+          revision_grant_order_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           subtotal_cents: number
           tax_cents: number
@@ -972,6 +974,8 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           payment_instructions?: string | null
+          revision_grant_count?: number
+          revision_grant_order_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           subtotal_cents?: number
           tax_cents?: number
@@ -999,6 +1003,8 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           payment_instructions?: string | null
+          revision_grant_count?: number
+          revision_grant_order_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           subtotal_cents?: number
           tax_cents?: number
@@ -2446,6 +2452,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_order_nda_atomic: {
+        Args: { p_actor_id: string; p_order_id: string }
+        Returns: Json
+      }
       accept_proposal_and_create_order: {
         Args: { p_actor_id: string; p_proposal_id: string }
         Returns: Json
@@ -2455,6 +2465,51 @@ export type Database = {
       claim_pending_email_outbox: {
         Args: { p_limit?: number; p_stale_seconds?: number }
         Returns: Database["public"]["Tables"]["email_outbox"]["Row"][]
+      }
+      create_credit_note_atomic: {
+        Args: {
+          p_admin_id: string
+          p_amount_cents: number
+          p_invoice_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      create_draft_invoice_multi_atomic: {
+        Args: {
+          p_admin_id?: string | null
+          p_client_id: string
+          p_currency: string
+          p_discount_cents: number
+          p_due_days: number
+          p_fx_rate_to_usd: number
+          p_issue_immediately?: boolean
+          p_items: Json
+          p_milestone_id?: string | null
+          p_notes?: string | null
+          p_order_id?: string | null
+          p_payment_instructions?: string | null
+          p_tax_rate_bps: number
+        }
+        Returns: Json
+      }
+      create_paid_revision_invoice_atomic: {
+        Args: {
+          p_admin_id: string
+          p_extra_revisions: number
+          p_fee_cents: number
+          p_order_id: string
+          p_summary: string
+        }
+        Returns: Json
+      }
+      decline_proposal_client_atomic: {
+        Args: {
+          p_actor_id: string
+          p_proposal_id: string
+          p_reason?: string | null
+        }
+        Returns: Json
       }
       client_portal_overview: { Args: { p_client_id: string }; Returns: Json }
       consume_rate_limit: {
@@ -2538,6 +2593,30 @@ export type Database = {
           p_ttl_seconds?: number
         }
         Returns: boolean
+      }
+      record_manual_payment_atomic: {
+        Args: {
+          p_admin_id: string
+          p_amount_cents: number
+          p_fx_rate?: number | null
+          p_invoice_id: string
+          p_method: Database["public"]["Enums"]["payment_method"]
+          p_reference: string
+        }
+        Returns: Json
+      }
+      renew_retainer_cycle_atomic: {
+        Args: { p_admin_id?: string | null; p_retainer_id: string }
+        Returns: Json
+      }
+      resolve_order_cancellation_atomic: {
+        Args: {
+          p_admin_id: string
+          p_decision: string
+          p_request_id: string
+          p_resolution_notes?: string | null
+        }
+        Returns: Json
       }
       review_invoice_payment: {
         Args: {

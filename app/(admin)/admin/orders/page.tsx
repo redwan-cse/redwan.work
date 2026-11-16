@@ -1,249 +1,406 @@
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowRight, Briefcase, Plus, ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Columns3,
+  List,
+  Plus,
+  ShieldCheck,
+} from 'lucide-react';
+import { AdminHubHeader } from '@/components/admin/hub-header';
+import { OrdersKanbanBoard } from '@/components/admin/orders-kanban-view';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAdminSession } from '@/lib/auth/session';
-import { createOrderFromAdminAction } from '@/lib/crm/actions';
+import {
+  createOrderFromAdminAction,
+  resolveCancellationRequestAction,
+} from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string; status?: string; q?: string }>;
+}) {
   await requireAdminSession();
+  const params = await searchParams;
+  const viewMode = params.view === 'kanban' ? 'kanban' : 'table';
+  const statusFilter = (params.status ?? '').trim();
+  const qFilter = (params.q ?? '').trim().toLowerCase();
+
   const admin = getSupabaseAdmin();
-  const [{ data: orders }, { data: clients }] = await Promise.all([
+  const [{ data: orders }, { data: clients }, { data: pendingCancels }] = await Promise.all([
     admin
       .from('orders')
       .select(
         'id, code, client_id, title, pillar, status, progress_percent, requires_roe, roe_signed_at, total_cents, currency, due_at, created_at'
       )
       .order('created_at', { ascending: false })
-      .limit(50),
+      .limit(80),
     admin
       .from('profiles')
       .select('id, full_name, email')
       .eq('role', 'client')
       .order('created_at', { ascending: false }),
+    admin
+      .from('cancellation_requests')
+      .select('id, order_id, reason, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(10),
   ]);
 
   const clientMap = new Map(
     (clients ?? []).map((c) => [c.id, c.full_name || c.email])
   );
+  const orderMap = new Map((orders ?? []).map((o) => [o.id, o]));
+
+  const filteredOrders = (orders ?? [])
+    .map((o) => ({
+      ...o,
+      clientName: clientMap.get(o.client_id) ?? 'Client',
+    }))
+    .filter((o) => {
+      if (statusFilter && o.status !== statusFilter) return false;
+      if (qFilter) {
+        const haystack = `${o.code} ${o.title} ${o.clientName} ${o.pillar}`.toLowerCase();
+        if (!haystack.includes(qFilter)) return false;
+      }
+      return true;
+    });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Badge variant="outline" className="mb-2 gap-1.5 font-mono text-xs text-primary">
-          <Briefcase className="h-3.5 w-3.5" />
-          ORDER EXECUTION PIPELINE
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Client Orders &amp; Deliverables (`ORD-XXXX`)
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Manage active engagements across all 5 service pillars, enforce Rules of Engagement, publish versioned encrypted deliverables, and communicate in order threads.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <AdminHubHeader
+        eyebrow="ORDER EXECUTION PIPELINE"
+        title="Client Orders & Deliverables (ORD-XXXX)"
+        description="Manage active engagements in Table or Kanban board view, verify RoE authorizations, publish encrypted deliverables, and track milestones."
+        actions={
+          <div className="inline-flex items-center rounded-full border border-border bg-muted/40 p-0.5">
+            <Link
+              href="/admin/orders?view=table"
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+                viewMode === 'table'
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              Table
+            </Link>
+            <Link
+              href="/admin/orders?view=kanban"
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+                viewMode === 'kanban'
+                  ? 'bg-background text-foreground shadow-2xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Columns3 className="h-3.5 w-3.5" />
+              Kanban Board
+            </Link>
+          </div>
+        }
+      />
 
-      <div className="grid gap-8 xl:grid-cols-12">
-        {/* Create New Order Form */}
-        <Card className="xl:col-span-5">
-          <CardHeader>
-            <CardTitle className="text-lg">Create Direct Order</CardTitle>
-            <CardDescription>
-              Initializes `ORD-XXXX`, default milestones, and kickoff deposit invoice.
-            </CardDescription>
+      {/* Pending Cancellation Requests Banner */}
+      {pendingCancels && pendingCancels.length > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Pending Order Cancellation Requests ({pendingCancels.length})
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form action={createOrderFromAdminAction} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Client *</Label>
-                <select
-                  name="client_id"
-                  required
-                  className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
+          <CardContent className="space-y-2.5">
+            {pendingCancels.map((req) => {
+              const targetOrder = orderMap.get(req.order_id);
+              return (
+                <div
+                  key={req.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 text-xs"
                 >
-                  <option value="">— Select Client —</option>
-                  {(clients ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.full_name || c.email} ({c.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/admin/orders/${req.order_id}`}
+                        className="font-mono font-bold text-primary hover:underline"
+                      >
+                        {targetOrder?.code ?? req.order_id.slice(0, 8)}
+                      </Link>
+                      <span className="font-medium">{targetOrder?.title}</span>
+                    </div>
+                    <p className="text-muted-foreground">{req.reason}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ActionFeedbackForm
+                      action={resolveCancellationRequestAction}
+                      successMessage="Cancellation approved and order cancelled."
+                    >
+                      <input type="hidden" name="request_id" value={req.id} />
+                      <input type="hidden" name="decision" value="approved" />
+                      <Button type="submit" size="sm" variant="destructive" className="h-8 text-xs">
+                        Approve Cancel
+                      </Button>
+                    </ActionFeedbackForm>
+                    <ActionFeedbackForm
+                      action={resolveCancellationRequestAction}
+                      successMessage="Cancellation declined."
+                    >
+                      <input type="hidden" name="request_id" value={req.id} />
+                      <input type="hidden" name="decision" value="rejected" />
+                      <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+                        Reject
+                      </Button>
+                    </ActionFeedbackForm>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Order Title *</Label>
-                <Input
-                  name="title"
-                  required
-                  placeholder="Web & API Penetration Test (VAPT)"
-                  className="h-9 text-xs"
-                />
-              </div>
+      {/* Search & Status Filter Strip */}
+      <form method="get" className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-3">
+        <input type="hidden" name="view" value={viewMode} />
+        <Input
+          name="q"
+          defaultValue={params.q ?? ''}
+          placeholder="Filter by ORD code, title, client, or pillar..."
+          className="h-8 min-w-[200px] flex-1 text-xs"
+        />
+        <select
+          name="status"
+          defaultValue={statusFilter}
+          className="h-8 rounded-md border border-input bg-background px-2.5 text-xs"
+        >
+          <option value="">All Statuses</option>
+          <option value="awaiting_payment">awaiting_payment</option>
+          <option value="pending_requirements">pending_requirements</option>
+          <option value="queued">queued</option>
+          <option value="in_progress">in_progress</option>
+          <option value="in_review">in_review</option>
+          <option value="revision_requested">revision_requested</option>
+          <option value="delivered">delivered</option>
+          <option value="completed">completed</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+        <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+          Apply Filter
+        </Button>
+      </form>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col justify-end gap-1.5">
-                  <Label className="mb-auto text-xs">Service Pillar</Label>
+      {viewMode === 'kanban' ? (
+        <OrdersKanbanBoard orders={filteredOrders} />
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-12">
+          {/* Create New Order Form */}
+          <Card className="xl:col-span-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Create Direct Order</CardTitle>
+              <CardDescription className="text-xs">
+                Initializes ORD-XXXX, milestones, and kickoff deposit invoice.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActionFeedbackForm
+                action={createOrderFromAdminAction}
+                successMessage="Order created and deposit invoice issued."
+                resetOnSuccess
+                className="space-y-3"
+              >
+                <div className="space-y-1">
+                  <Label className="text-xs">Client *</Label>
                   <select
-                    name="pillar"
+                    name="client_id"
+                    required
                     className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
                   >
-                    <option value="cybersecurity">Cybersecurity &amp; VAPT</option>
-                    <option value="development">Full-Stack Dev</option>
-                    <option value="cloud_devops">Cloud &amp; Linux Ops</option>
-                    <option value="ai_ml">AI/ML &amp; Automation</option>
-                    <option value="tech_support">Tech Support &amp; Recovery</option>
+                    <option value="">— Select Client —</option>
+                    {(clients ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.full_name || c.email} ({c.email})
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div className="flex flex-col justify-end gap-1.5">
-                  <Label className="mb-auto text-xs">Total Price (USD)</Label>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Order Title *</Label>
                   <Input
-                    name="total_usd"
-                    type="number"
-                    min="0"
-                    step="1"
-                    defaultValue="1150"
-                    className="h-9 font-mono text-xs"
+                    name="title"
+                    required
+                    placeholder="Web & API Penetration Test (VAPT)"
+                    className="h-9 text-xs"
                   />
                 </div>
-              </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col justify-end gap-1.5">
-                  <Label className="mb-auto text-xs">Deposit %</Label>
-                  <Input
-                    name="deposit_percent"
-                    type="number"
-                    min="0"
-                    max="100"
-                    defaultValue="50"
-                    className="h-9 font-mono text-xs"
-                  />
-                </div>
-                <div className="flex flex-col justify-end gap-1.5">
-                  <Label className="mb-auto text-xs">Target Due (Days)</Label>
-                  <Input
-                    name="due_days"
-                    type="number"
-                    min="1"
-                    defaultValue="10"
-                    className="h-9 font-mono text-xs"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-xs font-medium">
-                <input
-                  type="checkbox"
-                  name="requires_roe"
-                  className="h-4 w-4 rounded border-border"
-                />
-                Require Signed RoE Before Execution
-              </label>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Scope Summary</Label>
-                <Textarea
-                  name="description"
-                  rows={3}
-                  placeholder="Describe target assets, repositories, or deliverables..."
-                  className="text-xs"
-                />
-              </div>
-
-              <Button type="submit" className="w-full gap-1.5 rounded-full">
-                <Plus className="h-4 w-4" />
-                Launch Order
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Orders Pipeline List */}
-        <Card className="xl:col-span-7">
-          <CardHeader>
-            <CardTitle className="text-lg">All Orders</CardTitle>
-            <CardDescription>Click any order to open its 360° execution workspace.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {orders && orders.length > 0 ? (
-              <div className="divide-y divide-border/70">
-                {orders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          className="font-mono text-xs font-bold text-primary hover:underline"
-                        >
-                          {order.code}
-                        </Link>
-                        <Badge variant="outline" className="font-mono text-[10px]">
-                          {order.status.replace(/_/g, ' ')}
-                        </Badge>
-                        <Badge variant="secondary" className="font-mono text-[10px]">
-                          {order.pillar}
-                        </Badge>
-                        {order.requires_roe && (
-                          <Badge
-                            variant="outline"
-                            className="gap-1 border-primary/40 font-mono text-[10px] text-primary"
-                          >
-                            <ShieldCheck className="h-3 w-3" />
-                            {order.roe_signed_at ? 'RoE Signed' : 'RoE Pending'}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <Link
-                        href={`/admin/orders/${order.id}`}
-                        className="block text-base font-bold hover:text-primary"
-                      >
-                        {order.title}
-                      </Link>
-
-                      <div className="text-xs text-muted-foreground">
-                        Client: <span className="font-medium text-foreground">{clientMap.get(order.client_id) ?? 'Client'}</span> · Created{' '}
-                        {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right font-mono text-xs">
-                        <div className="text-sm font-bold">
-                          {formatMoney(order.total_cents, order.currency)}
-                        </div>
-                        <div className="text-muted-foreground">
-                          {order.progress_percent}% complete
-                        </div>
-                      </div>
-                      <Button asChild variant="outline" size="sm" className="gap-1 rounded-full text-xs">
-                        <Link href={`/admin/orders/${order.id}`}>
-                          Manage <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                    </div>
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Service Pillar</Label>
+                    <select
+                      name="pillar"
+                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                    >
+                      <option value="cybersecurity">Cybersecurity &amp; VAPT</option>
+                      <option value="development">Full-Stack Dev</option>
+                      <option value="cloud_devops">Cloud &amp; Linux Ops</option>
+                      <option value="ai_ml">AI &amp; ML Pipeline</option>
+                      <option value="tech_support">Executive Advisory</option>
+                    </select>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                No orders yet. Create an order on the left or accept a proposal.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Currency</Label>
+                    <select
+                      name="currency"
+                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                    >
+                      <option value="USD">USD</option>
+                      <option value="BDT">BDT</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Total *</Label>
+                    <Input name="total_usd" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Deposit %</Label>
+                    <Input name="deposit_percent" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Due Days</Label>
+                    <Input name="due_days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Scope Summary</Label>
+                  <Textarea
+                    name="description"
+                    rows={2}
+                    placeholder="Key target environments, milestones, or SLA deliverables..."
+                    className="text-xs"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs font-medium">
+                  <input type="checkbox" name="requires_roe" className="h-4 w-4 rounded border-border" />
+                  Require Rules of Engagement Signature
+                </label>
+
+                <Button type="submit" className="w-full gap-1.5 rounded-full">
+                  <Plus className="h-4 w-4" />
+                  Create Order &amp; Issue Deposit
+                </Button>
+              </ActionFeedbackForm>
+            </CardContent>
+          </Card>
+
+          {/* Compact Orders Table */}
+          <Card className="xl:col-span-8">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Orders Pipeline ({filteredOrders.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {filteredOrders.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Code / Title</TableHead>
+                      <TableHead className="text-xs">Client</TableHead>
+                      <TableHead className="text-xs">Status &amp; Gate</TableHead>
+                      <TableHead className="text-right text-xs">Value</TableHead>
+                      <TableHead className="text-right text-xs">Open</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOrders.map((ord) => (
+                      <TableRow key={ord.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/admin/orders/${ord.id}`}
+                              className="font-mono text-xs font-bold text-primary hover:underline"
+                            >
+                              {ord.code}
+                            </Link>
+                            <Badge variant="secondary" className="font-mono text-[10px]">
+                              {ord.progress_percent}%
+                            </Badge>
+                          </div>
+                          <Link
+                            href={`/admin/orders/${ord.id}`}
+                            className="line-clamp-1 text-xs font-medium hover:text-primary"
+                          >
+                            {ord.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          <Link href={`/admin/clients/${ord.client_id}`} className="hover:underline">
+                            {ord.clientName}
+                          </Link>
+                          <div className="font-mono text-[10px]">
+                            {formatDistanceToNow(new Date(ord.created_at), { addSuffix: true })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-mono text-[10px]">
+                            {ord.status.replace(/_/g, ' ')}
+                          </Badge>
+                          {ord.requires_roe && (
+                            <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-primary">
+                              <ShieldCheck className="h-3 w-3" />
+                              {ord.roe_signed_at ? 'RoE Signed' : 'RoE Needed'}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs font-semibold">
+                          {formatMoney(ord.total_cents, ord.currency)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-xs">
+                            <Link href={`/admin/orders/${ord.id}`}>
+                              Manage <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  No orders match the current filter.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

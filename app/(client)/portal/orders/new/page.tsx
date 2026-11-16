@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CheckCircle2, Handshake, ShieldAlert, Sparkles } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
@@ -18,16 +19,19 @@ export default async function ClientPortalNewOrderPage({
 }: {
   searchParams: Promise<{
     service?: string;
+    package?: string;
     tier?: string;
     budget?: string;
     requirements?: string;
+    quote_submitted?: string;
   }>;
 }) {
   const params = await searchParams;
+  const serviceParam = params.service || params.package;
   const session = await getCurrentSession();
   if (!session) {
     const qs = new URLSearchParams();
-    if (params.service) qs.set('service', params.service);
+    if (serviceParam) qs.set('service', serviceParam);
     if (params.tier) qs.set('tier', params.tier);
     if (params.budget) qs.set('budget', params.budget);
     if (params.requirements) qs.set('requirements', params.requirements);
@@ -40,7 +44,7 @@ export default async function ClientPortalNewOrderPage({
   const catalog = await getPublicServicesCatalog();
 
   const selectedService =
-    catalog.find((s) => s.slug === params.service) ?? catalog[0];
+    catalog.find((s) => s.slug === serviceParam) ?? catalog[0];
   const isCustomDefault = params.tier === 'custom';
   const isUnselectedDefault = params.tier === 'unselected';
   const selectedPkg =
@@ -56,6 +60,21 @@ export default async function ClientPortalNewOrderPage({
 
   return (
     <div className="space-y-8">
+      {params.quote_submitted === '1' && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4 text-xs text-emerald-700 dark:text-emerald-300"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <strong>Custom Quote Request Submitted!</strong> Your requirements and target budget have been logged into the commercial pipeline. Expect a tailored proposal in your{' '}
+            <Link href="/portal/proposals" className="font-semibold underline">
+              Proposals tab
+            </Link>{' '}
+            shortly.
+          </div>
+        </div>
+      )}
       <div>
         <Badge variant="outline" className="mb-2 font-mono text-xs">
           In-Portal Service Store &amp; Custom Deal Desk

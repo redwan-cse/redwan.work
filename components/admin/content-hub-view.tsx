@@ -1,0 +1,244 @@
+import Link from 'next/link';
+import { Save, UserCheck } from 'lucide-react';
+import { AdminHubHeader } from '@/components/admin/hub-header';
+import {
+  PortfolioStudioTable,
+  ResumeItemsStudioTable,
+  ServicesStudioTable,
+} from '@/components/admin/content-studio-drawers';
+import { ResumePdfManager } from '@/components/admin/resume-pdf-manager';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { updateSiteSettingsAction } from '@/lib/cms/actions';
+import {
+  getPublicPortfolioItems,
+  getPublicServicesCatalog,
+  getSiteSettingsAndResume,
+} from '@/lib/cms/queries';
+import { isPublicR2Configured } from '@/lib/r2';
+
+export async function ContentHubView({
+  activeTab,
+  basePath = '/admin/content',
+}: {
+  activeTab: 'services' | 'portfolio' | 'resume' | 'assets' | 'blogs';
+  basePath?: string;
+}) {
+  const [services, portfolioList, resumeData] = await Promise.all([
+    activeTab === 'services' ? getPublicServicesCatalog({ includeHidden: true }) : Promise.resolve([]),
+    activeTab === 'portfolio' ? getPublicPortfolioItems({ includeUnpublished: true }) : Promise.resolve([]),
+    activeTab === 'resume' ? getSiteSettingsAndResume({ includeHidden: true }) : Promise.resolve(null),
+  ]);
+
+  const tabHref = (id: string) =>
+    basePath === '/admin/services' && id === 'services'
+      ? '/admin/services'
+      : basePath === '/admin/portfolio' && id === 'portfolio'
+        ? '/admin/portfolio'
+        : basePath === '/admin/resume' && id === 'resume'
+          ? '/admin/resume'
+          : `/admin/content?tab=${id}`;
+
+  const tabs = [
+    { id: 'services', label: 'Services & Tiers', href: tabHref('services') },
+    { id: 'portfolio', label: 'Portfolio Studies', href: tabHref('portfolio') },
+    { id: 'resume', label: 'Resume & Profile', href: tabHref('resume') },
+    { id: 'assets', label: 'Public R2 Assets', href: '/admin/assets' },
+    { id: 'blogs', label: 'Blogs Sync', href: '/admin/blogs' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <AdminHubHeader
+        eyebrow="CONTENT STUDIO & PUBLIC CATALOG CMS"
+        title="Services, Portfolio, Resume & Public Assets"
+        description="Dense catalog overview with slide-over edit drawers. Updates sync immediately across /, /services/[slug], /portfolio/[slug], /resume, and Client Order Store."
+        tabs={tabs}
+        activeTab={activeTab}
+      />
+
+      {activeTab === 'services' && <ServicesStudioTable services={services} />}
+
+      {activeTab === 'portfolio' && <PortfolioStudioTable studies={portfolioList} />}
+
+      {activeTab === 'resume' && resumeData && (
+        <div className="space-y-6">
+          <ResumePdfManager
+            initialUrl={resumeData.settings.resume_pdf_url}
+            r2Configured={isPublicR2Configured()}
+          />
+
+          <ResumeItemsStudioTable items={resumeData.items} />
+
+          <Card className="border-border/80">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <UserCheck className="h-4 w-4 text-primary" />
+                Personal Profile, Contact Info &amp; Skills Matrix
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Controls the CV header, contact links, executive bio, and skill categories on /resume.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActionFeedbackForm
+                action={updateSiteSettingsAction}
+                successMessage="Site profile & skills matrix saved."
+                className="space-y-3.5"
+              >
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Full Name *</Label>
+                    <Input name="full_name" defaultValue={resumeData.settings.full_name} required className="h-9 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Role Title *</Label>
+                    <Input name="role_title" defaultValue={resumeData.settings.role_title} required className="h-9 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Short Role</Label>
+                    <Input name="short_role" defaultValue={resumeData.settings.short_role} className="h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Subtitle</Label>
+                    <Input name="subtitle" defaultValue={resumeData.settings.subtitle} className="h-9 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tagline</Label>
+                    <Input name="tagline" defaultValue={resumeData.settings.tagline} className="h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Email *</Label>
+                    <Input name="email" defaultValue={resumeData.settings.email} required className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Phone *</Label>
+                    <Input name="phone" defaultValue={resumeData.settings.phone} required className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">WhatsApp</Label>
+                    <Input name="whatsapp_number" defaultValue={resumeData.settings.whatsapp_number} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Location *</Label>
+                    <Input name="location" defaultValue={resumeData.settings.location} required className="h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cal.com URL</Label>
+                    <Input name="cal_com_url" defaultValue={resumeData.settings.cal_com_url} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">LinkedIn URL</Label>
+                    <Input name="linkedin_url" defaultValue={resumeData.settings.linkedin_url} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">GitHub URL</Label>
+                    <Input name="github_url" defaultValue={resumeData.settings.github_url} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Company Name</Label>
+                    <Input name="company_name" defaultValue={resumeData.settings.company_name} className="h-9 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Company URL</Label>
+                    <Input name="company_url" defaultValue={resumeData.settings.company_url} className="h-9 font-mono text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Resume PDF URL</Label>
+                  <Input name="resume_pdf_url" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Executive Bio *</Label>
+                  <Textarea name="executive_summary" rows={3} defaultValue={resumeData.settings.executive_summary} required className="text-xs" />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Research Interests</Label>
+                    <Textarea
+                      name="research_interests"
+                      rows={3}
+                      defaultValue={(resumeData.settings.research_interests ?? []).join('\n')}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Soft Skills</Label>
+                    <Textarea
+                      name="soft_skills"
+                      rows={3}
+                      defaultValue={(resumeData.settings.soft_skills ?? []).join('\n')}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Other Skills</Label>
+                    <Textarea
+                      name="other_skills"
+                      rows={3}
+                      defaultValue={(resumeData.settings.other_skills ?? []).join('\n')}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Technical Skills Categories (JSON Map)</Label>
+                  <Textarea
+                    name="technical_skills_json"
+                    rows={4}
+                    defaultValue={JSON.stringify(resumeData.settings.technical_skills ?? {}, null, 2)}
+                    className="font-mono text-xs"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+                    <Save className="h-4 w-4" />
+                    Save Profile &amp; Skills Matrix
+                  </Button>
+                </div>
+              </ActionFeedbackForm>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {(activeTab === 'assets' || activeTab === 'blogs') && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {activeTab === 'assets' ? 'Public R2 Media & Asset Manager' : 'Blogger Feed Sync & Cache'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Open the dedicated management console directly.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild size="sm" className="rounded-full">
+              <Link href={activeTab === 'assets' ? '/admin/assets' : '/admin/blogs'}>
+                Open {activeTab === 'assets' ? 'Public R2 Assets' : 'Blogs Sync Console'} →
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

@@ -77,6 +77,7 @@ export async function getPublicServicesCatalog(options?: {
       isPublic: boolean;
       isFeatured: boolean;
       sortOrder: number;
+      toolsTags?: string[];
       rawPackages: Array<{
         id: string;
         tier_name: string;
@@ -216,6 +217,7 @@ export async function getPublicServicesCatalog(options?: {
             : Array.isArray(row.tools_tags)
               ? row.tools_tags
               : [],
+        toolsTags: Array.isArray(row.tools_tags) ? row.tools_tags.map(String) : [],
         packages,
         isPublic: Boolean(row.is_public),
         isFeatured: Boolean(row.is_featured),
