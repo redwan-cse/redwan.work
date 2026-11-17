@@ -111,6 +111,28 @@ export async function enqueueTransactionalEmail(input: QueueEmailInput): Promise
     });
     if (error) {
       console.error('Failed to enqueue transactional email:', error.message);
+      return;
+    }
+
+    // Best-effort immediate delivery after the response is sent. The scheduled
+    // /api/cron/email-outbox run is only the retry/backstop path (it can be as
+    // infrequent as daily on some hosting plans), so customer emails must not
+    // depend on it. Set EMAIL_OUTBOX_INLINE_DRAIN=off to queue only (used by the
+    // deterministic retry/backoff E2E harness).
+    if (process.env.RESEND_API_KEY && process.env.EMAIL_OUTBOX_INLINE_DRAIN !== 'off') {
+      try {
+        const { after } = await import('next/server');
+        after(async () => {
+          try {
+            const { drainEmailOutbox } = await import('@/lib/email/outbox');
+            await drainEmailOutbox(10);
+          } catch {
+            // Defer cleanly to the scheduled email-outbox cron on transient error
+          }
+        });
+      } catch {
+        // Non-request context (e.g., CLI/unit tests): cron/drain will pick up queued row
+      }
     }
   } catch (err) {
     console.error('Failed to enqueue transactional email:', err);

@@ -261,4 +261,46 @@ test.describe('Phase 4 Extended E2E: Registration, Invite Activation, Support Ti
       await adminCtx.close();
     }
   });
+
+  test('[R1-ORDER-DELIVER-PAY] keeps Content Studio hub header and tabs when opening Public R2 Assets and Blogs Sync', async ({
+    browser,
+  }) => {
+    const adminCtx = await browser.newContext();
+    const adminPage = await adminCtx.newPage();
+
+    try {
+      await signInAdminWithAal2(adminPage);
+      await adminPage.goto('/admin/content');
+      const hubHeading = adminPage.getByRole('heading', {
+        level: 1,
+        name: /Services, Portfolio, Resume & Public Assets/i,
+      });
+      const hubTabs = adminPage.getByRole('navigation', {
+        name: /Services, Portfolio, Resume & Public Assets views/i,
+      });
+
+      await hubTabs.getByRole('link', { name: 'Public R2 Assets' }).click();
+      await adminPage.waitForURL('**/admin/content?tab=assets');
+      await expect(hubHeading).toBeVisible();
+      await expect(hubTabs.getByRole('link', { name: 'Blogs Sync' })).toBeVisible();
+      await expect(adminPage.getByText('Upload Public Asset')).toBeVisible();
+      await expect(adminPage.getByText(/Stored Public Objects/)).toBeVisible();
+      await expect(adminPage.getByRole('link', { name: /Back to Content Studio/i })).toHaveCount(0);
+
+      await hubTabs.getByRole('link', { name: 'Blogs Sync' }).click();
+      await adminPage.waitForURL('**/admin/content?tab=blogs');
+      await expect(hubHeading).toBeVisible();
+      await expect(hubTabs.getByRole('link', { name: 'Public R2 Assets' })).toBeVisible();
+      await expect(adminPage.getByText(/Synced Posts Preview/)).toBeVisible();
+      await expect(adminPage.getByRole('button', { name: /Purge Cache/i })).toBeVisible();
+
+      // Legacy standalone URLs now redirect into the hub instead of a separate environment.
+      await adminPage.goto('/admin/assets');
+      await adminPage.waitForURL('**/admin/content?tab=assets');
+      await adminPage.goto('/admin/blogs');
+      await adminPage.waitForURL('**/admin/content?tab=blogs');
+    } finally {
+      await adminCtx.close();
+    }
+  });
 });

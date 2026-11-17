@@ -182,7 +182,7 @@ export async function uploadPublicAssetAction(formData: FormData): Promise<void>
     metadata: { key, mime: resolvedMime, sizeBytes: file.size },
   });
 
-  revalidatePath('/admin/assets');
+  revalidatePath('/admin/content');
 }
 
 export async function deletePublicAssetAction(formData: FormData): Promise<void> {
@@ -204,7 +204,7 @@ export async function deletePublicAssetAction(formData: FormData): Promise<void>
     metadata: { key },
   });
 
-  revalidatePath('/admin/assets');
+  revalidatePath('/admin/content');
 }
 
 export async function syncBloggerCacheAction(): Promise<void> {
@@ -222,7 +222,7 @@ export async function syncBloggerCacheAction(): Promise<void> {
     summary: 'Cleared in-memory Blogger cache and revalidated public blog routes',
   });
 
-  revalidatePath('/admin/blogs');
+  revalidatePath('/admin/content');
 }
 
 export async function publishConsentPolicyAction(formData: FormData): Promise<void> {

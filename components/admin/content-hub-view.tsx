@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Save, UserCheck } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { ContentAssetsPanel } from '@/components/admin/content-assets-panel';
+import { ContentBlogsPanel } from '@/components/admin/content-blogs-panel';
 import {
   PortfolioStudioTable,
   ResumeItemsStudioTable,
@@ -47,8 +49,8 @@ export async function ContentHubView({
     { id: 'services', label: 'Services & Tiers', href: tabHref('services') },
     { id: 'portfolio', label: 'Portfolio Studies', href: tabHref('portfolio') },
     { id: 'resume', label: 'Resume & Profile', href: tabHref('resume') },
-    { id: 'assets', label: 'Public R2 Assets', href: '/admin/assets' },
-    { id: 'blogs', label: 'Blogs Sync', href: '/admin/blogs' },
+    { id: 'assets', label: 'Public R2 Assets', href: tabHref('assets') },
+    { id: 'blogs', label: 'Blogs Sync', href: tabHref('blogs') },
   ];
 
   return (
@@ -224,25 +226,9 @@ export async function ContentHubView({
         </div>
       )}
 
-      {(activeTab === 'assets' || activeTab === 'blogs') && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {activeTab === 'assets' ? 'Public R2 Media & Asset Manager' : 'Blogger Feed Sync & Cache'}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Open the dedicated management console directly.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild size="sm" className="rounded-full">
-              <Link href={activeTab === 'assets' ? '/admin/assets' : '/admin/blogs'}>
-                Open {activeTab === 'assets' ? 'Public R2 Assets' : 'Blogs Sync Console'} →
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      {activeTab === 'assets' && <ContentAssetsPanel />}
+
+      {activeTab === 'blogs' && <ContentBlogsPanel />}
     </div>
   );
 }

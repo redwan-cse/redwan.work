@@ -1821,6 +1821,8 @@ export async function startLoopbackServices(options = {}) {
         REVALIDATE_SECRET: LOOPBACK_SECRETS.revalidateSecret,
         REVALIDATION_SECRET: LOOPBACK_SECRETS.revalidateSecret,
         LEAD_IP_HASH_SALT: 'loopback-ip-hash-salt-2026',
+        // E2E asserts exact outbox retry/backoff counts, so disable the best-effort inline drain.
+        EMAIL_OUTBOX_INLINE_DRAIN: 'off',
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: '',
         TURNSTILE_SECRET_KEY: '',
         GOOGLE_CREDENTIALS_B64: '',

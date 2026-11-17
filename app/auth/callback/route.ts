@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sanitizeRelativeRedirectPath, shouldUseSecureCookies } from '@/lib/security/safe-redirect';
+import {
+  resolveCallbackOrigin,
+  sanitizeRelativeRedirectPath,
+  shouldUseSecureCookies,
+} from '@/lib/security/safe-redirect';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,49 +58,15 @@ function redirectWithCookies(
   return response;
 }
 
-function resolveRequestOrigin(request: NextRequest): string {
-  const protoHeader = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const hostHeader = (
-    request.headers.get('x-forwarded-host') ??
-    request.headers.get('host') ??
-    ''
-  )
-    .split(',')[0]
-    ?.trim();
-
-  let configuredOrigin: string | null = null;
-  const configuredSite = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configuredSite) {
-    try {
-      configuredOrigin = new URL(configuredSite).origin;
-    } catch {
-      configuredOrigin = null;
-    }
-  }
-
-  if (hostHeader) {
-    const proto =
-      protoHeader === 'https' || protoHeader === 'http'
-        ? protoHeader
-        : request.nextUrl.protocol.replace(/:$/, '');
-    try {
-      const candidate = new URL(`${proto}://${hostHeader}`);
-      const isLoopbackHost =
-        candidate.hostname === '127.0.0.1' || candidate.hostname === 'localhost';
-      if (isLoopbackHost || (configuredOrigin && candidate.origin === configuredOrigin)) {
-        return candidate.origin;
-      }
-    } catch {
-      // fall through
-    }
-  }
-
-  return configuredOrigin ?? request.nextUrl.origin;
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const origin = resolveRequestOrigin(request);
+  const origin = resolveCallbackOrigin({
+    host: request.headers.get('host'),
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    forwardedProto: request.headers.get('x-forwarded-proto'),
+    requestOrigin: request.nextUrl.origin,
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  });
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
