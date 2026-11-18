@@ -72,7 +72,7 @@ export default async function ClientOrderDetailPage({
       .select('id, filename, size_bytes, created_at')
       .eq('order_id', id)
       .in('category', ['requirement_attachment', 'order_attachment'])
-      .is('deleted_from_r2_at', null)
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
     admin
       .from('cancellation_requests')
@@ -377,8 +377,9 @@ export default async function ClientOrderDetailPage({
                       )}
 
                       {del.status === 'submitted' && (
-                        <form
+                        <ActionFeedbackForm
                           action={reviewDeliverableClientAction}
+                          successMessage="Deliverable review submitted."
                           className="mt-3 space-y-2 border-t border-border/60 pt-3"
                         >
                           <input type="hidden" name="deliverable_id" value={del.id} />
@@ -417,7 +418,7 @@ export default async function ClientOrderDetailPage({
                               All {order.revisions_included} included revision(s) used. Message us below to request a Paid Revision Addendum invoice.
                             </p>
                           )}
-                        </form>
+                        </ActionFeedbackForm>
                       )}
                     </div>
                   );
@@ -506,7 +507,11 @@ export default async function ClientOrderDetailPage({
                   </div>
                 </div>
               ) : (
-                <form action={submitOrderRequirementsAction} className="space-y-3">
+                <ActionFeedbackForm
+                  action={submitOrderRequirementsAction}
+                  successMessage="Project requirements saved."
+                  className="space-y-3"
+                >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1">
                     <Label className="text-xs">Target Scope, Architecture &amp; Endpoints</Label>
@@ -531,7 +536,7 @@ export default async function ClientOrderDetailPage({
                   <Button type="submit" size="sm" variant="outline">
                     Save Project Requirements
                   </Button>
-                </form>
+                </ActionFeedbackForm>
               )}
 
               {/* Attached Requirement Scope Files */}
@@ -599,7 +604,11 @@ export default async function ClientOrderDetailPage({
                   Engagement reviews unlock automatically once all deliverables are accepted and the order is marked completed.
                 </p>
               ) : (
-                <form action={submitClientReviewAction} className="space-y-3">
+                <ActionFeedbackForm
+                  action={submitClientReviewAction}
+                  successMessage={existingReview ? 'Engagement review updated.' : 'Engagement review submitted.'}
+                  className="space-y-3"
+                >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1.5">
                     <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
@@ -639,7 +648,7 @@ export default async function ClientOrderDetailPage({
                   <Button type="submit" size="sm" variant="outline" className="w-full">
                     {existingReview ? 'Update Review' : 'Submit Engagement Review'}
                   </Button>
-                </form>
+                </ActionFeedbackForm>
               )}
             </CardContent>
           </Card>

@@ -7,6 +7,7 @@ import {
   acceptProposalClientAction,
   declineProposalClientAction,
 } from '@/lib/crm/actions';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,9 +28,10 @@ export default async function ClientProposalDetailPage({
   const { id } = await params;
   const admin = getSupabaseAdmin();
 
-  const [{ data: proposal }, { data: milestones }] = await Promise.all([
+  const [{ data: proposal }, { data: milestones }, { data: convertedOrder }] = await Promise.all([
     admin.from('proposals').select('*').eq('id', id).maybeSingle(),
     admin.from('proposal_milestones').select('*').eq('proposal_id', id).order('position'),
+    admin.from('orders').select('id').eq('proposal_id', id).maybeSingle(),
   ]);
 
   if (
@@ -40,7 +42,9 @@ export default async function ClientProposalDetailPage({
     notFound();
   }
 
-  const canRespond = proposal.status === 'sent' || proposal.status === 'viewed';
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isExpired = Boolean(proposal.valid_until && proposal.valid_until < todayIso);
+  const canRespond = (proposal.status === 'sent' || proposal.status === 'viewed') && !isExpired;
 
   return (
     <div className="space-y-6">
@@ -56,10 +60,10 @@ export default async function ClientProposalDetailPage({
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="font-mono text-base font-bold text-primary">{proposal.code}</span>
             <Badge
-              variant={proposal.status === 'declined' ? 'destructive' : 'outline'}
+              variant={proposal.status === 'declined' || isExpired ? 'destructive' : 'outline'}
               className="font-mono text-xs uppercase"
             >
-              {proposal.status}
+              {isExpired && (proposal.status === 'sent' || proposal.status === 'viewed') ? 'expired' : proposal.status}
             </Badge>
             {proposal.requires_roe && (
               <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-800 dark:text-amber-300">
@@ -81,10 +85,10 @@ export default async function ClientProposalDetailPage({
         </div>
       </div>
 
-      {proposal.declined_reason && (
+      {proposal.decline_reason && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardContent className="p-4 text-xs text-destructive">
-            <strong>Decline Feedback Submitted:</strong> {proposal.declined_reason}
+            <strong>Decline Feedback Submitted:</strong> {proposal.decline_reason}
           </CardContent>
         </Card>
       )}
@@ -133,9 +137,9 @@ export default async function ClientProposalDetailPage({
               </div>
             ))}
 
-            {proposal.converted_order_id && (
+            {convertedOrder && (
               <Button asChild className="w-full rounded-full">
-                <Link href={`/portal/orders/${proposal.converted_order_id}`}>
+                <Link href={`/portal/orders/${convertedOrder.id}`}>
                   Open Converted Order Workspace →
                 </Link>
               </Button>
@@ -143,13 +147,13 @@ export default async function ClientProposalDetailPage({
 
             {canRespond && (
               <div className="space-y-2 border-t border-border/60 pt-3">
-                <form action={acceptProposalClientAction}>
+                <ActionFeedbackForm action={acceptProposalClientAction}>
                   <input type="hidden" name="proposal_id" value={proposal.id} />
                   <Button type="submit" className="w-full gap-1.5 rounded-full">
                     <CheckCircle2 className="h-4 w-4" />
                     Accept Proposal &amp; Start Order
                   </Button>
-                </form>
+                </ActionFeedbackForm>
 
                 <ConfirmActionButton
                   action={declineProposalClientAction}

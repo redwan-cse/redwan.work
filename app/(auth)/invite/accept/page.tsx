@@ -21,10 +21,11 @@ const initial: ActionState = {};
 function InviteAcceptContent() {
   const searchParams = useSearchParams();
   const tokenHash = searchParams?.get('token_hash') ?? '';
+  const hasPkceSession = searchParams?.get('session') === '1';
   const email = searchParams?.get('email') ?? '';
   const [state, submit, pending] = useActionState(acceptInviteAction, initial);
 
-  if (!tokenHash) {
+  if (!tokenHash && !hasPkceSession) {
     return (
       <Card>
         <CardHeader>
@@ -50,7 +51,8 @@ function InviteAcceptContent() {
       </CardHeader>
       <CardContent>
         <form action={submit} className="space-y-3">
-          <input type="hidden" name="token_hash" value={tokenHash} />
+          {tokenHash ? <input type="hidden" name="token_hash" value={tokenHash} /> : null}
+          {hasPkceSession ? <input type="hidden" name="session" value="1" /> : null}
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
             <Input

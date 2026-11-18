@@ -77,7 +77,10 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
     sort_order: sortOrder,
   };
   if (formData.has('tools_tags')) {
-    payload.tools_tags = parseLines(toolsTagsRaw);
+    payload.tools_tags = String(toolsTagsRaw ?? '')
+      .split(/[\r\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
   } else if (!id) {
     payload.tools_tags = highlights;
   }

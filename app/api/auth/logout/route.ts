@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 
 async function handle(request: NextRequest): Promise<NextResponse> {
   // Same-origin check (enforced strictly on POST, and GET is restricted solely
@@ -7,16 +8,28 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   // cross-site subresource tags like <img src="/api/auth/logout"> return 403).
   if (request.method === 'POST') {
     const origin = request.headers.get('origin');
-    const allowed = new Set([request.nextUrl.origin, 'https://redwan.work']);
+    const allowed = new Set([
+      request.nextUrl.origin,
+      'https://redwan.work',
+      'https://www.redwan.work',
+    ]);
+    if (process.env.NEXT_PUBLIC_SITE_URL) {
+      try {
+        allowed.add(new URL(process.env.NEXT_PUBLIC_SITE_URL).origin);
+      } catch {
+        // ignore invalid site URL
+      }
+    }
     const originOk =
       origin !== null &&
-      (() => {
-        try {
-          return allowed.has(new URL(origin).origin);
-        } catch {
-          return false;
-        }
-      })();
+      (isSameOriginRequest(request.headers) ||
+        (() => {
+          try {
+            return allowed.has(new URL(origin).origin);
+          } catch {
+            return false;
+          }
+        })());
     if (!originOk) {
       return NextResponse.json({ error: 'Request origin not allowed' }, { status: 403 });
     }

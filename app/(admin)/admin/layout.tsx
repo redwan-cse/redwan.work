@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
+import { getAdminCommandCenterMetrics } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PanelShell, type PanelNavItem } from '@/components/panel/panel-shell';
 import { AdminCommandPalette } from '@/components/admin/admin-command-palette';
@@ -26,8 +27,8 @@ export default async function AdminLayout({
   }
 
   const admin = getSupabaseAdmin();
-  const [{ data: metricsRaw }, { data: recentNotifications }] = await Promise.all([
-    admin.rpc('admin_command_center_metrics'),
+  const [metrics, { data: recentNotifications }] = await Promise.all([
+    getAdminCommandCenterMetrics(),
     admin
       .from('notifications')
       .select('id, title, body, href, is_read, created_at')
@@ -35,7 +36,6 @@ export default async function AdminLayout({
       .order('created_at', { ascending: false })
       .limit(12),
   ]);
-  const metrics = (metricsRaw ?? {}) as Record<string, number>;
 
   const navItems: PanelNavItem[] = [
     { label: 'Overview', href: '/admin', icon: 'dashboard' },

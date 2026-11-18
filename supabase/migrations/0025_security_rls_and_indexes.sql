@@ -193,7 +193,11 @@ begin
   end if;
   new.order_id := v_inv.order_id;
   new.reference := btrim(new.reference);
-  new.fx_rate_to_usd := v_inv.fx_rate_to_usd;
+  if coalesce(current_setting('app.manual_payment_fx', true), '') <> 'on' then
+    new.fx_rate_to_usd := v_inv.fx_rate_to_usd;
+  elsif new.fx_rate_to_usd is null or new.fx_rate_to_usd <= 0 then
+    new.fx_rate_to_usd := v_inv.fx_rate_to_usd;
+  end if;
 
   if new.proof_file_id is not null then
     if not exists (
@@ -482,7 +486,7 @@ as $$
 declare
   v_count int := 0;
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'Service role required.';
   end if;
 
@@ -1112,7 +1116,7 @@ declare
   v_has_unpaid boolean;
   v_count int := 0;
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'Service role required.';
   end if;
 
@@ -1680,6 +1684,7 @@ create policy "audit_logs_select_own_or_admin"
       public.is_active_user()
       and (client_id = auth.uid() or actor_id = auth.uid())
       and action not in (
+        'client.crm_updated',
         'client.note_added',
         'client.note_deleted',
         'client.tier_updated',
@@ -1741,7 +1746,7 @@ declare
   v_pending_bytes bigint := 0;
   v_quota_bytes constant bigint := 524288000; -- 500 MiB active per client
 begin
-  if auth.role() <> 'service_role' then
+  if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'Service role required to reserve vault quota.';
   end if;
   if p_client_id is null or p_size_bytes is null or p_size_bytes <= 0 then

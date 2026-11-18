@@ -68,6 +68,7 @@ export async function BillingHubView({
   const clientMap = new Map(
     (clients ?? []).map((c) => [c.id, c.full_name || c.email])
   );
+  const invoiceMap = new Map((invoices ?? []).map((inv) => [inv.id, inv]));
 
   const filteredInvoices = (invoices ?? []).filter(
     (inv) => !statusFilter || inv.status === statusFilter
@@ -153,16 +154,25 @@ export async function BillingHubView({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <form action={reviewPaymentProofAction} className="flex flex-wrap items-center gap-2">
+                  <ActionFeedbackForm
+                    action={reviewPaymentProofAction}
+                    successMessage="Payment confirmed and invoice ledger updated."
+                    className="flex flex-wrap items-center gap-2"
+                  >
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="confirmed" />
                     <div className="flex items-center gap-1">
                       <Label className="text-[11px] text-muted-foreground">FX→USD:</Label>
                       <Input
                         name="fx_rate"
+                        aria-label="Exchange rate to USD"
                         type="number"
                         step="0.0001"
-                        defaultValue={pay.currency === 'USD' ? '1.0' : '0.0083'}
+                        defaultValue={String(
+                          invoiceMap.get(pay.invoice_id)?.fx_rate_to_usd ??
+                            pay.fx_rate_to_usd ??
+                            '1.0'
+                        )}
                         className="h-8 w-20 font-mono text-xs"
                       />
                     </div>
@@ -170,13 +180,18 @@ export async function BillingHubView({
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Confirm Payment
                     </Button>
-                  </form>
+                  </ActionFeedbackForm>
 
-                  <form action={reviewPaymentProofAction} className="flex items-center gap-1.5">
+                  <ActionFeedbackForm
+                    action={reviewPaymentProofAction}
+                    successMessage="Payment proof rejected."
+                    className="flex items-center gap-1.5"
+                  >
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="rejected" />
                     <Input
                       name="reason"
+                      aria-label="Rejection reason"
                       placeholder="Rejection reason..."
                       className="h-8 w-36 text-xs"
                     />
@@ -184,7 +199,7 @@ export async function BillingHubView({
                       <XCircle className="h-3.5 w-3.5" />
                       Reject
                     </Button>
-                  </form>
+                  </ActionFeedbackForm>
                 </div>
               </div>
             ))}

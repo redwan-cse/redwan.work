@@ -112,5 +112,137 @@ describe('Phase 3 Retention Pagination Sweep & Outbox Template CTAs', () => {
     });
     expect(html).toContain('Settle Overdue Invoice');
     expect(html).toContain('https://redwan.work/portal/invoices/123');
+
+    const adminCancelHtml = renderOutboxHtml({
+      template: 'order_cancellation_requested',
+      subject: 'Cancellation Request ORD-901',
+      payload: {
+        message: 'Client requested mutual cancellation.',
+        actionUrl: 'https://redwan.work/admin/orders/ord-901',
+      },
+    });
+    expect(adminCancelHtml).toContain('Review Cancellation Request');
+
+    const adminGenericHtml = renderOutboxHtml({
+      template: 'custom_alert_admin',
+      subject: 'Admin Alert',
+      payload: {
+        message: 'Check queue.',
+        actionUrl: 'https://redwan.work/admin',
+      },
+    });
+    expect(adminGenericHtml).toContain('Open Admin Command Center');
+
+    const retainerHtml = renderOutboxHtml({
+      template: 'retainer_renewed',
+      subject: 'Retainer Renewed',
+      payload: {
+        message: 'New cycle ready.',
+        actionUrl: 'https://redwan.work/portal/retainers',
+      },
+    });
+    expect(retainerHtml).toContain('View Retainer &amp; Invoice');
+
+    const deactivatedHtml = renderOutboxHtml({
+      template: 'account_deactivated',
+      subject: 'Account Status Updated',
+      payload: {
+        message: 'Access disabled.',
+        actionUrl: 'https://redwan.work/contact',
+      },
+    });
+    expect(deactivatedHtml).toContain('Contact Support');
+  });
+
+  it('[P6-RETENTION-OVERDUE-RPC] uses mark_overdue_invoices_atomic RPC instead of blocked direct invoice writes', async () => {
+    mockIsR2Configured.mockReturnValue(false);
+    const invUpdate = vi.fn();
+    const insertedNotifs: Array<Record<string, unknown>> = [];
+    const insertedOutbox: Array<Record<string, unknown>> = [];
+    const rpcCalls: string[] = [];
+
+    mockGetSupabaseAdmin.mockReturnValue({
+      rpc: vi.fn(async (name: string) => {
+        rpcCalls.push(name);
+        if (name === 'run_auto_accept_deliverables') return { data: 0, error: null };
+        if (name === 'mark_overdue_invoices_atomic') return { data: 1, error: null };
+        return { data: 0, error: null };
+      }),
+      from: (table: string) => {
+        if (table === 'audit_logs') {
+          return {
+            select: () => ({
+              eq: () => ({
+                gte: async () => ({ data: [{ entity_id: 'inv-ov-1' }], error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === 'invoices') {
+          return {
+            update: invUpdate,
+            select: () => ({
+              in: async () => ({
+                data: [
+                  {
+                    id: 'inv-ov-1',
+                    code: 'INV-2099',
+                    client_id: 'cli-1',
+                    currency: 'USD',
+                    total_cents: 50000,
+                    amount_paid_cents: 0,
+                    credited_cents: 0,
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === 'profiles') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { email: 'cli@disposable.test' }, error: null }),
+              }),
+            }),
+          };
+        }
+        if (table === 'notifications') {
+          return {
+            insert: async (row: Record<string, unknown>) => {
+              insertedNotifs.push(row);
+              return { error: null };
+            },
+          };
+        }
+        if (table === 'email_outbox') {
+          return {
+            insert: async (row: Record<string, unknown>) => {
+              insertedOutbox.push(row);
+              return { error: null };
+            },
+          };
+        }
+        return {
+          update: () => ({
+            in: () => ({
+              lt: async () => ({ error: null }),
+            }),
+          }),
+        };
+      },
+    });
+
+    const req = new NextRequest('http://127.0.0.1:3000/api/cron/r2-retention', {
+      method: 'GET',
+      headers: { Authorization: 'Bearer phase3-cron-secret-value' },
+    });
+    const res = await runRetentionCron(req);
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toContain('mark_overdue_invoices_atomic');
+    expect(invUpdate).not.toHaveBeenCalled();
+    expect(insertedNotifs).toHaveLength(1);
+    expect(insertedOutbox).toHaveLength(1);
   });
 });

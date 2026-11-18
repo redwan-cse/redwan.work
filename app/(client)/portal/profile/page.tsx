@@ -28,8 +28,11 @@ export default async function ClientProfilePage() {
       .select('id, action, summary, created_at')
       .eq('client_id', session.userId)
       .not('action', 'like', 'crm.%')
-      .not('action', 'eq', 'client.crm_updated')
-      .not('action', 'eq', 'client.note_added')
+      .not(
+        'action',
+        'in',
+        '("client.crm_updated","client.note_added","client.note_deleted","client.tier_updated","client.followup_updated","order.internal_note_added","admin.internal_note")'
+      )
       .order('created_at', { ascending: false })
       .limit(12),
   ]);

@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
       .limit(5),
     admin
       .from('inquiries')
-      .select('id, name, email, subject, status')
-      .or(`name.ilike.${pattern},email.ilike.${pattern},subject.ilike.${pattern}`)
+      .select('id, code, name, email, company, status')
+      .or(`code.ilike.${pattern},name.ilike.${pattern},email.ilike.${pattern},company.ilike.${pattern}`)
       .limit(4),
   ]);
 
@@ -97,12 +97,12 @@ export async function GET(request: NextRequest) {
       id: `proposal-${p.id}`,
       label: `${p.code ?? 'Draft'}: ${p.title}`,
       meta: p.status,
-      href: `/admin/proposals`,
+      href: `/admin/proposals/${p.id}`,
     })),
     ...(inquiries ?? []).map((inq) => ({
       group: 'Inquiries',
       id: `inquiry-${inq.id}`,
-      label: `${inq.name} — ${inq.subject || inq.email}`,
+      label: `${inq.code ? `${inq.code}: ` : ''}${inq.name} — ${inq.company || inq.email}`,
       meta: inq.status,
       href: `/admin/pipeline`,
     })),

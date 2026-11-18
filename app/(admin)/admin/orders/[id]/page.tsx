@@ -197,7 +197,7 @@ export default async function AdminOrderDetailPage({
               />
               <ActionFeedbackForm action={resolveCancellationRequestAction} successMessage="Cancellation declined.">
                 <input type="hidden" name="request_id" value={pendingCancels[0].id} />
-                <input type="hidden" name="decision" value="rejected" />
+                <input type="hidden" name="decision" value="declined" />
                 <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
                   Decline Request
                 </Button>
@@ -781,7 +781,7 @@ export default async function AdminOrderDetailPage({
                           {task.is_completed ? 'Reopen' : 'Complete'}
                         </Button>
                       </ActionFeedbackForm>
-                      <form action={deleteOrderTaskAction}>
+                      <ActionFeedbackForm action={deleteOrderTaskAction} successMessage="Task removed.">
                         <input type="hidden" name="task_id" value={task.id} />
                         <input type="hidden" name="order_id" value={order.id} />
                         <Button
@@ -793,7 +793,7 @@ export default async function AdminOrderDetailPage({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </form>
+                      </ActionFeedbackForm>
                     </div>
                   </div>
                 ))}

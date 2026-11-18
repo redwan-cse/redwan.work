@@ -50,7 +50,7 @@ export async function PipelineHubView({
       admin
         .from('proposals')
         .select(
-          'id, code, recipient_name, recipient_email, title, pillar, total_cents, currency, deposit_percent, requires_roe, status, declined_reason, converted_order_id, created_at'
+          'id, code, recipient_name, recipient_email, title, pillar, total_cents, currency, deposit_percent, requires_roe, status, decline_reason, created_at'
         )
         .order('created_at', { ascending: false })
         .limit(40),
@@ -71,6 +71,16 @@ export async function PipelineHubView({
     ]);
 
   const prefill = prefillInquiryRes.data;
+  const proposalIds = (proposals ?? []).map((p) => p.id);
+  const { data: proposalOrders } =
+    proposalIds.length > 0
+      ? await admin.from('orders').select('id, proposal_id').in('proposal_id', proposalIds)
+      : { data: [] as Array<{ id: string; proposal_id: string | null }> };
+  const orderIdByProposalId = new Map(
+    (proposalOrders ?? [])
+      .filter((o) => Boolean(o.proposal_id))
+      .map((o) => [o.proposal_id as string, o.id])
+  );
   const newInqCount = (inquiries ?? []).filter((i) => i.status === 'new').length;
   const openPropCount = (proposals ?? []).filter(
     (p) => p.status === 'sent' || p.status === 'draft'
@@ -505,9 +515,9 @@ export async function PipelineHubView({
                         )}
                       </div>
 
-                      {prop.declined_reason && (
+                      {prop.decline_reason && (
                         <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
-                          Declined reason: {prop.declined_reason}
+                          Declined reason: {prop.decline_reason}
                         </p>
                       )}
 
@@ -523,9 +533,9 @@ export async function PipelineHubView({
                           >
                             Inspect →
                           </Link>
-                          {prop.converted_order_id && (
+                          {orderIdByProposalId.get(prop.id) && (
                             <Link
-                              href={`/admin/orders/${prop.converted_order_id}`}
+                              href={`/admin/orders/${orderIdByProposalId.get(prop.id)}`}
                               className="inline-flex items-center gap-1 font-mono font-semibold text-primary hover:underline"
                             >
                               Order <ArrowRight className="h-3 w-3" />

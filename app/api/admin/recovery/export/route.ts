@@ -34,8 +34,7 @@ export async function GET(request: NextRequest) {
       .from('vault_files')
       .select('id, filename, r2_key, category')
       .eq('order_id', orderId)
-      .is('archived_at', null)
-      .is('deleted_from_r2_at', null),
+      .is('archived_at', null),
   ]);
 
   if (!order) {

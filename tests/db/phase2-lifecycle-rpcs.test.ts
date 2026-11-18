@@ -242,4 +242,82 @@ describe('Phase 2 Full CRM & Client Portal Lifecycle RPCs', () => {
     );
     expect(Number(retAfter.rows[0].hours_used_current_period)).toBe(0);
   });
+
+  it('[P6-DB-REGRESSIONS] supports multi-line qty > 1, manual payment FX preservation, declined cancellations, pg_cron maintenance, and audit exclusion', async () => {
+    // 1. Multi-line invoice with qty > 1 AND quantity alias on non-USD BDT invoice
+    const bdtDraft = await pg.queryAs<{ res: { invoice_id: string; total_cents: number } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_draft_invoice_multi_atomic(
+         $1, null, null, 'BDT', 120.5, 0, 0, 14,
+         null, 'FX & qty regression',
+         '[{"description":"Scope A","qty":3,"unit_price_cents":2000},{"description":"Scope B","quantity":2,"unit_price_cents":5000}]'::jsonb,
+         true, $2
+       ) as res`,
+      [clientA.id, adminUser.id]
+    );
+    expect(bdtDraft.rows[0].res.total_cents).toBe(16000);
+    const invId = bdtDraft.rows[0].res.invoice_id;
+
+    // 2. Manual payment preserves explicit FX rate instead of being overwritten by invoice FX
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.record_manual_payment_atomic($1, $2, 'manual', 16000, 'BDT-FX-121', 121.25)`,
+      [invId, adminUser.id]
+    );
+    const payRow = await pg.db.query<{ fx_rate_to_usd: string }>(
+      `select fx_rate_to_usd::text from public.payments where invoice_id = $1 and reference = 'BDT-FX-121'`,
+      [invId]
+    );
+    expect(Number(payRow.rows[0].fx_rate_to_usd)).toBeCloseTo(121.25, 2);
+
+    // 3. Cancellation declined leaves order in_progress and request status = 'declined'
+    const ordRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic($1, $2, 'Cancellation Decline Test', 'Scope', 'development', 60000, 0, false, 10) as res`,
+      [adminUser.id, clientB.id]
+    );
+    const ordId = ordRes.rows[0].res.order_id;
+    await pg.queryAs(
+      { pgRole: 'service_role' },
+      `update public.orders set status = 'in_progress' where id = $1`,
+      [ordId]
+    );
+    const cr = await pg.queryAs<{ id: string }>(
+      { pgRole: 'authenticated', userId: clientB.id, email: clientB.email, appRole: 'client', aal: 'aal1' },
+      `insert into public.cancellation_requests (order_id, requested_by, reason) values ($1, $2, 'Checking decline path') returning id`,
+      [ordId, clientB.id]
+    );
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.resolve_order_cancellation_atomic($1, $2, 'declined', 'Scope already completed')`,
+      [cr.rows[0].id, adminUser.id]
+    );
+    const crCheck = await pg.db.query<{ status: string }>(
+      `select status::text from public.cancellation_requests where id = $1`,
+      [cr.rows[0].id]
+    );
+    const ordCheck = await pg.db.query<{ status: string }>(
+      `select status::text from public.orders where id = $1`,
+      [ordId]
+    );
+    expect(crCheck.rows[0].status).toBe('declined');
+    expect(ordCheck.rows[0].status).toBe('in_progress');
+
+    // 4. pg_cron context (postgres / auth.role() is NULL) can execute run_daily_crm_maintenance()
+    await expect(pg.db.query(`select public.run_daily_crm_maintenance()`)).resolves.toBeDefined();
+
+    // 5. Client audit_logs RLS excludes client.crm_updated
+    await pg.queryAs(
+      { pgRole: 'service_role' },
+      `insert into public.audit_logs (actor_id, actor_role, action, entity_type, entity_id, summary)
+       values ($1, 'admin', 'client.crm_updated', 'client', $2, 'Internal CRM score updated')`,
+      [adminUser.id, clientA.id]
+    );
+    const cliLogs = await pg.queryAs<{ action: string }>(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, appRole: 'client', aal: 'aal1' },
+      `select action from public.audit_logs where entity_id = $1`,
+      [clientA.id]
+    );
+    expect(cliLogs.rows.map((r) => r.action)).not.toContain('client.crm_updated');
+  });
 });

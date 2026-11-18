@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, KeyRound, RotateCcw, Copy, Check } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { sanitizeAdminMfaNextPath } from '@/lib/security/safe-redirect';
-import { resetUnverifiedMfaFactorsAction } from '@/lib/auth/actions';
+import {
+  resolvePostMfaDestinationAction,
+  resetUnverifiedMfaFactorsAction,
+} from '@/lib/auth/actions';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -160,8 +162,8 @@ export default function AdminMfaPage() {
           return;
         }
         const params = new URLSearchParams(window.location.search);
-        const targetAdminPath = sanitizeAdminMfaNextPath(params.get('next'));
-        router.replace(targetAdminPath);
+        const targetPath = await resolvePostMfaDestinationAction(params.get('next'));
+        router.replace(targetPath);
         router.refresh();
       } catch {
         setError('Unable to complete MFA verification. Please try again.');

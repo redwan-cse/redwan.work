@@ -236,7 +236,11 @@ export default async function AdminInvoiceDetailPage({
                     )}
                     {pay.status === 'submitted' && (
                       <div className="flex flex-wrap gap-2 pt-2">
-                        <form action={reviewPaymentProofAction} className="flex items-center gap-1.5">
+                        <ActionFeedbackForm
+                          action={reviewPaymentProofAction}
+                          successMessage="Payment confirmed and invoice ledger updated."
+                          className="flex items-center gap-1.5"
+                        >
                           <input type="hidden" name="payment_id" value={pay.id} />
                           <input type="hidden" name="decision" value="confirmed" />
                           <Input
@@ -244,22 +248,27 @@ export default async function AdminInvoiceDetailPage({
                             aria-label="Exchange rate to USD"
                             type="number"
                             step="0.0001"
-                            defaultValue={pay.currency === 'USD' ? '1.0' : '0.0083'}
+                            defaultValue={String(
+                              invoice.fx_rate_to_usd ?? pay.fx_rate_to_usd ?? '1.0'
+                            )}
                             className="h-8 w-20 font-mono text-xs"
                           />
                           <Button type="submit" size="sm" className="h-8 gap-1 rounded-full">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Approve
                           </Button>
-                        </form>
-                        <form action={reviewPaymentProofAction}>
+                        </ActionFeedbackForm>
+                        <ActionFeedbackForm
+                          action={reviewPaymentProofAction}
+                          successMessage="Payment proof rejected."
+                        >
                           <input type="hidden" name="payment_id" value={pay.id} />
                           <input type="hidden" name="decision" value="rejected" />
                           <Button type="submit" size="sm" variant="destructive" className="h-8 gap-1 rounded-full">
                             <XCircle className="h-3.5 w-3.5" />
                             Reject
                           </Button>
-                        </form>
+                        </ActionFeedbackForm>
                       </div>
                     )}
                   </div>

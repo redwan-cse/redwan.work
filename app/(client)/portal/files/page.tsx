@@ -30,7 +30,6 @@ export default async function ClientVaultFilesPage({
     )
     .eq('owner_client_id', session.userId)
     .is('archived_at', null)
-    .is('deleted_from_r2_at', null)
     .order('created_at', { ascending: false });
 
   const filtered = (files ?? []).filter((f) => {

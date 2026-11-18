@@ -4,6 +4,7 @@ import { ArrowRight, LifeBuoy, Plus } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createClientTicketAction } from '@/lib/crm/actions';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,11 @@ export default async function ClientTicketsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={createClientTicketAction} className="space-y-3.5">
+            <ActionFeedbackForm
+              action={createClientTicketAction}
+              successMessage="Support ticket submitted."
+              className="space-y-3.5"
+            >
               <div className="space-y-1">
                 <Label className="text-xs">Subject *</Label>
                 <Input
@@ -134,7 +139,7 @@ export default async function ClientTicketsPage() {
               <Button type="submit" className="w-full">
                 Submit Support Ticket
               </Button>
-            </form>
+            </ActionFeedbackForm>
           </CardContent>
         </Card>
 

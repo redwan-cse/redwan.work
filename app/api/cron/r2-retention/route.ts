@@ -62,12 +62,27 @@ async function handleStorageRetentionCron(request: NextRequest) {
   // 1b. Transition overdue invoices & expired proposals and queue overdue notifications
   try {
     const todayDate = new Date().toISOString().slice(0, 10);
-    const { data: newlyOverdue } = await admin
-      .from('invoices')
-      .update({ status: 'overdue' })
-      .in('status', ['issued', 'partially_paid'])
-      .lt('due_at', todayDate)
-      .select('id, code, client_id, currency, total_cents, amount_paid_cents, credited_cents');
+    const beforeMarkIso = new Date(Date.now() - 5000).toISOString();
+    const { data: markedOverdueCount } = await admin.rpc('mark_overdue_invoices_atomic');
+
+    let overdueIds: string[] = [];
+    if (Number(markedOverdueCount ?? 0) > 0) {
+      const { data: overdueAuditRows } = await admin
+        .from('audit_logs')
+        .select('entity_id')
+        .eq('action', 'invoice.overdue')
+        .gte('created_at', beforeMarkIso);
+      overdueIds = Array.from(
+        new Set((overdueAuditRows ?? []).map((r) => r.entity_id).filter(Boolean) as string[])
+      );
+    }
+    const { data: newlyOverdue } =
+      overdueIds.length > 0
+        ? await admin
+            .from('invoices')
+            .select('id, code, client_id, currency, total_cents, amount_paid_cents, credited_cents')
+            .in('id', overdueIds)
+        : { data: [] };
 
     if (Array.isArray(newlyOverdue) && newlyOverdue.length > 0) {
       const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
@@ -149,7 +164,7 @@ async function handleStorageRetentionCron(request: NextRequest) {
       }
       const { error: archiveErr } = await admin
         .from('vault_files')
-        .update({ archived_at: nowIso, deleted_from_r2_at: nowIso })
+        .update({ archived_at: nowIso })
         .in(
           'id',
           expiredFiles.map((f) => f.id)

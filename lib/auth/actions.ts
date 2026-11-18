@@ -4,7 +4,11 @@ import {headers, cookies} from 'next/headers';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
-import {sanitizeRelativeRedirectPath,shouldUseSecureCookies} from '@/lib/security/safe-redirect';
+import {
+  resolveCallbackOrigin,
+  sanitizeRelativeRedirectPath,
+  shouldUseSecureCookies,
+} from '@/lib/security/safe-redirect';
 export type ActionState={error?:string;notice?:string;linkHref?:string;linkText?:string};
 function safeRelativePath(raw:FormDataEntryValue|null):string|null {
  return sanitizeRelativeRedirectPath(raw);
@@ -67,6 +71,22 @@ async function resolveCurrentPanelDestination(): Promise<
     return { ok: true, home: '/admin' };
   }
 
+  const mfaApi = (
+    supabase.auth as {
+      mfa?: {
+        getAuthenticatorAssuranceLevel?: () => Promise<{
+          data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+        }>;
+      };
+    }
+  ).mfa;
+  if (mfaApi?.getAuthenticatorAssuranceLevel) {
+    const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
+    if (aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2') {
+      return { ok: true, home: '/mfa' };
+    }
+  }
+
   return { ok: true, home: '/portal' };
 }
 const MIN_PASSWORD=12;
@@ -92,8 +112,26 @@ async function checkOtpRateLimit():Promise<boolean> {
   if(error){console.error('OTP rate control unavailable.');return false;}return data===true;
  }catch{console.error('OTP rate control unavailable.');return false;}
 }
-function credentialEmailOrigin():string|null {
- try{const raw=process.env.NEXT_PUBLIC_SITE_URL;if(!raw)return null;const url=new URL(raw);if(url.username||url.password||url.search||url.hash||url.pathname!=='/')return null;if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))return null;return url.origin;}catch{return null;}
+async function credentialEmailOrigin():Promise<string|null> {
+ try{
+  const raw=process.env.NEXT_PUBLIC_SITE_URL;
+  if(!raw)return null;
+  const url=new URL(raw);
+  if(url.username||url.password||url.search||url.hash||url.pathname!=='/')return null;
+  if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))return null;
+  try {
+   const h=await headers();
+   return resolveCallbackOrigin({
+    host:h.get('host'),
+    forwardedHost:h.get('x-forwarded-host'),
+    forwardedProto:h.get('x-forwarded-proto'),
+    requestOrigin:url.origin,
+    siteUrl:url.origin,
+   });
+  } catch {
+   return url.origin;
+  }
+ }catch{return null;}
 }
 function validatePasswordPair(formData:FormData):{error:string}|{password:string} {
  const password=String(formData.get('password')??''),confirm=String(formData.get('confirm')??'');
@@ -193,7 +231,7 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
  const genericConfirmNotice =
   'If this email is eligible, a confirmation link has been sent to your inbox. Please verify your email address before signing in to the Client Portal.';
 
- const origin=credentialEmailOrigin();
+ const origin=await credentialEmailOrigin();
  const callbackUrl=origin
   ?`${origin}/auth/callback${next?`?next=${encodeURIComponent(next)}`:''}`
   :undefined;
@@ -258,7 +296,7 @@ export async function requestMagicLinkAction(_prev:ActionState,formData:FormData
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  const next=safeRelativePath(formData.get('next'));
  if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
- const origin=credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
+ const origin=await credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
  const redirectTarget=next?`${origin}/login?next=${encodeURIComponent(next)}`:`${origin}/login`;
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTarget}});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
@@ -267,7 +305,7 @@ export async function requestMagicLinkAction(_prev:ActionState,formData:FormData
 export async function requestPasswordResetAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
- const origin=credentialEmailOrigin();if(!origin)return {error:'Password recovery is temporarily unavailable. Please try again later.'};
+ const origin=await credentialEmailOrigin();if(!origin)return {error:'Password recovery is temporarily unavailable. Please try again later.'};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:origin+'/reset-password'});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
  return {notice:'If that address has an account, a reset link is on its way.'};
@@ -434,6 +472,9 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
       await supabase.auth.signOut().catch(()=>{});
       return {error:destination.error};
     }
+    if(destination.home==='/mfa'){
+      redirect('/mfa?next=%2Freset-password%3Fsession%3D1');
+    }
 
     const updated=await supabase.auth.updateUser({password:checked.password});
     if(updated.error){
@@ -448,6 +489,13 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
 
   const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'recovery',token_hash:tokenHash});
   if(!otpError&&otpData?.user?.id){
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok){
+      return {error:destination.error};
+    }
+    if(destination.home==='/mfa'){
+      redirect('/mfa?next=%2Freset-password%3Fsession%3D1');
+    }
     const {data:claimsData}=await supabase.auth.getClaims();
     const sessionId=extractSessionId(otpData.session,claimsData?.claims);
     const updated=await supabase.auth.updateUser({password:checked.password});
@@ -467,8 +515,6 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
       return {error:'Could not update your password. Try again.'};
     }
     cookieStore.delete(retryCookieName);
-    const destination=await resolveCurrentPanelDestination();
-    if(!destination.ok)return {error:destination.error};
     redirect(destination.home);
   }
 
@@ -481,6 +527,13 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   const verification=verifyRetryAuthorityToken(existingAuthority,'recovery',sub,sessionId,tokenHash);
   if(!verification.valid)return {error:INVALID_LINK};
 
+  const destination=await resolveCurrentPanelDestination();
+  if(!destination.ok)return {error:destination.error};
+  if(destination.home==='/mfa'){
+    cookieStore.delete(retryCookieName);
+    redirect('/mfa?next=%2Freset-password%3Fsession%3D1');
+  }
+
   const claimed=await consumeAtomicRetryClaim(verification.nonce,sub,'recovery',verification.exp);
   if(!claimed)return {error:INVALID_LINK};
 
@@ -490,9 +543,6 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   if(updated.error){
     return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
   }
-
-  const destination=await resolveCurrentPanelDestination();
-  if(!destination.ok)return {error:destination.error};
   redirect(destination.home);
 }
 
@@ -545,9 +595,31 @@ export async function changeAuthenticatedPasswordAction(
 }
 
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
-  const tokenHash=String(formData.get('token_hash')??'');if(!tokenHash)return {error:INVALID_LINK};
+  const tokenHash=String(formData.get('token_hash')??'');
+  const pkceSession=String(formData.get('session')??'')==='1';
+  if(!tokenHash&&!pkceSession)return {error:INVALID_LINK};
   const checked=validatePasswordPair(formData);if('error' in checked)return checked;
   const supabase=await createSupabaseServerClient();
+
+  if(!tokenHash&&pkceSession){
+    const {data:sessionClaims,error:sessionClaimsErr}=await supabase.auth.getClaims();
+    const claims=sessionClaims?.claims as Record<string, unknown> | undefined;
+    const sub=typeof claims?.sub==='string'?claims.sub:null;
+    const emailClaim=typeof claims?.email==='string'?claims.email:null;
+    if(sessionClaimsErr||!sub)return {error:INVALID_LINK};
+    const updated=await supabase.auth.updateUser({password:checked.password});
+    if(updated.error){
+      return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
+    }
+    await markInvitationAccepted(sub,emailClaim);
+    const destination=await resolveCurrentPanelDestination();
+    if(!destination.ok){
+      await supabase.auth.signOut().catch(()=>{});
+      return {error:destination.error};
+    }
+    redirect(destination.home);
+  }
+
   const cookieStore=await cookies();
   const retryCookieName='invite_retry_authority';
   const existingAuthority=cookieStore.get(retryCookieName)?.value;
@@ -661,4 +733,38 @@ export async function resetUnverifiedMfaFactorsAction(): Promise<{ ok: boolean }
     console.error('[auth] resetUnverifiedMfaFactorsAction error:', err);
     return { ok: false };
   }
+}
+
+
+export async function resolvePostMfaDestinationAction(rawNext?: string | null): Promise<string> {
+  const destination = await resolveCurrentPanelDestination();
+  if (!destination.ok) return '/login';
+  if (destination.home === '/mfa') return '/mfa';
+
+  const safeNext = safeRelativePath(rawNext ?? null);
+  if (safeNext) {
+    try {
+      const parsed = new URL(safeNext, 'https://return-path.invalid');
+      const pathname = decodeURIComponent(parsed.pathname);
+      if (pathname === '/reset-password' && parsed.searchParams.get('session') === '1') {
+        return `${pathname}${parsed.search}`;
+      }
+      if (
+        destination.home === '/admin' &&
+        (pathname === '/admin' || pathname.startsWith('/admin/'))
+      ) {
+        return `${pathname}${parsed.search}${parsed.hash}`;
+      }
+      if (
+        destination.home === '/portal' &&
+        (pathname === '/portal' || pathname.startsWith('/portal/'))
+      ) {
+        return `${pathname}${parsed.search}${parsed.hash}`;
+      }
+    } catch {
+      // fall back to destination.home
+    }
+  }
+
+  return destination.home;
 }

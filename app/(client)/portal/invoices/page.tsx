@@ -20,6 +20,7 @@ export default async function ClientInvoicesListPage() {
       'id, code, status, is_deposit_invoice, currency, total_cents, issued_at, due_at, paid_at, order:orders(id, code, title)'
     )
     .eq('client_id', session.userId)
+    .neq('status', 'draft')
     .order('created_at', { ascending: false });
 
   return (

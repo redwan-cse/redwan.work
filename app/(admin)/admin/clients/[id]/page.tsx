@@ -106,7 +106,7 @@ export default async function AdminClientDetailPage({
       .from('vault_files')
       .select('size_bytes')
       .eq('owner_client_id', id)
-      .is('deleted_from_r2_at', null),
+      .is('archived_at', null),
     admin
       .from('audit_logs')
       .select('id, action, summary, created_at')
@@ -633,7 +633,11 @@ export default async function AdminClientDetailPage({
               </div>
               <div className="flex justify-between rounded-lg bg-muted/30 px-3 py-2">
                 <span className="text-muted-foreground">Token Revocation Cutoff</span>
-                <span>{profile.tokens_valid_after ? new Date(profile.tokens_valid_after).toISOString() : 'None'}</span>
+                <span>
+                  {profile.tokens_valid_after
+                    ? new Date(Number(profile.tokens_valid_after) * 1000).toISOString()
+                    : 'None'}
+                </span>
               </div>
               <div className="flex justify-between rounded-lg bg-muted/30 px-3 py-2">
                 <span className="text-muted-foreground">Account Created</span>

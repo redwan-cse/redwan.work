@@ -7,6 +7,7 @@ import {
   acceptProposalClientAction,
   declineProposalClientAction,
 } from '@/lib/crm/actions';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { SERVICE_PILLARS, type ServicePillarKey } from '@/lib/content/site';
 import { Badge } from '@/components/ui/badge';
@@ -22,14 +23,28 @@ export default async function ClientProposalsPage() {
   if (!session) redirect('/login?next=/portal/proposals');
 
   const admin = getSupabaseAdmin();
-  const { data: proposals } = await admin
-    .from('proposals')
-    .select(
-      'id, code, title, pillar, scope_summary, status, requires_roe, estimated_days, deposit_percent, total_cents, currency, valid_until, accepted_at, declined_reason, converted_order_id, created_at, proposal_milestones(id, title, description, amount_cents, weight_percent, due_days_offset)'
-    )
-    .eq('client_id', session.userId)
-    .neq('status', 'draft')
-    .order('created_at', { ascending: false });
+  const [{ data: proposals }, { data: proposalOrders }] = await Promise.all([
+    admin
+      .from('proposals')
+      .select(
+        'id, code, title, pillar, scope_summary, status, requires_roe, estimated_days, deposit_percent, total_cents, currency, valid_until, accepted_at, decline_reason, created_at, proposal_milestones(id, title, description, amount_cents, weight_percent, due_days_offset)'
+      )
+      .eq('client_id', session.userId)
+      .neq('status', 'draft')
+      .order('created_at', { ascending: false }),
+    admin
+      .from('orders')
+      .select('id, proposal_id')
+      .eq('client_id', session.userId)
+      .not('proposal_id', 'is', null),
+  ]);
+
+  const orderIdByProposalId = new Map(
+    (proposalOrders ?? [])
+      .filter((o) => Boolean(o.proposal_id))
+      .map((o) => [o.proposal_id as string, o.id])
+  );
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -43,7 +58,9 @@ export default async function ClientProposalsPage() {
       <div className="space-y-4">
         {(proposals ?? []).map((prp) => {
           const pillarMeta = SERVICE_PILLARS[prp.pillar as ServicePillarKey];
-          const canRespond = prp.status === 'sent' || prp.status === 'viewed';
+          const isExpired = Boolean(prp.valid_until && prp.valid_until < todayIso);
+          const canRespond = (prp.status === 'sent' || prp.status === 'viewed') && !isExpired;
+          const convertedOrderId = orderIdByProposalId.get(prp.id) ?? null;
           const items = Array.isArray(prp.proposal_milestones) ? prp.proposal_milestones : [];
 
           return (
@@ -58,10 +75,10 @@ export default async function ClientProposalsPage() {
                       {prp.code}
                     </Link>
                     <Badge
-                      variant={prp.status === 'declined' ? 'destructive' : 'outline'}
+                      variant={prp.status === 'declined' || isExpired ? 'destructive' : 'outline'}
                       className="font-mono text-[10px] uppercase"
                     >
-                      {prp.status}
+                      {isExpired && (prp.status === 'sent' || prp.status === 'viewed') ? 'expired' : prp.status}
                     </Badge>
                     <Badge variant="secondary" className="text-xs">
                       {pillarMeta?.shortLabel ?? prp.pillar}
@@ -91,9 +108,9 @@ export default async function ClientProposalsPage() {
                   {prp.scope_summary}
                 </p>
 
-                {prp.declined_reason && (
+                {prp.decline_reason && (
                   <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                    Decline feedback: {prp.declined_reason}
+                    Decline feedback: {prp.decline_reason}
                   </p>
                 )}
 
@@ -143,9 +160,9 @@ export default async function ClientProposalsPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {prp.converted_order_id && (
+                    {convertedOrderId && (
                       <Button asChild size="sm" variant="secondary" className="text-xs">
-                        <Link href={`/portal/orders/${prp.converted_order_id}`}>
+                        <Link href={`/portal/orders/${convertedOrderId}`}>
                           Open Order Workspace →
                         </Link>
                       </Button>
@@ -176,13 +193,13 @@ export default async function ClientProposalsPage() {
                           }
                         />
 
-                        <form action={acceptProposalClientAction}>
+                        <ActionFeedbackForm action={acceptProposalClientAction}>
                           <input type="hidden" name="proposal_id" value={prp.id} />
                           <Button type="submit" size="sm" className="gap-1.5">
                             <CheckCircle2 className="h-4 w-4" />
                             Accept Proposal &amp; Start Order
                           </Button>
-                        </form>
+                        </ActionFeedbackForm>
                       </>
                     )}
                   </div>

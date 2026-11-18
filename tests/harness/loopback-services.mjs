@@ -606,6 +606,60 @@ export async function startLoopbackServices(options = {}) {
     return value;
   }
 
+  function compileSingleFilter(tableName, rawKey, rawExpr, params) {
+    const validCols = tableColumns.get(tableName);
+    if (validCols && !validCols.has(rawKey)) {
+      return { error: `Could not find the '${rawKey}' column of '${tableName}' in the schema cache` };
+    }
+    const colSql = quoteIdent(rawKey);
+    let negated = false;
+    let expr = rawExpr;
+    if (expr.startsWith('not.')) {
+      negated = true;
+      expr = expr.slice(4);
+    }
+
+    const dotIdx = expr.indexOf('.');
+    const op = dotIdx === -1 ? 'eq' : expr.slice(0, dotIdx);
+    const val = dotIdx === -1 ? expr : expr.slice(dotIdx + 1);
+
+    if (op === 'is') {
+      const lower = val.toLowerCase();
+      const sqlKeyword =
+        lower === 'null' ? 'NULL' : lower === 'true' ? 'TRUE' : lower === 'false' ? 'FALSE' : 'NULL';
+      return { sql: `${colSql} IS ${negated ? 'NOT ' : ''}${sqlKeyword}` };
+    }
+
+    if (op === 'in') {
+      const list = parseInList(val);
+      if (list.length === 0) {
+        return { sql: negated ? 'TRUE' : 'FALSE' };
+      }
+      const placeholders = list.map((item) => {
+        params.push(item);
+        return castParamPlaceholder(tableName, rawKey, params.length);
+      });
+      return { sql: `${colSql} ${negated ? 'NOT IN' : 'IN'} (${placeholders.join(', ')})` };
+    }
+
+    const opMap = {
+      eq: '=',
+      neq: '<>',
+      gt: '>',
+      gte: '>=',
+      lt: '<',
+      lte: '<=',
+      like: 'LIKE',
+      ilike: 'ILIKE',
+    };
+    const sqlOp = opMap[op] || '=';
+    params.push(val);
+    const placeholder = castParamPlaceholder(tableName, rawKey, params.length);
+    return {
+      sql: negated ? `NOT (${colSql} ${sqlOp} ${placeholder})` : `${colSql} ${sqlOp} ${placeholder}`,
+    };
+  }
+
   function buildWhereClause(tableName, searchParams, initialParams = []) {
     const clauses = [];
     const params = [...initialParams];
@@ -613,63 +667,90 @@ export async function startLoopbackServices(options = {}) {
 
     for (const [rawKey, rawVal] of searchParams.entries()) {
       if (reserved.has(rawKey)) continue;
-      const colSql = quoteIdent(rawKey);
 
-      let negated = false;
-      let expr = rawVal;
-      if (expr.startsWith('not.')) {
-        negated = true;
-        expr = expr.slice(4);
-      }
-
-      const dotIdx = expr.indexOf('.');
-      const op = dotIdx === -1 ? 'eq' : expr.slice(0, dotIdx);
-      const val = dotIdx === -1 ? expr : expr.slice(dotIdx + 1);
-
-      if (op === 'is') {
-        const lower = val.toLowerCase();
-        const sqlKeyword =
-          lower === 'null' ? 'NULL' : lower === 'true' ? 'TRUE' : lower === 'false' ? 'FALSE' : 'NULL';
-        clauses.push(`${colSql} IS ${negated ? 'NOT ' : ''}${sqlKeyword}`);
-        continue;
-      }
-
-      if (op === 'in') {
-        const list = parseInList(val);
-        if (list.length === 0) {
-          clauses.push(negated ? 'TRUE' : 'FALSE');
-          continue;
+      if (rawKey === 'or' || rawKey === 'and') {
+        const trimmed = rawVal.trim();
+        const inner =
+          trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed.slice(1, -1) : trimmed;
+        const subParts = splitTopLevelCommas(inner);
+        const subClauses = [];
+        for (const sub of subParts) {
+          const dotIdx = sub.indexOf('.');
+          if (dotIdx === -1) continue;
+          const subCol = sub.slice(0, dotIdx).trim();
+          const subExpr = sub.slice(dotIdx + 1);
+          const compiled = compileSingleFilter(tableName, subCol, subExpr, params);
+          if (compiled.error) {
+            return { whereErr: compiled.error, whereSql: '', params };
+          }
+          subClauses.push(compiled.sql);
         }
-        const placeholders = list.map((item) => {
-          params.push(item);
-          return castParamPlaceholder(tableName, rawKey, params.length);
-        });
-        clauses.push(`${colSql} ${negated ? 'NOT IN' : 'IN'} (${placeholders.join(', ')})`);
+        if (subClauses.length > 0) {
+          clauses.push(`(${subClauses.join(rawKey === 'or' ? ' OR ' : ' AND ')})`);
+        }
         continue;
       }
 
-      const opMap = {
-        eq: '=',
-        neq: '<>',
-        gt: '>',
-        gte: '>=',
-        lt: '<',
-        lte: '<=',
-        like: 'LIKE',
-        ilike: 'ILIKE',
-      };
-      const sqlOp = opMap[op] || '=';
-      params.push(val);
-      const placeholder = castParamPlaceholder(tableName, rawKey, params.length);
-      clauses.push(
-        negated ? `NOT (${colSql} ${sqlOp} ${placeholder})` : `${colSql} ${sqlOp} ${placeholder}`
-      );
+      const compiled = compileSingleFilter(tableName, rawKey, rawVal, params);
+      if (compiled.error) {
+        return { whereErr: compiled.error, whereSql: '', params };
+      }
+      clauses.push(compiled.sql);
     }
 
     return {
+      whereErr: null,
       whereSql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
       params,
     };
+  }
+
+  function validateSelectSpec(tableName, selectRaw) {
+    const validCols = tableColumns.get(tableName);
+    if (!validCols) {
+      return `Could not find the table 'public.${tableName}' in the schema cache`;
+    }
+    const { columns, relations } = parseSelectItems(selectRaw);
+    for (const colSpec of columns) {
+      const rawCol = typeof colSpec === 'string' ? colSpec : colSpec?.col;
+      if (!rawCol || rawCol === '*' || rawCol === 'count') continue;
+      const baseCol = rawCol.split(/->|::/)[0]?.trim();
+      if (!baseCol || baseCol === '*' || baseCol === 'count') continue;
+      if (!validCols.has(baseCol)) {
+        return `Could not find the '${baseCol}' column of '${tableName}' in the schema cache`;
+      }
+    }
+    for (const rel of relations) {
+      const nestedErr = validateSelectSpec(rel.targetTable, rel.nestedSelect);
+      if (nestedErr) return nestedErr;
+    }
+    return null;
+  }
+
+  function validateOrderSpec(tableName, searchParams) {
+    const validCols = tableColumns.get(tableName);
+    const orderRaw = searchParams.get('order');
+    if (!orderRaw || !validCols) return null;
+    for (const part of orderRaw.split(',')) {
+      const trimmed = part.trim();
+      if (!trimmed || trimmed.includes('(')) continue;
+      const col = trimmed.split('.')[0]?.trim();
+      if (col && !validCols.has(col)) {
+        return `Could not find the '${col}' column of '${tableName}' in the schema cache`;
+      }
+    }
+    return null;
+  }
+
+  function validateRecordColumns(tableName, rec) {
+    const validCols = tableColumns.get(tableName);
+    if (!validCols || !rec || typeof rec !== 'object') return null;
+    for (const k of Object.keys(rec)) {
+      if (rec[k] !== undefined && !validCols.has(k)) {
+        return `Could not find the '${k}' column of '${tableName}' in the schema cache`;
+      }
+    }
+    return null;
   }
 
   function buildOrderAndLimitSql(searchParams) {
@@ -1350,7 +1431,21 @@ export async function startLoopbackServices(options = {}) {
         const selectRaw = url.searchParams.get('select') || '*';
 
         if (req.method === 'GET' || req.method === 'HEAD') {
-          const { whereSql, params } = buildWhereClause(tableName, url.searchParams);
+          const selectErr = validateSelectSpec(tableName, selectRaw);
+          if (selectErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: selectErr });
+            return;
+          }
+          const orderErr = validateOrderSpec(tableName, url.searchParams);
+          if (orderErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: orderErr });
+            return;
+          }
+          const { whereErr, whereSql, params } = buildWhereClause(tableName, url.searchParams);
+          if (whereErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: whereErr });
+            return;
+          }
           let totalCount = null;
           if (wantsCountExact) {
             const countRes = await pg.queryAs(
@@ -1412,6 +1507,13 @@ export async function startLoopbackServices(options = {}) {
         }
 
         if (req.method === 'POST') {
+          if (url.searchParams.has('select')) {
+            const selectErr = validateSelectSpec(tableName, selectRaw);
+            if (selectErr) {
+              sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: selectErr });
+              return;
+            }
+          }
           const rawBody = await readJsonBody(req);
           const records = Array.isArray(rawBody) ? rawBody : [rawBody];
           if (records.length === 0) {
@@ -1421,6 +1523,11 @@ export async function startLoopbackServices(options = {}) {
 
           const colSet = new Set();
           for (const rec of records) {
+            const colErr = validateRecordColumns(tableName, rec);
+            if (colErr) {
+              sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: colErr });
+              return;
+            }
             Object.keys(rec).forEach((k) => {
               if (rec[k] !== undefined && tableColumns.get(tableName).has(k)) {
                 colSet.add(k);
@@ -1491,7 +1598,19 @@ export async function startLoopbackServices(options = {}) {
         }
 
         if (req.method === 'PATCH') {
+          if (url.searchParams.has('select')) {
+            const selectErr = validateSelectSpec(tableName, selectRaw);
+            if (selectErr) {
+              sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: selectErr });
+              return;
+            }
+          }
           const patchBody = await readJsonBody(req);
+          const colErr = validateRecordColumns(tableName, patchBody);
+          if (colErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: colErr });
+            return;
+          }
           const cols = Object.keys(patchBody).filter(
             (k) => patchBody[k] !== undefined && tableColumns.get(tableName).has(k)
           );
@@ -1504,7 +1623,11 @@ export async function startLoopbackServices(options = {}) {
             setParams.push(prepareColumnValue(tableName, col, patchBody[col]));
             return `${quoteIdent(col)} = ${castParamPlaceholder(tableName, col, setParams.length)}`;
           });
-          const { whereSql, params } = buildWhereClause(tableName, url.searchParams, setParams);
+          const { whereErr, whereSql, params } = buildWhereClause(tableName, url.searchParams, setParams);
+          if (whereErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: whereErr });
+            return;
+          }
           const updateRes = await pg.queryAs(
             dbSession,
             `UPDATE public.${quoteIdent(tableName)} SET ${setAssignments.join(
@@ -1540,7 +1663,11 @@ export async function startLoopbackServices(options = {}) {
         }
 
         if (req.method === 'DELETE') {
-          const { whereSql, params } = buildWhereClause(tableName, url.searchParams);
+          const { whereErr, whereSql, params } = buildWhereClause(tableName, url.searchParams);
+          if (whereErr) {
+            sendJson(res, 400, { code: 'PGRST204', details: null, hint: null, message: whereErr });
+            return;
+          }
           const delRes = await pg.queryAs(
             dbSession,
             `DELETE FROM public.${quoteIdent(tableName)} ${whereSql} RETURNING *`,

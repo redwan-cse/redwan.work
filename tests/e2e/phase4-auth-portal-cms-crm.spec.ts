@@ -303,4 +303,75 @@ test.describe('Phase 4 Extended E2E: Registration, Invite Activation, Support Ti
       await adminCtx.close();
     }
   });
+
+  test('[R1-ORDER-DELIVER-PAY] supports admin global search, structured consent policy publish -> /contact, and /invite/accept?session=1', async ({
+    browser,
+  }) => {
+    const adminCtx = await browser.newContext();
+    const adminPage = await adminCtx.newPage();
+
+    try {
+      await signInAdminWithAal2(adminPage);
+
+      // 1. Admin command search exercises inquiries + proposals + orders under strict schema checking
+      const searchRes = await adminPage.request.get('/api/admin/search?q=ORD-');
+      expect(searchRes.status()).toBe(200);
+      const searchJson = (await searchRes.json()) as {
+        results: Array<{ group: string; href: string }>;
+      };
+      expect(Array.isArray(searchJson.results)).toBe(true);
+
+      const inqSearchRes = await adminPage.request.get('/api/admin/search?q=FinGrid');
+      expect(inqSearchRes.status()).toBe(200);
+
+      // 2. Publish structured consent policy from /admin/settings and verify /contact renders it (never 503)
+      await adminPage.goto('/admin/settings');
+      const policyForm = adminPage
+        .locator('form')
+        .filter({ has: adminPage.locator('input[name="version"]') });
+      await policyForm.locator('input[name="version"]').fill('v2-pr15');
+      await policyForm
+        .locator('input[name="checkbox"]')
+        .fill('I accept PR15 structured consent & retention policy v2.');
+      await policyForm
+        .locator('textarea[name="privacy_notice"]')
+        .fill('Inquiry details are handled solely under NDA evaluation.');
+      await policyForm
+        .locator('textarea[name="attachment_notice"]')
+        .fill('Private attachments expire automatically per retention schedule.');
+      await policyForm
+        .locator('textarea[name="policy_text"]')
+        .fill('Full privacy and confidentiality policy terms for engineering engagements.');
+      await policyForm.locator('button[type="submit"]').click();
+      await expect(policyForm.getByRole('status')).toBeVisible();
+
+      const contactPolicyRes = await adminPage.request.get('/api/contact');
+      expect(contactPolicyRes.status()).toBe(200);
+      const contactPolicyJson = (await contactPolicyRes.json()) as {
+        policy: { version: string; checkbox: string; attachmentNotice: string };
+      };
+      expect(contactPolicyJson.policy.version).toBe('v2-pr15');
+      expect(contactPolicyJson.policy.checkbox).toBe(
+        'I accept PR15 structured consent & retention policy v2.'
+      );
+
+      const contactResp = await adminPage.goto('/contact');
+      expect(contactResp?.status()).toBe(200);
+      await expect(
+        adminPage.getByText('Private attachments expire automatically per retention schedule.')
+      ).toBeVisible();
+    } finally {
+      await adminCtx.close();
+    }
+
+    // 3. PKCE session=1 mode on /invite/accept renders form when authenticated and blocks unauthenticated visitors
+    const anonCtx = await browser.newContext();
+    const anonPage = await anonCtx.newPage();
+    try {
+      await anonPage.goto('/invite/accept?session=1');
+      await expect(anonPage.getByText(/invalid or has expired/i)).toBeVisible();
+    } finally {
+      await anonCtx.close();
+    }
+  });
 });

@@ -5,6 +5,7 @@ import { getCurrentSession } from '@/lib/auth/session';
 import { placePortalPackageOrderAction } from '@/lib/crm/actions';
 import { SERVICE_PILLARS } from '@/lib/content/site';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,7 +98,11 @@ export default async function ClientPortalNewOrderPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={placePortalPackageOrderAction} className="space-y-4">
+            <ActionFeedbackForm
+              action={placePortalPackageOrderAction}
+              successMessage="Order workspace created."
+              className="space-y-4"
+            >
               <div className="space-y-1.5">
                 <Label className="text-xs">Service Offering *</Label>
                 <select
@@ -206,7 +211,7 @@ export default async function ClientPortalNewOrderPage({
                 <Sparkles className="h-4 w-4" />
                 Launch Contract &amp; Open Live Chat Workspace
               </Button>
-            </form>
+            </ActionFeedbackForm>
           </CardContent>
         </Card>
 

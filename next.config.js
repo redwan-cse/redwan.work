@@ -37,6 +37,18 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()' },
 ];
+const r2PublicPattern = (() => {
+  const raw = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const protocol = parsed.protocol.replace(/:$/, '');
+    if (protocol !== 'https' && protocol !== 'http') return null;
+    return { protocol, hostname: parsed.hostname };
+  } catch {
+    return null;
+  }
+})();
 const nextConfig = {
   // Framework limit only. The hosting platform has a separate request ceiling.
   experimental: { serverActions: { bodySizeLimit: '12mb' } },
@@ -49,6 +61,7 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.blogspot.com' },
       { protocol: 'https', hostname: 'cdn.jsdelivr.net' },
       { protocol: 'https', hostname: 'raw.githubusercontent.com' },
+      ...(r2PublicPattern ? [r2PublicPattern] : []),
     ],
   },
   async headers() {

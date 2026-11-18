@@ -20,6 +20,7 @@ export const ASSET_ALLOWED: Record<string, readonly string[]> = {
   webp: ['image/webp'],
   avif: ['image/avif'],
   pdf: ['application/pdf'],
+  zip: ['application/zip', 'application/x-zip-compressed'],
 };
 
 export function validateMagicBytes(bytes: Uint8Array, mime: string): boolean {

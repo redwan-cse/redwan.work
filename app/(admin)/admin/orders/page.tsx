@@ -167,9 +167,9 @@ export default async function AdminOrdersPage({
                       successMessage="Cancellation declined."
                     >
                       <input type="hidden" name="request_id" value={req.id} />
-                      <input type="hidden" name="decision" value="rejected" />
+                      <input type="hidden" name="decision" value="declined" />
                       <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
-                        Reject
+                        Decline
                       </Button>
                     </ActionFeedbackForm>
                   </div>

@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { getAdminCommandCenterMetrics } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAdminSession } from '@/lib/auth/session';
 import { formatMoney } from '@/lib/format';
@@ -27,7 +28,7 @@ export default async function AdminOverviewPage() {
   await requireAdminSession();
   const admin = getSupabaseAdmin();
   const [
-    { data: metricsRaw },
+    metricsRaw,
     { data: recentOrders },
     { data: pendingPayments },
     { data: pendingCancellations },
@@ -36,7 +37,7 @@ export default async function AdminOverviewPage() {
     { data: recentInquiries },
     { data: recentAudit },
   ] = await Promise.all([
-    admin.rpc('admin_command_center_metrics'),
+    getAdminCommandCenterMetrics(),
     admin
       .from('orders')
       .select('id, code, title, pillar, status, progress_percent, total_cents, currency, created_at')

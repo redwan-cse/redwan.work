@@ -36,7 +36,7 @@ export async function OpsHubView({
     admin.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250),
     admin.from('email_outbox').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     admin.from('email_outbox').select('id', { count: 'exact', head: true }).in('status', ['failed', 'dead_letter']),
-    admin.from('vault_files').select('id', { count: 'exact', head: true }).is('deleted_from_r2_at', null),
+    admin.from('vault_files').select('id', { count: 'exact', head: true }).is('archived_at', null),
   ]);
 
   const lowerQ = qFilter.trim().toLowerCase();

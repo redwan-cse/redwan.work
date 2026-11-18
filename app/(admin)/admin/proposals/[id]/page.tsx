@@ -21,9 +21,10 @@ export default async function AdminProposalDetailPage({
   const { id } = await params;
   const admin = getSupabaseAdmin();
 
-  const [{ data: proposal }, { data: milestones }] = await Promise.all([
+  const [{ data: proposal }, { data: milestones }, { data: convertedOrder }] = await Promise.all([
     admin.from('proposals').select('*').eq('id', id).maybeSingle(),
     admin.from('proposal_milestones').select('*').eq('proposal_id', id).order('position'),
+    admin.from('orders').select('id').eq('proposal_id', id).maybeSingle(),
   ]);
 
   if (!proposal) notFound();
@@ -73,9 +74,9 @@ export default async function AdminProposalDetailPage({
               </Button>
             </ActionFeedbackForm>
           )}
-          {proposal.converted_order_id && (
+          {convertedOrder && (
             <Button asChild size="sm" className="gap-1.5 rounded-full text-xs">
-              <Link href={`/admin/orders/${proposal.converted_order_id}`}>
+              <Link href={`/admin/orders/${convertedOrder.id}`}>
                 Open Converted Order <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -83,10 +84,10 @@ export default async function AdminProposalDetailPage({
         </div>
       </div>
 
-      {proposal.declined_reason && (
+      {proposal.decline_reason && (
         <Card className="border-destructive/40 bg-destructive/5">
           <CardContent className="p-4 text-xs text-destructive">
-            <strong>Client Decline Feedback:</strong> {proposal.declined_reason}
+            <strong>Client Decline Feedback:</strong> {proposal.decline_reason}
           </CardContent>
         </Card>
       )}

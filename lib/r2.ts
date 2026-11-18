@@ -163,7 +163,7 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
   const { Upload } = await import('@aws-sdk/lib-storage');
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }
-export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'avif', 'pdf'] as const;
+export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'avif', 'pdf', 'zip'] as const;
 export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
 export const RESUME_ASSET_KEY = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
 export const RESUME_PDF_MAX_BYTES = 10 * 1024 * 1024;
@@ -179,7 +179,8 @@ export function isPublicR2Configured(): boolean {
 }
 
 export function makeAssetKey(ext: string): string {
-  const clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  let clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  if (clean === 'jpeg') clean = 'jpg';
   if (!(ASSET_ALLOWED_EXT as readonly string[]).includes(clean)) throw new Error('Invalid asset extension.');
   return `assets/${new Date().getUTCFullYear()}/${randomUUID().replace(/-/g, '')}.${clean}`;
 }

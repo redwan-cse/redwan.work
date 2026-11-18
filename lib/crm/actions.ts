@@ -2611,7 +2611,7 @@ export async function sendDraftProposalAction(formData: FormData): Promise<void>
 
   const { error: updErr } = await admin
     .from('proposals')
-    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .update({ status: 'sent' })
     .eq('id', proposalId)
     .eq('status', 'draft');
   if (updErr) throw new Error(updErr.message);
@@ -2751,12 +2751,13 @@ export async function createMultiLineInvoiceAction(formData: FormData): Promise<
 
   interface RawLineItem {
     description?: string;
+    qty?: number;
     quantity?: number;
     unit_price_major?: number;
     unit_price_cents?: number;
   }
 
-  let items: Array<{ description: string; quantity: number; unit_price_cents: number }> = [];
+  let items: Array<{ description: string; qty: number; quantity: number; unit_price_cents: number }> = [];
   const itemsJsonRaw = String(formData.get('items_json') ?? '').trim();
   if (itemsJsonRaw) {
     let parsed: RawLineItem[] = [];
@@ -2769,12 +2770,12 @@ export async function createMultiLineInvoiceAction(formData: FormData): Promise<
       items = parsed
         .map((row) => {
           const desc = String(row.description ?? '').trim();
-          const qty = Math.max(1, Math.round(Number(row.quantity ?? 1) || 1));
+          const qty = Math.max(1, Math.round(Number(row.quantity ?? row.qty ?? 1) || 1));
           const cents =
             typeof row.unit_price_cents === 'number' && row.unit_price_cents > 0
               ? Math.round(row.unit_price_cents)
               : Math.round(Number(row.unit_price_major ?? 0) * 100);
-          return { description: desc, quantity: qty, unit_price_cents: cents };
+          return { description: desc, qty, quantity: qty, unit_price_cents: cents };
         })
         .filter((row) => row.description && row.unit_price_cents > 0);
     }
@@ -2785,11 +2786,15 @@ export async function createMultiLineInvoiceAction(formData: FormData): Promise<
 
     if (descriptions.length > 0) {
       items = descriptions
-        .map((desc, i) => ({
-          description: desc,
-          quantity: Math.max(1, Math.round(quantities[i] || 1)),
-          unit_price_cents: Math.round((unitPrices[i] || 0) * 100),
-        }))
+        .map((desc, i) => {
+          const qty = Math.max(1, Math.round(quantities[i] || 1));
+          return {
+            description: desc,
+            qty,
+            quantity: qty,
+            unit_price_cents: Math.round((unitPrices[i] || 0) * 100),
+          };
+        })
         .filter((row) => row.description && row.unit_price_cents > 0);
     } else {
       const singleDesc = String(formData.get('description') ?? '').trim();
@@ -2798,6 +2803,7 @@ export async function createMultiLineInvoiceAction(formData: FormData): Promise<
         items = [
           {
             description: singleDesc,
+            qty: 1,
             quantity: 1,
             unit_price_cents: Math.round(singleAmount * 100),
           },
@@ -3237,7 +3243,7 @@ export async function resolveCancellationRequestAction(formData: FormData): Prom
   const session = await requireAdminSession();
   const requestId = String(formData.get('request_id') ?? '').trim();
   const rawDecision = String(formData.get('decision') ?? '').trim();
-  const decision = rawDecision === 'approved' ? 'approved' : 'rejected';
+  const decision = rawDecision === 'approved' ? 'approved' : 'declined';
   const notes = String(formData.get('resolution_notes') ?? '').trim() || null;
 
   if (!requestId) return;
@@ -3261,7 +3267,7 @@ export async function resolveCancellationRequestAction(formData: FormData): Prom
     await createInAppNotification({
       recipientId: reqRow.requested_by,
       category: 'order',
-      title: `Cancellation Request ${decision === 'approved' ? 'Approved' : 'Rejected'}`,
+      title: `Cancellation Request ${decision === 'approved' ? 'Approved' : 'Declined'}`,
       body: notes || `Your order cancellation request was ${decision}.`,
       href: `/portal/orders/${reqRow.order_id}`,
     });
@@ -3520,6 +3526,7 @@ export async function generateMilestoneInvoiceAction(formData: FormData): Promis
     p_items: [
       {
         description: `${order.code} — ${milestone.title}`,
+        qty: 1,
         quantity: 1,
         unit_price_cents: milestone.amount_cents,
       },

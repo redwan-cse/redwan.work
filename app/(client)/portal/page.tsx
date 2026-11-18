@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
+import { getClientPortalOverview } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,12 +29,12 @@ export default async function ClientPortalOverviewPage() {
   const admin = getSupabaseAdmin();
 
   const [
-    { data: overviewRaw },
+    overviewRaw,
     { data: orders },
     { data: proposals },
     { data: invoices },
   ] = await Promise.all([
-    admin.rpc('client_portal_overview', { p_client_id: session.userId }),
+    getClientPortalOverview(session.userId),
     admin
       .from('orders')
       .select('id, code, title, pillar, status, progress_percent, total_cents, currency, due_at')
@@ -51,6 +52,7 @@ export default async function ClientPortalOverviewPage() {
       .from('invoices')
       .select('id, code, status, total_cents, currency, due_at')
       .eq('client_id', session.userId)
+      .neq('status', 'draft')
       .order('created_at', { ascending: false })
       .limit(4),
   ]);

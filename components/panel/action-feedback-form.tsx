@@ -33,7 +33,10 @@ export function ActionFeedbackForm({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const submitter = (event.nativeEvent as SubmitEvent | undefined)?.submitter ?? null;
+    const formData = submitter
+      ? new FormData(event.currentTarget, submitter)
+      : new FormData(event.currentTarget);
     setErrorMessage(null);
     setDoneMessage(null);
 

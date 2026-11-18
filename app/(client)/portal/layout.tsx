@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
+import { getClientPortalOverview } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PanelShell, type PanelNavItem } from '@/components/panel/panel-shell';
 
@@ -25,10 +26,8 @@ export default async function ClientPortalLayout({
   }
 
   const admin = getSupabaseAdmin();
-  const [{ data: overviewRaw }, { data: recentNotifications }] = await Promise.all([
-    admin.rpc('client_portal_overview', {
-      p_client_id: session.userId,
-    }),
+  const [overview, { data: recentNotifications }] = await Promise.all([
+    getClientPortalOverview(session.userId),
     admin
       .from('notifications')
       .select('id, title, body, href, is_read, created_at')
@@ -36,7 +35,6 @@ export default async function ClientPortalLayout({
       .order('created_at', { ascending: false })
       .limit(12),
   ]);
-  const overview = (overviewRaw ?? {}) as Record<string, number>;
 
   const navItems: PanelNavItem[] = [
     { label: 'Workspace Overview', href: '/portal', icon: 'dashboard' },

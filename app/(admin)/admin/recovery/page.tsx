@@ -40,7 +40,7 @@ export default async function AdminRecoveryPage() {
       admin
         .from('vault_files')
         .select('*')
-        .is('deleted_from_r2_at', null)
+        .is('archived_at', null)
         .order('retention_until', { ascending: true, nullsFirst: false })
         .limit(100),
       admin.from('profiles').select('id, full_name, email').eq('role', 'client'),

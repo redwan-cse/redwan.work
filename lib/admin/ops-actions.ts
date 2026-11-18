@@ -1,9 +1,9 @@
 'use server';
 
-import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { requireAdminSession } from '@/lib/auth/session';
 import { clearBlogCache } from '@/lib/blogger';
+import { archivePolicy } from '@/lib/contact/consent-policy';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { drainEmailOutbox } from '@/lib/email/outbox';
 import { extFromFilename, resolveMimeType, validateMagicBytes } from '@/lib/mime';
@@ -228,12 +228,56 @@ export async function syncBloggerCacheAction(): Promise<void> {
 export async function publishConsentPolicyAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const version = String(formData.get('version') ?? '').trim();
-  const canonical = String(formData.get('canonical') ?? '').trim();
-  if (!version || canonical.length < 20) {
-    throw new Error('Provide a policy version tag and canonical consent policy text (>= 20 chars).');
+  const normalizeLf = (raw: FormDataEntryValue | null) =>
+    String(raw ?? '')
+      .replace(/\r\n/g, '\n')
+      .trim();
+
+  const checkboxRaw = normalizeLf(formData.get('checkbox'));
+  const privacyNoticeRaw = normalizeLf(formData.get('privacy_notice'));
+  const attachmentNoticeRaw = normalizeLf(formData.get('attachment_notice'));
+  const policyTextRaw = normalizeLf(formData.get('policy_text'));
+  const rawCanonical = normalizeLf(formData.get('canonical'));
+
+  let bundleCandidate: unknown;
+  if (checkboxRaw && privacyNoticeRaw && attachmentNoticeRaw && policyTextRaw) {
+    bundleCandidate = {
+      version,
+      checkbox: checkboxRaw,
+      privacyNotice: privacyNoticeRaw,
+      attachmentNotice: attachmentNoticeRaw,
+      policyText: policyTextRaw,
+    };
+  } else if (rawCanonical) {
+    try {
+      const parsed = JSON.parse(rawCanonical) as Record<string, unknown>;
+      bundleCandidate = {
+        ...parsed,
+        version: version || parsed.version,
+      };
+    } catch {
+      if (rawCanonical.length < 20) {
+        throw new Error(
+          'Provide a lowercase policy version and full structured consent notice fields.'
+        );
+      }
+      bundleCandidate = {
+        version,
+        checkbox: 'I have read and agree to the Data & Privacy Policy and Terms of Service.',
+        privacyNotice:
+          'Inquiry details are processed strictly for security & engineering scope evaluation.',
+        attachmentNotice:
+          'Uploaded scope files are stored privately in encrypted R2 storage and purged after retention expiry.',
+        policyText: rawCanonical,
+      };
+    }
+  } else {
+    throw new Error(
+      'Provide a lowercase policy version, checkbox label, privacy notice, attachment notice, and policy text.'
+    );
   }
 
-  const hash = createHash('sha256').update(canonical).digest('hex');
+  const archived = archivePolicy(bundleCandidate);
   const admin = getSupabaseAdmin();
 
   const { error: deactErr } = await admin
@@ -244,9 +288,9 @@ export async function publishConsentPolicyAction(formData: FormData): Promise<vo
 
   const { error: insErr } = await admin.from('consent_policies').upsert(
     {
-      version,
-      canonical,
-      hash,
+      version: archived.version,
+      canonical: archived.canonical,
+      hash: archived.hash,
       is_active: true,
     },
     { onConflict: 'version' }
@@ -258,9 +302,9 @@ export async function publishConsentPolicyAction(formData: FormData): Promise<vo
     actorRole: 'admin',
     action: 'consent_policy.published',
     entityType: 'consent_policy',
-    entityId: version,
-    summary: `Published and activated consent policy ${version} (${hash.slice(0, 12)}…)`,
-    metadata: { version, hash },
+    entityId: archived.version,
+    summary: `Published and activated consent policy ${archived.version} (${archived.hash.slice(0, 12)}…)`,
+    metadata: { version: archived.version, hash: archived.hash },
   });
 
   revalidatePath('/admin/settings');

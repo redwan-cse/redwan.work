@@ -87,6 +87,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
         const logoutUrl = new URL('/api/auth/logout?reason=deactivated', request.url);
         return withNoIndex(carry(response, NextResponse.redirect(logoutUrl)));
       }
+      if (recProfile.data.role === 'admin' && claims?.aal !== 'aal2') {
+        const mfaUrl = new URL('/mfa', request.url);
+        mfaUrl.searchParams.set('next', pathname + search);
+        return withNoIndex(carry(response, NextResponse.redirect(mfaUrl)));
+      }
       return withNoIndex(response);
     }
     if (pathname.startsWith('/invite/')) {
@@ -121,16 +126,35 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const adminNeedsMfa =
       role === 'admin' && claims?.aal !== 'aal2';
 
-    if (adminNeedsMfa) {
+    let clientNeedsMfa = false;
+    if (role === 'client') {
+      const mfaApi = (
+        supabase.auth as {
+          mfa?: {
+            getAuthenticatorAssuranceLevel?: () => Promise<{
+              data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+            }>;
+          };
+        }
+      ).mfa;
+      if (mfaApi?.getAuthenticatorAssuranceLevel) {
+        const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
+        clientNeedsMfa = Boolean(
+          aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2'
+        );
+      }
+    }
+
+    if (adminNeedsMfa || clientNeedsMfa) {
       if (pathname === '/mfa') return withNoIndex(response);
       const mfaUrl = new URL('/mfa', request.url);
-      if (pathname.startsWith('/admin')) {
+      if (pathname.startsWith('/admin') || pathname.startsWith('/portal')) {
         mfaUrl.searchParams.set('next', pathname + search);
       }
       return withNoIndex(carry(response, NextResponse.redirect(mfaUrl)));
     }
 
-    if (pathname === '/mfa') {
+    if (pathname === '/mfa' && request.method === 'GET' && !request.headers.has('next-action')) {
       return withNoIndex(carry(response, NextResponse.redirect(new URL(home, request.url))));
     }
 

@@ -97,7 +97,7 @@ begin
 
   for v_item in select value from jsonb_array_elements(p_items) loop
     v_desc := btrim(coalesce(v_item ->> 'description', ''));
-    v_qty := coalesce((v_item ->> 'qty')::int, 1);
+    v_qty := coalesce(nullif(v_item ->> 'qty', '')::int, nullif(v_item ->> 'quantity', '')::int, 1);
     v_unit := coalesce((v_item ->> 'unit_price_cents')::int, 0);
     if v_desc = '' or v_qty < 1 or v_unit <= 0 then
       raise exception 'Each invoice line item requires a description, qty >= 1, and unit_price_cents > 0.';
@@ -130,7 +130,7 @@ begin
 
   for v_item in select value from jsonb_array_elements(p_items) loop
     v_desc := btrim(coalesce(v_item ->> 'description', ''));
-    v_qty := coalesce((v_item ->> 'qty')::int, 1);
+    v_qty := coalesce(nullif(v_item ->> 'qty', '')::int, nullif(v_item ->> 'quantity', '')::int, 1);
     v_unit := coalesce((v_item ->> 'unit_price_cents')::int, 0);
     insert into public.invoice_items (invoice_id, position, description, qty, unit_price_cents)
     values (v_inv_id, v_pos, v_desc, v_qty, v_unit);
@@ -384,6 +384,7 @@ begin
   v_effective_fx := coalesce(nullif(p_fx_rate, 0), v_inv.fx_rate_to_usd, 1.000000);
   v_capped_usd := round(p_amount_cents::numeric * v_effective_fx)::bigint;
 
+  perform set_config('app.manual_payment_fx', 'on', true);
   insert into public.payments (
     invoice_id, client_id, order_id, method, currency, fx_rate_to_usd,
     amount_cents, reference, status, reviewed_by, reviewed_at
@@ -437,7 +438,7 @@ create or replace function public.review_invoice_payment(
   p_payment_id uuid,
   p_admin_id uuid,
   p_decision text,
-  p_fx_rate numeric default 1.000000,
+  p_fx_rate numeric default null,
   p_reason text default null
 )
 returns jsonb

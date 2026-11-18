@@ -15,6 +15,16 @@ declare
   v_renewed_retainers int := 0;
   v_ret record;
 begin
+  if coalesce(auth.role(), '') <> 'service_role'
+     and current_user not in ('postgres', 'supabase_admin') then
+    raise exception 'Service role required.';
+  end if;
+
+  -- Ensure pg_cron invocations running without PostgREST headers execute downstream
+  -- service-role RPCs under transaction-local service_role claims.
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('role', 'service_role')::text, true);
+
   v_overdue := public.mark_overdue_invoices_atomic();
 
   update public.proposals

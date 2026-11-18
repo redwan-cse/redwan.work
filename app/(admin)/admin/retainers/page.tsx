@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminRetainersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; status?: string }>;
+  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
 }) {
   await requireAdminSession();
   const params = await searchParams;
@@ -15,6 +15,7 @@ export default async function AdminRetainersPage({
     <BillingHubView
       activeTab={activeTab}
       statusFilter={params.status ?? ''}
+      pageParam={params.page}
       basePath="/admin/retainers"
     />
   );

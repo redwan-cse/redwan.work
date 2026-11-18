@@ -38,7 +38,10 @@ export default async function ClientInvoiceDetailPage({
     admin.from('credit_notes').select('*').eq('invoice_id', id).order('created_at', { ascending: false }),
   ]);
 
-  if (!invoice || (session.role !== 'admin' && invoice.client_id !== session.userId)) {
+  if (
+    !invoice ||
+    (session.role !== 'admin' && (invoice.client_id !== session.userId || invoice.status === 'draft'))
+  ) {
     notFound();
   }
 
