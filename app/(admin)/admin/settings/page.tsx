@@ -74,8 +74,9 @@ export default async function AdminSettingsPage() {
                 className="space-y-3"
               >
                 <div className="space-y-1">
-                  <Label className="text-xs">Version Identifier * (lowercase alphanumeric + hyphens)</Label>
+                  <Label htmlFor="consent-version" className="text-xs">Version Identifier * (lowercase alphanumeric + hyphens)</Label>
                   <Input
+                    id="consent-version"
                     name="version"
                     required
                     pattern="^[a-z][a-z0-9-]{0,63}$"
@@ -85,8 +86,9 @@ export default async function AdminSettingsPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Consent Checkbox Label *</Label>
+                  <Label htmlFor="consent-checkbox" className="text-xs">Consent Checkbox Label *</Label>
                   <Input
+                    id="consent-checkbox"
                     name="checkbox"
                     required
                     defaultValue={
@@ -98,8 +100,9 @@ export default async function AdminSettingsPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Privacy Notice *</Label>
+                    <Label htmlFor="consent-privacy-notice" className="text-xs">Privacy Notice *</Label>
                     <Textarea
+                      id="consent-privacy-notice"
                       name="privacy_notice"
                       aria-label="Privacy notice summary"
                       rows={3}
@@ -112,8 +115,9 @@ export default async function AdminSettingsPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Attachment Notice *</Label>
+                    <Label htmlFor="consent-attachment-notice" className="text-xs">Attachment Notice *</Label>
                     <Textarea
+                      id="consent-attachment-notice"
                       name="attachment_notice"
                       aria-label="Attachment handling notice"
                       rows={3}
@@ -127,8 +131,9 @@ export default async function AdminSettingsPage() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Full Consent Policy Text *</Label>
+                  <Label htmlFor="consent-policy-text" className="text-xs">Full Consent Policy Text *</Label>
                   <Textarea
+                    id="consent-policy-text"
                     name="policy_text"
                     aria-label="Full consent policy text"
                     rows={4}
