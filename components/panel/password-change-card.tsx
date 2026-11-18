@@ -2,17 +2,17 @@
 
 import { useActionState } from 'react';
 import { KeyRound } from 'lucide-react';
-import { changeAuthenticatedPasswordAction, type ActionState } from '@/lib/auth/actions';
+import { changePasswordAction, type PasswordChangeState } from '@/lib/auth/password-change';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const initialState: ActionState = {};
+const initialState: PasswordChangeState = {};
 
 export function PasswordChangeCard() {
   const [state, formAction, pending] = useActionState(
-    changeAuthenticatedPasswordAction,
+    changePasswordAction,
     initialState
   );
 
@@ -26,6 +26,20 @@ export function PasswordChangeCard() {
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
+          <div className="flex flex-col justify-end gap-1.5">
+            <Label htmlFor="current-password" className="text-xs">
+              Current Password *
+            </Label>
+            <Input
+              id="current-password"
+              name="currentPassword"
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="Enter current password"
+              className="h-9 text-xs"
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col justify-end gap-1.5">
               <Label htmlFor="new-password" className="mb-auto text-xs">
@@ -65,7 +79,7 @@ export function PasswordChangeCard() {
             </p>
           )}
           {state.notice && (
-            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
               {state.notice}
             </p>
           )}

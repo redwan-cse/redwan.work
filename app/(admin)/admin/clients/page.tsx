@@ -1,22 +1,43 @@
 import Link from 'next/link';
-import { ArrowRight, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, Search, UserPlus } from 'lucide-react';
+import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { requireAdminSession } from '@/lib/auth/session';
 import { inviteOrProvisionClientAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminClientsPage() {
+export default async function AdminClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; tier?: string }>;
+}) {
+  await requireAdminSession();
+  const params = await searchParams;
+  const qFilter = (params.q ?? '').trim().toLowerCase();
+  const tierFilter = (params.tier ?? '').trim();
+
   const admin = getSupabaseAdmin();
   const [{ data: profiles }, { data: clientProfiles }] = await Promise.all([
     admin
       .from('profiles')
-      .select('id, email, full_name, is_active, created_at')
+      .select('id, email, full_name, company, is_active, created_at')
       .eq('role', 'client')
       .order('created_at', { ascending: false }),
     admin.from('client_profiles').select('*'),
@@ -24,31 +45,42 @@ export default async function AdminClientsPage() {
 
   const crmMap = new Map((clientProfiles ?? []).map((cp) => [cp.user_id, cp]));
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <Badge variant="outline" className="mb-2 gap-1.5 font-mono text-xs text-primary">
-          <Users className="h-3.5 w-3.5" />
-          LONG-TERM CLIENT RETENTION CRM
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Clients 360° Directory</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage long-term client relationships, track lifetime value (LTV), schedule follow-ups, and invite new clients to the Portal.
-        </p>
-      </div>
+  const filteredClients = (profiles ?? []).filter((client) => {
+    const crm = crmMap.get(client.id);
+    const tier = crm?.tier ?? 'standard';
+    if (tierFilter && tier !== tierFilter) return false;
+    if (qFilter) {
+      const hay = `${client.full_name ?? ''} ${client.email} ${crm?.company_name ?? client.company ?? ''}`.toLowerCase();
+      if (!hay.includes(qFilter)) return false;
+    }
+    return true;
+  });
 
-      <div className="grid gap-8 xl:grid-cols-12">
+  return (
+    <div className="space-y-6">
+      <AdminHubHeader
+        eyebrow="LONG-TERM CLIENT RETENTION CRM"
+        title="Clients 360° Directory"
+        description="Invite portal accounts, segment VIP and Retainer clients, track USD Lifetime Value, and open complete 6-tab 360° client records."
+      />
+
+      <div className="grid gap-6 xl:grid-cols-12">
         {/* Invite Client Card */}
-        <Card className="xl:col-span-5">
-          <CardHeader>
-            <CardTitle className="text-lg">Invite Client to Portal</CardTitle>
-            <CardDescription>
+        <Card className="xl:col-span-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Invite Client to Portal</CardTitle>
+            <CardDescription className="text-xs">
               Sends a magic invitation link and initializes their 360° CRM profile.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={inviteOrProvisionClientAction} className="space-y-4">
-              <div className="space-y-1.5">
+            <ActionFeedbackForm
+              action={inviteOrProvisionClientAction}
+              successMessage="Invitation issued and CRM profile initialized."
+              resetOnSuccess
+              className="space-y-3"
+            >
+              <div className="space-y-1">
                 <Label className="text-xs">Client Email *</Label>
                 <Input
                   name="email"
@@ -58,7 +90,7 @@ export default async function AdminClientsPage() {
                   className="h-9 text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label className="text-xs">Full Name *</Label>
                 <Input
                   name="full_name"
@@ -67,91 +99,151 @@ export default async function AdminClientsPage() {
                   className="h-9 text-xs"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Company / Organization</Label>
-                <Input name="company" placeholder="Acme Security Inc." className="h-9 text-xs" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Relationship Tier</Label>
-                <select
-                  name="tier"
-                  className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
-                >
-                  <option value="standard">standard</option>
-                  <option value="vip">vip</option>
-                  <option value="retainer">retainer</option>
-                  <option value="enterprise">enterprise</option>
-                </select>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Company / Org</Label>
+                  <Input name="company" placeholder="Acme Security Inc." className="h-9 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Relationship Tier</Label>
+                  <select
+                    name="tier"
+                    aria-label="Client invite tier"
+                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                  >
+                    <option value="standard">standard</option>
+                    <option value="vip">vip</option>
+                    <option value="retainer">retainer</option>
+                    <option value="enterprise">enterprise</option>
+                  </select>
+                </div>
               </div>
               <Button type="submit" className="w-full gap-1.5 rounded-full">
                 <UserPlus className="h-4 w-4" />
                 Send Portal Invitation
               </Button>
-            </form>
+            </ActionFeedbackForm>
           </CardContent>
         </Card>
 
-        {/* Client Roster */}
-        <Card className="xl:col-span-7">
-          <CardHeader>
-            <CardTitle className="text-lg">Client Roster</CardTitle>
-            <CardDescription>Click any client to inspect LTV, notes, orders, and follow-up schedule.</CardDescription>
+        {/* Compact Client Table Roster */}
+        <Card className="xl:col-span-8">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 pb-3">
+            <div>
+              <CardTitle className="text-base">Client Roster ({filteredClients.length})</CardTitle>
+              <CardDescription className="text-xs">
+                Filter by name, organization, or retention tier.
+              </CardDescription>
+            </div>
+            <form method="get" className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  name="q"
+                  defaultValue={params.q ?? ''}
+                  placeholder="Search clients..."
+                  className="h-8 w-44 pl-8 text-xs"
+                />
+              </div>
+              <select
+                name="tier"
+                aria-label="Filter clients by tier"
+                defaultValue={tierFilter}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">All Tiers</option>
+                <option value="standard">standard</option>
+                <option value="vip">vip</option>
+                <option value="retainer">retainer</option>
+                <option value="enterprise">enterprise</option>
+              </select>
+              <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+                Filter
+              </Button>
+            </form>
           </CardHeader>
-          <CardContent>
-            {profiles && profiles.length > 0 ? (
-              <div className="divide-y divide-border/70">
-                {profiles.map((client) => {
-                  const crm = crmMap.get(client.id);
-                  return (
-                    <div
-                      key={client.id}
-                      className="flex flex-wrap items-center justify-between gap-4 py-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
+          <CardContent className="p-0">
+            {filteredClients.length > 0 ? (() => {
+              const pagedClients = paginateItems(
+                filteredClients,
+                (params as Record<string, string | undefined>).page
+              );
+              return (
+              <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Client &amp; Email</TableHead>
+                    <TableHead className="text-xs">Tier / Status</TableHead>
+                    <TableHead className="text-right text-xs">USD LTV</TableHead>
+                    <TableHead className="text-right text-xs">Orders</TableHead>
+                    <TableHead className="text-right text-xs">CRM</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedClients.items.map((client) => {
+                    const crm = crmMap.get(client.id);
+                    return (
+                      <TableRow key={client.id}>
+                        <TableCell>
                           <Link
                             href={`/admin/clients/${client.id}`}
-                            className="text-base font-bold hover:text-primary"
+                            className="font-semibold hover:text-primary"
                           >
                             {client.full_name || client.email}
                           </Link>
-                          <Badge variant="outline" className="font-mono text-[10px] uppercase">
-                            {crm?.tier ?? 'standard'}
-                          </Badge>
-                          {client.is_active === false && (
-                            <Badge variant="destructive" className="font-mono text-[10px]">
-                              DEACTIVATED
+                          <div className="font-mono text-[11px] text-muted-foreground">
+                            {client.email}
+                            {crm?.company_name ? ` · ${crm.company_name}` : ''}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                              {crm?.tier ?? 'standard'}
                             </Badge>
-                          )}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {client.email}{' '}
-                          {crm?.company_name ? `· ${crm.company_name}` : ''}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="text-right font-mono text-xs">
-                          <div className="font-bold">
-                            LTV: {formatMoney(crm?.lifetime_value_usd_cents ?? 0, 'USD')}
+                            {client.is_active === false && (
+                              <Badge variant="destructive" className="font-mono text-[10px]">
+                                INACTIVE
+                              </Badge>
+                            )}
                           </div>
-                          <div className="text-muted-foreground">
-                            {crm?.completed_orders_count ?? 0} completed orders
-                          </div>
-                        </div>
-                        <Button asChild variant="outline" size="sm" className="gap-1 rounded-full text-xs">
-                          <Link href={`/admin/clients/${client.id}`}>
-                            360° CRM <ArrowRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs font-bold">
+                          {formatMoney(crm?.lifetime_value_usd_cents ?? 0, 'USD')}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs">
+                          {crm?.completed_orders_count ?? 0}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild variant="ghost" size="sm" className="h-7 gap-1 text-xs">
+                            <Link href={`/admin/clients/${client.id}`}>
+                              360° <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <AdminPagination
+                basePath="/admin/clients"
+                page={pagedClients.page}
+                totalPages={pagedClients.totalPages}
+                totalItems={pagedClients.totalItems}
+                startIndex={pagedClients.startIndex}
+                endIndex={pagedClients.endIndex}
+                query={{
+                  tier: tierFilter || undefined,
+                  q: params.q || undefined,
+                }}
+              />
+              </>
+              );
+            })() : (
               <p className="py-12 text-center text-sm text-muted-foreground">
-                No client accounts yet. Invite a client on the left or convert an inquiry.
+                No clients match the current filter.
               </p>
             )}
           </CardContent>

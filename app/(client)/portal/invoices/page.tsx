@@ -20,6 +20,7 @@ export default async function ClientInvoicesListPage() {
       'id, code, status, is_deposit_invoice, currency, total_cents, issued_at, due_at, paid_at, order:orders(id, code, title)'
     )
     .eq('client_id', session.userId)
+    .neq('status', 'draft')
     .order('created_at', { ascending: false });
 
   return (
@@ -27,7 +28,7 @@ export default async function ClientInvoicesListPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Invoices & Billing</h1>
         <p className="text-sm text-muted-foreground">
-          View itemized multi-currency invoices (`USD`, `BDT`, `EUR`, `GBP`) and submit payment transfer proofs for verification.
+          View itemized multi-currency invoices (USD, BDT, EUR, GBP) and submit payment transfer proofs for verification.
         </p>
       </div>
 
@@ -67,7 +68,7 @@ export default async function ClientInvoicesListPage() {
                       <span>Due: {new Date(inv.due_at).toLocaleDateString()}</span>
                     )}
                     {inv.paid_at && (
-                      <span className="text-emerald-600 dark:text-emerald-400">
+                      <span className="text-emerald-800 dark:text-emerald-300">
                         Paid: {new Date(inv.paid_at).toLocaleDateString()}
                       </span>
                     )}

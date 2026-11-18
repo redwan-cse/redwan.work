@@ -138,10 +138,19 @@ export async function verifyStoredPortalObjectSize(key: string, declared: number
   if (!isPortalKey(key) || !Number.isSafeInteger(declared) || declared < 1 || declared > ARCHIVE_MAX_BYTES) return false;
   return await getPrivateObjectSize(key) === declared;
 }
-export async function presignPrivateGet(key: string, expiresIn = 60): Promise<string> {
+export async function presignPrivateGet(key: string, expiresIn = 60, filename?: string): Promise<string> {
   if (!isPortalKey(key) && !isValidContactKey(key)) throw new Error('Invalid private key.');
   const { GetObjectCommand } = await import('@aws-sdk/client-s3');
-  return getSignedUrl(privateClient(), new GetObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key }), { expiresIn });
+  const safeName = filename ? filename.replace(/[\r\n"\\/]+/g, '_').slice(0, 180) : undefined;
+  return getSignedUrl(
+    privateClient(),
+    new GetObjectCommand({
+      Bucket: process.env.R2_PRIVATE_BUCKET,
+      Key: key,
+      ResponseContentDisposition: safeName ? `attachment; filename="${safeName}"` : 'attachment',
+    }),
+    { expiresIn }
+  );
 }
 export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
   if (!isPortalKey(key)) throw new Error('Invalid portal key.');
@@ -154,7 +163,7 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
   const { Upload } = await import('@aws-sdk/lib-storage');
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }
-export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'svg', 'avif', 'pdf'] as const;
+export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'avif', 'pdf', 'zip'] as const;
 export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
 export const RESUME_ASSET_KEY = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
 export const RESUME_PDF_MAX_BYTES = 10 * 1024 * 1024;
@@ -170,7 +179,8 @@ export function isPublicR2Configured(): boolean {
 }
 
 export function makeAssetKey(ext: string): string {
-  const clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  let clean = ext.replace(/^\.+/, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+  if (clean === 'jpeg') clean = 'jpg';
   if (!(ASSET_ALLOWED_EXT as readonly string[]).includes(clean)) throw new Error('Invalid asset extension.');
   return `assets/${new Date().getUTCFullYear()}/${randomUUID().replace(/-/g, '')}.${clean}`;
 }
@@ -285,4 +295,28 @@ export async function getPublicObjectBytes(key: string): Promise<Buffer | null> 
 export async function deletePublicObject(key: string): Promise<void> {
   assertValidAssetKey(key);
   await publicClient().send(new DeleteObjectCommand({ Bucket: process.env.R2_PUBLIC_BUCKET, Key: key }));
+}
+export async function listPublicObjects(prefix = 'assets/'): Promise<R2ObjectSummary[]> {
+  const client = publicClient();
+  const out: R2ObjectSummary[] = [];
+  const tokens = new Set<string>();
+  let token: string | undefined;
+  do {
+    const response = await client.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.R2_PUBLIC_BUCKET,
+        Prefix: prefix,
+        ContinuationToken: token,
+      })
+    );
+    for (const obj of response.Contents ?? []) {
+      if (!obj.Key || !obj.LastModified) continue;
+      out.push({ key: obj.Key, lastModified: obj.LastModified, size: obj.Size ?? 0 });
+    }
+    if (!response.IsTruncated) break;
+    token = response.NextContinuationToken;
+    if (!token || tokens.has(token)) break;
+    tokens.add(token);
+  } while (token);
+  return out;
 }

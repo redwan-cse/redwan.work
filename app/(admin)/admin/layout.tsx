@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
+import { getAdminCommandCenterMetrics } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PanelShell, type PanelNavItem } from '@/components/panel/panel-shell';
+import { AdminCommandPalette } from '@/components/admin/admin-command-palette';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +27,8 @@ export default async function AdminLayout({
   }
 
   const admin = getSupabaseAdmin();
-  const [{ data: metricsRaw }, { data: recentNotifications }] = await Promise.all([
-    admin.rpc('admin_command_center_metrics'),
+  const [metrics, { data: recentNotifications }] = await Promise.all([
+    getAdminCommandCenterMetrics(),
     admin
       .from('notifications')
       .select('id, title, body, href, is_read, created_at')
@@ -34,47 +36,49 @@ export default async function AdminLayout({
       .order('created_at', { ascending: false })
       .limit(12),
   ]);
-  const metrics = (metricsRaw ?? {}) as Record<string, number>;
 
   const navItems: PanelNavItem[] = [
-    { label: 'Command Overview', href: '/admin', icon: 'dashboard' },
+    { label: 'Overview', href: '/admin', icon: 'dashboard' },
     {
-      label: 'Inquiries & Leads',
-      href: '/admin/inquiries',
-      icon: 'inquiries',
+      label: 'Pipeline & Proposals',
+      href: '/admin/pipeline',
+      icon: 'pipeline',
       badge: metrics.new_inquiries ?? 0,
+      activePrefixes: ['/admin/inquiries', '/admin/proposals'],
     },
-    { label: 'Proposals', href: '/admin/proposals', icon: 'proposals' },
     {
       label: 'Orders & Delivery',
       href: '/admin/orders',
       icon: 'orders',
       badge: metrics.active_orders ?? 0,
     },
-    { label: 'Clients 360° CRM', href: '/admin/clients', icon: 'clients' },
+    { label: 'Clients 360°', href: '/admin/clients', icon: 'clients' },
     {
-      label: 'Invoices & Payments',
-      href: '/admin/invoices',
-      icon: 'invoices',
+      label: 'Billing & Retainers',
+      href: '/admin/billing',
+      icon: 'billing',
       badge: metrics.submitted_payments ?? 0,
+      activePrefixes: ['/admin/invoices', '/admin/retainers'],
     },
     {
-      label: 'Support Tickets',
-      href: '/admin/tickets',
-      icon: 'tickets',
+      label: 'Support & Reviews',
+      href: '/admin/support',
+      icon: 'support',
       badge: metrics.open_tickets ?? 0,
+      activePrefixes: ['/admin/tickets', '/admin/reviews'],
     },
     {
-      label: 'Monthly Retainers',
-      href: '/admin/retainers',
-      icon: 'retainers',
-      badge: metrics.active_retainers ?? 0,
+      label: 'Content Studio',
+      href: '/admin/content',
+      icon: 'content',
+      activePrefixes: ['/admin/services', '/admin/portfolio', '/admin/resume', '/admin/assets', '/admin/blogs'],
     },
-    { label: 'Client Reviews', href: '/admin/reviews', icon: 'reviews' },
-    { label: 'Services & Packages CMS', href: '/admin/services', icon: 'services' },
-    { label: 'Portfolio CMS', href: '/admin/portfolio', icon: 'deliverables' },
-    { label: 'Resume & Profile CMS', href: '/admin/resume', icon: 'profile' },
-    { label: 'Audit & Security Log', href: '/admin/audit', icon: 'audit' },
+    {
+      label: 'Security & Ops',
+      href: '/admin/ops',
+      icon: 'ops',
+      activePrefixes: ['/admin/audit', '/admin/emails', '/admin/recovery', '/admin/settings'],
+    },
   ];
 
   return (
@@ -85,6 +89,7 @@ export default async function AdminLayout({
       unreadNotifications={metrics.unread_notifications ?? 0}
       recentNotifications={recentNotifications ?? []}
       navItems={navItems}
+      headerSlot={<AdminCommandPalette />}
     >
       {children}
     </PanelShell>

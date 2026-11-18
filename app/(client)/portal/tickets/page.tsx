@@ -4,6 +4,8 @@ import { ArrowRight, LifeBuoy, Plus } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createClientTicketAction } from '@/lib/crm/actions';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
+import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,7 +54,11 @@ export default async function ClientTicketsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={createClientTicketAction} className="space-y-3.5">
+            <ActionFeedbackForm
+              action={createClientTicketAction}
+              successMessage="Support ticket submitted."
+              className="space-y-3.5"
+            >
               <div className="space-y-1">
                 <Label className="text-xs">Subject *</Label>
                 <Input
@@ -68,6 +74,7 @@ export default async function ClientTicketsPage() {
                   <Label className="mb-auto text-xs">Priority</Label>
                   <select
                     name="priority"
+                    aria-label="Ticket priority"
                     defaultValue="medium"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
@@ -82,14 +89,16 @@ export default async function ClientTicketsPage() {
                   <Label className="mb-auto text-xs">Category</Label>
                   <select
                     name="category"
+                    aria-label="Ticket category"
                     defaultValue="general"
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                   >
                     <option value="general">General Support</option>
+                    <option value="technical_support">Technical Support / Outage</option>
                     <option value="security_incident">Security Incident / VAPT</option>
-                    <option value="server_outage">Server / Cloud Outage</option>
-                    <option value="bug_report">Bug Report / Patch</option>
+                    <option value="order_question">Order Question / Bug Report</option>
                     <option value="billing">Billing &amp; Invoices</option>
+                    <option value="retainer_request">Retainer Request</option>
                   </select>
                 </div>
               </div>
@@ -98,6 +107,7 @@ export default async function ClientTicketsPage() {
                 <Label className="text-xs">Related Order (Optional)</Label>
                 <select
                   name="order_id"
+                  aria-label="Related order"
                   defaultValue=""
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                 >
@@ -121,10 +131,15 @@ export default async function ClientTicketsPage() {
                 />
               </div>
 
+              <R2FileUploader
+                category="ticket_attachment"
+                label="Attach Logs / Screenshot / Evidence (Optional)"
+              />
+
               <Button type="submit" className="w-full">
                 Submit Support Ticket
               </Button>
-            </form>
+            </ActionFeedbackForm>
           </CardContent>
         </Card>
 

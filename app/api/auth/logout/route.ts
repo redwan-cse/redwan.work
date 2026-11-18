@@ -1,26 +1,53 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 
 async function handle(request: NextRequest): Promise<NextResponse> {
-  // Same-origin check (mirrors the contact API convention), enforced on POST
-  // only: browsers always send an Origin on form posts, so a cross-origin or
-  // Origin-less POST is rejected with 403. GET skips the check entirely — it
-  // exists solely for the proxy's deactivated-client bounce, which arrives as
-  // a top-level browser GET navigation carrying no Origin header.
+  // Same-origin check (enforced strictly on POST, and GET is restricted solely
+  // to top-level document navigations for proxy's deactivated-client bounce so
+  // cross-site subresource tags like <img src="/api/auth/logout"> return 403).
   if (request.method === 'POST') {
     const origin = request.headers.get('origin');
-    const allowed = new Set([request.nextUrl.origin, 'https://redwan.work']);
+    const allowed = new Set([
+      request.nextUrl.origin,
+      'https://redwan.work',
+      'https://www.redwan.work',
+    ]);
+    if (process.env.NEXT_PUBLIC_SITE_URL) {
+      try {
+        allowed.add(new URL(process.env.NEXT_PUBLIC_SITE_URL).origin);
+      } catch {
+        // ignore invalid site URL
+      }
+    }
     const originOk =
       origin !== null &&
-      (() => {
-        try {
-          return allowed.has(new URL(origin).origin);
-        } catch {
-          return false;
-        }
-      })();
+      (isSameOriginRequest(request.headers) ||
+        (() => {
+          try {
+            return allowed.has(new URL(origin).origin);
+          } catch {
+            return false;
+          }
+        })());
     if (!originOk) {
       return NextResponse.json({ error: 'Request origin not allowed' }, { status: 403 });
+    }
+  } else if (request.method === 'GET') {
+    const secFetchSite = request.headers.get('sec-fetch-site') ?? '';
+    const secFetchDest = request.headers.get('sec-fetch-dest') ?? '';
+    const secFetchMode = request.headers.get('sec-fetch-mode') ?? '';
+    const reason = request.nextUrl.searchParams.get('reason');
+    if (
+      secFetchSite === 'cross-site' ||
+      (secFetchDest && secFetchDest !== 'document') ||
+      (secFetchMode && secFetchMode !== 'navigate') ||
+      reason !== 'deactivated'
+    ) {
+      return NextResponse.json(
+        { error: 'Method Not Allowed. Use POST /api/auth/logout.' },
+        { status: 403 }
+      );
     }
   }
 

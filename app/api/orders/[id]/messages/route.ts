@@ -6,6 +6,7 @@ import {
   enqueueTransactionalEmail,
   notifyAllAdmins,
 } from '@/lib/crm/audit';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 
 export async function GET(
@@ -34,14 +35,15 @@ export async function GET(
     .from('order_messages')
     .select('id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)')
     .eq('order_id', id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   if (session.role !== 'admin') {
     query = query.eq('is_internal_note', false);
   }
 
   const { data: messages } = await query;
-  return NextResponse.json({ messages: messages ?? [] });
+  return NextResponse.json({ messages: [...(messages ?? [])].reverse() });
 }
 
 export async function POST(
@@ -83,6 +85,21 @@ export async function POST(
 
   if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  try {
+    const allowed = await consumeRateLimit('order-message', session.userId, 30, 60);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many messages sent. Please wait a minute before sending again.' },
+        { status: 429 }
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: 'Messaging rate limit service unavailable.' },
+      { status: 503 }
+    );
   }
 
   const isInternalNote = session.role === 'admin' && Boolean(payload?.is_internal_note);

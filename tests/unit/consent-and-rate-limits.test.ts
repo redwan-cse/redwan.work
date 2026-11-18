@@ -23,6 +23,7 @@ const EXPECTED_RATE_LIMIT_KINDS = [
   'portal-presign',
   'password-login',
   'register-ip',
+  'order-message',
 ] as const;
 
 function collectSourceFiles(dir: string): string[] {

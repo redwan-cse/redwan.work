@@ -17,7 +17,34 @@ function sanitizeActionUrl(raw: unknown): string | null {
   return escapeHtml(trimmed);
 }
 
+const TEMPLATE_CTA_LABELS: Record<string, string> = {
+  invoice_issued: 'View & Pay Invoice',
+  invoice_overdue: 'Settle Overdue Invoice',
+  invoice_credit_note: 'View Credit Adjustment',
+  proposal_sent: 'Review Proposal Brief',
+  proposal_accepted_admin: 'Inspect Accepted Order',
+  proposal_declined_admin: 'Review Declined Proposal',
+  order_placed_admin: 'Open New Order',
+  deliverable_published: 'Inspect Deliverable',
+  deliverable_accepted_admin: 'Inspect Signed-Off Order',
+  deliverable_revision_requested_admin: 'Review Revision Request',
+  deliverable_auto_accepted: 'View Completed Order',
+  payment_confirmed: 'View Billing Receipt',
+  payment_rejected: 'Resubmit Payment Proof',
+  payment_proof_submitted_admin: 'Review Payment Proof',
+  order_message: 'Open Order Thread',
+  order_message_admin: 'Reply in Command Center',
+  ticket_reply: 'View Ticket Reply',
+  ticket_reply_admin: 'Open Ticket in Helpdesk',
+  ticket_created_admin: 'Open Support Queue',
+  order_cancellation_requested: 'Review Cancellation Request',
+  order_cancellation_resolved: 'View Order Status',
+  retainer_renewed: 'View Retainer & Invoice',
+  account_deactivated: 'Contact Support',
+};
+
 export function renderOutboxHtml(item: {
+  template?: string | null;
   subject: string;
   payload: unknown;
 }): string {
@@ -35,13 +62,16 @@ export function renderOutboxHtml(item: {
     String(payload.message ?? 'You have a new update in your redwan.work Client Portal.')
   );
   const safeActionUrl = sanitizeActionUrl(payload.actionUrl);
+  const ctaLabel =
+    (item.template && TEMPLATE_CTA_LABELS[item.template]) ||
+    (item.template?.endsWith('_admin') ? 'Open Admin Command Center' : 'Open Client Portal');
 
   return `<div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;">
     <h2 style="margin-top:0;color:#111827;">${safeSubject}</h2>
     <p style="color:#374151;line-height:1.6;white-space:pre-line;">${safeMessage}</p>
     ${
       safeActionUrl
-        ? `<p style="margin-top:20px;"><a href="${safeActionUrl}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Open Client Portal</a></p>`
+        ? `<p style="margin-top:20px;"><a href="${safeActionUrl}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">${escapeHtml(ctaLabel)}</a></p>`
         : ''
     }
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
@@ -80,6 +110,7 @@ export async function drainEmailOutbox(
   for (const item of claimed ?? []) {
     try {
       const htmlBody = renderOutboxHtml({
+        template: item.template,
         subject: item.subject,
         payload: item.payload,
       });

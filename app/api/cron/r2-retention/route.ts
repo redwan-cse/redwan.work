@@ -8,9 +8,41 @@ import {
   listPrivateContactObjects,
   listPrivateVaultObjects,
   staleObjectKeys,
+  type R2ObjectSummary,
 } from '@/lib/r2';
 
 export const dynamic = 'force-dynamic';
+
+async function collectUnretainedOrphans(
+  objects: R2ObjectSummary[],
+  prefix: string,
+  cutoffDate: Date,
+  checkBatch: (keys: string[]) => Promise<{ retained: Set<string>; ok: boolean }>,
+  maxCollect = 500
+): Promise<{ ok: boolean; keys: string[] }> {
+  const candidates = objects.filter(
+    (obj) =>
+      obj.key.startsWith(prefix) &&
+      obj.lastModified instanceof Date &&
+      obj.lastModified.getTime() < cutoffDate.getTime()
+  );
+
+  const collected: string[] = [];
+  for (let i = 0; i < candidates.length && collected.length < maxCollect; i += 100) {
+    const slice = candidates.slice(i, i + 100);
+    const { retained, ok } = await checkBatch(slice.map((item) => item.key));
+    if (!ok) {
+      return { ok: false, keys: [] };
+    }
+    const stale = staleObjectKeys(slice, cutoffDate, retained);
+    for (const key of stale) {
+      if (collected.length >= maxCollect) break;
+      collected.push(key);
+    }
+  }
+
+  return { ok: true, keys: collected };
+}
 
 async function handleStorageRetentionCron(request: NextRequest) {
   if (!requireBearer(process.env.CRON_SECRET, request.headers.get('authorization'))) {
@@ -27,14 +59,67 @@ async function handleStorageRetentionCron(request: NextRequest) {
     return NextResponse.json({ error: autoErr.message }, { status: 500 });
   }
 
-  // 1b. Transition overdue invoices and expired proposals
+  // 1b. Transition overdue invoices & expired proposals and queue overdue notifications
   try {
     const todayDate = new Date().toISOString().slice(0, 10);
-    await admin
-      .from('invoices')
-      .update({ status: 'overdue' })
-      .in('status', ['issued', 'partially_paid'])
-      .lt('due_at', todayDate);
+    const beforeMarkIso = new Date(Date.now() - 5000).toISOString();
+    const { data: markedOverdueCount } = await admin.rpc('mark_overdue_invoices_atomic');
+
+    let overdueIds: string[] = [];
+    if (Number(markedOverdueCount ?? 0) > 0) {
+      const { data: overdueAuditRows } = await admin
+        .from('audit_logs')
+        .select('entity_id')
+        .eq('action', 'invoice.overdue')
+        .gte('created_at', beforeMarkIso);
+      overdueIds = Array.from(
+        new Set((overdueAuditRows ?? []).map((r) => r.entity_id).filter(Boolean) as string[])
+      );
+    }
+    const { data: newlyOverdue } =
+      overdueIds.length > 0
+        ? await admin
+            .from('invoices')
+            .select('id, code, client_id, currency, total_cents, amount_paid_cents, credited_cents')
+            .in('id', overdueIds)
+        : { data: [] };
+
+    if (Array.isArray(newlyOverdue) && newlyOverdue.length > 0) {
+      const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
+      for (const inv of newlyOverdue) {
+        const dueCents = Math.max(
+          0,
+          Number(inv.total_cents || 0) -
+            Number(inv.amount_paid_cents || 0) -
+            Number(inv.credited_cents || 0)
+        );
+        await admin.from('notifications').insert({
+          recipient_id: inv.client_id,
+          category: 'invoice',
+          title: `Invoice Overdue: ${inv.code ?? ''}`,
+          body: `Balance due: ${inv.currency} ${(dueCents / 100).toLocaleString()}`,
+          href: `/portal/invoices/${inv.id}`,
+        });
+        const { data: prof } = await admin
+          .from('profiles')
+          .select('email')
+          .eq('id', inv.client_id)
+          .maybeSingle();
+        if (prof?.email) {
+          await admin.from('email_outbox').insert({
+            to_email: prof.email,
+            template: 'invoice_overdue',
+            subject: `Action Required: Invoice ${inv.code ?? ''} is Overdue`,
+            payload: {
+              message: `Invoice ${inv.code ?? ''} (${inv.currency} ${(dueCents / 100).toLocaleString()} remaining balance) is now past its due date. Please submit payment proof or contact support.`,
+              actionUrl: `${origin}/portal/invoices/${inv.id}`,
+            },
+            entity_type: 'invoice',
+            entity_id: inv.id,
+          });
+        }
+      }
+    }
 
     await admin
       .from('proposals')
@@ -42,7 +127,7 @@ async function handleStorageRetentionCron(request: NextRequest) {
       .in('status', ['sent', 'viewed'])
       .lt('valid_until', todayDate);
   } catch {
-    // Non-fatal in isolated storage unit tests
+    // Non-fatal in isolated storage unit tests with mocked DB clients
   }
 
   let deletedVaultFiles = 0;
@@ -135,8 +220,8 @@ async function handleStorageRetentionCron(request: NextRequest) {
       }
     }
 
-    // Sweep stale orphan contact/* objects older than 90 days not tracked in inquiry_attachments
-    let contactObjects: Awaited<ReturnType<typeof listPrivateContactObjects>> = [];
+    // Paginated cursor sweep across all contact/* objects older than 90d not tracked in DB
+    let contactObjects: R2ObjectSummary[] = [];
     try {
       contactObjects = await listPrivateContactObjects();
     } catch {
@@ -146,48 +231,42 @@ async function handleStorageRetentionCron(request: NextRequest) {
       );
     }
 
-    // Filter candidate stale objects first (capped at 100 per batch) so we query only those keys
-    // and never truncate retained attachments at PostgREST's 1,000-row limit.
-    const candidateStaleObjects = contactObjects
-      .filter(
-        (obj) =>
-          obj.key.startsWith('contact/') &&
-          obj.lastModified instanceof Date &&
-          obj.lastModified.getTime() < cutoffDate.getTime()
-      )
-      .slice(0, 100);
+    const contactSweep = await collectUnretainedOrphans(
+      contactObjects,
+      'contact/',
+      cutoffDate,
+      async (keys) => {
+        const { data: trackedAtts, error: trackedErr } = await admin
+          .from('inquiry_attachments')
+          .select('r2_key')
+          .in('r2_key', keys);
+        if (trackedErr || !trackedAtts) {
+          return { retained: new Set<string>(), ok: false };
+        }
+        return { retained: new Set(trackedAtts.map((r) => r.r2_key)), ok: true };
+      }
+    );
 
-    if (candidateStaleObjects.length > 0) {
-      const candidateKeys = candidateStaleObjects.map((obj) => obj.key);
-      const { data: trackedAtts, error: trackedErr } = await admin
-        .from('inquiry_attachments')
-        .select('r2_key')
-        .in('r2_key', candidateKeys);
-
-      if (trackedErr || !trackedAtts) {
+    if (!contactSweep.ok) {
+      return NextResponse.json(
+        { error: 'Could not verify retained contact attachments.' },
+        { status: 503 }
+      );
+    }
+    if (contactSweep.keys.length > 0) {
+      try {
+        deletedOrphanContactObjects = await deletePrivateObjects(contactSweep.keys);
+      } catch {
         return NextResponse.json(
-          { error: trackedErr?.message ?? 'Could not verify retained contact attachments.' },
+          { error: 'Failed to delete orphan contact objects.' },
           { status: 503 }
         );
       }
-
-      const retainedSet = new Set(trackedAtts.map((row) => row.r2_key));
-      const staleKeys = staleObjectKeys(candidateStaleObjects, cutoffDate, retainedSet);
-      if (staleKeys.length > 0) {
-        try {
-          deletedOrphanContactObjects = await deletePrivateObjects(staleKeys.slice(0, 100));
-        } catch {
-          return NextResponse.json(
-            { error: 'Failed to delete orphan contact objects.' },
-            { status: 503 }
-          );
-        }
-      }
     }
 
-    // Sweep unreferenced private/* vault uploads older than 24 hours not tracked in vault_files
+    // Paginated cursor sweep across all unreferenced private/* objects older than 24h
     const vaultOrphanCutoff = new Date(now.getTime() - 86_400_000);
-    let privateObjects: Awaited<ReturnType<typeof listPrivateVaultObjects>> = [];
+    let privateObjects: R2ObjectSummary[] = [];
     try {
       privateObjects = await listPrivateVaultObjects();
     } catch {
@@ -197,44 +276,36 @@ async function handleStorageRetentionCron(request: NextRequest) {
       );
     }
 
-    const candidateOrphanPrivate = privateObjects
-      .filter(
-        (obj) =>
-          obj.key.startsWith('private/') &&
-          obj.lastModified instanceof Date &&
-          obj.lastModified.getTime() < vaultOrphanCutoff.getTime()
-      )
-      .slice(0, 100);
+    const vaultSweep = await collectUnretainedOrphans(
+      privateObjects,
+      'private/',
+      vaultOrphanCutoff,
+      async (keys) => {
+        const { data: trackedVaultFiles, error: trackedVaultErr } = await admin
+          .from('vault_files')
+          .select('r2_key')
+          .in('r2_key', keys);
+        if (trackedVaultErr || !trackedVaultFiles) {
+          return { retained: new Set<string>(), ok: false };
+        }
+        return { retained: new Set(trackedVaultFiles.map((r) => r.r2_key)), ok: true };
+      }
+    );
 
-    if (candidateOrphanPrivate.length > 0) {
-      const candidatePrivateKeys = candidateOrphanPrivate.map((obj) => obj.key);
-      const { data: trackedVaultFiles, error: trackedVaultErr } = await admin
-        .from('vault_files')
-        .select('r2_key')
-        .in('r2_key', candidatePrivateKeys);
-
-      if (trackedVaultErr || !trackedVaultFiles) {
+    if (!vaultSweep.ok) {
+      return NextResponse.json(
+        { error: 'Could not verify retained vault files.' },
+        { status: 503 }
+      );
+    }
+    if (vaultSweep.keys.length > 0) {
+      try {
+        deletedOrphanPrivateObjects = await deletePrivateObjects(vaultSweep.keys);
+      } catch {
         return NextResponse.json(
-          { error: trackedVaultErr?.message ?? 'Could not verify retained vault files.' },
+          { error: 'Failed to delete orphan private objects.' },
           { status: 503 }
         );
-      }
-
-      const trackedVaultSet = new Set(trackedVaultFiles.map((row) => row.r2_key));
-      const orphanPrivateKeys = staleObjectKeys(
-        candidateOrphanPrivate,
-        vaultOrphanCutoff,
-        trackedVaultSet
-      );
-      if (orphanPrivateKeys.length > 0) {
-        try {
-          deletedOrphanPrivateObjects = await deletePrivateObjects(orphanPrivateKeys.slice(0, 100));
-        } catch {
-          return NextResponse.json(
-            { error: 'Failed to delete orphan private objects.' },
-            { status: 503 }
-          );
-        }
       }
     }
   }

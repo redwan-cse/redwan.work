@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  Clock,
   Download,
   FileCheck2,
-  MessageSquare,
+  Lock,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
@@ -14,15 +16,21 @@ import {
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
+  acceptOrderNdaAction,
+  attachOrderRequirementFileAction,
   reviewDeliverableClientAction,
   signOrderRoeAction,
+  submitCancellationRequestAction,
   submitClientReviewAction,
   submitOrderRequirementsAction,
 } from '@/lib/crm/actions';
-import { ContractLiveChat } from '@/components/panel/contract-live-chat';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
+import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
+import { OrderLiveChatServer } from '@/components/panel/order-live-chat-server';
+import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,13 +48,38 @@ export default async function ClientOrderDetailPage({
   const { id } = await params;
   const admin = getSupabaseAdmin();
 
-  const { data: order } = await admin
-    .from('orders')
-    .select(
-      '*, order_milestones(*), order_requirements(*), engagement_authorizations(*), deliverables(*, vault_files(*)), order_messages(*, author:profiles!order_messages_author_id_fkey(full_name, email, role)), client_reviews(*)'
-    )
-    .eq('id', id)
-    .maybeSingle();
+  const [
+    { data: order },
+    { data: visibleTasks },
+    { data: requirementAttachments },
+    { data: cancellationHistory },
+  ] = await Promise.all([
+    admin
+      .from('orders')
+      .select(
+        '*, order_milestones(*), order_requirements(*), engagement_authorizations(*), deliverables(*, vault_files(*)), client_reviews(*)'
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    admin
+      .from('order_tasks')
+      .select('id, title, is_completed, completed_at')
+      .eq('order_id', id)
+      .eq('is_client_visible', true)
+      .order('created_at'),
+    admin
+      .from('vault_files')
+      .select('id, filename, size_bytes, created_at')
+      .eq('order_id', id)
+      .in('category', ['requirement_attachment', 'order_attachment'])
+      .is('archived_at', null)
+      .order('created_at', { ascending: false }),
+    admin
+      .from('cancellation_requests')
+      .select('*')
+      .eq('order_id', id)
+      .order('created_at', { ascending: false }),
+  ]);
 
   if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
     notFound();
@@ -54,9 +87,6 @@ export default async function ClientOrderDetailPage({
 
   const milestones = Array.isArray(order.order_milestones) ? order.order_milestones : [];
   const deliverables = Array.isArray(order.deliverables) ? order.deliverables : [];
-  const messages = (Array.isArray(order.order_messages) ? order.order_messages : []).filter(
-    (m: { is_internal_note?: boolean }) => !m.is_internal_note
-  );
   const reqRecord = Array.isArray(order.order_requirements)
     ? order.order_requirements[0]
     : order.order_requirements;
@@ -66,6 +96,13 @@ export default async function ClientOrderDetailPage({
   const existingReview = Array.isArray(order.client_reviews)
     ? order.client_reviews[0]
     : order.client_reviews;
+
+  const isReqLocked = Boolean(reqRecord?.verified_by_admin_at);
+  const canRequestCancellation =
+    session.role === 'client' &&
+    order.status !== 'completed' &&
+    order.status !== 'cancelled' &&
+    !(cancellationHistory ?? []).some((c) => c.status === 'pending');
 
   return (
     <div className="space-y-6">
@@ -103,6 +140,40 @@ export default async function ClientOrderDetailPage({
         </div>
       </div>
 
+      {/* Explicit Mutual Confidentiality NDA Panel */}
+      <Card className={order.nda_accepted_at ? 'border-emerald-500/35 bg-emerald-500/5' : 'border-border/80 bg-card/85'}>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-xs">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck
+              className={`h-4 w-4 shrink-0 ${
+                order.nda_accepted_at ? 'text-emerald-500' : 'text-primary'
+              }`}
+            />
+            <div>
+              <div className="font-semibold">
+                Confidentiality &amp; Mutual Non-Disclosure Agreement (NDA)
+              </div>
+              <div className="text-muted-foreground">
+                {order.nda_accepted_at
+                  ? `Executed cleanly on ${new Date(order.nda_accepted_at).toLocaleString()}.`
+                  : 'All files, reports, and codebase assets are handled under strict NDA terms. Record explicit acceptance if required for procurement compliance.'}
+              </div>
+            </div>
+          </div>
+          {!order.nda_accepted_at && session.role === 'client' && (
+            <ConfirmActionButton
+              action={acceptOrderNdaAction}
+              hiddenFields={{ order_id: order.id }}
+              triggerLabel="Accept Mutual NDA"
+              confirmTitle="Accept Mutual NDA Agreement?"
+              confirmDescription="Records your authenticated consent timestamp to mutual non-disclosure terms for this engagement."
+              confirmLabel="Sign & Accept NDA"
+              successMessage="Mutual NDA executed."
+            />
+          )}
+        </CardContent>
+      </Card>
+
       {/* Rules of Engagement Signer (when requires_roe is true) */}
       {order.requires_roe && (
         <Card className="border-amber-500/40 bg-amber-500/5">
@@ -124,7 +195,7 @@ export default async function ClientOrderDetailPage({
                   <div className="text-muted-foreground">
                     {roeRecord.signer_full_name} ({roeRecord.signer_title || 'Authorized Representative'})
                   </div>
-                  <div className="mt-1 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <div className="mt-1 font-mono text-[11px] text-emerald-800 dark:text-emerald-300">
                     Signed {new Date(roeRecord.signed_at).toLocaleString()}
                   </div>
                 </div>
@@ -133,16 +204,25 @@ export default async function ClientOrderDetailPage({
                   <div className="mt-1 font-mono text-[11px] text-muted-foreground">
                     {(roeRecord.authorized_targets ?? []).join(', ')}
                   </div>
+                  {(roeRecord.testing_window_start || roeRecord.testing_window_end) && (
+                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">
+                      Window: {roeRecord.testing_window_start ?? 'Immediate'} → {roeRecord.testing_window_end ?? 'Completion'}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="font-semibold">Emergency SOC Contact</div>
                   <div className="text-muted-foreground">
-                    {roeRecord.emergency_contact_name} • {roeRecord.emergency_contact_phone}
+                    {roeRecord.emergency_contact_name} · {roeRecord.emergency_contact_phone}
                   </div>
                 </div>
               </div>
             ) : (
-              <form action={signOrderRoeAction} className="space-y-3">
+              <ActionFeedbackForm
+                action={signOrderRoeAction}
+                successMessage="Rules of Engagement signed cleanly."
+                className="space-y-3"
+              >
                 <input type="hidden" name="order_id" value={order.id} />
                 <p className="text-muted-foreground">
                   Before active penetration testing, vulnerability scanning, or forensic recovery begins, OWASP/PTES operational governance requires explicit written authorization of the target assets you own or control.
@@ -166,6 +246,16 @@ export default async function ClientOrderDetailPage({
                       placeholder="Third-party payment gateways, production ERP..."
                       className="font-mono text-xs"
                     />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Testing Window Start (Optional)</Label>
+                    <Input name="testing_window_start" type="date" className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Testing Window End (Optional)</Label>
+                    <Input name="testing_window_end" type="date" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -199,21 +289,21 @@ export default async function ClientOrderDetailPage({
                   <ShieldCheck className="h-4 w-4" />
                   Digitally Sign Rules of Engagement
                 </Button>
-              </form>
+              </ActionFeedbackForm>
             )}
           </CardContent>
         </Card>
       )}
 
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Left 7 Cols: Deliverables, Milestones & Requirements */}
+        {/* Left 7 Cols */}
         <div className="space-y-6 lg:col-span-7">
           {/* Deliverables & Client Acceptance Sign-off */}
           <Card className="border-border/80 bg-card/85">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-bold">
                 <FileCheck2 className="h-4 w-4 text-primary" />
-                Versioned Deliverables & Acceptance Sign-Off ({deliverables.length})
+                Versioned Deliverables &amp; Acceptance Sign-Off ({deliverables.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -225,7 +315,7 @@ export default async function ClientOrderDetailPage({
                   title: string;
                   status: string;
                   release_notes: string | null;
-                  client_feedback: string | null;
+                  auto_accept_at?: string | null;
                   vault_files?: Array<{ id: string; filename: string; size_bytes: number; sha256_checksum: string | null }>;
                 }) => {
                   const files = Array.isArray(del.vault_files) ? del.vault_files : [];
@@ -247,6 +337,13 @@ export default async function ClientOrderDetailPage({
                         </Badge>
                       </div>
 
+                      {del.auto_accept_at && del.status === 'submitted' && (
+                        <div className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] text-amber-800 dark:text-amber-300">
+                          <Clock className="h-3 w-3" />
+                          Auto-accept deadline: {new Date(del.auto_accept_at).toLocaleDateString()}
+                        </div>
+                      )}
+
                       {del.release_notes && (
                         <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
                           {del.release_notes}
@@ -264,7 +361,7 @@ export default async function ClientOrderDetailPage({
                                 <div className="break-all font-mono font-medium">{f.filename}</div>
                                 {f.sha256_checksum && (
                                   <div className="break-all font-mono text-[10px] text-muted-foreground">
-                                    SHA-256: {f.sha256_checksum.slice(0, 24)}…
+                                    SHA-256: {f.sha256_checksum}
                                   </div>
                                 )}
                               </div>
@@ -280,8 +377,9 @@ export default async function ClientOrderDetailPage({
                       )}
 
                       {del.status === 'submitted' && (
-                        <form
+                        <ActionFeedbackForm
                           action={reviewDeliverableClientAction}
+                          successMessage="Deliverable review submitted."
                           className="mt-3 space-y-2 border-t border-border/60 pt-3"
                         >
                           <input type="hidden" name="deliverable_id" value={del.id} />
@@ -300,7 +398,7 @@ export default async function ClientOrderDetailPage({
                               className="h-9 gap-1.5 text-xs"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              Accept Deliverable & Sign Off
+                              Accept Deliverable &amp; Sign Off
                             </Button>
                             <Button
                               type="submit"
@@ -317,14 +415,10 @@ export default async function ClientOrderDetailPage({
                           </div>
                           {order.revisions_used >= order.revisions_included && (
                             <p className="text-[11px] text-muted-foreground">
-                              All {order.revisions_included} included revision(s) have been used. Need additional scope changes?{' '}
-                              <Link href="/portal/orders/new?tier=custom" className="font-medium text-primary underline">
-                                Request a custom scope extension
-                              </Link>
-                              .
+                              All {order.revisions_included} included revision(s) used. Message us below to request a Paid Revision Addendum invoice.
                             </p>
                           )}
-                        </form>
+                        </ActionFeedbackForm>
                       )}
                     </div>
                   );
@@ -339,84 +433,161 @@ export default async function ClientOrderDetailPage({
             </CardContent>
           </Card>
 
-          {/* Milestones */}
+          {/* Milestones & Visible Execution Checklist */}
           <Card className="border-border/80 bg-card/85">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-bold">
-                Execution Milestones ({milestones.length})
+                Milestones &amp; Live Progress ({milestones.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2.5">
-              {milestones.map(
-                (ms: { id: string; title: string; status: string; weight_percent: number }) => (
-                  <div
-                    key={ms.id}
-                    className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 p-3 text-xs"
-                  >
-                    <span className="font-semibold">{ms.title}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-muted-foreground">{ms.weight_percent}%</span>
-                      <Badge variant="outline" className="font-mono text-[10px] uppercase">
-                        {ms.status.replace(/_/g, ' ')}
-                      </Badge>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                {milestones.map(
+                  (ms: { id: string; title: string; status: string; weight_percent: number }) => (
+                    <div
+                      key={ms.id}
+                      className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 p-3 text-xs"
+                    >
+                      <span className="font-semibold">{ms.title}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-muted-foreground">{ms.weight_percent}%</span>
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                          {ms.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
                     </div>
+                  )
+                )}
+              </div>
+
+              {visibleTasks && visibleTasks.length > 0 && (
+                <div className="space-y-2 border-t border-border/60 pt-3">
+                  <div className="font-mono text-[11px] font-semibold uppercase text-muted-foreground">
+                    Live Execution Tasks ({visibleTasks.filter((t) => t.is_completed).length}/{visibleTasks.length} Done)
                   </div>
-                )
+                  {visibleTasks.map((task) => (
+                    <div key={task.id} className="flex items-center gap-2 text-xs">
+                      <CheckCircle2
+                        className={`h-3.5 w-3.5 shrink-0 ${
+                          task.is_completed ? 'text-primary' : 'text-muted-foreground/40'
+                        }`}
+                      />
+                      <span className={task.is_completed ? 'line-through text-muted-foreground' : ''}>
+                        {task.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Project Requirements Intake */}
+          {/* Project Requirements Intake & Vault File Upload */}
           <Card className="border-border/80 bg-card/85">
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base font-bold">
-                Project Requirements & Technical Intake
+                Project Requirements &amp; Technical Intake
               </CardTitle>
+              {isReqLocked && (
+                <Badge variant="secondary" className="gap-1 font-mono text-[10px]">
+                  <Lock className="h-3 w-3" /> Verified &amp; Locked
+                </Badge>
+              )}
             </CardHeader>
-            <CardContent>
-              <form action={submitOrderRequirementsAction} className="space-y-3">
-                <input type="hidden" name="order_id" value={order.id} />
-                <div className="space-y-1">
-                  <Label className="text-xs">Target Scope, Architecture & Endpoints</Label>
-                  <Textarea
-                    name="target_scope_notes"
-                    rows={3}
-                    defaultValue={reqRecord?.target_scope_notes ?? ''}
-                    placeholder="Provide target URLs, repo links, staging environments, or business requirements..."
-                    className="text-xs"
-                  />
+            <CardContent className="space-y-4">
+              {isReqLocked ? (
+                <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3 text-xs">
+                  <div>
+                    <strong>Target Scope Notes:</strong>{' '}
+                    <span className="text-muted-foreground">{reqRecord?.target_scope_notes || '—'}</span>
+                  </div>
+                  <div>
+                    <strong>Access Instructions:</strong>{' '}
+                    <span className="text-muted-foreground">{reqRecord?.access_instructions || '—'}</span>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Secure Access / Testing Instructions</Label>
-                  <Textarea
-                    name="access_instructions"
-                    rows={2}
-                    defaultValue={reqRecord?.access_instructions ?? ''}
-                    placeholder="Test account roles, VPN/IP whitelisting notes (do not paste raw production secrets in plain text)..."
-                    className="text-xs"
-                  />
+              ) : (
+                <ActionFeedbackForm
+                  action={submitOrderRequirementsAction}
+                  successMessage="Project requirements saved."
+                  className="space-y-3"
+                >
+                  <input type="hidden" name="order_id" value={order.id} />
+                  <div className="space-y-1">
+                    <Label className="text-xs">Target Scope, Architecture &amp; Endpoints</Label>
+                    <Textarea
+                      name="target_scope_notes"
+                      rows={3}
+                      defaultValue={reqRecord?.target_scope_notes ?? ''}
+                      placeholder="Provide target URLs, repo links, staging environments, or business requirements..."
+                      className="text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Secure Access / Testing Instructions</Label>
+                    <Textarea
+                      name="access_instructions"
+                      rows={2}
+                      defaultValue={reqRecord?.access_instructions ?? ''}
+                      placeholder="Test account roles, VPN/IP whitelisting notes (do not paste raw production secrets in plain text)..."
+                      className="text-xs"
+                    />
+                  </div>
+                  <Button type="submit" size="sm" variant="outline">
+                    Save Project Requirements
+                  </Button>
+                </ActionFeedbackForm>
+              )}
+
+              {/* Attached Requirement Scope Files */}
+              {requirementAttachments && requirementAttachments.length > 0 && (
+                <div className="space-y-1.5 border-t border-border/60 pt-3 text-xs">
+                  <div className="font-semibold">Uploaded Intake Documents</div>
+                  {requirementAttachments.map((vf) => (
+                    <div key={vf.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-1.5">
+                      <span className="truncate font-mono">{vf.filename}</span>
+                      <a
+                        href={`/api/files/${vf.id}/download`}
+                        className="font-mono text-primary hover:underline"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  ))}
                 </div>
-                <Button type="submit" size="sm" variant="outline">
-                  Save Project Requirements
-                </Button>
-              </form>
+              )}
+
+              {!isReqLocked && (
+                <ActionFeedbackForm
+                  action={attachOrderRequirementFileAction}
+                  successMessage="Requirement document uploaded to Vault."
+                  resetOnSuccess
+                  className="space-y-2 border-t border-border/60 pt-3"
+                >
+                  <input type="hidden" name="order_id" value={order.id} />
+                  <R2FileUploader
+                    category="requirement_attachment"
+                    orderId={order.id}
+                    label="Attach Architecture Diagram / OpenAPI Spec / Test Credentials Doc"
+                  />
+                  <Button type="submit" size="sm" variant="outline" className="rounded-full text-xs">
+                    Upload Scope File
+                  </Button>
+                </ActionFeedbackForm>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Right 5 Cols: Order Chat & Client Review */}
+        {/* Right 5 Cols */}
         <div className="space-y-6 lg:col-span-5">
-          <ContractLiveChat
+          <OrderLiveChatServer
+            orderId={order.id}
+            orderCode={order.code ?? 'ORD-XXXX'}
+            orderTitle={order.title}
+            orderStatus={order.status}
             viewerId={session.userId}
             viewerRole={session.role === 'admin' ? 'admin' : 'client'}
-            contracts={[
-              {
-                id: order.id,
-                code: order.code,
-                title: order.title,
-                status: order.status,
-              },
-            ]}
           />
 
           {/* Client Review & Testimonial */}
@@ -424,7 +595,7 @@ export default async function ClientOrderDetailPage({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-bold">
                 <Star className="h-4 w-4 text-amber-500" />
-                Engagement Feedback & Rating
+                Engagement Feedback &amp; Rating
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -433,12 +604,17 @@ export default async function ClientOrderDetailPage({
                   Engagement reviews unlock automatically once all deliverables are accepted and the order is marked completed.
                 </p>
               ) : (
-                <form action={submitClientReviewAction} className="space-y-3">
+                <ActionFeedbackForm
+                  action={submitClientReviewAction}
+                  successMessage={existingReview ? 'Engagement review updated.' : 'Engagement review submitted.'}
+                  className="space-y-3"
+                >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1.5">
                     <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
                     <select
                       name="rating_overall"
+                      aria-label="Overall rating"
                       defaultValue={String(existingReview?.rating_overall ?? 5)}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
                     >
@@ -472,10 +648,65 @@ export default async function ClientOrderDetailPage({
                   <Button type="submit" size="sm" variant="outline" className="w-full">
                     {existingReview ? 'Update Review' : 'Submit Engagement Review'}
                   </Button>
-                </form>
+                </ActionFeedbackForm>
               )}
             </CardContent>
           </Card>
+
+          {/* Cancellation Request Panel */}
+          {(canRequestCancellation || (cancellationHistory && cancellationHistory.length > 0)) && (
+            <Card className="border-border/80 bg-card/85">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-bold">
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  Order Cancellation / Scope Hold
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Need to cancel or pause this contract? Submit a formal request for review.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                {(cancellationHistory ?? []).map((req) => (
+                  <div key={req.id} className="rounded-lg border border-border/70 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <Badge variant={req.status === 'pending' ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                        {req.status}
+                      </Badge>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(req.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="mt-1">{req.reason}</p>
+                    {req.resolution_notes && (
+                      <p className="mt-1 text-muted-foreground">Note: {req.resolution_notes}</p>
+                    )}
+                  </div>
+                ))}
+
+                {canRequestCancellation && (
+                  <ActionFeedbackForm
+                    action={submitCancellationRequestAction}
+                    successMessage="Cancellation request sent for admin review."
+                    resetOnSuccess
+                    className="space-y-2.5"
+                  >
+                    <input type="hidden" name="order_id" value={order.id} />
+                    <Textarea
+                      name="reason"
+                      required
+                      minLength={5}
+                      rows={2}
+                      placeholder="Reason for requesting order cancellation..."
+                      className="text-xs"
+                    />
+                    <Button type="submit" size="sm" variant="outline" className="w-full text-xs text-destructive hover:text-destructive">
+                      Request Order Cancellation
+                    </Button>
+                  </ActionFeedbackForm>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

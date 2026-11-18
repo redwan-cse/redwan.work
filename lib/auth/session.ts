@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export type AppRole = 'admin' | 'client';
@@ -16,7 +18,14 @@ interface ClaimsLike {
   app_metadata?: Record<string, unknown>;
 }
 
-export async function getCurrentSession(): Promise<SessionInfo | null> {
+const cachedGetCurrentSession =
+  typeof cache === 'function' ? cache(resolveCurrentSession) : resolveCurrentSession;
+
+export function getCurrentSession(): Promise<SessionInfo | null> {
+  return cachedGetCurrentSession();
+}
+
+async function resolveCurrentSession(): Promise<SessionInfo | null> {
   try {
     const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase.auth.getClaims();
@@ -109,4 +118,26 @@ export async function getPendingMfaAdminSession(): Promise<{
   } catch {
     return null;
   }
+}
+
+export async function requireAdminSession(): Promise<SessionInfo> {
+  const session = await getCurrentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.role !== 'admin') {
+    redirect('/portal');
+  }
+  return session;
+}
+
+export async function requireClientSession(): Promise<SessionInfo> {
+  const session = await getCurrentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  if (session.role !== 'client') {
+    redirect('/admin');
+  }
+  return session;
 }

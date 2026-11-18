@@ -7,7 +7,7 @@ import {
   buildResumeProfileJsonLd,
 } from '@/lib/seo/structured-data';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Curriculum Vitae & Credentials — Md. Redwan Ahmed',

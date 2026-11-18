@@ -97,17 +97,30 @@ export function ContractLiveChat({
     setMessages(contracts.find((c) => c.id === orderId)?.initialMessages ?? []);
   };
 
+  const hasInitialMessagesForSelected = contracts.some(
+    (c) => c.id === selectedOrderId && Array.isArray(c.initialMessages)
+  );
+
   useEffect(() => {
     if (!selectedOrderId) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void pollMessages(selectedOrderId);
-
-    const interval = setInterval(() => {
+    if (!hasInitialMessagesForSelected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void pollMessages(selectedOrderId);
-    }, 5000);
+    }
 
-    return () => clearInterval(interval);
-  }, [selectedOrderId, pollMessages]);
+    const pollIfVisible = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void pollMessages(selectedOrderId);
+    };
+
+    const interval = setInterval(pollIfVisible, 5000);
+    document.addEventListener('visibilitychange', pollIfVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', pollIfVisible);
+    };
+  }, [selectedOrderId, hasInitialMessagesForSelected, pollMessages]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -175,6 +188,7 @@ export function ContractLiveChat({
         <div className="flex flex-wrap items-center gap-2">
           {contracts.length > 1 && (
             <select
+              aria-label="Select active contract thread"
               value={selectedOrderId}
               onChange={(e) => handleSelectContract(e.target.value)}
               className="h-8 rounded-full border border-border bg-background px-3 font-mono text-xs"
@@ -248,7 +262,7 @@ export function ContractLiveChat({
                     )}
                     {authorLabel}
                     {msg.is_internal_note && (
-                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-300">
                         <Lock className="h-2.5 w-2.5" />
                         Internal Admin Note
                       </span>

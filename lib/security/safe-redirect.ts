@@ -133,3 +133,60 @@ export function sanitizeHttpUrl(
 
   return trimmed;
 }
+
+/**
+ * Decide which origin an auth callback should redirect to.
+ *
+ * Session cookies set on the callback response are host-only, so the redirect MUST land on the
+ * same host the visitor used (e.g. www.example.com vs example.com), otherwise they arrive
+ * signed-out. To stay safe against Host-header injection we only trust a request host when it is
+ *   - a loopback host (local dev / isolated CI), or
+ *   - the configured site host or its www./apex twin.
+ * Anything else falls back to the configured site origin. Non-loopback hosts always use the
+ * configured scheme, so a forwarded `http` can never downgrade an https site.
+ */
+export function resolveCallbackOrigin(input: {
+  host: string | null | undefined;
+  forwardedHost?: string | null;
+  forwardedProto?: string | null;
+  requestOrigin: string;
+  siteUrl?: string | null;
+}): string {
+  let configured: URL | null = null;
+  if (input.siteUrl) {
+    try {
+      configured = new URL(input.siteUrl);
+    } catch {
+      configured = null;
+    }
+  }
+
+  const rawHost = (input.forwardedHost ?? input.host ?? '').split(',')[0]?.trim() ?? '';
+  if (rawHost) {
+    const proto =
+      input.forwardedProto?.split(',')[0]?.trim() === 'https'
+        ? 'https'
+        : input.forwardedProto?.split(',')[0]?.trim() === 'http'
+          ? 'http'
+          : new URL(input.requestOrigin).protocol.replace(/:$/, '');
+    try {
+      const candidate = new URL(`${proto}://${rawHost}`);
+      const hostname = candidate.hostname.toLowerCase();
+      if (!candidate.username && !candidate.password) {
+        if (hostname === '127.0.0.1' || hostname === 'localhost') {
+          return candidate.origin;
+        }
+        if (configured) {
+          const base = configured.hostname.toLowerCase().replace(/^www\./, '');
+          if (hostname === base || hostname === `www.${base}`) {
+            return `${configured.protocol}//${candidate.host}`;
+          }
+        }
+      }
+    } catch {
+      // fall through to the configured/request origin
+    }
+  }
+
+  return configured ? configured.origin : input.requestOrigin;
+}

@@ -2,6 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockGetClaims = vi.fn();
+const mockGetAal = vi.fn().mockResolvedValue({
+  data: { currentLevel: 'aal1', nextLevel: 'aal1' },
+  error: null,
+});
 const mockMaybeSingle = vi.fn();
 const mockRpc = vi.fn();
 const mockSignInWithPassword = vi.fn();
@@ -11,6 +15,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: async () => ({
     auth: {
       getClaims: mockGetClaims,
+      mfa: { getAuthenticatorAssuranceLevel: mockGetAal },
       signInWithPassword: mockSignInWithPassword,
       signOut: mockSignOut,
     },
@@ -30,6 +35,7 @@ vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({
     auth: {
       getClaims: mockGetClaims,
+      mfa: { getAuthenticatorAssuranceLevel: mockGetAal },
     },
     from: () => ({
       select: () => ({
@@ -315,5 +321,92 @@ describe('Session & Proxy MFA AAL2 and Active-Account Enforcement', () => {
     const res = await proxy(new NextRequest('http://localhost:3000/admin'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://localhost:3000/mfa?next=%2Fadmin');
+  });
+
+  it('[P6-CLIENT-TOTP-RECOVERY-AAL2] enforces AAL2 in proxy() for enrolled client TOTP and admin recovery sessions', async () => {
+    mockGetClaims.mockResolvedValueOnce({
+      data: {
+        claims: {
+          sub: '22222222-2222-2222-2222-222222222222',
+          email: 'client-mfa@disposable.test',
+          aal: 'aal1',
+          app_metadata: { role: 'client' },
+        },
+      },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        role: 'client',
+        is_active: true,
+        mfa_enforced: false,
+      },
+      error: null,
+    });
+    mockGetAal.mockResolvedValueOnce({
+      data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
+    });
+
+    const clientMfaRes = await proxy(new NextRequest('http://localhost:3000/portal/orders'));
+    expect(clientMfaRes.status).toBe(307);
+    expect(clientMfaRes.headers.get('location')).toBe(
+      'http://localhost:3000/mfa?next=%2Fportal%2Forders'
+    );
+
+    mockGetClaims.mockResolvedValueOnce({
+      data: {
+        claims: {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'admin@disposable.test',
+          aal: 'aal1',
+          amr: [{ method: 'recovery', timestamp: 1 }],
+          app_metadata: { role: 'admin' },
+        },
+      },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        role: 'admin',
+        is_active: true,
+      },
+      error: null,
+    });
+
+    const recoveryRes = await proxy(
+      new NextRequest('http://localhost:3000/reset-password?session=1')
+    );
+    expect(recoveryRes.status).toBe(307);
+    expect(recoveryRes.headers.get('location')).toBe(
+      'http://localhost:3000/mfa?next=%2Freset-password%3Fsession%3D1'
+    );
+
+    mockGetClaims.mockResolvedValueOnce({
+      data: {
+        claims: {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'admin@disposable.test',
+          aal: 'aal2',
+          app_metadata: { role: 'admin' },
+        },
+      },
+      error: null,
+    });
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: {
+        role: 'admin',
+        is_active: true,
+        mfa_enforced: true,
+      },
+      error: null,
+    });
+    const mfaPostRes = await proxy(
+      new NextRequest('http://localhost:3000/mfa?next=%2Fadmin%2Forders', {
+        method: 'POST',
+        headers: { 'next-action': 'resolve-post-mfa' },
+      })
+    );
+    expect(mfaPostRes.status).toBe(200);
   });
 });

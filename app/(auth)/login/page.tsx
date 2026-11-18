@@ -74,7 +74,7 @@ function LoginPageContent() {
   useEffect(() => {
     if (tokenState !== 'working') return;
     let cancelled = false;
-    consumeMagicLinkTokenAction(tokenHash)
+    consumeMagicLinkTokenAction(tokenHash, nextPath)
       .then((result) => {
         if (cancelled) return;
         if (result.ok) {
@@ -89,7 +89,7 @@ function LoginPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [tokenState, tokenHash]);
+  }, [tokenState, tokenHash, nextPath]);
 
   return (
     <Card>

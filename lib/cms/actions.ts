@@ -60,7 +60,8 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
 
   if (!title || !slug) return;
 
-  const payload = {
+  const toolsTagsRaw = formData.get('tools_tags');
+  const payload: Record<string, unknown> = {
     slug,
     pillar,
     title,
@@ -71,11 +72,18 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
     delivery_days_min: deliveryDaysMin,
     delivery_days_max: deliveryDaysMax,
     highlights,
-    tools_tags: highlights,
     is_public: isPublic,
     is_featured: isFeatured,
     sort_order: sortOrder,
   };
+  if (formData.has('tools_tags')) {
+    payload.tools_tags = String(toolsTagsRaw ?? '')
+      .split(/[\r\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } else if (!id) {
+    payload.tools_tags = highlights;
+  }
 
   if (id) {
     const { error } = await admin.from('services').update(payload).eq('id', id);
@@ -96,6 +104,7 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -121,6 +130,7 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -149,13 +159,12 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
 
   if (!serviceId) return;
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     service_id: serviceId,
     tier_name: tierName,
     package_name: packageName,
     summary,
     price_cents: priceCents,
-    deposit_percent: depositPercent,
     delivery_days: deliveryDays,
     revisions_included: revisionsIncluded,
     is_popular: isPopular,
@@ -163,6 +172,9 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
     features,
     sort_order: sortOrder,
   };
+  if (formData.has('deposit_percent') || !id) {
+    payload.deposit_percent = depositPercent;
+  }
 
   if (id) {
     const { error } = await admin.from('service_packages').update(payload).eq('id', id);
@@ -185,6 +197,7 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -210,6 +223,7 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
 
   revalidatePath('/');
   revalidatePath('/services');
+  revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
@@ -256,7 +270,7 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
 
   if (!title || !slug) return;
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     code,
     slug,
     pillar,
@@ -271,11 +285,13 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
     outcomes,
     stack,
     related_service_slug: relatedServiceSlug,
-    external_url: externalUrl,
     is_published: isPublished,
     is_featured: isFeatured,
     sort_order: sortOrder,
   };
+  if (formData.has('external_url') || !id) {
+    payload.external_url = externalUrl;
+  }
 
   if (id) {
     const { error } = await admin.from('portfolio_items').update(payload).eq('id', id);
@@ -296,6 +312,7 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
 
   revalidatePath('/');
   revalidatePath('/portfolio');
+  revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
 }
 
@@ -319,6 +336,7 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
 
   revalidatePath('/');
   revalidatePath('/portfolio');
+  revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
 }
 
@@ -529,19 +547,21 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
 
   if (!title) return;
 
-  const payload = {
+  const description = String(formData.get('description') ?? '').trim() || null;
+  const payload: Record<string, unknown> = {
     section,
     title,
     organization,
-    role_type: roleType,
-    location,
-    period,
-    badge_label: badgeLabel,
-    verification_url: verificationUrl,
     highlights,
     sort_order: sortOrder,
     is_visible: isVisible,
   };
+  if (formData.has('role_type') || !id) payload.role_type = roleType;
+  if (formData.has('location') || !id) payload.location = location;
+  if (formData.has('period') || !id) payload.period = period;
+  if (formData.has('description') || !id) payload.description = description;
+  if (formData.has('badge_label') || !id) payload.badge_label = badgeLabel;
+  if (formData.has('verification_url') || !id) payload.verification_url = verificationUrl;
 
   if (id) {
     const { error } = await admin.from('resume_items').update(payload).eq('id', id);

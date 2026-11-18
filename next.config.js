@@ -37,10 +37,23 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()' },
 ];
+const r2PublicPattern = (() => {
+  const raw = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL;
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const protocol = parsed.protocol.replace(/:$/, '');
+    if (protocol !== 'https' && protocol !== 'http') return null;
+    return { protocol, hostname: parsed.hostname };
+  } catch {
+    return null;
+  }
+})();
 const nextConfig = {
   // Framework limit only. The hosting platform has a separate request ceiling.
   experimental: { serverActions: { bodySizeLimit: '12mb' } },
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: '**.googleusercontent.com' },
@@ -48,20 +61,27 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.blogspot.com' },
       { protocol: 'https', hostname: 'cdn.jsdelivr.net' },
       { protocol: 'https', hostname: 'raw.githubusercontent.com' },
+      ...(r2PublicPattern ? [r2PublicPattern] : []),
     ],
   },
   async headers() {
     const noindexHeader = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+    const privateNoStoreHeaders = [
+      { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+    ];
     return [
       { source: '/:path*', headers: securityHeaders },
-      { source: '/admin', headers: noindexHeader },
-      { source: '/admin/:path*', headers: noindexHeader },
-      { source: '/portal', headers: noindexHeader },
-      { source: '/portal/:path*', headers: noindexHeader },
+      { source: '/admin', headers: privateNoStoreHeaders },
+      { source: '/admin/:path*', headers: privateNoStoreHeaders },
+      { source: '/portal', headers: privateNoStoreHeaders },
+      { source: '/portal/:path*', headers: privateNoStoreHeaders },
       { source: '/api/:path*', headers: noindexHeader },
+      { source: '/api/files/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/orders/:path*', headers: privateNoStoreHeaders },
       { source: '/login', headers: noindexHeader },
       { source: '/register', headers: noindexHeader },
-      { source: '/mfa', headers: noindexHeader },
+      { source: '/mfa', headers: privateNoStoreHeaders },
       { source: '/reset-password', headers: noindexHeader },
       { source: '/auth/:path*', headers: noindexHeader },
       { source: '/invite/:path*', headers: noindexHeader },

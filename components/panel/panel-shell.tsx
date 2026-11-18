@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import {
   Activity,
   Bell,
@@ -31,7 +31,10 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
-import { markAllNotificationsReadAction } from '@/lib/crm/actions';
+import {
+  markAllNotificationsReadAction,
+  markNotificationReadAction,
+} from '@/lib/crm/actions';
 import {
   Popover,
   PopoverContent,
@@ -51,6 +54,7 @@ export interface PanelNavItem {
   href: string;
   icon: string;
   badge?: number;
+  activePrefixes?: string[];
 }
 
 export interface PanelNotificationItem {
@@ -64,15 +68,20 @@ export interface PanelNotificationItem {
 
 const ICON_MAP: Record<string, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
+  pipeline: FileSpreadsheet,
   inquiries: Inbox,
   proposals: FileSpreadsheet,
   orders: Briefcase,
   clients: Users,
+  billing: CreditCard,
   invoices: CreditCard,
+  support: LifeBuoy,
   tickets: LifeBuoy,
   retainers: Repeat,
   reviews: Star,
+  content: Package,
   services: Package,
+  ops: ShieldCheck,
   audit: Activity,
   emails: Mail,
   files: FolderLock,
@@ -88,6 +97,7 @@ export function PanelShell({
   unreadNotifications = 0,
   recentNotifications = [],
   navItems,
+  headerSlot,
   children,
 }: {
   role: 'admin' | 'client';
@@ -96,24 +106,32 @@ export function PanelShell({
   unreadNotifications?: number;
   recentNotifications?: PanelNotificationItem[];
   navItems: PanelNavItem[];
+  headerSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const prefersReducedMotion = useReducedMotion();
 
-  const isNavItemActive = (href: string) => {
-    if (href === '/admin' || href === '/portal') {
-      return pathname === href;
+  const isNavItemActive = (item: PanelNavItem) => {
+    if (item.href === '/admin' || item.href === '/portal') {
+      return pathname === item.href;
     }
-    return pathname === href || pathname?.startsWith(`${href}/`);
+    if (pathname === item.href || pathname?.startsWith(`${item.href}/`)) {
+      return true;
+    }
+    return Boolean(
+      item.activePrefixes?.some(
+        (prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`)
+      )
+    );
   };
 
   const renderNavList = (onItemClick?: () => void) => (
     <nav aria-label={role === 'admin' ? 'Admin navigation' : 'Client portal navigation'} className="flex-1 space-y-1 px-3 py-4">
       {navItems.map((item) => {
         const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
-        const active = isNavItemActive(item.href);
+        const active = isNavItemActive(item);
         return (
           <Link
             key={item.href}
@@ -131,7 +149,7 @@ export function PanelShell({
               (prefersReducedMotion ? (
                 <span className="absolute inset-0 rounded-lg bg-primary shadow-2xs" />
               ) : (
-                <motion.span
+                <m.span
                   layoutId="panel-sidebar-active"
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   className="absolute inset-0 rounded-lg bg-primary shadow-2xs"
@@ -169,7 +187,7 @@ export function PanelShell({
       </a>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border/80 bg-card/50 lg:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border/80 bg-card/50 print:hidden lg:flex">
         <div className="flex h-16 items-center justify-between border-b border-border/80 px-5">
           <Link
             href={role === 'admin' ? '/admin' : '/portal'}
@@ -224,7 +242,7 @@ export function PanelShell({
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Header */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border/80 bg-background/85 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border/80 bg-background/85 px-4 backdrop-blur-md print:hidden sm:px-6">
           <div className="flex items-center gap-3">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
@@ -291,6 +309,7 @@ export function PanelShell({
                 </Link>
               </Button>
             )}
+            {headerSlot}
             {role === 'admin' && (
               <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full px-2.5 text-xs sm:px-3">
                 <Link href="/admin/proposals">
@@ -341,16 +360,32 @@ export function PanelShell({
                           !notif.is_read && 'bg-primary/5'
                         )}
                       >
-                        {notif.href ? (
-                          <Link
-                            href={notif.href}
-                            className="block font-semibold text-foreground hover:text-primary"
-                          >
-                            {notif.title}
-                          </Link>
-                        ) : (
-                          <div className="font-semibold text-foreground">{notif.title}</div>
-                        )}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            {notif.href ? (
+                              <Link
+                                href={notif.href}
+                                className="block font-semibold text-foreground hover:text-primary"
+                              >
+                                {notif.title}
+                              </Link>
+                            ) : (
+                              <div className="font-semibold text-foreground">{notif.title}</div>
+                            )}
+                          </div>
+                          {!notif.is_read && (
+                            <form action={markNotificationReadAction}>
+                              <input type="hidden" name="notification_id" value={notif.id} />
+                              <button
+                                type="submit"
+                                className="shrink-0 font-mono text-[10px] text-primary hover:underline"
+                                title="Mark as read"
+                              >
+                                Read
+                              </button>
+                            </form>
+                          )}
+                        </div>
                         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
                           {notif.body}
                         </p>

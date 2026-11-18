@@ -25,7 +25,9 @@ interface BlogPreviewModalProps {
   excerpt: string;
   readingMinutes?: number;
   toc?: BlogTocItem[];
-  children: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children?: React.ReactNode;
 }
 
 function numberTocItems(toc: BlogTocItem[]) {
@@ -45,15 +47,23 @@ export function BlogPreviewModal({
   excerpt,
   readingMinutes,
   toc = [],
+  open: controlledOpen,
+  onOpenChange,
   children,
 }: BlogPreviewModalProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const handleOpenChange = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const safePostUrl = sanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work';
   const numberedToc = numberTocItems(toc);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>button]:hidden border border-border/80 shadow-2xl">
         <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
           <Image
@@ -163,7 +173,7 @@ export function BlogPreviewModal({
               variant="outline"
               size="sm"
               className="h-9 rounded-full border-border/80 bg-background/60 px-5 text-xs font-medium backdrop-blur-xs hover:bg-accent"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Close
             </Button>
