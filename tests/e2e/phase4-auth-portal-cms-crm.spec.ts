@@ -364,11 +364,14 @@ test.describe('Phase 4 Extended E2E: Registration, Invite Activation, Support Ti
       await adminCtx.close();
     }
 
-    // 3. PKCE session=1 mode on /invite/accept renders form when authenticated and blocks unauthenticated visitors
+    // 3. PKCE session=1 mode on /invite/accept rejects unauthenticated activation submissions
     const anonCtx = await browser.newContext();
     const anonPage = await anonCtx.newPage();
     try {
       await anonPage.goto('/invite/accept?session=1');
+      await anonPage.locator('input[name="password"]').fill('StrongInviteTest!1234');
+      await anonPage.locator('input[name="confirm"]').fill('StrongInviteTest!1234');
+      await anonPage.getByRole('button', { name: /Activate account/i }).click();
       await expect(anonPage.getByText(/invalid or has expired/i)).toBeVisible();
     } finally {
       await anonCtx.close();
