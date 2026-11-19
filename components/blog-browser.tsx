@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { m } from 'motion/react';
-import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import {
   ArrowRight,
   BookOpen,
@@ -220,7 +220,7 @@ export function BlogBrowser({
 
                   <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
                     <Link
-                      href={sanitizeHttpUrl(featuredItem.post.url) ?? 'https://blogs.redwan.work'}
+                      href={trySanitizeHttpUrl(featuredItem.post.url) ?? 'https://blogs.redwan.work'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -313,7 +313,7 @@ export function BlogBrowser({
                   </Button>
                   <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
                     <Link
-                      href={sanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work'}
+                      href={trySanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

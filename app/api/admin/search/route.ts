@@ -4,22 +4,37 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
+const PRIVATE_NO_STORE = {
+  'Cache-Control': 'private, no-store, max-age=0',
+  'X-Robots-Tag': 'noindex, nofollow',
+};
+
 function escapeIlikePattern(raw: string): string {
-  return raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+  return raw
+    .replace(/[,()*"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_');
 }
 
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session || session.role !== 'admin') {
-    return NextResponse.json({ error: 'Admin authorization required.' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Admin authorization required.' },
+      { status: 403, headers: PRIVATE_NO_STORE }
+    );
   }
 
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim();
-  if (q.length < 2) {
-    return NextResponse.json({ results: [] });
+  const safeQuery = escapeIlikePattern(q.slice(0, 64));
+  if (safeQuery.length < 2) {
+    return NextResponse.json({ results: [] }, { headers: PRIVATE_NO_STORE });
   }
 
-  const pattern = `%${escapeIlikePattern(q.slice(0, 64))}%`;
+  const pattern = `%${safeQuery}%`;
   const admin = getSupabaseAdmin();
 
   const [
@@ -108,5 +123,5 @@ export async function GET(request: NextRequest) {
     })),
   ];
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ results }, { headers: PRIVATE_NO_STORE });
 }

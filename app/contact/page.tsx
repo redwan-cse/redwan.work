@@ -19,17 +19,13 @@ import {
   InteractiveCard,
   ScrollReveal,
 } from '@/components/motion/reveal';
-import { getPublicServicesCatalog, getSiteSettingsAndResume } from '@/lib/cms/queries';
-import { getCurrentSession } from '@/lib/auth/session';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import {
-  ContractLiveChat,
-  type ActiveContractOption,
-} from '@/components/panel/contract-live-chat';
+import { getPublicContactChannels, getPublicServicesCatalog } from '@/lib/cms/queries';
+import { readConsentControl } from '@/lib/contact/consent-control';
+import { ContactActiveChat } from '@/components/panel/contact-active-chat';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
 import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: 'Contact & Project Inquiry — Md. Redwan Ahmed',
@@ -39,54 +35,15 @@ export const metadata: Metadata = buildPublicMetadata({
 });
 
 export default async function Contact() {
-  const [services, { settings }, session] = await Promise.all([
+  const [services, channels, consentResult] = await Promise.all([
     getPublicServicesCatalog(),
-    getSiteSettingsAndResume(),
-    getCurrentSession(),
+    getPublicContactChannels(),
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY
+      ? readConsentControl().catch(() => ({ ok: false as const }))
+      : Promise.resolve({ ok: false as const }),
   ]);
 
-  let activeContracts: ActiveContractOption[] = [];
-  if (session) {
-    try {
-      const admin = getSupabaseAdmin();
-      let ordersQuery = admin
-        .from('orders')
-        .select(
-          'id, code, title, status, order_messages(id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role))'
-        )
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (session.role !== 'admin') {
-        ordersQuery = ordersQuery.eq('client_id', session.userId);
-      }
-
-      const { data: orderRows } = await ordersQuery;
-      activeContracts = (orderRows ?? []).map((o) => ({
-        id: o.id,
-        code: o.code ?? 'ORD-XXXX',
-        title: o.title,
-        status: o.status,
-        initialMessages: (Array.isArray(o.order_messages) ? o.order_messages : [])
-          .filter((m) => session.role === 'admin' || !m.is_internal_note)
-          .map((m) => ({
-            id: m.id,
-            body: m.body,
-            created_at: m.created_at,
-            is_internal_note: m.is_internal_note,
-            author_id: m.author_id,
-            author: Array.isArray(m.author) ? m.author[0] ?? null : m.author ?? null,
-          }))
-          .sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          ),
-      }));
-    } catch {
-      activeContracts = [];
-    }
-  }
+  const initialConsentPolicy = consentResult.ok ? consentResult.bundle : null;
 
   const contactBreadcrumb = buildBreadcrumbJsonLd([
     { name: 'Home', path: '/' },
@@ -132,7 +89,7 @@ export default async function Contact() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                  Direct Ticket &amp; Proposal Reference (`INQ-XXXX`)
+                  Direct Ticket &amp; Proposal Reference (INQ-XXXX)
                 </span>
               </div>
             </HeroRevealItem>
@@ -143,32 +100,8 @@ export default async function Contact() {
       {/* Main Content */}
       <section className="py-14">
         <div className="container max-w-5xl space-y-12">
-          {/* Active Contract Live Chat (Automatically appears when a contract has started) */}
-          {session && activeContracts.length > 0 && (
-            <ScrollReveal>
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <Badge className="mb-1 gap-1.5 font-mono text-[11px]">
-                      ACTIVE CONTRACT WORKSPACE
-                    </Badge>
-                    <h2 className="text-xl font-bold tracking-tight">
-                      Live Contract Chat with Md. Redwan Ahmed
-                    </h2>
-                    <p className="text-xs text-muted-foreground">
-                      Your contract is active. Message directly here or open your full Contract Workspace in the Portal.
-                    </p>
-                  </div>
-                </div>
-                <ContractLiveChat
-                  contracts={activeContracts}
-                  viewerRole={session.role === 'admin' ? 'admin' : 'client'}
-                  viewerId={session.userId}
-                  showPortalLink
-                />
-              </div>
-            </ScrollReveal>
-          )}
+          {/* Active Contract Live Chat (Client-hydrated so /contact stays Edge ISR-cached) */}
+          <ContactActiveChat />
 
           {/* 3 Interactive Quick Channels */}
           <div className="grid gap-6 md:grid-cols-3">
@@ -186,7 +119,7 @@ export default async function Contact() {
                 <div className="mt-6 pt-2">
                   <Button asChild variant="outline" size="sm" className="w-full gap-1.5 rounded-full">
                     <Link
-                      href={`https://wa.me/${settings.whatsapp_number}`}
+                      href={`https://wa.me/${channels.whatsapp_number}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -212,7 +145,7 @@ export default async function Contact() {
                 <div className="mt-6 pt-2">
                   <Button asChild variant="outline" size="sm" className="w-full gap-1.5 rounded-full">
                     <Link
-                      href={settings.cal_com_url}
+                      href={channels.cal_com_url}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -267,7 +200,10 @@ export default async function Contact() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 sm:p-8">
-                <EnhancedContactForm initialServices={services} />
+                <EnhancedContactForm
+                  initialServices={services}
+                  initialConsentPolicy={initialConsentPolicy}
+                />
               </CardContent>
             </Card>
           </ScrollReveal>

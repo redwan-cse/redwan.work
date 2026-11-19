@@ -35,14 +35,13 @@ export default async function AdminRecoveryPage() {
   const admin = getSupabaseAdmin();
   const r2Ready = isR2Configured();
 
-  const [{ data: vaultFiles }, { data: clients }, { data: orders }, r2PrivateList] =
+  const [{ data: allTrackedVaultFiles }, { data: clients }, { data: orders }, r2PrivateList] =
     await Promise.all([
       admin
         .from('vault_files')
-        .select('*')
+        .select('id, r2_key, filename, category, owner_client_id, order_id, deliverable_id, size_bytes, retention_until, archived_at, created_at')
         .is('archived_at', null)
-        .order('retention_until', { ascending: true, nullsFirst: false })
-        .limit(100),
+        .order('retention_until', { ascending: true, nullsFirst: false }),
       admin.from('profiles').select('id, full_name, email').eq('role', 'client'),
       admin
         .from('orders')
@@ -52,12 +51,14 @@ export default async function AdminRecoveryPage() {
       r2Ready ? listPrivateVaultObjects().catch(() => [] as R2ObjectSummary[]) : Promise.resolve([]),
     ]);
 
+  const vaultFiles = (allTrackedVaultFiles ?? []).slice(0, 100);
+
   const clientMap = new Map((clients ?? []).map((c) => [c.id, c.full_name || c.email]));
   const quotaByClient = new Map<string, number>();
   const fileCountByOrder = new Map<string, number>();
   const trackedKeys = new Set<string>();
 
-  for (const vf of vaultFiles ?? []) {
+  for (const vf of allTrackedVaultFiles ?? []) {
     trackedKeys.add(vf.r2_key);
     if (vf.owner_client_id && !vf.archived_at) {
       quotaByClient.set(

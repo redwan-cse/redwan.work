@@ -2529,6 +2529,7 @@ export type Database = {
         Args: {
           p_admin_id: string
           p_client_id: string
+          p_currency?: string
           p_deposit_percent: number
           p_description?: string | null
           p_due_days: number

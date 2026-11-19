@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getBlogPostsPage } from '@/lib/blogger';
+import { getPublicPortfolioItems, getPublicServicesCatalog } from '@/lib/cms/queries';
 import { SITE } from '@/lib/content/site';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
@@ -40,14 +41,23 @@ async function resolveLatestTimestamp(
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [siteUpdated, servicesUpdated, portfolioUpdated, resumeUpdated, blogsUpdated] =
-    await Promise.all([
-      resolveLatestTimestamp('site_settings'),
-      resolveLatestTimestamp('services'),
-      resolveLatestTimestamp('portfolio_items'),
-      resolveLatestTimestamp('resume_items'),
-      resolveLatestBlogTimestamp(),
-    ]);
+  const [
+    siteUpdated,
+    servicesUpdated,
+    portfolioUpdated,
+    resumeUpdated,
+    blogsUpdated,
+    services,
+    portfolioItems,
+  ] = await Promise.all([
+    resolveLatestTimestamp('site_settings'),
+    resolveLatestTimestamp('services'),
+    resolveLatestTimestamp('portfolio_items'),
+    resolveLatestTimestamp('resume_items'),
+    resolveLatestBlogTimestamp(),
+    getPublicServicesCatalog().catch(() => []),
+    getPublicPortfolioItems().catch(() => []),
+  ]);
 
   const homeModified =
     [siteUpdated, servicesUpdated, portfolioUpdated, resumeUpdated, blogsUpdated].sort().at(-1) ??
@@ -67,6 +77,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { route: '/contact', lastModified: siteUpdated, changeFrequency: 'monthly', priority: 0.6 },
     { route: '/privacy', lastModified: FALLBACK_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.5 },
     { route: '/tos', lastModified: FALLBACK_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.5 },
+    ...services.map((svc) => ({
+      route: `/services/${svc.slug}`,
+      lastModified: servicesUpdated,
+      changeFrequency: 'monthly' as const,
+      priority: 0.75,
+    })),
+    ...portfolioItems.map((item) => ({
+      route: `/portfolio/${item.slug}`,
+      lastModified: portfolioUpdated,
+      changeFrequency: 'monthly' as const,
+      priority: 0.65,
+    })),
   ];
 
   return entries.map((entry) => ({

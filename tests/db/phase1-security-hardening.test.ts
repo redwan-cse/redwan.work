@@ -313,4 +313,165 @@ describe('Phase 1 P0 DB Security Hardening & Invariants', () => {
     );
     expect(overflowRes.rows[0].ok).toBe(false);
   });
+
+  it('[SEC-DB-04] allows newly registered clients without app_metadata.role claim while blocking cross-tenant order_requirements hijack, un-attested RoE execution, negative FX, and credit_note/issued-invoice deletion', async () => {
+    const clientB = await pg.createTestUser({
+      email: 'sec-client-b@disposable.test',
+      fullName: 'Security Client B',
+      role: 'client',
+      isActive: true,
+    });
+
+    // 1. A newly self-registered or invited client whose JWT app_metadata has no 'role' field
+    //    must still resolve current_account_role() = 'client' and is_active_client() = true
+    const newClientRoleCheck = await pg.queryAs<{
+      account_role: string | null;
+      active_client: boolean;
+      active_user: boolean;
+    }>(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, aal: 'aal1', appRole: '' as unknown as 'client' },
+      `select
+         public.current_account_role() as account_role,
+         public.is_active_client() as active_client,
+         public.is_active_user() as active_user`
+    );
+    expect(newClientRoleCheck.rows[0]).toEqual({
+      account_role: 'client',
+      active_client: true,
+      active_user: true,
+    });
+
+    // Conversely, an admin without app_metadata.role = 'admin' must be rejected
+    const unverifiedAdminCheck = await pg.queryAs<{
+      account_role: string | null;
+      is_adm: boolean;
+    }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, aal: 'aal2' },
+      `select
+         public.current_account_role() as account_role,
+         public.is_admin() as is_adm`
+    );
+    expect(unverifiedAdminCheck.rows[0]).toEqual({
+      account_role: null,
+      is_adm: false,
+    });
+
+    // 2. Cross-tenant order_requirements IDOR: Client A cannot re-point their unverified order_requirements row to Client B's order
+    const clientAOrderRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, aal: 'aal1' },
+      `select public.create_package_order_atomic(
+         $1, $2, 'Client A Dev Order', 'Scope A', 'development', false,
+         false, 2, 12000, 50, 5, 'Client A scope',
+         '{"package_tier":"starter"}'::jsonb, array['Build'], 'hi', 'Deposit'
+       ) as res`,
+      [clientA.id, webServiceId]
+    );
+    const clientAOrderId = clientAOrderRes.rows[0].res.order_id;
+
+    const clientBOrderRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic(
+         $1, $2, 'Client B BDT Order', 'Scope B', 'development', 5000000, 50, false, 10, 'BDT'
+       ) as res`,
+      [adminUser.id, clientB.id]
+    );
+    const clientBOrderId = clientBOrderRes.rows[0].res.order_id;
+
+    // Verify p_currency = 'BDT' propagated to orders and deposit invoice
+    const bdtOrderCheck = await pg.db.query<{ order_currency: string; inv_currency: string }>(
+      `select o.currency as order_currency, i.currency as inv_currency
+       from public.orders o
+       join public.invoices i on i.order_id = o.id
+       where o.id = $1`,
+      [clientBOrderId]
+    );
+    expect(bdtOrderCheck.rows[0]).toEqual({
+      order_currency: 'BDT',
+      inv_currency: 'BDT',
+    });
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, aal: 'aal1' },
+        `update public.order_requirements
+         set order_id = $1
+         where order_id = $2
+         returning id`,
+        [clientBOrderId, clientAOrderId]
+      ).then((r) => {
+        if (r.rows.length === 0) throw new Error('Cross-tenant order_id reassignment blocked');
+        return r;
+      })
+    ).rejects.toThrow();
+
+    // Client also cannot INSERT order_requirements with verified_by_admin_at pre-populated
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: clientB.id, email: clientB.email, aal: 'aal1' },
+        `insert into public.order_requirements (order_id, client_id, target_scope_notes, verified_by_admin_at)
+         values ($1, $2, 'Forged pre-verified', now())`,
+        [clientBOrderId, clientB.id]
+      )
+    ).rejects.toThrow(/only administrators|locked/i);
+
+    // 3. Setting orders.roe_signed_at without a real engagement_authorizations row must NOT bypass enforce_order_roe_before_progress
+    const fakeRoeOrderRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic(
+         $1, $2, 'Unattested RoE Order', 'Scope', 'cybersecurity', 50000, 0, true, 7
+       ) as res`,
+      [adminUser.id, clientA.id]
+    );
+    const fakeRoeOrderId = fakeRoeOrderRes.rows[0].res.order_id;
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `update public.orders set roe_signed_at = now(), status = 'in_progress' where id = $1`,
+        [fakeRoeOrderId]
+      )
+    ).rejects.toThrow(/rules of engagement|roe/i);
+
+    // 4. Negative p_fx_rate in record_manual_payment_atomic must be rejected, and issued invoices/credit_notes cannot be deleted
+    const bdtInvRes = await pg.db.query<{ id: string }>(
+      `select id from public.invoices where order_id = $1 limit 1`,
+      [clientBOrderId]
+    );
+    const bdtInvId = bdtInvRes.rows[0].id;
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `select public.record_manual_payment_atomic($1, $2, 'bank_transfer', 100000, 'NEG-FX-1', -0.5)`,
+        [bdtInvId, adminUser.id]
+      )
+    ).rejects.toThrow(/fx_rate|positive/i);
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `delete from public.invoices where id = $1`,
+        [bdtInvId]
+      )
+    ).rejects.toThrow(/immutable|cannot be deleted/i);
+
+    // 5. Internal ticket note and draft proposal/invoice audit logs must be hidden from client SELECT
+    await pg.db.query(
+      `insert into public.audit_logs (actor_id, actor_role, client_id, action, entity_type, summary, metadata)
+       values
+         ($1, 'admin', $2, 'ticket.replied', 'ticket', 'Internal escalation note', '{"isInternalNote":true}'::jsonb),
+         ($1, 'admin', $2, 'proposal.draft_saved', 'proposal', 'Secret draft pricing', '{}'::jsonb),
+         ($1, 'admin', $2, 'invoice.draft_created', 'invoice', 'Draft invoice internal', '{}'::jsonb)`,
+      [adminUser.id, clientA.id]
+    );
+    const filteredAudit = await pg.queryAs<{ action: string }>(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, aal: 'aal1' },
+      `select action from public.audit_logs where client_id = $1`,
+      [clientA.id]
+    );
+    const actionsSeen = filteredAudit.rows.map((r) => r.action);
+    expect(actionsSeen).not.toContain('ticket.replied');
+    expect(actionsSeen).not.toContain('proposal.draft_saved');
+    expect(actionsSeen).not.toContain('invoice.draft_created');
+  });
 });

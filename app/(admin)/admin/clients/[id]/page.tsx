@@ -548,10 +548,9 @@ export default async function AdminClientDetailPage({
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
                     >
                       <option value="general">general</option>
-                      <option value="call">call</option>
+                      <option value="call_log">call_log</option>
                       <option value="followup">followup</option>
-                      <option value="risk">risk</option>
-                      <option value="win">win</option>
+                      <option value="preference">preference</option>
                     </select>
                   </div>
                   <div className="space-y-1">

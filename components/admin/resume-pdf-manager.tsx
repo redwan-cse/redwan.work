@@ -135,8 +135,8 @@ export function ResumePdfManager({
         </div>
         <CardDescription className="text-xs">
           Your pre-formatted resume PDF is stored directly in the Cloudflare R2
-          public bucket (`assets/resume/Md_Redwan_Ahmed_Resume.pdf`) and served
-          via CDN without runtime PDF generation. Upload a new `.pdf` here any
+          public bucket (assets/resume/Md_Redwan_Ahmed_Resume.pdf) and served
+          via CDN without runtime PDF generation. Upload a new .pdf here any
           time to replace it immediately.
         </CardDescription>
       </CardHeader>
@@ -145,7 +145,7 @@ export function ResumePdfManager({
         <div className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-background/60 p-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Active Resume PDF URL (`site_settings.resume_pdf_url`)
+              Active Resume PDF URL (site_settings.resume_pdf_url)
             </p>
             <p className="truncate font-mono text-xs text-foreground">
               {currentUrl}
@@ -170,7 +170,7 @@ export function ResumePdfManager({
             >
               <a href="/resume.pdf" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
-                Inline Preview (`/resume.pdf`)
+                Inline Preview (/resume.pdf)
               </a>
             </Button>
             <Button
@@ -198,7 +198,7 @@ export function ResumePdfManager({
         >
           <div className="space-y-1.5">
             <Label htmlFor="resume-pdf-upload" className="text-xs font-medium">
-              Replace Resume PDF in R2 Public Bucket (`.pdf`, max{' '}
+              Replace Resume PDF in R2 Public Bucket (.pdf, max{' '}
               {formatBytes(MAX_RESUME_BYTES)})
             </Label>
             <Input

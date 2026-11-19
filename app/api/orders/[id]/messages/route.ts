@@ -43,7 +43,10 @@ export async function GET(
   }
 
   const { data: messages } = await query;
-  return NextResponse.json({ messages: [...(messages ?? [])].reverse() });
+  return NextResponse.json(
+    { messages: [...(messages ?? [])].reverse() },
+    { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' } }
+  );
 }
 
 export async function POST(
@@ -175,5 +178,8 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ message: inserted });
+  return NextResponse.json(
+    { message: inserted },
+    { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' } }
+  );
 }

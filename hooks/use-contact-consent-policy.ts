@@ -5,9 +5,10 @@ import { CONSENT_UNAVAILABLE_MESSAGE, parsePublicConsentPolicy } from '@/lib/con
 import type { PolicyBundle } from '@/lib/contact/consent-policy';
 
 /** Initial read and explicit user refresh only. Never retries a submission. */
-export function useContactConsentPolicy() {
-  const [policy, setPolicy] = useState<PolicyBundle | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useContactConsentPolicy(initialPolicy?: PolicyBundle | null) {
+  const normalizedInitial = initialPolicy ? parsePublicConsentPolicy(initialPolicy) : null;
+  const [policy, setPolicy] = useState<PolicyBundle | null>(normalizedInitial);
+  const [loading, setLoading] = useState(!normalizedInitial);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<AbortController | null>(null);
 
@@ -50,7 +51,10 @@ export function useContactConsentPolicy() {
     await loadPolicy();
   }, [loadPolicy]);
 
+  const hasInitialPolicy = normalizedInitial !== null;
+
   useEffect(() => {
+    if (hasInitialPolicy) return;
     const timer = setTimeout(() => {
       void loadPolicy();
     }, 0);
@@ -60,7 +64,7 @@ export function useContactConsentPolicy() {
       pending.current = null;
       controller?.abort();
     };
-  }, [loadPolicy]);
+  }, [loadPolicy, hasInitialPolicy]);
 
   const replacePolicy = useCallback((value: unknown) => {
     const controller = pending.current;

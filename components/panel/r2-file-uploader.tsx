@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Loader2, UploadCloud } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ export function R2FileUploader({
   orderId?: string | null;
   label?: string;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [fileMeta, setFileMeta] = useState<{
@@ -32,6 +33,20 @@ export function R2FileUploader({
     sizeBytes: number;
     sha256: string;
   } | null>(null);
+
+  useEffect(() => {
+    const form = containerRef.current?.closest('form');
+    if (!form) return;
+    const handleFormReset = () => {
+      setStatus('idle');
+      setErrorMsg('');
+      setFileMeta(null);
+    };
+    form.addEventListener('reset', handleFormReset);
+    return () => {
+      form.removeEventListener('reset', handleFormReset);
+    };
+  }, []);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -100,7 +115,7 @@ export function R2FileUploader({
   };
 
   return (
-    <div className="space-y-2">
+    <div ref={containerRef} className="space-y-2">
       <Label className="text-xs font-medium">{label}</Label>
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
         <UploadCloud className="h-5 w-5 shrink-0 text-primary" />

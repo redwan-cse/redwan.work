@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { InteractiveCard, ScrollReveal } from '@/components/motion/reveal';
 import {
   PORTFOLIO_ITEMS,
@@ -247,18 +248,30 @@ export function PortfolioShowcase({
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
-                {activeStudy.externalUrl && (
-                  <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
-                    <Link
-                      href={activeStudy.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      View Research / Details
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                )}
+                <Button asChild variant="ghost" size="sm" className="gap-1.5 rounded-full">
+                  <Link
+                    href={`/portfolio/${'slug' in activeStudy && typeof activeStudy.slug === 'string' ? activeStudy.slug : activeStudy.id}`}
+                  >
+                    Full Case Study Page
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+                {(() => {
+                  const safeExternalUrl = trySanitizeHttpUrl(activeStudy.externalUrl);
+                  if (!safeExternalUrl) return null;
+                  return (
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
+                      <a
+                        href={safeExternalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View Research / Details
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  );
+                })()}
                 <Button asChild size="sm" className="gap-1.5 rounded-full">
                   <Link href={`/contact?service=${activeStudy.relatedServiceSlug}`}>
                     Start a Similar Engagement

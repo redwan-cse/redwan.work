@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { syncBloggerCacheAction } from '@/lib/admin/ops-actions';
 import { getBlogPostsPage } from '@/lib/blogger';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
 /**
  * Blogger feed sync console, rendered inline inside the Content Studio hub so the
@@ -77,7 +78,11 @@ export async function ContentBlogsPanel() {
                   </TableCell>
                   <TableCell className="text-right">
                     <Button asChild size="sm" variant="ghost" className="h-7 gap-1 text-xs">
-                      <a href={post.url} target="_blank" rel="noopener noreferrer">
+                      <a
+                        href={trySanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         View <ExternalLink className="h-3 w-3" />
                       </a>
                     </Button>
