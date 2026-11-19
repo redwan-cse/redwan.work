@@ -366,7 +366,7 @@ export default async function AdminInvoiceDetailPage({
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <FileMinus2 className="h-4 w-4 text-primary" />
-                  Issue Credit Note (CN-XXXX)
+                  Issue Credit Note (CRN-XXXX)
                 </CardTitle>
               </CardHeader>
               <CardContent>

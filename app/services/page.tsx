@@ -108,7 +108,7 @@ export default async function ServicesPage() {
                   Need a Custom Scope or Multi-Month Retainer?
                 </h2>
                 <p className="max-w-xl text-sm text-muted-foreground">
-                  Tell me what you are building or defending. You will receive a structured proposal (`PRP-1001`) with clear milestones, deliverables, and pricing.
+                  Tell me what you are building or defending. You will receive a structured proposal (PRP-1001) with clear milestones, deliverables, and pricing.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-3">

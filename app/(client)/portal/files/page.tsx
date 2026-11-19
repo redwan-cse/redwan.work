@@ -54,7 +54,7 @@ export default async function ClientVaultFilesPage({
             Encrypted Deliverables &amp; File Vault
           </h1>
           <p className="text-sm text-muted-foreground">
-            Download VAPT audit reports, source code archives, scope docs, and receipts via short-lived 120-second signed URLs.
+            Download VAPT audit reports, source code archives, scope docs, and receipts via short-lived 60-second signed URLs.
           </p>
         </div>
 

@@ -302,7 +302,6 @@ export async function publishConsentPolicyAction(formData: FormData): Promise<vo
     actorRole: 'admin',
     action: 'consent_policy.published',
     entityType: 'consent_policy',
-    entityId: archived.version,
     summary: `Published and activated consent policy ${archived.version} (${archived.hash.slice(0, 12)}…)`,
     metadata: { version: archived.version, hash: archived.hash },
   });

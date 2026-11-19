@@ -126,6 +126,23 @@ async function handleStorageRetentionCron(request: NextRequest) {
       .update({ status: 'expired' })
       .in('status', ['sent', 'viewed'])
       .lt('valid_until', todayDate);
+
+    // Renew active retainers due on or before today (ensures Vercel Cron triggers renewal even if pg_cron is disabled)
+    const { data: dueRetainers } = await admin
+      .from('retainer_plans')
+      .select('id')
+      .eq('status', 'active')
+      .lte('next_invoice_date', todayDate)
+      .limit(50);
+
+    if (Array.isArray(dueRetainers)) {
+      for (const ret of dueRetainers) {
+        await admin.rpc('renew_retainer_cycle_atomic', {
+          p_retainer_id: ret.id,
+          p_admin_id: undefined,
+        });
+      }
+    }
   } catch {
     // Non-fatal in isolated storage unit tests with mocked DB clients
   }

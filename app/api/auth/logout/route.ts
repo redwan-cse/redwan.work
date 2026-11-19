@@ -42,7 +42,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       secFetchSite === 'cross-site' ||
       (secFetchDest && secFetchDest !== 'document') ||
       (secFetchMode && secFetchMode !== 'navigate') ||
-      reason !== 'deactivated'
+      (reason !== 'deactivated' && reason !== 'session_invalid')
     ) {
       return NextResponse.json(
         { error: 'Method Not Allowed. Use POST /api/auth/logout.' },

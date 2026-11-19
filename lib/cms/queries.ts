@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
   CEH_VERIFICATION_URL,
@@ -1324,6 +1325,39 @@ export async function getSiteSettingsAndResume(options?: {
     return { settings: defaultSettings, items: DEFAULT_RESUME_ITEMS };
   }
 }
+
+export const getPublicContactChannels = (
+  typeof cache === 'function' ? cache : <T extends (...args: never[]) => unknown>(fn: T) => fn
+)(async function fetchPublicContactChannels(): Promise<{
+  whatsapp_number: string;
+  cal_com_url: string;
+}> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from('site_settings')
+      .select('whatsapp_number, cal_com_url')
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return {
+        whatsapp_number: SITE.whatsappNumber,
+        cal_com_url: SITE.calComUrl,
+      };
+    }
+
+    return {
+      whatsapp_number: data.whatsapp_number || SITE.whatsappNumber,
+      cal_com_url: data.cal_com_url || SITE.calComUrl,
+    };
+  } catch {
+    return {
+      whatsapp_number: SITE.whatsappNumber,
+      cal_com_url: SITE.calComUrl,
+    };
+  }
+});
 
 export interface ApprovedClientReview {
   id: string;

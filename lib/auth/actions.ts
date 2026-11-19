@@ -575,25 +575,6 @@ async function markInvitationAccepted(userId: string, email?: string | null): Pr
   }
 }
 
-export async function changeAuthenticatedPasswordAction(
-  _prev: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const checked = validatePasswordPair(formData);
-  if ('error' in checked) return checked;
-  const supabase = await createSupabaseServerClient();
-  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const sub = typeof claimsData?.claims?.sub === 'string' ? claimsData.claims.sub : null;
-  if (claimsError || !sub) {
-    return { error: 'Your session has expired. Please sign in again.' };
-  }
-  const updated = await supabase.auth.updateUser({ password: checked.password });
-  if (updated.error) {
-    return { error: 'Could not update your password. Please choose a different strong password.' };
-  }
-  return { notice: 'Your account password has been updated.' };
-}
-
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
   const tokenHash=String(formData.get('token_hash')??'');
   const pkceSession=String(formData.get('session')??'')==='1';
@@ -605,8 +586,41 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     const {data:sessionClaims,error:sessionClaimsErr}=await supabase.auth.getClaims();
     const claims=sessionClaims?.claims as Record<string, unknown> | undefined;
     const sub=typeof claims?.sub==='string'?claims.sub:null;
-    const emailClaim=typeof claims?.email==='string'?claims.email:null;
-    if(sessionClaimsErr||!sub)return {error:INVALID_LINK};
+    const emailClaim=typeof claims?.email==='string'?claims.email.trim().toLowerCase():null;
+    if(sessionClaimsErr||!sub||!emailClaim)return {error:INVALID_LINK};
+
+    const admin=getSupabaseAdmin();
+    const [{data:profile},{data:pendingInvite}]=await Promise.all([
+      admin.from('profiles').select('role, is_active').eq('id',sub).maybeSingle(),
+      admin
+        .from('client_invitations')
+        .select('id')
+        .eq('email',emailClaim)
+        .is('accepted_at',null)
+        .is('revoked_at',null)
+        .gt('expires_at',new Date().toISOString())
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if(!profile||profile.is_active!==true||profile.role!=='client'){
+      return {error:INVALID_LINK};
+    }
+
+    const amrEntries=Array.isArray(claims?.amr)?claims.amr:[];
+    const hasInviteAmr=amrEntries.some((entry)=>{
+      if(typeof entry==='string')return entry==='invite'||entry==='otp';
+      if(entry&&typeof entry==='object'){
+        const method=(entry as {method?:unknown}).method;
+        return method==='invite'||method==='otp';
+      }
+      return false;
+    });
+
+    if(!pendingInvite&&!hasInviteAmr){
+      return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
+    }
+
     const updated=await supabase.auth.updateUser({password:checked.password});
     if(updated.error){
       return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};

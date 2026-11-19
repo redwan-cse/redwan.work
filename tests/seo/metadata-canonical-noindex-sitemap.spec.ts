@@ -169,7 +169,12 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     expect(secondXml).toBe(firstXml);
 
     const locs = Array.from(firstXml.matchAll(/<loc>([^<]+)<\/loc>/g)).map((m) => m[1]);
-    expect(locs.length).toBe(PUBLIC_INDEXABLE_ROUTES.length);
+    expect(new Set(locs).size).toBe(locs.length);
+    for (const route of PUBLIC_INDEXABLE_ROUTES) {
+      expect(locs).toContain(route.expectedCanonical);
+    }
+    expect(locs.some((loc) => loc.startsWith(`${CANONICAL_ORIGIN}/services/`))).toBe(true);
+    expect(locs.some((loc) => loc.startsWith(`${CANONICAL_ORIGIN}/portfolio/`))).toBe(true);
 
     for (const loc of locs) {
       expect(loc.startsWith(CANONICAL_ORIGIN)).toBe(true);

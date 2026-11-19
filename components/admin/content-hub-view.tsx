@@ -160,9 +160,15 @@ export async function ContentHubView({
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Resume PDF URL</Label>
-                  <Input name="resume_pdf_url" aria-label="Resume PDF URL" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Website URL</Label>
+                    <Input name="website_url" aria-label="Website URL" defaultValue={resumeData.settings.website_url} className="h-9 font-mono text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Resume PDF URL</Label>
+                    <Input name="resume_pdf_url" aria-label="Resume PDF URL" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
+                  </div>
                 </div>
 
                 <div className="space-y-1">

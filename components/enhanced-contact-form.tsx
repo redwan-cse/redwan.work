@@ -1,13 +1,15 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Script from 'next/script';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+import type { CountryCode } from 'libphonenumber-js';
+import type { PolicyBundle } from '@/lib/contact/consent-policy';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +37,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Calendar } from "@/components/ui/calendar";
+const Calendar = dynamic(
+  () => import('@/components/ui/calendar').then((m) => m.Calendar),
+  { ssr: false }
+);
 import { Checkbox } from "@/components/ui/checkbox";
 import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react";
 import Link from "next/link";
@@ -110,11 +115,11 @@ function attachmentMime(filename: string, browserType?: string): string {
  * @param local - Local phone number digits only
  * @returns true if valid, error message string if invalid
  */
-function validateWhatsappNumber(
+async function validateWhatsappNumber(
   countryIso: string,
   callingCode: string,
   local: string
-): string | true {
+): Promise<string | true> {
   // If empty, it's valid (field is optional)
   if (!local.trim()) {
     return true;
@@ -127,15 +132,16 @@ function validateWhatsappNumber(
   const fullNumber = `${callingCode}${cleanLocal}`;
 
   try {
-    // Validate using libphonenumber-js
-    if (!isValidPhoneNumber(fullNumber, countryIso as any)) {
+    // Dynamically load libphonenumber-js only when validating a non-empty WhatsApp number
+    const { isValidPhoneNumber } = await import('libphonenumber-js');
+    if (!isValidPhoneNumber(fullNumber, countryIso as CountryCode)) {
       // Get country name for better error message
       const country = countries.find(c => c.code === countryIso);
       const countryName = country?.name || countryIso;
       return `Invalid phone number format for ${countryName}`;
     }
     return true;
-  } catch (error) {
+  } catch {
     // If parsing fails, return generic error
     const country = countries.find(c => c.code === countryIso);
     const countryName = country?.name || countryIso;
@@ -261,8 +267,10 @@ interface HiddenFields {
 
 export default function EnhancedContactForm({
   initialServices = SERVICE_CATALOG,
+  initialConsentPolicy = null,
 }: {
   initialServices?: ServiceCatalogItem[];
+  initialConsentPolicy?: PolicyBundle | null;
 }) {
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -294,7 +302,7 @@ export default function EnhancedContactForm({
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = React.useRef(false);
-  const { policy: consentPolicy, loading: policyLoading, error: policyError, refresh: refreshPolicy, replacePolicy } = useContactConsentPolicy();
+  const { policy: consentPolicy, loading: policyLoading, error: policyError, refresh: refreshPolicy, replacePolicy } = useContactConsentPolicy(initialConsentPolicy);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState('');
   const [selectedWhatsAppCountryCode, setSelectedWhatsAppCountryCode] = useState('');
@@ -728,7 +736,7 @@ export default function EnhancedContactForm({
    * Validates the form and returns validation results
    * @returns Object with isValid flag and array of missing field labels
    */
-  const validateForm = (): { isValid: boolean; errors: string[] } => {
+  const validateForm = async (): Promise<{ isValid: boolean; errors: string[] }> => {
     const newErrors: FormErrors = {};
     const missingFields: string[] = [];
 
@@ -788,7 +796,7 @@ export default function EnhancedContactForm({
     }
     // 2. If provided, validate using libphonenumber-js
     else if (formData.whatsAppNumber.trim()) {
-      const validationResult = validateWhatsappNumber(
+      const validationResult = await validateWhatsappNumber(
         selectedWhatsAppCountryCode || 'BD',
         formData.whatsAppCountryCode || '+880',
         formData.whatsAppNumber
@@ -868,7 +876,7 @@ export default function EnhancedContactForm({
     e.preventDefault();
     if (submittingRef.current || uploading || policyLoading) return;
 
-    const validation = validateForm();
+    const validation = await validateForm();
     
     if (!validation.isValid) {
       // Show validation dialog with missing fields

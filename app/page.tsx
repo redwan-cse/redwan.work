@@ -68,7 +68,7 @@ const ORDER_LIFECYCLE_STEPS = [
     step: '02',
     title: 'Portal Onboarding, Deposit & Signed RoE',
     description:
-      'Access your dedicated Client Portal (`ORD-1001`). Offensive security orders include digital Rules of Engagement (RoE) authorization before testing begins.',
+      'Access your dedicated Client Portal (ORD-1001). Offensive security orders include digital Rules of Engagement (RoE) authorization before testing begins.',
   },
   {
     step: '03',
@@ -80,7 +80,7 @@ const ORDER_LIFECYCLE_STEPS = [
     step: '04',
     title: 'Encrypted Vault Delivery & Retainer Care',
     description:
-      'Download versioned deliverables (`DLV-1001`) via SHA-256 verified signed links, approve final sign-off, and transition smoothly into long-term retainer support.',
+      'Download versioned deliverables (DLV-1001) via SHA-256 verified signed links, approve final sign-off, and transition smoothly into long-term retainer support.',
   },
 ];
 

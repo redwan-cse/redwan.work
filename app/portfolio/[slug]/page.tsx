@@ -6,6 +6,7 @@ import { getPublicPortfolioItems } from '@/lib/cms/queries';
 import { SERVICE_PILLARS, SITE } from '@/lib/content/site';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
 import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -116,13 +117,17 @@ export default async function PortfolioCaseStudyPage({
               View Related Service Package <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </Button>
-          {study.externalUrl && (
-            <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full">
-              <a href={study.externalUrl} target="_blank" rel="noopener noreferrer">
-                Reference / Source <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </Button>
-          )}
+          {(() => {
+            const safeExternalUrl = trySanitizeHttpUrl(study.externalUrl);
+            if (!safeExternalUrl) return null;
+            return (
+              <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full">
+                <a href={safeExternalUrl} target="_blank" rel="noopener noreferrer">
+                  Reference / Source <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
+            );
+          })()}
         </div>
       </div>
 

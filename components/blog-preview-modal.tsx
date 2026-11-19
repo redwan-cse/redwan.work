@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { isDirectBlogImage } from '@/lib/blog-image-policy';
 import type { BlogPost, BlogTocItem } from '@/lib/blogger';
-import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { cn } from '@/lib/utils';
 
 interface BlogPreviewModalProps {
@@ -58,7 +58,7 @@ export function BlogPreviewModal({
     if (!isControlled) setInternalOpen(next);
     onOpenChange?.(next);
   };
-  const safePostUrl = sanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work';
+  const safePostUrl = trySanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work';
   const numberedToc = numberTocItems(toc);
 
   return (

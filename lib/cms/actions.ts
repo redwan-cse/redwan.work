@@ -108,6 +108,7 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
+  revalidatePath('/admin/content');
 }
 
 export async function deleteServiceAction(formData: FormData): Promise<void> {
@@ -134,6 +135,7 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
+  revalidatePath('/admin/content');
 }
 
 export async function upsertServicePackageAction(formData: FormData): Promise<void> {
@@ -201,6 +203,7 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
+  revalidatePath('/admin/content');
 }
 
 export async function deleteServicePackageAction(formData: FormData): Promise<void> {
@@ -227,6 +230,7 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
   revalidatePath('/contact');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
+  revalidatePath('/admin/content');
 }
 
 // ============================================================================
@@ -314,6 +318,7 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
   revalidatePath('/portfolio');
   revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
+  revalidatePath('/admin/content');
 }
 
 export async function deletePortfolioItemAction(formData: FormData): Promise<void> {
@@ -338,6 +343,7 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
   revalidatePath('/portfolio');
   revalidatePath('/portfolio/[slug]', 'page');
   revalidatePath('/admin/portfolio');
+  revalidatePath('/admin/content');
 }
 
 // ============================================================================
@@ -371,9 +377,11 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   const githubUrl =
     sanitizeHttpUrl(String(formData.get('github_url') ?? '').trim(), { allowRelative: true }) ??
     '';
-  const websiteUrl =
-    sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim(), { allowRelative: true }) ??
-    '';
+  const hasWebsiteUrl = formData.has('website_url');
+  const websiteUrl = hasWebsiteUrl
+    ? (sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim(), { allowRelative: true }) ??
+      '')
+    : undefined;
   const rawResumePdfUrl = formData.get('resume_pdf_url');
   const resumePdfUrl =
     typeof rawResumePdfUrl === 'string' && rawResumePdfUrl.trim()
@@ -413,11 +421,14 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
     company_url: companyUrl,
     linkedin_url: linkedinUrl,
     github_url: githubUrl,
-    website_url: websiteUrl,
     research_interests: researchInterests,
     soft_skills: softSkills,
     other_skills: otherSkills,
   };
+
+  if (websiteUrl !== undefined) {
+    updatePayload.website_url = websiteUrl;
+  }
 
   if (resumePdfUrl) {
     updatePayload.resume_pdf_url = resumePdfUrl;
@@ -446,6 +457,7 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   revalidatePath('/llms-full.txt');
   revalidatePath('/contact');
   revalidatePath('/admin/resume');
+  revalidatePath('/admin/content');
 }
 
 export async function uploadResumePdfAction(formData: FormData): Promise<{
@@ -511,6 +523,7 @@ export async function uploadResumePdfAction(formData: FormData): Promise<{
     revalidatePath('/llms.txt');
     revalidatePath('/llms-full.txt');
     revalidatePath('/admin/resume');
+  revalidatePath('/admin/content');
 
     return {
       ok: true,
@@ -586,6 +599,7 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   revalidatePath('/llms.txt');
   revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');
+  revalidatePath('/admin/content');
 }
 
 export async function deleteResumeItemAction(formData: FormData): Promise<void> {
@@ -612,4 +626,5 @@ export async function deleteResumeItemAction(formData: FormData): Promise<void> 
   revalidatePath('/llms.txt');
   revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');
+  revalidatePath('/admin/content');
 }

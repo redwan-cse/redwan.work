@@ -340,7 +340,8 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
-  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+  const requiresRoe =
+    parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
   const rawPropStatus = String(formData.get('proposal_status') ?? 'sent').trim();
   const proposalStatus = rawPropStatus === 'draft' ? 'draft' : 'sent';
   const milestonesJsonRaw = String(formData.get('milestones_json') ?? '').trim();
@@ -545,6 +546,9 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const description = String(formData.get('description') ?? '').trim() || null;
   const pillar = (String(formData.get('pillar') ?? 'cybersecurity').trim() ||
     'cybersecurity') as ServicePillarKey;
+  const rawCurrency = String(formData.get('currency') ?? 'USD').trim().toUpperCase();
+  const currency =
+    rawCurrency === 'BDT' || rawCurrency === 'EUR' || rawCurrency === 'GBP' ? rawCurrency : 'USD';
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('deposit_percent') ?? 50))));
   const requiresRoe = parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
@@ -565,6 +569,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
     p_deposit_percent: depositPercent,
     p_requires_roe: requiresRoe,
     p_due_days: dueDays,
+    p_currency: currency,
   });
 
   if (rpcErr) {
@@ -903,95 +908,6 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   revalidatePath('/portal/files');
 }
 
-export async function postOrderMessageAction(formData: FormData): Promise<void> {
-  const session = await requireAuthenticatedSession();
-  const orderId = String(formData.get('order_id') ?? '').trim();
-  const body = String(formData.get('body') ?? '').trim();
-  const isInternalNote =
-    session.role === 'admin' && parseFormBoolean(formData, 'is_internal_note');
-
-  if (!orderId || !body) return;
-
-  const admin = getSupabaseAdmin();
-  const { data: order } = await admin
-    .from('orders')
-    .select('client_id, code, title')
-    .eq('id', orderId)
-    .maybeSingle();
-
-  if (!order) return;
-  if (session.role !== 'admin' && order.client_id !== session.userId) {
-    throw new Error('Forbidden.');
-  }
-
-  const fileId = await registerVaultAttachmentFromForm(admin, {
-    formData,
-    ownerClientId: order.client_id,
-    uploadedBy: session.userId,
-    category: 'order_attachment',
-    orderId,
-  });
-
-  const { error: msgErr } = await admin.from('order_messages').insert({
-    order_id: orderId,
-    author_id: session.userId,
-    body,
-    is_internal_note: isInternalNote,
-    attachment_file_ids: fileId ? [fileId] : [],
-  });
-  if (msgErr) {
-    throw new Error(msgErr.message);
-  }
-
-  if (!isInternalNote) {
-    if (session.role === 'admin') {
-      await createInAppNotification({
-        recipientId: order.client_id,
-        category: 'message',
-        title: `New message on ${order.code}`,
-        body: body.slice(0, 120),
-        href: `/portal/orders/${orderId}`,
-      });
-      const clientEmail = await lookupProfileEmail(order.client_id);
-      if (clientEmail) {
-        await enqueueTransactionalEmail({
-          toEmail: clientEmail,
-          template: 'order_message',
-          subject: `New Message on Order ${order.code} — ${order.title}`,
-          payload: {
-            message: body.slice(0, 400),
-            actionUrl: `${getSiteOrigin()}/portal/orders/${orderId}`,
-          },
-          entityType: 'order',
-          entityId: orderId,
-        });
-      }
-    } else {
-      await notifyAllAdmins({
-        category: 'message',
-        title: `Client reply on ${order.code}`,
-        body: body.slice(0, 120),
-        href: `/admin/orders/${orderId}`,
-      });
-      await enqueueTransactionalEmail({
-        toEmail: getAdminAlertEmail(),
-        template: 'order_message_admin',
-        subject: `Client Reply on Order ${order.code} — ${order.title}`,
-        payload: {
-          message: body.slice(0, 400),
-          actionUrl: `${getSiteOrigin()}/admin/orders/${orderId}`,
-        },
-        entityType: 'order',
-        entityId: orderId,
-      });
-    }
-  }
-
-  revalidatePath(`/admin/orders/${orderId}`);
-  revalidatePath(`/portal/orders/${orderId}`);
-  revalidatePath('/contact');
-}
-
 // =============================================================================
 // 3. ADMIN: INVOICES, PAYMENTS, CLIENT CRM & TICKETS
 // =============================================================================
@@ -1085,6 +1001,7 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
   }
 
   revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
   revalidatePath('/portal/invoices');
 }
 
@@ -1092,7 +1009,9 @@ export async function reviewPaymentProofAction(formData: FormData): Promise<void
   const session = await requireAdminSession();
   const paymentId = String(formData.get('payment_id') ?? '').trim();
   const decision = String(formData.get('decision') ?? '').trim();
-  const fxRate = Number(formData.get('fx_rate') ?? 1) || 1;
+  const rawFxStr = String(formData.get('fx_rate') ?? '').trim();
+  const parsedFx = rawFxStr ? Number(rawFxStr) : NaN;
+  const fxRate = Number.isFinite(parsedFx) && parsedFx > 0 ? parsedFx : undefined;
   const reason = String(formData.get('reason') ?? '').trim() || null;
 
   if (!paymentId || (decision !== 'confirmed' && decision !== 'rejected')) return;
@@ -1733,6 +1652,25 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
     if (hasCustomBudget && customBudgetUsd < 25) {
       throw new Error('Custom quote budgets must be at least USD 25.');
     }
+
+    const { data: consentControlRaw, error: consentCtrlErr } = await admin.rpc(
+      'contact_consent_control'
+    );
+    const consentObj =
+      consentControlRaw && typeof consentControlRaw === 'object' && !Array.isArray(consentControlRaw)
+        ? (consentControlRaw as {
+            activeVersion?: string;
+            policies?: Array<{ version?: string; hash?: string }>;
+          })
+        : null;
+    const activeConsentVersion = consentObj?.activeVersion?.trim() || '';
+    const activeConsentPolicy = (consentObj?.policies ?? []).find(
+      (p) => p?.version === activeConsentVersion
+    );
+    if (consentCtrlErr || !activeConsentVersion || !activeConsentPolicy?.hash) {
+      throw new Error('Could not verify active privacy consent policy. Please retry shortly.');
+    }
+
     const { data: inquiry, error: inqErr } = await admin
       .from('inquiries')
       .insert({
@@ -1749,6 +1687,10 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
           : (matchedService?.slug ?? serviceSlug),
         selected_package_tier: 'Custom',
         converted_client_id: session.userId,
+        consent_policy_version: activeConsentVersion,
+        consent_policy_hash: activeConsentPolicy.hash,
+        consent_capture_method: 'checkbox_v1',
+        consent_at: new Date().toISOString(),
         status: 'new',
       })
       .select('id, code')
@@ -1927,6 +1869,16 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
 
   if (!order || order.client_id !== session.userId) {
     throw new Error('Forbidden.');
+  }
+
+  const { data: existingReq } = await admin
+    .from('order_requirements')
+    .select('id, verified_by_admin_at')
+    .eq('order_id', orderId)
+    .maybeSingle();
+
+  if (existingReq?.verified_by_admin_at) {
+    throw new Error('Verified order requirements are locked and cannot be edited.');
   }
 
   const { error: reqErr } = await admin.from('order_requirements').upsert(
@@ -2352,6 +2304,15 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   revalidatePath('/admin/invoices');
 }
 
+const ALLOWED_TICKET_CATEGORIES = new Set([
+  'general',
+  'technical_support',
+  'security_incident',
+  'order_question',
+  'billing',
+  'retainer_request',
+]);
+
 export async function createClientTicketAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
   const subject = String(formData.get('subject') ?? '').trim();
@@ -2361,7 +2322,10 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     rawPriority === 'urgent' || rawPriority === 'high' || rawPriority === 'low'
       ? rawPriority
       : 'medium';
-  const rawCategory = String(formData.get('category') ?? 'general').trim() || 'general';
+  const candidateCategory = String(formData.get('category') ?? 'general').trim() || 'general';
+  const rawCategory = ALLOWED_TICKET_CATEGORIES.has(candidateCategory)
+    ? candidateCategory
+    : 'general';
   const orderId = String(formData.get('order_id') ?? '').trim() || null;
 
   if (!subject || !body) return;
@@ -2695,14 +2659,7 @@ export async function issueCreditNoteAction(formData: FormData): Promise<void> {
 
   if (invoice?.client_id) {
     const displayAmount = (amountCents / 100).toLocaleString();
-    await createInAppNotification({
-      recipientId: invoice.client_id,
-      category: 'invoice',
-      title: `Credit Note ${resultObj?.code ?? ''} Issued`,
-      body: `Applied ${invoice.currency} ${displayAmount} credit to invoice ${invoice.code ?? ''}.`,
-      href: `/portal/invoices/${invoiceId}`,
-    });
-
+    // Note: create_credit_note_atomic already inserts the in-app notification atomically.
     const clientEmail = await lookupProfileEmail(invoice.client_id);
     if (clientEmail) {
       await enqueueTransactionalEmail({
@@ -3069,13 +3026,7 @@ export async function createPaidRevisionInvoiceAction(formData: FormData): Promi
 
   if (order?.client_id) {
     const displayFee = (feeCents / 100).toLocaleString();
-    await createInAppNotification({
-      recipientId: order.client_id,
-      category: 'invoice',
-      title: `Revision Addendum Issued (${order.code})`,
-      body: `+${extraRevisions} revision round(s) · ${order.currency ?? 'USD'} ${displayFee}`,
-      href: created?.invoice_id ? `/portal/invoices/${created.invoice_id}` : `/portal/orders/${orderId}`,
-    });
+    // Note: create_paid_revision_invoice_atomic already inserts the in-app notification atomically.
     const clientEmail = await lookupProfileEmail(order.client_id);
     if (clientEmail) {
       await enqueueTransactionalEmail({
@@ -3264,13 +3215,7 @@ export async function resolveCancellationRequestAction(formData: FormData): Prom
   if (error) throw new Error(error.message);
 
   if (reqRow?.requested_by && reqRow.order_id) {
-    await createInAppNotification({
-      recipientId: reqRow.requested_by,
-      category: 'order',
-      title: `Cancellation Request ${decision === 'approved' ? 'Approved' : 'Declined'}`,
-      body: notes || `Your order cancellation request was ${decision}.`,
-      href: `/portal/orders/${reqRow.order_id}`,
-    });
+    // Note: resolve_order_cancellation_atomic already inserts the in-app notification atomically.
     const clientEmail = await lookupProfileEmail(reqRow.requested_by);
     if (clientEmail) {
       await enqueueTransactionalEmail({
@@ -3320,20 +3265,12 @@ export async function renewRetainerCycleAction(formData: FormData): Promise<void
 
   if (ret?.client_id) {
     const displayFee = (ret.monthly_fee_cents / 100).toLocaleString();
-    await createInAppNotification({
-      recipientId: ret.client_id,
-      category: 'invoice',
-      title: `Retainer Renewed: ${ret.title}`,
-      body: resultObj?.invoice_code
-        ? `Issued ${resultObj.invoice_code} (${ret.currency} ${displayFee})`
-        : 'Cycle hours reset for the new billing period.',
-      href: resultObj?.invoice_id ? `/portal/invoices/${resultObj.invoice_id}` : '/portal/retainers',
-    });
+    // Note: renew_retainer_cycle_atomic already inserts the in-app notification atomically.
     const clientEmail = await lookupProfileEmail(ret.client_id);
     if (clientEmail && resultObj?.invoice_id) {
       await enqueueTransactionalEmail({
         toEmail: clientEmail,
-        template: 'invoice_issued',
+        template: 'retainer_renewed',
         subject: `Retainer Cycle Invoice ${resultObj.invoice_code ?? ''} — ${ret.title}`,
         payload: {
           message: `Your retainer (${ret.title}) rolled into the new cycle (${resultObj.period_start ?? 'today'}) and invoice ${resultObj.invoice_code ?? ''} for ${ret.currency} ${displayFee} has been issued.`,
@@ -3512,12 +3449,28 @@ export async function generateMilestoneInvoiceAction(formData: FormData): Promis
     throw new Error('Milestone amount must be greater than zero to generate an invoice.');
   }
 
+  const invoiceCurrency = milestone.currency || order.currency || 'USD';
+  let inheritedFxRate = 1;
+  if (invoiceCurrency !== 'USD') {
+    const { data: latestFxInv } = await admin
+      .from('invoices')
+      .select('fx_rate_to_usd')
+      .eq('order_id', order.id)
+      .eq('currency', invoiceCurrency)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestFxInv?.fx_rate_to_usd && Number(latestFxInv.fx_rate_to_usd) > 0) {
+      inheritedFxRate = Number(latestFxInv.fx_rate_to_usd);
+    }
+  }
+
   const { data: rpcRes, error } = await admin.rpc('create_draft_invoice_multi_atomic', {
     p_client_id: order.client_id,
     p_order_id: order.id,
     p_milestone_id: milestone.id,
-    p_currency: milestone.currency || order.currency || 'USD',
-    p_fx_rate_to_usd: 1,
+    p_currency: invoiceCurrency,
+    p_fx_rate_to_usd: inheritedFxRate,
     p_discount_cents: 0,
     p_tax_rate_bps: 0,
     p_due_days: 7,
@@ -3776,14 +3729,15 @@ export async function deleteDeliverableOrVaultFileAction(formData: FormData): Pr
   revalidatePath('/portal/files');
 }
 
-const ALLOWED_NOTE_TYPES = new Set(['general', 'call', 'followup', 'risk', 'win']);
+const ALLOWED_NOTE_TYPES = new Set(['general', 'call_log', 'followup', 'preference']);
 
 export async function addTypedClientNoteAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const clientId = String(formData.get('client_id') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
   const rawNoteType = String(formData.get('note_type') ?? 'general').trim();
-  const noteType = ALLOWED_NOTE_TYPES.has(rawNoteType) ? rawNoteType : 'general';
+  const normalizedNoteType = rawNoteType === 'call' ? 'call_log' : rawNoteType;
+  const noteType = ALLOWED_NOTE_TYPES.has(normalizedNoteType) ? normalizedNoteType : 'general';
   const isPinned = parseFormBoolean(formData, 'is_pinned');
   const followupDate = String(formData.get('followup_date') ?? '').trim() || null;
 

@@ -190,7 +190,12 @@ export function ServicesShowcase({
                       </span>
                     </div>
                     <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                      {service.title}
+                      <Link
+                        href={`/services/${service.slug}`}
+                        className="transition-colors hover:text-primary"
+                      >
+                        {service.title}
+                      </Link>
                     </h2>
                     <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
                       {service.description}

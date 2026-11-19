@@ -134,6 +134,18 @@ export function sanitizeHttpUrl(
   return trimmed;
 }
 
+/** Non-throwing variant of sanitizeHttpUrl for UI rendering (returns null on invalid/unsafe schemes). */
+export function trySanitizeHttpUrl(
+  raw: string | null | undefined,
+  options?: { allowRelative?: boolean }
+): string | null {
+  try {
+    return sanitizeHttpUrl(raw, options);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Decide which origin an auth callback should redirect to.
  *

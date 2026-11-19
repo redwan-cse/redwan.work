@@ -119,7 +119,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
         if (state.error) return unavailable(response);
         inactive = state.data === 'inactive';
       }
-      if (inactive) logout.searchParams.set('reason', 'deactivated');
+      if (inactive) {
+        logout.searchParams.set('reason', 'deactivated');
+      } else {
+        logout.searchParams.set('reason', 'session_invalid');
+      }
       return withNoIndex(carry(response, NextResponse.redirect(logout)));
     }
 

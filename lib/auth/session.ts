@@ -15,6 +15,7 @@ interface ClaimsLike {
   sub?: string;
   email?: string;
   aal?: string;
+  iat?: number;
   app_metadata?: Record<string, unknown>;
 }
 
@@ -42,11 +43,18 @@ async function resolveCurrentSession(): Promise<SessionInfo | null> {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, is_active, mfa_enforced, full_name, email')
+      .select('role, is_active, mfa_enforced, tokens_valid_after, full_name, email')
       .eq('id', claims.sub)
       .maybeSingle();
 
     if (profileError || !profile || profile.is_active !== true) {
+      return null;
+    }
+
+    const tokensValidAfter = Number(
+      (profile as { tokens_valid_after?: number | null }).tokens_valid_after ?? 0
+    );
+    if (tokensValidAfter > 0 && typeof claims.iat === 'number' && claims.iat < tokensValidAfter) {
       return null;
     }
 
@@ -61,6 +69,25 @@ async function resolveCurrentSession(): Promise<SessionInfo | null> {
       }
       if (claims.aal !== 'aal2') {
         return null;
+      }
+    } else if (role === 'client') {
+      const mfaApi = (
+        supabase.auth as {
+          mfa?: {
+            getAuthenticatorAssuranceLevel?: () => Promise<{
+              data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+            }>;
+          };
+        }
+      ).mfa;
+      if (mfaApi?.getAuthenticatorAssuranceLevel) {
+        const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
+        if (
+          aalRes?.data?.nextLevel === 'aal2' &&
+          aalRes?.data?.currentLevel !== 'aal2'
+        ) {
+          return null;
+        }
       }
     }
 
