@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NextRequest } from 'next/server';
@@ -75,6 +76,7 @@ import { POST as postOrderMessage } from '@/app/api/orders/[id]/messages/route';
 import { POST as logoutPost } from '@/app/api/auth/logout/route';
 import { parsePublicConsentPolicy } from '@/lib/contact/consent-client';
 import { archivePolicy } from '@/lib/contact/consent-policy';
+import { checkPasswordLeakedHibp } from '@/lib/auth/hibp';
 
 describe('PR #15 Adversarial Review Regression Suite', () => {
   beforeEach(() => {
@@ -593,5 +595,34 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
     );
     expect(contactFormSource).toContain("await import('libphonenumber-js')");
     expect(contactFormSource).not.toMatch(/import\s*\{[^}]*isValidPhoneNumber[^}]*\}\s*from\s*['"]libphonenumber-js['"]/);
+
+    // 5. Verify Free-Tier HaveIBeenPwned (HIBP) k-anonymity password breach detection
+    const offlineBreach = await checkPasswordLeakedHibp('password123456');
+    expect(offlineBreach.leaked).toBe(true);
+
+    const testPass = 'PwnedSecret!2026';
+    const expectedSha1 = createHash('sha1').update(testPass, 'utf8').digest('hex').toUpperCase();
+    const expectedPrefix = expectedSha1.slice(0, 5);
+    const expectedSuffix = expectedSha1.slice(5);
+
+    const mockedHibpFetch = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(`https://api.pwnedpasswords.com/range/${expectedPrefix}`);
+      return new Response(
+        `00000000000000000000000000000000000:0\r\n${expectedSuffix}:42\r\n`,
+        { status: 200 }
+      );
+    }) as unknown as typeof fetch;
+
+    const remoteBreach = await checkPasswordLeakedHibp(testPass, {
+      fetchImpl: mockedHibpFetch,
+      forceRemoteCheck: true,
+    });
+    expect(remoteBreach).toEqual({ leaked: true, count: 42 });
+
+    const cleanPassword = await checkPasswordLeakedHibp('UniqueUnbreached!2026#Redwan', {
+      fetchImpl: vi.fn(async () => new Response('00000000000000000000000000000000000:0\r\n', { status: 200 })) as unknown as typeof fetch,
+      forceRemoteCheck: true,
+    });
+    expect(cleanPassword).toEqual({ leaked: false, count: 0 });
   });
 });

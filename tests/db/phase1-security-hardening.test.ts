@@ -473,5 +473,25 @@ describe('Phase 1 P0 DB Security Hardening & Invariants', () => {
     expect(actionsSeen).not.toContain('ticket.replied');
     expect(actionsSeen).not.toContain('proposal.draft_saved');
     expect(actionsSeen).not.toContain('invoice.draft_created');
+
+    // 6. Verify 0029 Supabase Free-Tier advisor invariants:
+    //    - contact_consent_control is SECURITY INVOKER (prosecdef = false)
+    //    - 0 public tables with RLS enabled but no policy
+    //    - 0 public policies with bare un-cached auth.uid()
+    const advisorCheck = await pg.db.query<{
+      consent_secdef: boolean;
+      tables_without_policy: number;
+      bare_auth_uid_policies: number;
+    }>(
+      `select
+         (select p.prosecdef from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'contact_consent_control' limit 1) as consent_secdef,
+         (select count(*)::int from pg_tables t where t.schemaname = 'public' and t.rowsecurity is true and not exists (select 1 from pg_policies pol where pol.schemaname = 'public' and pol.tablename = t.tablename)) as tables_without_policy,
+         (select count(*)::int from pg_policies where schemaname = 'public' and ((qual is not null and qual like '%auth.uid()%' and qual not like '%SELECT auth.uid()%' and qual not like '%select auth.uid()%') or (with_check is not null and with_check like '%auth.uid()%' and with_check not like '%SELECT auth.uid()%' and with_check not like '%select auth.uid()%'))) as bare_auth_uid_policies`
+    );
+    expect(advisorCheck.rows[0]).toEqual({
+      consent_secdef: false,
+      tables_without_policy: 0,
+      bare_auth_uid_policies: 0,
+    });
   });
 });

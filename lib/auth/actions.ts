@@ -1,6 +1,7 @@
 'use server';
 import {redirect} from 'next/navigation';
 import {headers, cookies} from 'next/headers';
+import {checkPasswordLeakedHibp, LEAKED_PASSWORD_ERROR} from '@/lib/auth/hibp';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
@@ -133,10 +134,13 @@ async function credentialEmailOrigin():Promise<string|null> {
   }
  }catch{return null;}
 }
-function validatePasswordPair(formData:FormData):{error:string}|{password:string} {
+async function validatePasswordPair(formData:FormData):Promise<{error:string}|{password:string}> {
  const password=String(formData.get('password')??''),confirm=String(formData.get('confirm')??'');
  if(password.length<MIN_PASSWORD)return {error:`Password must be at least ${MIN_PASSWORD} characters.`};
- if(password!==confirm)return {error:'Passwords do not match.'};return {password};
+ if(password!==confirm)return {error:'Passwords do not match.'};
+ const hibp=await checkPasswordLeakedHibp(password);
+ if(hibp.leaked)return {error:LEAKED_PASSWORD_ERROR};
+ return {password};
 }
 async function checkPasswordSignInRateLimit(_email?:string):Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;
@@ -222,7 +226,7 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
  if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
   return {error:'Please enter a valid email address.'};
  }
- const checked=validatePasswordPair(formData);
+ const checked=await validatePasswordPair(formData);
  if('error' in checked)return checked;
  if(!await checkRegistrationRateLimit()){
   return {error:'Too many registration attempts from this network. Please wait and try again.'};
@@ -455,7 +459,7 @@ async function consumeAtomicRetryClaim(
 
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
   const tokenHash=String(formData.get('token_hash')??'');
-  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
+  const checked=await validatePasswordPair(formData);if('error' in checked)return checked;
   const supabase=await createSupabaseServerClient();
 
   // PKCE callback recovery path: user already holds an active recovery session exchanged at /auth/callback
@@ -579,7 +583,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
   const tokenHash=String(formData.get('token_hash')??'');
   const pkceSession=String(formData.get('session')??'')==='1';
   if(!tokenHash&&!pkceSession)return {error:INVALID_LINK};
-  const checked=validatePasswordPair(formData);if('error' in checked)return checked;
+  const checked=await validatePasswordPair(formData);if('error' in checked)return checked;
   const supabase=await createSupabaseServerClient();
 
   if(!tokenHash&&pkceSession){

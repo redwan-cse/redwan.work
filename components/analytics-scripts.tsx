@@ -49,6 +49,47 @@ function pushConsentSignals(analyticsGranted: boolean) {
   }
 }
 
+function bootstrapAnalyticsRuntime(gaId: string | null, clarityId: string | null) {
+  if (typeof window === 'undefined') return;
+  if (typeof navigator !== 'undefined' && navigator.webdriver === true) return;
+
+  const w = window as WindowWithAnalytics;
+  const granted = allowsAnalyticsStorage();
+  const state = granted ? 'granted' : 'denied';
+
+  if (gaId) {
+    w.dataLayer = w.dataLayer || [];
+    if (typeof w.gtag !== 'function') {
+      w.gtag = function gtag(...args: unknown[]) {
+        w.dataLayer?.push(args);
+      };
+    }
+    w.gtag('consent', 'default', {
+      analytics_storage: state,
+      ad_storage: 'denied',
+      ad_user_data: 'denied',
+      ad_personalization: 'denied',
+      wait_for_update: 500,
+    });
+    w.gtag('js', new Date());
+    w.gtag('config', gaId, {});
+  }
+
+  if (clarityId) {
+    if (typeof w.clarity !== 'function') {
+      const clarityQueueFn = ((...args: unknown[]) => {
+        clarityQueueFn.q = clarityQueueFn.q || [];
+        clarityQueueFn.q.push(args);
+      }) as ((...args: unknown[]) => void) & { q?: unknown[] };
+      w.clarity = clarityQueueFn;
+    }
+    w.clarity('consentv2', {
+      ad_Storage: 'denied',
+      analytics_Storage: state,
+    });
+  }
+}
+
 export function trackAnalyticsEvent(
   eventName: string,
   params?: Record<string, string | number | boolean>
@@ -67,6 +108,8 @@ export function AnalyticsScripts() {
 
   React.useEffect(() => {
     if (!gaId && !clarityId) return;
+
+    bootstrapAnalyticsRuntime(gaId, clarityId);
 
     // Sync live consent changes immediately whenever the visitor saves or updates choices
     const onConsentChange = (event: Event) => {
@@ -92,37 +135,23 @@ export function AnalyticsScripts() {
 
   if (!gaId && !clarityId) return null;
 
-  const gaBootstrapScript = gaId
-    ? `(function(){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=window.gtag||gtag;var granted=true;try{var raw=window.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}gtag('consent','default',{analytics_storage:granted?'granted':'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});gtag('js',new Date());gtag('config',${JSON.stringify(gaId)},{});}catch(e){}})();`
-    : null;
-
-  const clarityBootstrapScript = clarityId
-    ? `(function(c,l,a,r,i,t,y){try{if(typeof navigator!=='undefined'&&navigator.webdriver===true)return;c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};var granted=true;try{var raw=c.localStorage.getItem('redwan_work_cookie_preferences_v1');if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.essential===true&&typeof parsed.analytics==='boolean'){granted=parsed.analytics;}else if(parsed&&parsed.experience===false){granted=false;}}}catch(e){}c[a]('consentv2',{ad_Storage:'denied',analytics_Storage:granted?'granted':'denied'});t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);}catch(e){}})(window,document,'clarity','script',${JSON.stringify(clarityId)});`
-    : null;
-
   return (
     <>
-      {gaId && gaBootstrapScript && (
-        <>
-          <Script id="ga4-consent-bootstrap" strategy="afterInteractive">
-            {gaBootstrapScript}
-          </Script>
-          <Script
-            id="ga4-gtag-src"
-            src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`}
-            strategy="afterInteractive"
-            onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
-          />
-        </>
-      )}
-      {clarityId && clarityBootstrapScript && (
+      {gaId && (
         <Script
-          id="ms-clarity-loader"
+          id="ga4-gtag-src"
+          src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`}
           strategy="afterInteractive"
           onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
-        >
-          {clarityBootstrapScript}
-        </Script>
+        />
+      )}
+      {clarityId && (
+        <Script
+          id="ms-clarity-loader"
+          src={`https://www.clarity.ms/tag/${encodeURIComponent(clarityId)}`}
+          strategy="afterInteractive"
+          onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
+        />
       )}
     </>
   );

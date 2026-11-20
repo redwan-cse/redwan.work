@@ -5,6 +5,7 @@ import {createClient} from '@supabase/supabase-js';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {getCurrentSession} from '@/lib/auth/session';
+import {checkPasswordLeakedHibp, LEAKED_PASSWORD_ERROR} from '@/lib/auth/hibp';
 import {sha256Hex} from '@/lib/contact/lead-schema';
 
 export type PasswordChangeState = {
@@ -50,6 +51,8 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
   if(typeof password!=='string'||password.length<12||password.length>4096)return denied('New password must contain between 12 and 4096 characters.');
   if(typeof confirm!=='string'||password!==confirm)return denied('Passwords do not match.');
   if(password===current)return denied('Choose a different new password.');
+  const hibp=await checkPasswordLeakedHibp(password);
+  if(hibp.leaked)return denied(LEAKED_PASSWORD_ERROR);
   let phase:'authority'|'verification'|'update'|'changed'='authority';
   try{
     const actor=await getCurrentSession();

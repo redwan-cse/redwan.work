@@ -48,9 +48,13 @@ describe('blogger HTML-to-plaintext sanitization (CodeQL Alert #1)', () => {
       <p>Hardening Linux <strong>ksmbd</strong> endpoints against pre-auth remote execution.</p>
       <div class="code-block-header"><span>bash</span><button>Copy</button></div>
       <script>console.log('ignored');</script>
+      <script type="text/javascript">window.__pwn = 1;</script >
+      <style media="all">.malformed-close { display: none; }</style\t bar="1">
     `;
     const plain = stripHtmlToPlainText(bloggerHtml);
     expect(plain).not.toContain('.code-block-wrap');
+    expect(plain).not.toContain('.malformed-close');
+    expect(plain).not.toContain('window.__pwn');
     expect(plain).not.toContain('margin:');
     expect(plain).not.toContain('Copy');
     expect(plain).not.toContain('console.log');
