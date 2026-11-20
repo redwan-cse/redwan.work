@@ -407,26 +407,93 @@ export function extractFirstImage(content: string): string {
  * neither encoded tags (`&lt;script&gt;`) nor nested fragments (`<scr<script>ipt>`)
  * can survive as markup, while `&amp;lt;` remains literal `&lt;`.
  */
-const NON_PROSE_BLOCK_PATTERNS: RegExp[] = [
-  /<style\b[^>]*>[\s\S]*?<\/style>/gi,
-  /<script\b[^>]*>[\s\S]*?<\/script>/gi,
-  /<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi,
-  /<svg\b[^>]*>[\s\S]*?<\/svg>/gi,
-  /<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>[\s\S]*?<\/nav>/gi,
-  /<div\b[^>]*class=["'][^"']*code-block-header[^"']*["'][^>]*>[\s\S]*?<\/div>/gi,
-  /<a\b[^>]*class=["'][^"']*heading-anchor[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
+const NON_PROSE_TAG_NAMES = ["style", "script", "noscript", "svg"] as const;
+
+const NON_PROSE_CHROME_PATTERNS: RegExp[] = [
+  /<nav\b[^>]*class=["'][^"']*table-of-contents[^"']*["'][^>]*>[\s\S]*?<\/nav\b[^>]*>/gi,
+  /<div\b[^>]*class=["'][^"']*code-block-header[^"']*["'][^>]*>[\s\S]*?<\/div\b[^>]*>/gi,
+  /<a\b[^>]*class=["'][^"']*heading-anchor[^"']*["'][^>]*>[\s\S]*?<\/a\b[^>]*>/gi,
 ];
+
+function isTagNameBoundary(ch: string | undefined): boolean {
+  return (
+    ch === undefined ||
+    ch === ">" ||
+    ch === "/" ||
+    ch === " " ||
+    ch === "\t" ||
+    ch === "\n" ||
+    ch === "\r" ||
+    ch === "\f"
+  );
+}
+
+/**
+ * Deterministically strips `<tagName ...>...</tagName ...>` blocks (including malformed closing tags
+ * such as `</script >` or unclosed trailing blocks) without relying on tag-filtering regexes.
+ */
+function removeElementBlocksByTagName(input: string, tagName: string): string {
+  const lower = input.toLowerCase();
+  const openToken = `<${tagName}`;
+  const closeToken = `</${tagName}`;
+  let cursor = 0;
+  let result = "";
+
+  while (cursor < input.length) {
+    const openIdx = lower.indexOf(openToken, cursor);
+    if (openIdx === -1) {
+      result += input.slice(cursor);
+      break;
+    }
+
+    const afterOpen = lower[openIdx + openToken.length];
+    if (!isTagNameBoundary(afterOpen)) {
+      result += input.slice(cursor, openIdx + openToken.length);
+      cursor = openIdx + openToken.length;
+      continue;
+    }
+
+    result += input.slice(cursor, openIdx) + " ";
+    const openEnd = lower.indexOf(">", openIdx + openToken.length);
+    if (openEnd === -1) {
+      break;
+    }
+
+    let searchFrom = openEnd + 1;
+    let closedAt = -1;
+    while (searchFrom < input.length) {
+      const closeIdx = lower.indexOf(closeToken, searchFrom);
+      if (closeIdx === -1) break;
+      const afterClose = lower[closeIdx + closeToken.length];
+      if (isTagNameBoundary(afterClose)) {
+        const closeEnd = lower.indexOf(">", closeIdx + closeToken.length);
+        closedAt = closeEnd === -1 ? input.length : closeEnd + 1;
+        break;
+      }
+      searchFrom = closeIdx + closeToken.length;
+    }
+
+    if (closedAt === -1) {
+      break;
+    }
+    cursor = closedAt;
+  }
+
+  return result;
+}
 
 function stripNonProseBlocks(html: string, includeTocNav: boolean = true): string {
   let cleaned = html;
-  const patterns = includeTocNav
-    ? NON_PROSE_BLOCK_PATTERNS
-    : NON_PROSE_BLOCK_PATTERNS.slice(0, 4);
 
   for (let pass = 0; pass < 20; pass += 1) {
     let next = cleaned;
-    for (const pattern of patterns) {
-      next = next.replace(pattern, " ");
+    for (const tag of NON_PROSE_TAG_NAMES) {
+      next = removeElementBlocksByTagName(next, tag);
+    }
+    if (includeTocNav) {
+      for (const pattern of NON_PROSE_CHROME_PATTERNS) {
+        next = next.replace(pattern, " ");
+      }
     }
     if (next === cleaned) break;
     cleaned = next;
