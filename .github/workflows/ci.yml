@@ -38,7 +38,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Test the quality gate itself (not the application)
-        run: node --test scripts/verify-quality-contract.test.mjs
+        run: node --test scripts/verify-quality-contract.test.mjs scripts/run-quality-suite.test.mjs
       - name: Generate Next route types
         run: ./node_modules/.bin/next typegen
       - name: Typecheck

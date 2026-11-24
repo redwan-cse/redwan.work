@@ -1,0 +1,3 @@
+# Verified false positive in historical commit 328cb46: plain English cookie-banner UI copy
+# flagged by generic-api-key rule during full-history scheduled scans.
+328cb46bbcc8fef9f453edf5ec2706db812201b4:components/cookie-preferences.tsx:generic-api-key:221
