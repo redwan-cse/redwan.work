@@ -1,5 +1,5 @@
 // lib/blogger.ts
-import { google } from "googleapis";
+import crypto from "node:crypto";
 
 export interface BlogPost {
   id: string;
@@ -10,6 +10,9 @@ export interface BlogPost {
   author?: string;
   labels?: string[];
 }
+
+/** Client-safe summary passed across the RSC boundary without raw HTML bodies. */
+export type BlogPostSummary = Omit<BlogPost, "content">;
 
 export interface BlogTocItem {
   level: 2 | 3;
@@ -31,12 +34,15 @@ export interface BlogPostsPage {
  * - Between FRESH_TTL (60s) and STALE_TTL (10m): served immediately while a non-blocking
  *   background refresh fetches the latest Blogger posts for subsequent visits.
  *
- * NOTE: unstable_cache is intentionally avoided here (it breaks with googleapis/gaxios
- * under Next.js 16 + Turbopack).
+ * Uses native Node `crypto` RS256 JWT signing + `fetch()` against Blogger REST v3
+ * (zero `googleapis` bundle overhead).
  */
 const BLOGGER_FRESH_TTL_MS = 60_000;
 const BLOGGER_STALE_TTL_MS = 10 * 60_000;
 const MAX_CACHE_ENTRIES = 50;
+const BLOGGER_API_TIMEOUT_MS = 10_000;
+const GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const BLOGGER_READONLY_SCOPE = "https://www.googleapis.com/auth/blogger.readonly";
 
 interface CacheEntry {
   data: BlogPostsPage;
@@ -52,13 +58,96 @@ interface RawSnapshot {
   staleUntil: number;
 }
 
+interface AccessTokenCacheEntry {
+  accessToken: string;
+  expiresAt: number;
+}
+
+export interface BloggerJwtAuth {
+  email: string;
+  privateKey: string;
+  scopes: string[];
+  getAccessToken: () => Promise<string>;
+}
+
 const blogCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<BlogPostsPage>>();
+const tokenCache = new Map<string, AccessTokenCacheEntry>();
 let cacheGeneration = 0;
 let snapshotVersion = 0;
 
 let rawPostsSnapshot: RawSnapshot | null = null;
 let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> | null = null;
+
+function base64UrlEncode(input: Buffer | string): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function signServiceAccountJwt(email: string, privateKey: string, scopes: string[]): string {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      iss: email,
+      scope: scopes.join(" "),
+      aud: GOOGLE_OAUTH_TOKEN_URL,
+      iat: nowSec,
+      exp: nowSec + 3600,
+    })
+  );
+  const signingInput = `${header}.${payload}`;
+  const signer = crypto.createSign("RSA-SHA256");
+  signer.update(signingInput);
+  signer.end();
+  const signature = base64UrlEncode(signer.sign(privateKey));
+  return `${signingInput}.${signature}`;
+}
+
+async function exchangeJwtForAccessToken(
+  email: string,
+  privateKey: string,
+  scopes: string[]
+): Promise<string> {
+  const cacheKey = `${email}:${scopes.join(",")}`;
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.accessToken;
+  }
+
+  const assertion = signServiceAccountJwt(email, privateKey, scopes);
+  const body = new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    assertion,
+  });
+
+  const response = await fetch(GOOGLE_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(BLOGGER_API_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google OAuth token exchange failed (${response.status})`);
+  }
+
+  const json = (await response.json()) as { access_token?: string; expires_in?: number };
+  if (!json.access_token) {
+    throw new Error("Google OAuth token response missing access_token");
+  }
+
+  const ttlSec = Number.isFinite(json.expires_in) && (json.expires_in ?? 0) > 60 ? Number(json.expires_in) : 3300;
+  tokenCache.set(cacheKey, {
+    accessToken: json.access_token,
+    expiresAt: Date.now() + ttlSec * 1000,
+  });
+
+  return json.access_token;
+}
 
 function sweepExpiredCache(now: number) {
   for (const [key, entry] of blogCache.entries()) {
@@ -89,7 +178,7 @@ export function clearBlogCache() {
   rawPostsInFlight = null;
 }
 
-export function createBloggerAuthFromBase64(encodedCredentials: string) {
+export function createBloggerAuthFromBase64(encodedCredentials: string): BloggerJwtAuth | null {
   const credentialsJSON = Buffer.from(encodedCredentials, "base64").toString("utf-8");
   const credentials = JSON.parse(credentialsJSON) as {
     client_email?: unknown;
@@ -105,11 +194,13 @@ export function createBloggerAuthFromBase64(encodedCredentials: string) {
     return null;
   }
 
-  return new google.auth.JWT({
+  const scopes = [BLOGGER_READONLY_SCOPE];
+  return {
     email: clientEmail,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/blogger.readonly"],
-  });
+    privateKey,
+    scopes,
+    getAccessToken: () => exchangeJwtForAccessToken(clientEmail, privateKey, scopes),
+  };
 }
 
 function createBloggerClient() {
@@ -127,7 +218,7 @@ function createBloggerClient() {
 
   return {
     blogId: BLOG_ID,
-    blogger: google.blogger({ version: "v3", auth }),
+    auth,
   };
 }
 
@@ -140,6 +231,15 @@ interface BloggerPostItem {
   published?: string | null;
   author?: { displayName?: string | null } | null;
   labels?: string[] | null;
+}
+
+interface BloggerBlogMetaResponse {
+  posts?: { totalItems?: number };
+}
+
+interface BloggerPostsListResponse {
+  items?: BloggerPostItem[];
+  nextPageToken?: string;
 }
 
 function mapPost(post: BloggerPostItem): BlogPost {
@@ -159,6 +259,21 @@ const MAX_POSTS_FETCH = 300;
 
 // Blogger caps a single posts.list response well below this
 const POSTS_PER_API_CALL = 100;
+
+async function fetchBloggerJson<T>(url: string, accessToken: string): Promise<T> {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(BLOGGER_API_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`Blogger API request failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}
 
 async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
   const fixtureRaw = process.env.BLOGGER_FIXTURE_POSTS_JSON;
@@ -183,41 +298,49 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
     return { items: [], totalItems: 0, isCapped: false };
   }
 
+  const accessToken = await client.auth.getAccessToken();
+  const baseUrl = `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(client.blogId)}`;
+
   const allItems: BloggerPostItem[] = [];
   let pageToken: string | undefined;
   let isCapped = false;
 
   // Fetch blog metadata in parallel with page 1 of posts.list to save a network RTT.
-  const blogMetaPromise =
-    typeof client.blogger.blogs?.get === 'function'
-      ? client.blogger.blogs.get({ blogId: client.blogId }).catch(() => null)
-      : Promise.resolve(null);
+  const blogMetaPromise = fetchBloggerJson<BloggerBlogMetaResponse>(baseUrl, accessToken).catch(
+    () => null
+  );
 
   do {
     const remaining = MAX_POSTS_FETCH - allItems.length;
     if (remaining <= 0) break;
 
-    const response = await client.blogger.posts.list({
-      blogId: client.blogId,
-      maxResults: Math.min(remaining, POSTS_PER_API_CALL),
-      pageToken,
-      fetchImages: true,
-      status: ['live'],
+    const query = new URLSearchParams({
+      maxResults: String(Math.min(remaining, POSTS_PER_API_CALL)),
+      fetchImages: "true",
+      status: "live",
     });
+    if (pageToken) {
+      query.set("pageToken", pageToken);
+    }
 
-    const items = (response.data.items ?? []) as BloggerPostItem[];
+    const data = await fetchBloggerJson<BloggerPostsListResponse>(
+      `${baseUrl}/posts?${query.toString()}`,
+      accessToken
+    );
+
+    const items = (data.items ?? []) as BloggerPostItem[];
     allItems.push(...items);
-    if (allItems.length >= MAX_POSTS_FETCH && response.data.nextPageToken) {
+    if (allItems.length >= MAX_POSTS_FETCH && data.nextPageToken) {
       isCapped = true;
       pageToken = undefined;
     } else {
-      pageToken = response.data.nextPageToken ?? undefined;
+      pageToken = data.nextPageToken ?? undefined;
     }
   } while (pageToken);
 
   let totalItems = allItems.length;
   const blogMeta = await blogMetaPromise;
-  const metaCount = Number(blogMeta?.data?.posts?.totalItems);
+  const metaCount = Number(blogMeta?.posts?.totalItems);
   if (Number.isSafeInteger(metaCount) && metaCount > 0) {
     if (metaCount > MAX_POSTS_FETCH) {
       isCapped = true;

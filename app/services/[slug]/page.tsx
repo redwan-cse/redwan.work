@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CheckCircle2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { getPublicPortfolioItems, getPublicServicesCatalog } from '@/lib/cms/queries';
-import { SERVICE_PILLARS, SITE } from '@/lib/content/site';
+import { SERVICE_CATALOG, SERVICE_PILLARS, SITE } from '@/lib/content/site';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
 import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const revalidate = 300;
+
+export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
+  try {
+    const services = await getPublicServicesCatalog();
+    if (services.length > 0) {
+      return services.map((service) => ({ slug: service.slug }));
+    }
+  } catch {
+    // Fall back to canonical catalog slugs during offline static builds.
+  }
+  return SERVICE_CATALOG.map((service) => ({ slug: service.slug }));
+}
 
 export async function generateMetadata({
   params,

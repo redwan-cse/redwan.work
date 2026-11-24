@@ -15,12 +15,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { isDirectBlogImage } from '@/lib/blog-image-policy';
-import type { BlogPost, BlogTocItem } from '@/lib/blogger';
+import type { BlogPostSummary, BlogTocItem } from '@/lib/blogger';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { cn } from '@/lib/utils';
 
 interface BlogPreviewModalProps {
-  post: BlogPost;
+  post: BlogPostSummary;
   imageUrl: string;
   excerpt: string;
   readingMinutes?: number;

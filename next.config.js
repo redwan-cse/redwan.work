@@ -65,7 +65,10 @@ const r2PublicPattern = (() => {
 })();
 const nextConfig = {
   // Framework limit only. The hosting platform has a separate request ceiling.
-  experimental: { serverActions: { bodySizeLimit: '12mb' } },
+  experimental: {
+    serverActions: { bodySizeLimit: '12mb' },
+    optimizePackageImports: ['lucide-react', 'date-fns'],
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [

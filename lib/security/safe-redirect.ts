@@ -24,10 +24,12 @@ export function sanitizeRelativeRedirectPath(raw: unknown): string | null {
   } catch {
     return null;
   }
+  const decodedRawPath = decodedRaw.split(/[?#]/)[0] ?? decodedRaw;
   if (
     !decodedRaw.startsWith('/') ||
     decodedRaw.startsWith('//') ||
-    hasControlOrBackslash(decodedRaw)
+    hasControlOrBackslash(decodedRaw) ||
+    decodedRawPath.split('/').includes('..')
   ) {
     return null;
   }

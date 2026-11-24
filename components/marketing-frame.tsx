@@ -1,7 +1,6 @@
 import { Navigation } from '@/components/navigation';
 import { Footer } from '@/components/footer';
 import { BackToTop } from '@/components/back-to-top';
-import { BlogPreloader } from '@/components/blog-preloader';
 import { CookiePreferences } from '@/components/cookie-preferences';
 import { AnalyticsScripts } from '@/components/analytics-scripts';
 
@@ -21,7 +20,6 @@ export function MarketingFrame({ children }: { children: React.ReactNode }) {
       </main>
       <Footer />
       <BackToTop />
-      <BlogPreloader />
       <CookiePreferences />
       <AnalyticsScripts />
     </div>

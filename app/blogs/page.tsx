@@ -10,7 +10,6 @@ import {
   BLOG_FIRST_PAGE_COUNT,
   BLOG_GRID_PER_PAGE,
   extractBlogToc,
-  extractExcerpt,
   extractFirstImage,
   getBlogPaginationMeta,
   getBlogPostsPage,
@@ -66,8 +65,7 @@ export async function generateMetadata({
   });
 }
 
-function estimateReadingMinutes(html: string): number {
-  const plain = stripHtmlToPlainText(html);
+function estimateReadingMinutesFromPlainText(plain: string): number {
   const words = plain ? plain.split(/\s+/).length : 0;
   return Math.max(2, Math.ceil(words / 200));
 }
@@ -91,13 +89,20 @@ export default async function BlogsPage({
   const { totalPages, startIndex } = getBlogPaginationMeta(totalPosts, currentPage);
   const endIndex = startIndex + allPosts.length;
 
-  const enrichedPosts: EnrichedBlogPost[] = allPosts.map((post) => ({
-    post,
-    imageUrl: extractFirstImage(post.content),
-    excerpt: extractExcerpt(post.content, 240),
-    readingMinutes: estimateReadingMinutes(post.content),
-    toc: extractBlogToc(post.content),
-  }));
+  // Strip raw HTML bodies (`content`) before crossing the RSC -> Client boundary
+  // and compute plain text once per post for both excerpt and reading-time estimate.
+  const enrichedPosts: EnrichedBlogPost[] = allPosts.map((post) => {
+    const { content, ...postSummary } = post;
+    const plain = stripHtmlToPlainText(content);
+    const excerpt = plain.length > 240 ? `${plain.slice(0, 240)}...` : plain;
+    return {
+      post: postSummary,
+      imageUrl: extractFirstImage(content),
+      excerpt,
+      readingMinutes: estimateReadingMinutesFromPlainText(plain),
+      toc: extractBlogToc(content),
+    };
+  });
 
   const structuredData = [
     buildBreadcrumbJsonLd([
