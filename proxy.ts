@@ -56,7 +56,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   try {
     const { data, error } = await supabase.auth.getClaims();
     const claims = data?.claims as
-      | { sub?: string; aal?: string; app_metadata?: Record<string, unknown> }
+      | { sub?: string; aal?: string; iat?: number; app_metadata?: Record<string, unknown> }
       | undefined;
     const userId = claims?.sub;
 
@@ -100,7 +100,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
     const profile = await supabase
       .from('profiles')
-      .select('role, is_active, mfa_enforced')
+      .select('role, is_active, mfa_enforced, tokens_valid_after')
       .eq('id', userId)
       .maybeSingle();
 
@@ -109,8 +109,14 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const role = profile.data?.role;
     const home = panelHome(role);
     const validAdminClaim = role !== 'admin' || claims?.app_metadata?.role === 'admin';
+    const tokensValidAfter = Number(
+      (profile.data as { tokens_valid_after?: number | null } | null)?.tokens_valid_after ?? 0
+    );
+    const tokenRevoked =
+      tokensValidAfter > 0 &&
+      (typeof claims?.iat !== 'number' || !Number.isFinite(claims.iat) || claims.iat < tokensValidAfter);
 
-    if (!home || !profile.data || profile.data.is_active !== true || !validAdminClaim) {
+    if (!home || !profile.data || profile.data.is_active !== true || !validAdminClaim || tokenRevoked) {
       if (pathname === '/login' || pathname === '/register') return withNoIndex(response);
       const logout = new URL('/api/auth/logout', request.url);
       let inactive = profile.data?.is_active === false;
@@ -132,20 +138,36 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
     let clientNeedsMfa = false;
     if (role === 'client') {
-      const mfaApi = (
-        supabase.auth as {
-          mfa?: {
-            getAuthenticatorAssuranceLevel?: () => Promise<{
-              data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
-            }>;
-          };
+      if (profile.data.mfa_enforced === true && claims?.aal !== 'aal2') {
+        clientNeedsMfa = true;
+      } else {
+        const mfaApi = (
+          supabase.auth as {
+            mfa?: {
+              getAuthenticatorAssuranceLevel?: () => Promise<{
+                data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+                error?: unknown;
+              }>;
+            };
+          }
+        ).mfa;
+        if (mfaApi?.getAuthenticatorAssuranceLevel) {
+          const aalRes = await mfaApi.getAuthenticatorAssuranceLevel();
+          if (aalRes?.error) {
+            const errStatus =
+              typeof (aalRes.error as { status?: unknown }).status === 'number'
+                ? (aalRes.error as { status: number }).status
+                : 0;
+            if (errStatus === 401 || errStatus === 403) {
+              const logout = new URL('/api/auth/logout?reason=session_invalid', request.url);
+              return withNoIndex(carry(response, NextResponse.redirect(logout)));
+            }
+            return unavailable(response);
+          }
+          clientNeedsMfa = Boolean(
+            aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2'
+          );
         }
-      ).mfa;
-      if (mfaApi?.getAuthenticatorAssuranceLevel) {
-        const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
-        clientNeedsMfa = Boolean(
-          aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2'
-        );
       }
     }
 

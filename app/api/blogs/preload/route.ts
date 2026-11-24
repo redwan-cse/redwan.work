@@ -5,27 +5,66 @@ import {
   getBlogPaginationMeta,
   getBlogPostsPage,
 } from '@/lib/blogger';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
+import { resolveTrustedIp } from '@/lib/security/trusted-ip';
+import { blogsPreloadQuerySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
-const MAX_PRELOAD_PAGE = 50;
+const PRELOAD_HEADERS = {
+  'Cache-Control': 'private, no-store, max-age=0',
+  'X-Robots-Tag': 'noindex, nofollow',
+};
+
+const memWindow = new Map<string, number[]>();
+function allowMemoryBurst(ip: string): boolean {
+  const cutoff = Date.now() - 60_000;
+  if (memWindow.size >= 2000) memWindow.clear();
+  const recent = (memWindow.get(ip) ?? []).filter((t) => t > cutoff);
+  if (recent.length >= 30) return false;
+  memWindow.set(ip, [...recent, Date.now()]);
+  return true;
+}
 
 export async function GET(request: NextRequest) {
-  const rawPage = request.nextUrl.searchParams.get('page');
-  const parsed = rawPage === null ? 1 : Number(rawPage);
-
-  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > MAX_PRELOAD_PAGE) {
+  const ip = resolveTrustedIp(request.headers);
+  if (!allowMemoryBurst(ip)) {
     return NextResponse.json(
-      { ok: false, error: 'Invalid page parameter' },
-      {
-        status: 400,
-        headers: {
-          'Cache-Control': 'private, no-store',
-          'X-Robots-Tag': 'noindex, nofollow',
-        },
-      }
+      { ok: false, error: 'Too many preload requests.' },
+      { status: 429, headers: PRELOAD_HEADERS }
     );
   }
+
+  if (
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.SUPABASE_SECRET_KEY &&
+    process.env.LEAD_IP_HASH_SALT
+  ) {
+    try {
+      const allowed = await consumeRateLimit('blogs-preload', ip, 30, 60);
+      if (!allowed) {
+        return NextResponse.json(
+          { ok: false, error: 'Too many preload requests.' },
+          { status: 429, headers: PRELOAD_HEADERS }
+        );
+      }
+    } catch {
+      // Fall back to in-memory burst cap if DB rate limiter is unavailable on read-only blog preload
+    }
+  }
+
+  const rawPage = request.nextUrl.searchParams.get('page');
+  const parsedResult = blogsPreloadQuerySchema.safeParse({
+    page: rawPage === null ? 1 : rawPage,
+  });
+
+  if (!parsedResult.success || (rawPage !== null && !/^\d+$/.test(rawPage.trim()))) {
+    return NextResponse.json(
+      { ok: false, error: 'Invalid page parameter' },
+      { status: 400, headers: PRELOAD_HEADERS }
+    );
+  }
+  const parsed = parsedResult.data.page;
 
   const pageData = await getBlogPostsPage(
     parsed,
@@ -41,12 +80,6 @@ export async function GET(request: NextRequest) {
       totalItems: pageData.totalItems,
       totalPages,
     },
-    {
-      status: 200,
-      headers: {
-        'Cache-Control': 'private, no-store',
-        'X-Robots-Tag': 'noindex, nofollow',
-      },
-    }
+    { status: 200, headers: PRELOAD_HEADERS }
   );
 }

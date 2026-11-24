@@ -5,6 +5,7 @@ import { getCurrentSession } from '@/lib/auth/session';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { getPrivateObjectBytes, isR2Configured } from '@/lib/r2';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { recoveryExportQuerySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +23,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Private R2 storage is not configured.' }, { status: 503 });
   }
 
-  const orderId = (request.nextUrl.searchParams.get('order_id') ?? '').trim();
-  if (!orderId) {
-    return NextResponse.json({ error: 'Missing order_id parameter.' }, { status: 400 });
+  const parsedOrder = recoveryExportQuerySchema.safeParse({
+    order_id: request.nextUrl.searchParams.get('order_id') ?? '',
+  });
+  if (!parsedOrder.success) {
+    return NextResponse.json({ error: 'Invalid or missing order_id parameter.' }, { status: 400 });
   }
+  const orderId = parsedOrder.data.order_id;
 
   const admin = getSupabaseAdmin();
   const [{ data: order }, { data: files }] = await Promise.all([

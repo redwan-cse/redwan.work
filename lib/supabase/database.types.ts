@@ -1294,6 +1294,7 @@ export type Database = {
           description: string | null
           discount_cents: number
           due_at: string | null
+          fx_rate_to_usd: number
           id: string
           inquiry_id: string | null
           is_custom_deal: boolean
@@ -1334,6 +1335,7 @@ export type Database = {
           description?: string | null
           discount_cents?: number
           due_at?: string | null
+          fx_rate_to_usd?: number
           id?: string
           inquiry_id?: string | null
           is_custom_deal?: boolean
@@ -1374,6 +1376,7 @@ export type Database = {
           description?: string | null
           discount_cents?: number
           due_at?: string | null
+          fx_rate_to_usd?: number
           id?: string
           inquiry_id?: string | null
           is_custom_deal?: boolean
@@ -1726,6 +1729,7 @@ export type Database = {
           deposit_percent: number
           discount_cents: number
           estimated_days: number
+          fx_rate_to_usd: number
           id: string
           inquiry_id: string | null
           number: number
@@ -1760,6 +1764,7 @@ export type Database = {
           deposit_percent?: number
           discount_cents?: number
           estimated_days?: number
+          fx_rate_to_usd?: number
           id?: string
           inquiry_id?: string | null
           number?: number
@@ -1794,6 +1799,7 @@ export type Database = {
           deposit_percent?: number
           discount_cents?: number
           estimated_days?: number
+          fx_rate_to_usd?: number
           id?: string
           inquiry_id?: string | null
           number?: number
@@ -2595,6 +2601,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      publish_consent_policy_atomic: {
+        Args: {
+          p_admin_id?: string | null
+          p_canonical: string
+          p_hash: string
+          p_version: string
+        }
+        Returns: Json
+      }
       record_manual_payment_atomic: {
         Args: {
           p_admin_id: string
@@ -2607,7 +2622,11 @@ export type Database = {
         Returns: Json
       }
       renew_retainer_cycle_atomic: {
-        Args: { p_admin_id?: string | null; p_retainer_id: string }
+        Args: {
+          p_admin_id?: string | null
+          p_force?: boolean
+          p_retainer_id: string
+        }
         Returns: Json
       }
       resolve_order_cancellation_atomic: {
@@ -2639,6 +2658,7 @@ export type Database = {
         Returns: Json
       }
       run_auto_accept_deliverables: { Args: never; Returns: number }
+      run_daily_crm_maintenance: { Args: never; Returns: Json }
       send_draft_invoice_atomic: {
         Args: { p_admin_id?: string | null; p_invoice_id: string }
         Returns: Json

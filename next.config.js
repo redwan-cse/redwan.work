@@ -15,19 +15,30 @@ const supabaseOrigin = (() => {
 })();
 const supabaseWsOrigin = supabaseOrigin ? supabaseOrigin.replace(/^http/, 'ws') : null;
 const isDev = process.env.NODE_ENV !== 'production';
+const isHttpsProduction =
+  !isDev &&
+  process.env.TEST_ENVIRONMENT !== 'isolated-ci' &&
+  (process.env.NEXT_PUBLIC_SITE_URL ?? '').startsWith('https://');
+const supabaseConnect = supabaseOrigin
+  ? `${supabaseOrigin}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}`
+  : 'https://*.supabase.co wss://*.supabase.co';
+const r2Connect = r2Origins.length
+  ? r2Origins.join(' ')
+  : 'https://*.r2.cloudflarestorage.com';
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://challenges.cloudflare.com https://www.googletagmanager.com https://www.clarity.ms https://scripts.clarity.ms`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https:",
   "font-src 'self' data:",
-  `connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.clarity.ms https://c.bing.com${supabaseOrigin ? ` ${supabaseOrigin}` : ''}${supabaseWsOrigin ? ` ${supabaseWsOrigin}` : ''}${r2Origins.length ? ` ${r2Origins.join(' ')}` : ''}`,
+  `connect-src 'self' https://challenges.cloudflare.com ${supabaseConnect} ${r2Connect} https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.clarity.ms https://c.bing.com`,
   'frame-src https://challenges.cloudflare.com',
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  ...(isHttpsProduction ? ['upgrade-insecure-requests'] : []),
 ].join('; ');
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: csp },
@@ -36,6 +47,9 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=(), payment=()' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
 ];
 const r2PublicPattern = (() => {
   const raw = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL;
@@ -76,15 +90,23 @@ const nextConfig = {
       { source: '/admin/:path*', headers: privateNoStoreHeaders },
       { source: '/portal', headers: privateNoStoreHeaders },
       { source: '/portal/:path*', headers: privateNoStoreHeaders },
-      { source: '/api/:path*', headers: noindexHeader },
+      { source: '/api/auth/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/admin/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/contact', headers: privateNoStoreHeaders },
+      { source: '/api/contact/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/cron/:path*', headers: privateNoStoreHeaders },
       { source: '/api/files/:path*', headers: privateNoStoreHeaders },
       { source: '/api/orders/:path*', headers: privateNoStoreHeaders },
-      { source: '/login', headers: noindexHeader },
-      { source: '/register', headers: noindexHeader },
+      { source: '/api/uploads/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/blogs/:path*', headers: privateNoStoreHeaders },
+      { source: '/api/revalidate', headers: privateNoStoreHeaders },
+      { source: '/api/:path*', headers: noindexHeader },
+      { source: '/login', headers: privateNoStoreHeaders },
+      { source: '/register', headers: privateNoStoreHeaders },
       { source: '/mfa', headers: privateNoStoreHeaders },
-      { source: '/reset-password', headers: noindexHeader },
-      { source: '/auth/:path*', headers: noindexHeader },
-      { source: '/invite/:path*', headers: noindexHeader },
+      { source: '/reset-password', headers: privateNoStoreHeaders },
+      { source: '/auth/:path*', headers: privateNoStoreHeaders },
+      { source: '/invite/:path*', headers: privateNoStoreHeaders },
     ];
   },
 };

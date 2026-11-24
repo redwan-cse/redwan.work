@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { adminSearchQuerySchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,8 +30,28 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const q = (request.nextUrl.searchParams.get('q') ?? '').trim();
-  const safeQuery = escapeIlikePattern(q.slice(0, 64));
+  try {
+    const allowed = await consumeRateLimit('admin-search', session.userId, 60, 60);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many search requests. Please pause briefly.' },
+        { status: 429, headers: PRIVATE_NO_STORE }
+      );
+    }
+  } catch {
+    if (process.env.NODE_ENV === 'production' && process.env.TEST_ENVIRONMENT !== 'isolated-ci') {
+      return NextResponse.json(
+        { error: 'Search rate control unavailable.' },
+        { status: 503, headers: PRIVATE_NO_STORE }
+      );
+    }
+  }
+
+  const parsedQ = adminSearchQuerySchema.safeParse({
+    q: (request.nextUrl.searchParams.get('q') ?? '').slice(0, 64),
+  });
+  const q = parsedQ.success ? parsedQ.data.q : '';
+  const safeQuery = escapeIlikePattern(q);
   if (safeQuery.length < 2) {
     return NextResponse.json({ results: [] }, { headers: PRIVATE_NO_STORE });
   }

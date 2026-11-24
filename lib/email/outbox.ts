@@ -129,6 +129,7 @@ export async function drainEmailOutbox(
           subject: item.subject,
           html: htmlBody,
         }),
+        signal: AbortSignal.timeout(10000),
       });
 
       const rawText = await response.text();

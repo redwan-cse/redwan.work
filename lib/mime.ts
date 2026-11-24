@@ -46,8 +46,22 @@ export function validateMagicBytes(bytes: Uint8Array, mime: string): boolean {
       return startsWith([0xff, 0xd8, 0xff]);
     case 'image/webp':
       return asciiAt(0, 'RIFF') && asciiAt(8, 'WEBP');
-    case 'image/avif':
-      return asciiAt(4, 'ftyp');
+    case 'image/avif': {
+      if (!asciiAt(4, 'ftyp') || bytes.length < 12) return false;
+      const boxSize = Math.min(
+        bytes.length,
+        ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0 || bytes.length
+      );
+      const limit = Math.max(12, Math.min(boxSize, 64));
+      const avifBrands = ['avif', 'avis', 'mif1'];
+      // Major brand at offset 8..11
+      if (avifBrands.some((brand) => asciiAt(8, brand))) return true;
+      // Compatible brands start at offset 16 (4-byte chunks after 4-byte minor_version)
+      for (let off = 16; off + 4 <= limit; off += 4) {
+        if (avifBrands.some((brand) => asciiAt(off, brand))) return true;
+      }
+      return false;
+    }
     case 'application/zip':
     case 'application/x-zip-compressed':
     case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':

@@ -4,8 +4,28 @@ import { parseConsentedLeadPayload } from '@/lib/contact/consent-intake';
 import { readConsentControl } from '@/lib/contact/consent-control';
 import type { PolicyBundle } from '@/lib/contact/consent-policy';
 import { insertLead } from '@/lib/contact/lead-store';
-import { verifyStoredObjectSize } from '@/lib/r2';
+import { validateMagicBytes } from '@/lib/mime';
+import { getPrivateObjectHeadBytes, verifyStoredObjectSize } from '@/lib/r2';
+import { resolveTrustedIp } from '@/lib/security/trusted-ip';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+
+function isAllowedTurnstileHostname(hostname: unknown): boolean {
+  if (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.TEST_ENVIRONMENT === 'isolated-ci' ||
+    !process.env.NEXT_PUBLIC_SITE_URL
+  ) {
+    return true;
+  }
+  if (typeof hostname !== 'string' || !hostname.trim()) return false;
+  try {
+    const base = new URL(process.env.NEXT_PUBLIC_SITE_URL).hostname.toLowerCase().replace(/^www\./, '');
+    const actual = hostname.trim().toLowerCase();
+    return actual === base || actual === `www.${base}`;
+  } catch {
+    return true;
+  }
+}
 
 export const dynamic = 'force-dynamic';
 const WINDOW_SECONDS = 3600;
@@ -88,7 +108,7 @@ export async function POST(request: NextRequest) {
     if (!developmentBypass && (typeof token !== 'string' || !token || token.length > 2048)) {
       return NextResponse.json({ error: 'Verification failed. Please complete the security check.' }, { status: 400 });
     }
-    const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'unknown';
+    const ip = resolveTrustedIp(request.headers);
     const ipHash = await sha256Hex(salt + ip);
     const parsed = await parseConsentedLeadPayload(form, { ipHash, userAgent: request.headers.get('user-agent') });
     if (!parsed.ok) {
@@ -110,8 +130,8 @@ export async function POST(request: NextRequest) {
           method: 'POST', body, signal: AbortSignal.timeout(10000),
         });
         if (!response.ok) return unavailable();
-        const validation: unknown = await response.json();
-        if (!validation || typeof validation !== 'object' || !('success' in validation) || validation.success !== true) {
+        const validation = (await response.json()) as { success?: unknown; hostname?: unknown } | null;
+        if (!validation || typeof validation !== 'object' || validation.success !== true || !isAllowedTurnstileHostname(validation.hostname)) {
           return NextResponse.json({ error: 'Security verification failed. Please try again.' }, { status: 400 });
         }
       } catch { console.error('Contact verification unavailable.'); return unavailable(); }
@@ -122,6 +142,10 @@ export async function POST(request: NextRequest) {
     for (const attachment of parsed.lead.attachments) {
       if (!await verifyStoredObjectSize(attachment.key, attachment.size_bytes)) {
         return NextResponse.json({ error: 'Attachment data is invalid. Please re-upload your files.' }, { status: 400 });
+      }
+      const headBytes = await getPrivateObjectHeadBytes(attachment.key, 64);
+      if (!headBytes || !validateMagicBytes(headBytes, attachment.mime)) {
+        return NextResponse.json({ error: 'Attachment file signature does not match its declared file type.' }, { status: 400 });
       }
     }
     const stored = await insertLead(parsed.lead);

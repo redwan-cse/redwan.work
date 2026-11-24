@@ -573,6 +573,7 @@ export async function startLoopbackServices(options = {}) {
         userId: claims.sub,
         email: claims.email,
         aal: claims.aal || 'aal1',
+        iat: typeof claims.iat === 'number' ? claims.iat : undefined,
         appRole: claims.app_metadata?.role || null,
       };
     }
@@ -1222,8 +1223,23 @@ export async function startLoopbackServices(options = {}) {
         const authHeader = req.headers['authorization'] || '';
         const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
         const claims = verifyJwtToken(bearer);
-        if (claims?.session_id && sessionsById.has(claims.session_id)) {
-          sessionsById.get(claims.session_id).revoked = true;
+        const scope = url.searchParams.get('scope') || 'global';
+        if (claims?.sub) {
+          if (scope === 'others') {
+            for (const [sid, sess] of sessionsById.entries()) {
+              if (sess.userId === claims.sub && sid !== claims.session_id) {
+                sess.revoked = true;
+              }
+            }
+          } else if (scope === 'global') {
+            for (const sess of sessionsById.values()) {
+              if (sess.userId === claims.sub) {
+                sess.revoked = true;
+              }
+            }
+          } else if (claims.session_id && sessionsById.has(claims.session_id)) {
+            sessionsById.get(claims.session_id).revoked = true;
+          }
         }
         res.writeHead(204);
         res.end();

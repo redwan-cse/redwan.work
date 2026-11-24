@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBearer } from '@/lib/auth/bearer';
 import { clearBlogCache } from '@/lib/blogger';
+import { revalidateQuerySchema } from '@/lib/validation/schemas';
 
 /**
  * API Route for On-Demand Revalidation
@@ -31,14 +32,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const path = request.nextUrl.searchParams.get('path') || '/blogs';
+  const parsedPath = revalidateQuerySchema.safeParse({
+    path: request.nextUrl.searchParams.get('path') || '/blogs',
+  });
 
-  if (!ALLOWED_PATHS.has(path)) {
+  if (!parsedPath.success || !ALLOWED_PATHS.has(parsedPath.data.path)) {
     return NextResponse.json(
       { message: `Path not allowed. Allowed paths: ${Array.from(ALLOWED_PATHS).join(', ')}` },
       { status: 400 }
     );
   }
+  const path = parsedPath.data.path;
 
   try {
     revalidatePath(path);

@@ -11,6 +11,7 @@ import {
   presignPrivatePut,
 } from '@/lib/r2';
 import { extFromFilename, isAllowedMime, PORTAL_ALLOWED, resolveMimeType } from '@/lib/mime';
+import { portalPresignRequestSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,23 +61,27 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as {
-      filename?: string;
-      mime?: string;
-      mimeType?: string;
-      size?: number;
-      category?: string;
-      clientId?: string;
-      orderId?: string | null;
-    };
+    const rawBody = await request.json();
+    const parsed = portalPresignRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      const sizeIssue = parsed.error.issues.find((i) => i.path[0] === 'size');
+      if (sizeIssue) {
+        return NextResponse.json(
+          { error: 'File size must be between 1 byte and 100 MB.' },
+          { status: 400 }
+        );
+      }
+      return NextResponse.json({ error: 'Invalid upload parameters.' }, { status: 400 });
+    }
 
-    const filename = typeof body.filename === 'string' ? body.filename.trim() : '';
+    const body = parsed.data;
+    const filename = body.filename;
     const mime = resolveMimeType(filename, body.mime ?? body.mimeType);
-    const size = typeof body.size === 'number' ? body.size : 0;
-    const category = typeof body.category === 'string' ? body.category : 'deliverable';
-    const orderId = typeof body.orderId === 'string' ? body.orderId.trim() : '';
+    const size = body.size;
+    const category = body.category;
+    const orderId = body.orderId ?? '';
 
-    if (!filename || filename.length > 255 || !ALLOWED_CATEGORIES.has(category)) {
+    if (!ALLOWED_CATEGORIES.has(category)) {
       return NextResponse.json({ error: 'Invalid upload parameters.' }, { status: 400 });
     }
 

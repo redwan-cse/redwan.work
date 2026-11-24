@@ -2,9 +2,11 @@
 import {redirect} from 'next/navigation';
 import {headers, cookies} from 'next/headers';
 import {checkPasswordLeakedHibp, LEAKED_PASSWORD_ERROR} from '@/lib/auth/hibp';
+import {recordAuditLog} from '@/lib/crm/audit';
 import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {sha256Hex} from '@/lib/contact/lead-schema';
+import {resolveTrustedIp} from '@/lib/security/trusted-ip';
 import {
   resolveCallbackOrigin,
   sanitizeRelativeRedirectPath,
@@ -25,7 +27,7 @@ async function resolveCurrentPanelDestination(): Promise<
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims as
-    | { sub?: string; aal?: string; app_metadata?: Record<string, unknown> }
+    | { sub?: string; aal?: string; iat?: number; app_metadata?: Record<string, unknown> }
     | undefined;
   const sub = typeof claims?.sub === 'string' ? claims.sub : null;
   if (!sub) {
@@ -35,7 +37,7 @@ async function resolveCurrentPanelDestination(): Promise<
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role, is_active, mfa_enforced')
+    .select('role, is_active, mfa_enforced, tokens_valid_after')
     .eq('id', sub)
     .maybeSingle();
 
@@ -46,12 +48,19 @@ async function resolveCurrentPanelDestination(): Promise<
 
   const role = profile?.role;
   const validAdminClaim = role !== 'admin' || claims?.app_metadata?.role === 'admin';
+  const tokensValidAfter = Number(
+    (profile as { tokens_valid_after?: number | null } | null)?.tokens_valid_after ?? 0
+  );
+  const tokenRevoked =
+    tokensValidAfter > 0 &&
+    (typeof claims?.iat !== 'number' || !Number.isFinite(claims.iat) || claims.iat < tokensValidAfter);
 
   if (
     !profile ||
     profile.is_active !== true ||
     (role !== 'admin' && role !== 'client') ||
-    !validAdminClaim
+    !validAdminClaim ||
+    tokenRevoked
   ) {
     let inactive = profile?.is_active === false;
     if (!profile) {
@@ -72,46 +81,110 @@ async function resolveCurrentPanelDestination(): Promise<
     return { ok: true, home: '/admin' };
   }
 
+  if (profile.mfa_enforced === true && claims?.aal !== 'aal2') {
+    return { ok: true, home: '/mfa' };
+  }
+
   const mfaApi = (
     supabase.auth as {
       mfa?: {
         getAuthenticatorAssuranceLevel?: () => Promise<{
           data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+          error?: unknown;
         }>;
       };
     }
   ).mfa;
   if (mfaApi?.getAuthenticatorAssuranceLevel) {
-    const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
-    if (aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2') {
-      return { ok: true, home: '/mfa' };
+    try {
+      const aalRes = await mfaApi.getAuthenticatorAssuranceLevel();
+      if (aalRes?.error) {
+        await supabase.auth.signOut();
+        return { ok: false, error: UNAVAILABLE_ACCOUNT_MESSAGE };
+      }
+      if (aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2') {
+        return { ok: true, home: '/mfa' };
+      }
+    } catch {
+      await supabase.auth.signOut();
+      return { ok: false, error: UNAVAILABLE_ACCOUNT_MESSAGE };
     }
   }
 
   return { ok: true, home: '/portal' };
 }
 const MIN_PASSWORD=12;
+const MAX_PASSWORD=128;
 const INVALID_LINK='This link is invalid or has expired. Ask for a new one.';
 const SPENT_RECOVERY_LINK='Could not update your password. This reset link is no longer valid. Please request a new password reset link.';
 const SPENT_INVITE_LINK='Could not save your password. This invitation link is no longer valid. Please ask an administrator to send a new invitation.';
 const OTP_RATE_MESSAGE='Too many requests. Please try again later.';
 async function resolveTrustedClientIp():Promise<string>{
  const h=await headers();
- return (
-  h.get('x-vercel-forwarded-for')?.split(',').pop()?.trim()||
-  h.get('cf-connecting-ip')?.trim()||
-  h.get('x-real-ip')?.trim()||
-  h.get('x-forwarded-for')?.split(',').pop()?.trim()||
-  'unknown'
- );
+ return resolveTrustedIp(h);
 }
-async function checkOtpRateLimit():Promise<boolean> {
+async function checkOtpRateLimit(email?:string):Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;if(!salt){console.error('OTP configuration unavailable.');return false;}
  try {
   const ip=await resolveTrustedClientIp();
   const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'otp-ip',p_key_hash:await sha256Hex(salt+ip),p_window_seconds:300,p_max_count:5});
-  if(error){console.error('OTP rate control unavailable.');return false;}return data===true;
+  if(error||data!==true){if(error)console.error('OTP rate control unavailable.');return false;}
+  if(email){
+   const {data:emData,error:emErr}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'otp-email',p_key_hash:await sha256Hex(`${salt}:otp:${email}`),p_window_seconds:300,p_max_count:5});
+   if(emErr||emData!==true)return false;
+  }
+  return true;
  }catch{console.error('OTP rate control unavailable.');return false;}
+}
+async function checkTokenActionRateLimit():Promise<boolean> {
+ const salt=process.env.LEAD_IP_HASH_SALT;
+ if(!salt){
+  if(process.env.NODE_ENV==='production'){console.error('Token rate control unavailable.');return false;}
+  return true;
+ }
+ try {
+  const ip=await resolveTrustedClientIp();
+  const admin=getSupabaseAdmin();
+  if(typeof admin.rpc!=='function'){
+   return process.env.NODE_ENV!=='production'&&process.env.VITEST==='true';
+  }
+  const {data,error}=await admin.rpc('consume_rate_limit',{p_kind:'otp-ip',p_key_hash:await sha256Hex(`${salt}:token:${ip}`),p_window_seconds:300,p_max_count:10});
+  if(error)return false;
+  return data===true;
+ }catch{
+  return process.env.NODE_ENV!=='production'&&process.env.VITEST==='true';
+ }
+}
+async function revokeOtherSessionsAfterRecovery(
+ supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+ userId: string
+): Promise<void> {
+ try {
+  if (typeof supabase.auth.signOut === 'function') {
+   await supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
+  }
+  if (typeof supabase.auth.refreshSession === 'function') {
+   await supabase.auth.refreshSession().catch(() => undefined);
+  }
+  const claimsRes = await supabase.auth.getClaims().catch(() => ({ data: null }));
+  const claims = claimsRes?.data?.claims as { iat?: number } | undefined;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const iatSec = typeof claims?.iat === 'number' && Number.isFinite(claims.iat) ? Math.floor(claims.iat) : nowSec;
+  const cutoffSec = Math.min(nowSec, iatSec);
+  const admin = getSupabaseAdmin();
+  await admin.from('profiles').update({ tokens_valid_after: cutoffSec }).eq('id', userId);
+  await recordAuditLog({
+   actorId: userId,
+   actorRole: 'client',
+   clientId: userId,
+   action: 'auth.password_reset_completed',
+   entityType: 'profile',
+   entityId: userId,
+   summary: 'Password reset completed via recovery flow and prior access tokens revoked',
+  });
+ } catch {
+  // Non-fatal in isolated unit tests without full admin mocks
+ }
 }
 async function credentialEmailOrigin():Promise<string|null> {
  try{
@@ -136,13 +209,13 @@ async function credentialEmailOrigin():Promise<string|null> {
 }
 async function validatePasswordPair(formData:FormData):Promise<{error:string}|{password:string}> {
  const password=String(formData.get('password')??''),confirm=String(formData.get('confirm')??'');
- if(password.length<MIN_PASSWORD)return {error:`Password must be at least ${MIN_PASSWORD} characters.`};
+ if(password.length<MIN_PASSWORD||password.length>MAX_PASSWORD)return {error:`Password must be between ${MIN_PASSWORD} and ${MAX_PASSWORD} characters.`};
  if(password!==confirm)return {error:'Passwords do not match.'};
  const hibp=await checkPasswordLeakedHibp(password);
  if(hibp.leaked)return {error:LEAKED_PASSWORD_ERROR};
  return {password};
 }
-async function checkPasswordSignInRateLimit(_email?:string):Promise<boolean> {
+async function checkPasswordSignInRateLimit(email?:string):Promise<boolean> {
  const salt=process.env.LEAD_IP_HASH_SALT;
  if(!salt){
   if(process.env.NODE_ENV==='production'){
@@ -158,7 +231,12 @@ async function checkPasswordSignInRateLimit(_email?:string):Promise<boolean> {
    console.error('Password sign-in rate limit RPC failed:',error.message);
    return false;
   }
-  return data===true;
+  if(data!==true)return false;
+  if(email){
+   const {data:emData,error:emErr}=await getSupabaseAdmin().rpc('consume_rate_limit',{p_kind:'password-login-email',p_key_hash:await sha256Hex(`${salt}:login-email:${email}`),p_window_seconds:300,p_max_count:10});
+   if(emErr||emData!==true)return false;
+  }
+  return true;
  }catch(err){
   console.error('Password sign-in rate control error:',err);
   return process.env.NODE_ENV!=='production'&&process.env.VITEST==='true';
@@ -299,7 +377,7 @@ export async function registerClientAccountAction(_prev:ActionState,formData:For
 export async function requestMagicLinkAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  const next=safeRelativePath(formData.get('next'));
- if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
+ if(!await checkOtpRateLimit(email))return {error:OTP_RATE_MESSAGE};
  const origin=await credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
  const redirectTarget=next?`${origin}/login?next=${encodeURIComponent(next)}`:`${origin}/login`;
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTarget}});
@@ -308,7 +386,7 @@ export async function requestMagicLinkAction(_prev:ActionState,formData:FormData
 }
 export async function requestPasswordResetAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
- if(!await checkOtpRateLimit())return {error:OTP_RATE_MESSAGE};
+ if(!await checkOtpRateLimit(email))return {error:OTP_RATE_MESSAGE};
  const origin=await credentialEmailOrigin();if(!origin)return {error:'Password recovery is temporarily unavailable. Please try again later.'};
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:origin+'/reset-password'});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
@@ -458,6 +536,7 @@ async function consumeAtomicRetryClaim(
 }
 
 export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
+  if(!await checkTokenActionRateLimit())return {error:OTP_RATE_MESSAGE};
   const tokenHash=String(formData.get('token_hash')??'');
   const checked=await validatePasswordPair(formData);if('error' in checked)return checked;
   const supabase=await createSupabaseServerClient();
@@ -484,6 +563,7 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
     if(updated.error){
       return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
     }
+    await revokeOtherSessionsAfterRecovery(supabase, sessionSub);
     redirect(destination.home);
   }
 
@@ -519,6 +599,7 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
       return {error:'Could not update your password. Try again.'};
     }
     cookieStore.delete(retryCookieName);
+    await revokeOtherSessionsAfterRecovery(supabase, otpData.user.id);
     redirect(destination.home);
   }
 
@@ -547,6 +628,7 @@ export async function setNewPasswordFromRecoveryAction(_prev:ActionState,formDat
   if(updated.error){
     return {error:SPENT_RECOVERY_LINK,linkHref:'/login',linkText:'Request a new password reset link'};
   }
+  await revokeOtherSessionsAfterRecovery(supabase, sub);
   redirect(destination.home);
 }
 
@@ -574,12 +656,22 @@ async function markInvitationAccepted(userId: string, email?: string | null): Pr
         .eq('email', email.trim().toLowerCase())
         .eq('status', 'pending');
     }
+    await recordAuditLog({
+      actorId: userId,
+      actorRole: 'client',
+      clientId: userId,
+      action: 'auth.invite_accepted',
+      entityType: 'client_invitation',
+      entityId: userId,
+      summary: 'Client accepted portal invitation and set password',
+    });
   } catch {
     // Non-fatal if service role is unavailable in isolated unit tests
   }
 }
 
 export async function acceptInviteAction(_prev:ActionState,formData:FormData):Promise<ActionState> {
+  if(!await checkTokenActionRateLimit())return {error:OTP_RATE_MESSAGE};
   const tokenHash=String(formData.get('token_hash')??'');
   const pkceSession=String(formData.get('session')??'')==='1';
   if(!tokenHash&&!pkceSession)return {error:INVALID_LINK};

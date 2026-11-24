@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createDisposablePostgres,
@@ -493,5 +494,439 @@ describe('Phase 1 P0 DB Security Hardening & Invariants', () => {
       tables_without_policy: 0,
       bare_auth_uid_policies: 0,
     });
+  });
+
+  it('[SEC-DB-05] enforces 0030 deposit+RoE window guards, review_invoice_payment void/paid/overpay rejection, paid-revision balance separation, and cron retainer idempotency', async () => {
+    // 1. Unpaid kickoff deposit blocks entering in_progress
+    const depOrdRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic(
+         $1, $2, 'Deposit Gate Test', 'Scope', 'development', 100000, 50, false, 10
+       ) as res`,
+      [adminUser.id, clientA.id]
+    );
+    const depOrderId = depOrdRes.rows[0].res.order_id;
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `update public.orders set status = 'in_progress' where id = $1`,
+        [depOrderId]
+      )
+    ).rejects.toThrow(/deposit/i);
+
+    // 2. Expired RoE testing window blocks entering in_progress, while active window succeeds and post-window completion succeeds
+    const roeOrdRes = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic(
+         $1, $2, 'RoE Window Gate Test', 'Scope', 'cybersecurity', 50000, 0, true, 7
+       ) as res`,
+      [adminUser.id, clientA.id]
+    );
+    const roeOrderId = roeOrdRes.rows[0].res.order_id;
+
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, appRole: 'client', aal: 'aal1' },
+      `insert into public.engagement_authorizations (
+         order_id, client_id, authorized_targets, testing_window_start, testing_window_end,
+         emergency_contact_name, emergency_contact_phone, ownership_attested, signer_full_name
+       ) values ($1, $2, array['expired.example.com'], now() - interval '10 days', now() - interval '1 day', 'Ops', '+15550199', true, 'Security Client')`,
+      [roeOrderId, clientA.id]
+    );
+    await pg.db.query(`update public.orders set roe_signed_at = now() where id = $1`, [roeOrderId]);
+
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `update public.orders set status = 'in_progress' where id = $1`,
+        [roeOrderId]
+      )
+    ).rejects.toThrow(/testing window|rules of engagement|roe/i);
+
+    // 3. review_invoice_payment rejects confirming a submitted payment after invoice is voided, and rejects NaN FX
+    const voidableInv = await pg.queryAs<{ res: { invoice_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.issue_invoice_atomic($1, null, false, 'USD', 1.0, 20000, 0, 0, 7, 'Void race test', 'Line') as res`,
+      [clientA.id]
+    );
+    const voidableInvId = voidableInv.rows[0].res.invoice_id;
+    const pendingPay = await pg.queryAs<{ id: string }>(
+      { pgRole: 'authenticated', userId: clientA.id, email: clientA.email, appRole: 'client', aal: 'aal1' },
+      `insert into public.payments (invoice_id, client_id, method, currency, amount_cents, reference)
+       values ($1, $2, 'bank_transfer', 'USD', 20000, 'VOID-RACE-PAY-1') returning id`,
+      [voidableInvId, clientA.id]
+    );
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.void_invoice_atomic($1, $2)`,
+      [voidableInvId, adminUser.id]
+    );
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `select public.review_invoice_payment($1, $2, 'confirmed', 1.0, null)`,
+        [pendingPay.rows[0].id, adminUser.id]
+      )
+    ).rejects.toThrow(/not open|void|settled/i);
+
+    // Reject 'NaN'::numeric FX in issue_invoice_atomic and record_manual_payment_atomic
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `select public.issue_invoice_atomic($1, null, false, 'EUR', 'NaN'::numeric, 10000, 0, 0, 7, 'NaN FX', 'Line')`,
+        [clientA.id]
+      )
+    ).rejects.toThrow(/fx|positive|finite|nan/i);
+
+    // 4. Paid-revision addendum: does NOT flip order back to 'completed', does NOT under-bill final balance
+    const revClient = await pg.createTestUser({
+      email: 'paid-rev-client@disposable.test',
+      fullName: 'Paid Rev Client',
+      role: 'client',
+      isActive: true,
+    });
+    const revOrdRes = await pg.queryAs<{ res: { order_id: string; deposit_invoice_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic(
+         $1, $2, 'Paid Revision Balance Test', 'Scope', 'development', 100000, 50, false, 10
+       ) as res`,
+      [adminUser.id, revClient.id]
+    );
+    const revOrderId = revOrdRes.rows[0].res.order_id;
+    const revDepInvId = revOrdRes.rows[0].res.deposit_invoice_id;
+
+    // Pay $500 deposit
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.record_manual_payment_atomic($1, $2, 'manual', 50000, 'REV-DEP-500', 1.0)`,
+      [revDepInvId, adminUser.id]
+    );
+    // Deliver v1.0 & set order delivered, plus assume an earlier accepted final milestone existed?
+    // Simulate delivered state with 0 revisions left, then issue + pay a $150 paid-revision addendum
+    await pg.db.query(`update public.orders set status = 'delivered', revisions_included = 1, revisions_used = 1 where id = $1`, [revOrderId]);
+    const revAddonInv = await pg.queryAs<{ res: { invoice_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_paid_revision_invoice_atomic($1, $2, 1, 15000, 'Extra revision round') as res`,
+      [revOrderId, adminUser.id]
+    );
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.record_manual_payment_atomic($1, $2, 'manual', 15000, 'REV-ADDON-150', 1.0)`,
+      [revAddonInv.rows[0].res.invoice_id, adminUser.id]
+    );
+    const afterAddonOrder = await pg.db.query<{ status: string; revisions_included: number }>(
+      `select status::text, revisions_included from public.orders where id = $1`,
+      [revOrderId]
+    );
+    expect(afterAddonOrder.rows[0]).toEqual({ status: 'revision_requested', revisions_included: 2 });
+
+    // Deliver v2.0 final -> client accepts -> final balance invoice MUST be $500 (50000 cents), NOT $350 (35000)!
+    const deliv2 = await pg.queryAs<{ id: string }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `insert into public.deliverables (order_id, version_label, title, is_final_delivery, status, submitted_by)
+       values ($1, 'v2.0', 'Revised Final Deliverable', true, 'submitted', $2) returning id`,
+      [revOrderId, adminUser.id]
+    );
+    const accept2 = await pg.queryAs<{ res: { final_invoice_id: string } }>(
+      { pgRole: 'authenticated', userId: revClient.id, email: revClient.email, appRole: 'client', aal: 'aal1' },
+      `select public.review_order_deliverable($1, $2, 'accepted', 'Great revision') as res`,
+      [deliv2.rows[0].id, revClient.id]
+    );
+    const finalBalInv = await pg.db.query<{ total_cents: number }>(
+      `select total_cents from public.invoices where id = $1`,
+      [accept2.rows[0].res.final_invoice_id]
+    );
+    expect(finalBalInv.rows[0].total_cents).toBe(50000);
+
+    // 5. Duplicate active milestone invoice blocked in create_draft_invoice_multi_atomic
+    const msRow = await pg.db.query<{ id: string }>(
+      `insert into public.order_milestones (order_id, title, amount_cents, position)
+       values ($1, 'Milestone A', 25000, 0) returning id`,
+      [revOrderId]
+    );
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_draft_invoice_multi_atomic(
+         $1, $2, $3, 'USD', 1.0, 0, 0, 7, null, 'MS inv 1',
+         '[{"description":"MS A","qty":1,"unit_price_cents":25000}]'::jsonb, false, $4
+       )`,
+      [revClient.id, revOrderId, msRow.rows[0].id, adminUser.id]
+    );
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+        `select public.create_draft_invoice_multi_atomic(
+           $1, $2, $3, 'USD', 1.0, 0, 0, 7, null, 'MS inv 2',
+           '[{"description":"MS A dup","qty":1,"unit_price_cents":25000}]'::jsonb, false, $4
+         )`,
+        [revClient.id, revOrderId, msRow.rows[0].id, adminUser.id]
+      )
+    ).rejects.toThrow(/already|milestone/i);
+
+    // 6. Automated cron retainer renewal enforces next_invoice_date <= current_date and enqueues retainer_renewed email_outbox
+    const retDue = await pg.db.query<{ id: string }>(
+      `insert into public.retainer_plans (client_id, title, monthly_fee_cents, hours_per_month, billing_cycle, next_invoice_date, current_period_end)
+       values ($1, 'Cron Retainer Test', 40000, 10, 'monthly', current_date, current_date) returning id`,
+      [revClient.id]
+    );
+    const firstRenew = await pg.queryAs<{ res: { invoice_id?: string; skipped?: boolean } }>(
+      { pgRole: 'service_role' },
+      `select public.renew_retainer_cycle_atomic($1, null, false) as res`,
+      [retDue.rows[0].id]
+    );
+    expect(typeof firstRenew.rows[0].res.invoice_id).toBe('string');
+
+    // Immediate second automated renewal call must skip (no double-billing!)
+    const secondRenew = await pg.queryAs<{ res: { skipped?: boolean } }>(
+      { pgRole: 'service_role' },
+      `select public.renew_retainer_cycle_atomic($1, null, false) as res`,
+      [retDue.rows[0].id]
+    );
+    expect(secondRenew.rows[0].res.skipped).toBe(true);
+
+    // Confirm retainer_renewed email was atomically enqueued inside email_outbox
+    const retOutbox = await pg.db.query<{ template: string }>(
+      `select template from public.email_outbox where entity_id = $1 and template = 'retainer_renewed'`,
+      [firstRenew.rows[0].res.invoice_id]
+    );
+    expect(retOutbox.rows).toHaveLength(1);
+  });
+
+  it('[SEC-DB-06] enqueues cron overdue+auto-accept emails, prunes expired rate_limits/reservations, enforces tokens_valid_after on profiles, and locks direct PostgREST RLS gaps', async () => {
+    const rlsClient = await pg.createTestUser({
+      email: 'rls-0030-client@disposable.test',
+      fullName: 'RLS 0030 Client',
+      role: 'client',
+      isActive: true,
+    });
+
+    // 1. run_daily_crm_maintenance atomically queues invoice_overdue + deliverable_auto_accepted emails and prunes expired rate_limits & vault_upload_reservations
+    const overdueDraft = await pg.db.query<{ id: string }>(
+      `insert into public.invoices (
+         client_id, is_deposit_invoice, status, currency, fx_rate_to_usd,
+         subtotal_cents, discount_cents, tax_rate_bps, tax_cents, total_cents, due_at, notes
+       ) values (
+         $1, false, 'draft', 'USD', 1.0, 15000, 0, 0, 0, 15000, current_date - 3, 'Overdue cron test'
+       ) returning id`,
+      [rlsClient.id]
+    );
+    await pg.db.query(
+      `insert into public.invoice_items (invoice_id, position, description, qty, unit_price_cents)
+       values ($1, 0, 'Audit', 1, 15000)`,
+      [overdueDraft.rows[0].id]
+    );
+    await pg.queryAs(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.send_draft_invoice_atomic($1, $2)`,
+      [overdueDraft.rows[0].id, adminUser.id]
+    );
+
+    const autoOrd = await pg.queryAs<{ res: { order_id: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.create_admin_order_atomic($1, $2, 'Auto-Accept Cron Order', 'Scope', 'development', 30000, 0, false, 7) as res`,
+      [adminUser.id, rlsClient.id]
+    );
+    const autoDeliv = await pg.db.query<{ id: string }>(
+      `insert into public.deliverables (order_id, version_label, title, is_final_delivery, status, auto_accept_at, submitted_by)
+       values ($1, 'v1.0', 'Elapsed Deliverable', false, 'submitted', now() - interval '1 hour', $2) returning id`,
+      [autoOrd.rows[0].res.order_id, adminUser.id]
+    );
+
+    await pg.db.query(
+      `insert into public.rate_limits (kind, key_hash, window_started_at, count)
+       values ('ip', 'stale-rate-limit-hash-0030', now() - interval '48 hours', 1)`
+    );
+    await pg.db.query(
+      `insert into public.vault_upload_reservations (r2_key, client_id, size_bytes, expires_at)
+       values ($1, $2, 1024, now() - interval '2 hours')`,
+      [`private/${rlsClient.id}/payment_proof/expired-res.pdf`, rlsClient.id]
+    );
+
+    const maintRes = await pg.db.query<{ res: Record<string, number> }>(
+      `select public.run_daily_crm_maintenance() as res`
+    );
+    expect(maintRes.rows[0].res.overdue_invoices).toBeGreaterThanOrEqual(1);
+    expect(maintRes.rows[0].res.auto_accepted_deliverables).toBeGreaterThanOrEqual(1);
+    expect(maintRes.rows[0].res.pruned_rate_limits).toBeGreaterThanOrEqual(1);
+    expect(maintRes.rows[0].res.pruned_upload_reservations).toBeGreaterThanOrEqual(1);
+
+    const cronEmails = await pg.db.query<{ template: string }>(
+      `select template from public.email_outbox where to_email = $1 and template in ('invoice_overdue', 'deliverable_auto_accepted')`,
+      [rlsClient.email]
+    );
+    expect(cronEmails.rows.map((r) => r.template).sort()).toEqual([
+      'deliverable_auto_accepted',
+      'invoice_overdue',
+    ]);
+    expect(autoDeliv.rows[0].id).toBeTruthy();
+
+    // 2. Direct PostgREST RLS hardening:
+    // 2a. Client cannot insert cancellation_requests with forged status='approved'
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+        `insert into public.cancellation_requests (order_id, requested_by, reason, status, resolved_by)
+         values ($1, $2, 'Forged auto approval', 'approved', $2)`,
+        [autoOrd.rows[0].res.order_id, rlsClient.id]
+      )
+    ).rejects.toThrow();
+
+    // 2b. Client cannot mutate notification title/body/href, ONLY read_at
+    const notifRow = await pg.db.query<{ id: string }>(
+      `insert into public.notifications (recipient_id, category, title, body, href)
+       values ($1, 'system', 'Original Title', 'Original Body', '/portal') returning id`,
+      [rlsClient.id]
+    );
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+        `update public.notifications set title = 'Tampered Title' where id = $1`,
+        [notifRow.rows[0].id]
+      )
+    ).rejects.toThrow(/only read_at|immutable/i);
+
+    const readOk = await pg.queryAs<{ read_at: string | null }>(
+      { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+      `update public.notifications set read_at = now() where id = $1 returning read_at::text`,
+      [notifRow.rows[0].id]
+    );
+    expect(readOk.rows[0].read_at).not.toBeNull();
+
+    // 2c. Client cannot post to closed tickets or cancelled orders
+    const closedTicket = await pg.db.query<{ id: string }>(
+      `insert into public.tickets (client_id, subject, status)
+       values ($1, 'Closed Support Thread', 'closed') returning id`,
+      [rlsClient.id]
+    );
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+        `insert into public.ticket_messages (ticket_id, author_id, body, is_internal_note)
+         values ($1, $2, 'Post on closed ticket', false)`,
+        [closedTicket.rows[0].id, rlsClient.id]
+      )
+    ).rejects.toThrow();
+
+    await pg.db.query(`update public.orders set status = 'cancelled' where id = $1`, [autoOrd.rows[0].res.order_id]);
+    await expect(
+      pg.queryAs(
+        { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+        `insert into public.order_messages (order_id, author_id, body, is_internal_note)
+         values ($1, $2, 'Post on cancelled order', false)`,
+        [autoOrd.rows[0].res.order_id, rlsClient.id]
+      )
+    ).rejects.toThrow();
+
+    // 2d. Expired vault_files (retention_until <= now()) hidden from client SELECT
+    await pg.db.query(
+      `insert into public.vault_files (owner_client_id, category, r2_key, filename, mime_type, size_bytes, retention_until, uploaded_by)
+       values ($1, 'order_attachment', $2, 'expired.pdf', 'application/pdf', 100, now() - interval '1 hour', $1)`,
+      [rlsClient.id, `private/${rlsClient.id}/order_attachment/expired-check.pdf`]
+    );
+    const clientVault = await pg.queryAs<{ filename: string }>(
+      { pgRole: 'authenticated', userId: rlsClient.id, email: rlsClient.email, appRole: 'client', aal: 'aal1' },
+      `select filename from public.vault_files where owner_client_id = $1`,
+      [rlsClient.id]
+    );
+    expect(clientVault.rows.map((r) => r.filename)).not.toContain('expired.pdf');
+
+    // 3. profiles RLS & caller_account_state enforce tokens_valid_after AND block client resetting tokens_valid_after = 0
+    const oldIat = Math.floor(Date.now() / 1000) - 120;
+    const cutoffSec = Math.floor(Date.now() / 1000);
+    await pg.db.query(`update public.profiles set tokens_valid_after = $1 where id = $2`, [cutoffSec, rlsClient.id]);
+
+    const staleProfileCheck = await pg.db.transaction(async (tx) => {
+      await tx.exec(`set local search_path = public, extensions; set local role authenticated;`);
+      await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+        JSON.stringify({
+          sub: rlsClient.id,
+          email: rlsClient.email,
+          role: 'authenticated',
+          aal: 'aal1',
+          iat: oldIat,
+          app_metadata: { role: 'client' },
+        }),
+      ]);
+      await tx.query(`select set_config('request.jwt.claim.sub', $1, true)`, [rlsClient.id]);
+      const profRows = await tx.query<{ id: string }>(`select id from public.profiles where id = $1`, [rlsClient.id]);
+      const stateRow = await tx.query<{ state: string }>(`select public.caller_account_state() as state`);
+      return { profCount: profRows.rows.length, state: stateRow.rows[0].state };
+    });
+    expect(staleProfileCheck).toEqual({ profCount: 0, state: 'revoked' });
+
+    // Even with a fresh JWT (iat >= tokens_valid_after), client cannot reset tokens_valid_after = 0
+    const freshIat = cutoffSec + 10;
+    await expect(
+      pg.db.transaction(async (tx) => {
+        await tx.exec(`set local search_path = public, extensions; set local role authenticated;`);
+        await tx.query(`select set_config('request.jwt.claims', $1, true)`, [
+          JSON.stringify({
+            sub: rlsClient.id,
+            email: rlsClient.email,
+            role: 'authenticated',
+            aal: 'aal1',
+            iat: freshIat,
+            app_metadata: { role: 'client' },
+          }),
+        ]);
+        await tx.query(`select set_config('request.jwt.claim.sub', $1, true)`, [rlsClient.id]);
+        await tx.query(`update public.profiles set tokens_valid_after = 0 where id = $1`, [rlsClient.id]);
+      })
+    ).rejects.toThrow();
+
+    // 4. Atomic consent policy publish leaves exactly 1 active policy and works with 'explicit-checkbox-v1'
+    const canonicalV3 = '{"version":"v3"}';
+    const newHash = createHash('sha256').update(canonicalV3).digest('hex');
+    const pubRes = await pg.queryAs<{ res: { version: string; hash: string } }>(
+      { pgRole: 'authenticated', userId: adminUser.id, email: adminUser.email, appRole: 'admin', aal: 'aal2' },
+      `select public.publish_consent_policy_atomic('v3', $1, $2, $3) as res`,
+      [canonicalV3, newHash, adminUser.id]
+    );
+    expect(pubRes.rows[0].res).toEqual({ version: 'v3', hash: newHash });
+    const activePolicies = await pg.db.query<{ version: string }>(
+      `select version from public.consent_policies where is_active is true`
+    );
+    expect(activePolicies.rows).toEqual([{ version: 'v3' }]);
+
+    // Verify inquiry trigger rejects legacy 'checkbox_v1' (PT409) and accepts 'explicit-checkbox-v1'
+    await expect(
+      pg.queryAs(
+        { pgRole: 'service_role' },
+        `insert into public.inquiries (
+           name, email, project_summary, consent_at,
+           consent_policy_version, consent_policy_hash, consent_capture_method
+         ) values ('Bad Quote', 'bad@disposable.test', 'Scope', now(), 'v3', $1, 'checkbox_v1')`,
+        [newHash]
+      )
+    ).rejects.toThrow(/consent policy evidence/i);
+
+    const okInq = await pg.queryAs<{ id: string }>(
+      { pgRole: 'service_role' },
+      `insert into public.inquiries (
+         name, email, project_summary, consent_at,
+         consent_policy_version, consent_policy_hash, consent_capture_method
+       ) values ('Good Quote', 'good@disposable.test', 'Scope', now(), 'v3', $1, 'explicit-checkbox-v1')
+       returning id`,
+      [newHash]
+    );
+    expect(okInq.rows).toHaveLength(1);
+
+    // 5. Verify 0030 preserves 0 bare auth.uid()/auth.jwt() initplan warnings
+    const initplanCheck = await pg.db.query<{ bare_auth_calls: number }>(
+      `select count(*)::int as bare_auth_calls
+         from pg_policies
+        where schemaname = 'public'
+          and (
+            (qual is not null and (
+              (qual like '%auth.uid()%' and qual not like '%SELECT auth.uid()%' and qual not like '%select auth.uid()%')
+              or (qual like '%auth.jwt()%' and qual not like '%SELECT auth.jwt()%' and qual not like '%select auth.jwt()%')
+            ))
+            or (with_check is not null and (
+              (with_check like '%auth.uid()%' and with_check not like '%SELECT auth.uid()%' and with_check not like '%select auth.uid()%')
+              or (with_check like '%auth.jwt()%' and with_check not like '%SELECT auth.jwt()%' and with_check not like '%select auth.jwt()%')
+            ))
+          )`
+    );
+    expect(initplanCheck.rows[0].bare_auth_calls).toBe(0);
   });
 });

@@ -176,6 +176,7 @@ export async function createDisposablePostgres({
               email: context.email ?? 'user@test.local',
               role: 'authenticated',
               aal: context.aal ?? 'aal1',
+              ...(typeof context.iat === 'number' ? { iat: context.iat } : {}),
               app_metadata: { role: context.appRole ?? 'client' },
               user_metadata: {},
             };

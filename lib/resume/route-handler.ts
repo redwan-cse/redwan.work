@@ -2,10 +2,55 @@ import type { NextRequest } from 'next/server';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import {
   RESUME_ASSET_KEY,
+  RESUME_PDF_MAX_BYTES,
   extractPublicAssetKeyFromUrl,
   getPublicObjectBytes,
 } from '@/lib/r2';
-import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { resumeDownloadQuerySchema } from '@/lib/validation/schemas';
+
+async function readBoundedResponse(
+  response: Response,
+  maxBytes: number
+): Promise<Buffer | null> {
+  if (!response.body) {
+    const ab = await response.arrayBuffer();
+    if (ab.byteLength <= 0 || ab.byteLength > maxBytes) return null;
+    return Buffer.from(ab);
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (total <= 0) return null;
+  return Buffer.concat(chunks, total);
+}
+
+function allowedPublicAssetOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
 
 export async function serveStoredResumePdf(
   request: NextRequest,
@@ -34,31 +79,42 @@ export async function serveStoredResumePdf(
   }
 
   if (!pdfBytes) {
-    const safeRemoteUrl = sanitizeHttpUrl(configuredUrl);
-    if (safeRemoteUrl) {
+    const safeRemoteUrl = trySanitizeHttpUrl(configuredUrl);
+    const pinnedOrigin = allowedPublicAssetOrigin();
+    if (safeRemoteUrl && pinnedOrigin) {
+      let targetUrl: URL | null = null;
       try {
-        const res = await fetch(safeRemoteUrl, {
-          cache: 'no-store',
-          signal: AbortSignal.timeout(8000),
-        });
-        const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-        const declaredLen = Number(res.headers.get('content-length') ?? 0);
-        if (
-          res.ok &&
-          contentType.includes('application/pdf') &&
-          (!Number.isFinite(declaredLen) || declaredLen <= 10 * 1024 * 1024)
-        ) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          if (
-            buf.byteLength > 0 &&
-            buf.byteLength <= 10 * 1024 * 1024 &&
-            buf.subarray(0, 5).toString('ascii') === '%PDF-'
-          ) {
-            pdfBytes = buf;
-          }
-        }
+        targetUrl = new URL(safeRemoteUrl);
       } catch {
-        pdfBytes = null;
+        targetUrl = null;
+      }
+      if (targetUrl && targetUrl.origin === pinnedOrigin) {
+        try {
+          const res = await fetch(targetUrl.toString(), {
+            cache: 'no-store',
+            redirect: 'error',
+            signal: AbortSignal.timeout(8000),
+          });
+          const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+          const declaredLen = Number(res.headers.get('content-length') ?? 0);
+          if (
+            res.ok &&
+            contentType.includes('application/pdf') &&
+            (!Number.isFinite(declaredLen) || declaredLen <= RESUME_PDF_MAX_BYTES)
+          ) {
+            const buf = await readBoundedResponse(res, RESUME_PDF_MAX_BYTES);
+            if (
+              buf &&
+              buf.byteLength > 0 &&
+              buf.byteLength <= RESUME_PDF_MAX_BYTES &&
+              buf.subarray(0, 5).toString('ascii') === '%PDF-'
+            ) {
+              pdfBytes = buf;
+            }
+          }
+        } catch {
+          pdfBytes = null;
+        }
       }
     }
   }
@@ -71,7 +127,10 @@ export async function serveStoredResumePdf(
   }
 
   const url = new URL(request.url);
-  const downloadParam = url.searchParams.get('download');
+  const parsedQuery = resumeDownloadQuerySchema.safeParse({
+    download: url.searchParams.get('download'),
+  });
+  const downloadParam = parsedQuery.success ? parsedQuery.data.download : null;
   const forceDownload = downloadParam === '1' || downloadParam === 'true';
 
   const safeBaseName = (settings.full_name || 'Md_Redwan_Ahmed')

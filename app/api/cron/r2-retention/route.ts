@@ -51,101 +51,25 @@ async function handleStorageRetentionCron(request: NextRequest) {
 
   const admin = getSupabaseAdmin();
 
-  // 1. Run auto-accept deliverables past their review window
-  const { data: autoAcceptedCount, error: autoErr } = await admin.rpc(
-    'run_auto_accept_deliverables'
-  );
-  if (autoErr) {
-    return NextResponse.json({ error: autoErr.message }, { status: 500 });
+  // 1. Run atomic daily CRM maintenance inside PostgreSQL (idempotent across pg_cron & Vercel Cron;
+  //    atomically marks overdue invoices, expires proposals, auto-accepts deliverables, renews due
+  //    retainers, queues notifications + email_outbox rows, and prunes expired rate_limits/reservations).
+  const { data: maintData, error: maintErr } = await admin.rpc('run_daily_crm_maintenance');
+  if (maintErr) {
+    console.error('[cron/r2-retention] run_daily_crm_maintenance failed:', maintErr.message);
+    return NextResponse.json({ error: 'Daily CRM maintenance failed.' }, { status: 500 });
   }
 
-  // 1b. Transition overdue invoices & expired proposals and queue overdue notifications
-  try {
-    const todayDate = new Date().toISOString().slice(0, 10);
-    const beforeMarkIso = new Date(Date.now() - 5000).toISOString();
-    const { data: markedOverdueCount } = await admin.rpc('mark_overdue_invoices_atomic');
-
-    let overdueIds: string[] = [];
-    if (Number(markedOverdueCount ?? 0) > 0) {
-      const { data: overdueAuditRows } = await admin
-        .from('audit_logs')
-        .select('entity_id')
-        .eq('action', 'invoice.overdue')
-        .gte('created_at', beforeMarkIso);
-      overdueIds = Array.from(
-        new Set((overdueAuditRows ?? []).map((r) => r.entity_id).filter(Boolean) as string[])
-      );
-    }
-    const { data: newlyOverdue } =
-      overdueIds.length > 0
-        ? await admin
-            .from('invoices')
-            .select('id, code, client_id, currency, total_cents, amount_paid_cents, credited_cents')
-            .in('id', overdueIds)
-        : { data: [] };
-
-    if (Array.isArray(newlyOverdue) && newlyOverdue.length > 0) {
-      const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
-      for (const inv of newlyOverdue) {
-        const dueCents = Math.max(
-          0,
-          Number(inv.total_cents || 0) -
-            Number(inv.amount_paid_cents || 0) -
-            Number(inv.credited_cents || 0)
-        );
-        await admin.from('notifications').insert({
-          recipient_id: inv.client_id,
-          category: 'invoice',
-          title: `Invoice Overdue: ${inv.code ?? ''}`,
-          body: `Balance due: ${inv.currency} ${(dueCents / 100).toLocaleString()}`,
-          href: `/portal/invoices/${inv.id}`,
-        });
-        const { data: prof } = await admin
-          .from('profiles')
-          .select('email')
-          .eq('id', inv.client_id)
-          .maybeSingle();
-        if (prof?.email) {
-          await admin.from('email_outbox').insert({
-            to_email: prof.email,
-            template: 'invoice_overdue',
-            subject: `Action Required: Invoice ${inv.code ?? ''} is Overdue`,
-            payload: {
-              message: `Invoice ${inv.code ?? ''} (${inv.currency} ${(dueCents / 100).toLocaleString()} remaining balance) is now past its due date. Please submit payment proof or contact support.`,
-              actionUrl: `${origin}/portal/invoices/${inv.id}`,
-            },
-            entity_type: 'invoice',
-            entity_id: inv.id,
-          });
-        }
-      }
-    }
-
-    await admin
-      .from('proposals')
-      .update({ status: 'expired' })
-      .in('status', ['sent', 'viewed'])
-      .lt('valid_until', todayDate);
-
-    // Renew active retainers due on or before today (ensures Vercel Cron triggers renewal even if pg_cron is disabled)
-    const { data: dueRetainers } = await admin
-      .from('retainer_plans')
-      .select('id')
-      .eq('status', 'active')
-      .lte('next_invoice_date', todayDate)
-      .limit(50);
-
-    if (Array.isArray(dueRetainers)) {
-      for (const ret of dueRetainers) {
-        await admin.rpc('renew_retainer_cycle_atomic', {
-          p_retainer_id: ret.id,
-          p_admin_id: undefined,
-        });
-      }
-    }
-  } catch {
-    // Non-fatal in isolated storage unit tests with mocked DB clients
-  }
+  const maintObj =
+    maintData && typeof maintData === 'object' && !Array.isArray(maintData)
+      ? (maintData as Record<string, unknown>)
+      : null;
+  const autoAcceptedCount =
+    typeof maintObj?.auto_accepted_deliverables === 'number'
+      ? maintObj.auto_accepted_deliverables
+      : typeof maintData === 'number'
+        ? maintData
+        : 0;
 
   let deletedVaultFiles = 0;
   let deletedInquiryAttachments = 0;
@@ -166,7 +90,8 @@ async function handleStorageRetentionCron(request: NextRequest) {
       .limit(100);
 
     if (vaultQueryErr) {
-      return NextResponse.json({ error: vaultQueryErr.message }, { status: 500 });
+      console.error('[cron/r2-retention] vault query failed:', vaultQueryErr.message);
+      return NextResponse.json({ error: 'Vault retention query failed.' }, { status: 500 });
     }
 
     if (expiredFiles && expiredFiles.length > 0) {
@@ -187,7 +112,8 @@ async function handleStorageRetentionCron(request: NextRequest) {
           expiredFiles.map((f) => f.id)
         );
       if (archiveErr) {
-        return NextResponse.json({ error: archiveErr.message }, { status: 500 });
+        console.error('[cron/r2-retention] archive update failed:', archiveErr.message);
+        return NextResponse.json({ error: 'Failed to archive expired vault records.' }, { status: 500 });
       }
 
       await admin.from('audit_logs').insert({
@@ -211,7 +137,8 @@ async function handleStorageRetentionCron(request: NextRequest) {
       .limit(100);
 
     if (attErr) {
-      return NextResponse.json({ error: attErr.message }, { status: 500 });
+      console.error('[cron/r2-retention] inquiry attachment query failed:', attErr.message);
+      return NextResponse.json({ error: 'Inquiry attachment retention query failed.' }, { status: 500 });
     }
 
     if (expiredInquiryAtts && expiredInquiryAtts.length > 0) {
@@ -233,7 +160,8 @@ async function handleStorageRetentionCron(request: NextRequest) {
           expiredInquiryAtts.map((a) => a.id)
         );
       if (delAttErr) {
-        return NextResponse.json({ error: delAttErr.message }, { status: 500 });
+        console.error('[cron/r2-retention] inquiry attachment delete failed:', delAttErr.message);
+        return NextResponse.json({ error: 'Failed to delete expired inquiry attachment records.' }, { status: 500 });
       }
     }
 
