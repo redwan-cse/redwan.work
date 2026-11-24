@@ -6,7 +6,9 @@ import {createSupabaseServerClient} from '@/lib/supabase/server';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {getCurrentSession} from '@/lib/auth/session';
 import {checkPasswordLeakedHibp, LEAKED_PASSWORD_ERROR} from '@/lib/auth/hibp';
+import {recordAuditLog} from '@/lib/crm/audit';
 import {sha256Hex} from '@/lib/contact/lead-schema';
+import {resolveTrustedIp} from '@/lib/security/trusted-ip';
 
 export type PasswordChangeState = {
   status?: 'denied' | 'verification-unconfirmed' | 'update-unconfirmed' | 'changed-unconfirmed' | 'complete';
@@ -32,7 +34,7 @@ async function allowAttempt(userId: string): Promise<boolean> {
   if(!salt)return false;
   try{
     const h=await headers();
-    const ip=h.get('cf-connecting-ip')||h.get('x-forwarded-for')?.split(',')[0]?.trim()||h.get('x-real-ip')||'unknown';
+    const ip=resolveTrustedIp(h);
     // Independent account and network budgets; no schema or existing OTP-budget changes.
     for(const key of [`password:account:${userId}`,`password:ip:${ip}`]){
       const {data,error}=await getSupabaseAdmin().rpc('consume_rate_limit',{
@@ -47,8 +49,8 @@ async function allowAttempt(userId: string): Promise<boolean> {
 
 export async function changePasswordAction(_previous: PasswordChangeState, form: FormData): Promise<PasswordChangeState> {
   const current=form.get('currentPassword'),password=form.get('password'),confirm=form.get('confirm');
-  if(typeof current!=='string'||!current||current.length>4096)return denied('Enter your current password.');
-  if(typeof password!=='string'||password.length<12||password.length>4096)return denied('New password must contain between 12 and 4096 characters.');
+  if(typeof current!=='string'||!current||current.length>128)return denied('Enter your current password.');
+  if(typeof password!=='string'||password.length<12||password.length>128)return denied('New password must contain between 12 and 128 characters.');
   if(typeof confirm!=='string'||password!==confirm)return denied('Passwords do not match.');
   if(password===current)return denied('Choose a different new password.');
   const hibp=await checkPasswordLeakedHibp(password);
@@ -111,13 +113,42 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
     phase='changed';
     const revoked=await original.auth.signOut({scope:'others'});
     if(revoked.error)return changedUnknown;
+    // Refresh the retained session so its newly minted JWT has an iat >= tokens_valid_after
+    // before advancing the account-wide cutoff that immediately invalidates other sessions' access tokens.
+    if (typeof original.auth.refreshSession === 'function') {
+      await original.auth.refreshSession().catch(() => undefined);
+    }
     // Scope others can suppress missing-session errors; local JWT claims are not liveness.
     // Require point-in-time Auth acceptance before the final original-session binding.
     const retainedUser=await original.auth.getUser();
     if(retainedUser.error||retainedUser.data.user?.id!==actor.userId)return changedUnknown;
     const retained=await original.auth.getClaims();
     if(retained.error||retained.data?.claims?.sub!==actor.userId||retained.data?.claims?.session_id!==sid)return changedUnknown;
-    return {status:'complete',notice:'Password changed. This session is retained; other sessions cannot refresh. Existing access tokens may work until they expire.'};
+    const nowSec = Math.floor(Date.now() / 1000);
+    const retainedIat =
+      typeof retained.data?.claims?.iat === 'number' && Number.isFinite(retained.data.claims.iat)
+        ? Math.floor(retained.data.claims.iat)
+        : nowSec;
+    const cutoffSec = Math.min(nowSec, retainedIat);
+    const { error: cutoffErr } = await getSupabaseAdmin()
+      .from('profiles')
+      .update({ tokens_valid_after: cutoffSec })
+      .eq('id', actor.userId);
+    if (cutoffErr) return changedUnknown;
+    try {
+      await recordAuditLog({
+        actorId: actor.userId,
+        actorRole: actor.role,
+        clientId: actor.role === 'client' ? actor.userId : null,
+        action: 'auth.password_changed',
+        entityType: 'profile',
+        entityId: actor.userId,
+        summary: 'Account password changed and prior access tokens revoked',
+      });
+    } catch {
+      // Non-fatal audit log error after confirmed password change & cutoff bump
+    }
+    return {status:'complete',notice:'Password changed. This session is retained and all other sessions and prior tokens have been revoked.'};
   }catch{
     // No raw provider responses, tokens, passwords or automatic mutation retries.
     if(phase==='changed')return changedUnknown;

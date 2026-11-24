@@ -207,6 +207,18 @@ export default async function ClientPortalNewOrderPage({
                 />
               </div>
 
+              <label className="flex items-start gap-2.5 rounded-lg border border-border/80 bg-background/60 p-3 text-xs leading-relaxed text-muted-foreground">
+                <input
+                  type="checkbox"
+                  name="consent_accepted"
+                  value="true"
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                />
+                <span>
+                  I agree to the active Data &amp; Privacy Policy for processing these scope details (required for custom quote requests).
+                </span>
+              </label>
+
               <Button type="submit" className="w-full gap-1.5">
                 <Sparkles className="h-4 w-4" />
                 Launch Contract &amp; Open Live Chat Workspace

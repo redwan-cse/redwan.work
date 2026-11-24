@@ -3,6 +3,8 @@ import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getPrivateObjectSize, isR2Configured, presignPrivateGet } from '@/lib/r2';
 import { recordAuditLog } from '@/lib/crm/audit';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
+import { uuidSchema } from '@/lib/validation/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,9 +17,28 @@ export async function GET(
     return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   }
 
-  const { id } = await context.params;
-  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+  const { id: rawId } = await context.params;
+  const parsedId = uuidSchema.safeParse(rawId);
+  if (!parsedId.success) {
     return NextResponse.json({ error: 'Invalid file identifier.' }, { status: 400 });
+  }
+  const id = parsedId.data;
+
+  try {
+    const allowed = await consumeRateLimit('file-download', session.userId, 60, 60);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many download requests. Please wait a minute and try again.' },
+        { status: 429, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
+      );
+    }
+  } catch {
+    if (process.env.NODE_ENV === 'production' && process.env.TEST_ENVIRONMENT !== 'isolated-ci') {
+      return NextResponse.json(
+        { error: 'Download rate control temporarily unavailable.' },
+        { status: 503, headers: { 'Cache-Control': 'private, no-store, max-age=0' } }
+      );
+    }
   }
 
   const admin = getSupabaseAdmin();

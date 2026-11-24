@@ -6,7 +6,7 @@ import { clearBlogCache } from '@/lib/blogger';
 import { archivePolicy } from '@/lib/contact/consent-policy';
 import { recordAuditLog } from '@/lib/crm/audit';
 import { drainEmailOutbox } from '@/lib/email/outbox';
-import { extFromFilename, resolveMimeType, validateMagicBytes } from '@/lib/mime';
+import { extFromFilename, isAllowedAssetMime, resolveMimeType, validateMagicBytes } from '@/lib/mime';
 import {
   deletePrivateObjects,
   deletePublicObject,
@@ -17,14 +17,9 @@ import {
   putPublicObject,
 } from '@/lib/r2';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { uuidSchema } from '@/lib/validation/schemas';
 
-const PUBLIC_ASSET_ALLOWED_MIME = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'application/pdf',
-  'application/zip',
-]);
+const PUBLIC_ASSET_MAX_BYTES = 10 * 1024 * 1024;
 
 export async function drainEmailOutboxAction(): Promise<void> {
   const session = await requireAdminSession();
@@ -46,8 +41,9 @@ export async function drainEmailOutboxAction(): Promise<void> {
 
 export async function retryOutboxEmailAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
-  const outboxId = String(formData.get('outbox_id') ?? '').trim();
-  if (!outboxId) return;
+  const parsedId = uuidSchema.safeParse(formData.get('outbox_id'));
+  if (!parsedId.success) return;
+  const outboxId = parsedId.data;
 
   const admin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
@@ -60,7 +56,8 @@ export async function retryOutboxEmailAction(formData: FormData): Promise<void> 
       last_error: null,
       next_attempt_at: nowIso,
     })
-    .eq('id', outboxId);
+    .eq('id', outboxId)
+    .neq('status', 'sent');
   if (error) throw new Error(error.message);
 
   if (process.env.RESEND_API_KEY) {
@@ -78,13 +75,15 @@ export async function retryOutboxEmailAction(formData: FormData): Promise<void> 
 
   revalidatePath('/admin/emails');
   revalidatePath('/admin/emails/outbox');
+  revalidatePath('/admin/ops');
 }
 
 export async function extendVaultRetentionAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
-  const fileId = String(formData.get('file_id') ?? '').trim();
+  const parsedId = uuidSchema.safeParse(formData.get('file_id'));
   const mode = String(formData.get('mode') ?? 'extend_90d').trim();
-  if (!fileId) return;
+  if (!parsedId.success) return;
+  const fileId = parsedId.data;
 
   const nextRetention =
     mode === 'pin_forever'
@@ -96,9 +95,11 @@ export async function extendVaultRetentionAction(formData: FormData): Promise<vo
     .from('vault_files')
     .update({ retention_until: nextRetention })
     .eq('id', fileId)
+    .is('archived_at', null)
     .select('filename, owner_client_id, order_id')
     .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!fileRow) return;
 
   await recordAuditLog({
     actorId: session.userId,
@@ -115,6 +116,7 @@ export async function extendVaultRetentionAction(formData: FormData): Promise<vo
   });
 
   revalidatePath('/admin/recovery');
+  revalidatePath('/admin/ops');
   revalidatePath('/portal/files');
 }
 
@@ -129,6 +131,19 @@ export async function purgeOrphanPrivateObjectAction(formData: FormData): Promis
     throw new Error('Private R2 storage is not configured.');
   }
 
+  const admin = getSupabaseAdmin();
+  const [{ data: vaultRefs, error: vaultRefErr }, { data: inquiryRefs, error: inqRefErr }] =
+    await Promise.all([
+      admin.from('vault_files').select('id').eq('r2_key', r2Key).limit(1),
+      admin.from('inquiry_attachments').select('id').eq('r2_key', r2Key).limit(1),
+    ]);
+  if (vaultRefErr || inqRefErr) {
+    throw new Error('Could not verify whether storage object is still referenced.');
+  }
+  if ((vaultRefs && vaultRefs.length > 0) || (inquiryRefs && inquiryRefs.length > 0)) {
+    throw new Error('Cannot purge storage object: key is still referenced by an active database record.');
+  }
+
   await deletePrivateObjects([r2Key]);
 
   await recordAuditLog({
@@ -141,6 +156,7 @@ export async function purgeOrphanPrivateObjectAction(formData: FormData): Promis
   });
 
   revalidatePath('/admin/recovery');
+  revalidatePath('/admin/ops');
 }
 
 export async function uploadPublicAssetAction(formData: FormData): Promise<void> {
@@ -153,14 +169,14 @@ export async function uploadPublicAssetAction(formData: FormData): Promise<void>
   if (!(file instanceof File) || file.size <= 0) {
     throw new Error('Select a valid image, PDF, or ZIP asset file.');
   }
-  if (file.size > 15 * 1024 * 1024) {
-    throw new Error('Public assets are limited to 15 MB per file.');
+  if (file.size > PUBLIC_ASSET_MAX_BYTES) {
+    throw new Error('Public assets are limited to 10 MB per file.');
   }
 
   const ext = extFromFilename(file.name);
   const resolvedMime = resolveMimeType(file.name, file.type);
-  if (!PUBLIC_ASSET_ALLOWED_MIME.has(resolvedMime)) {
-    throw new Error(`Disallowed public asset MIME type: ${resolvedMime}`);
+  if (!ext || !isAllowedAssetMime(ext, resolvedMime)) {
+    throw new Error(`Disallowed public asset type/extension: ${resolvedMime}`);
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -169,8 +185,13 @@ export async function uploadPublicAssetAction(formData: FormData): Promise<void>
   }
 
   const key = makeAssetKey(ext || 'bin');
+  const needsAttachmentDisposition =
+    resolvedMime === 'application/pdf' ||
+    resolvedMime === 'application/zip' ||
+    resolvedMime === 'application/x-zip-compressed';
   await putPublicObject(key, bytes, resolvedMime, {
     cacheControl: 'public, max-age=31536000, immutable',
+    ...(needsAttachmentDisposition ? { contentDisposition: 'attachment' } : {}),
   });
 
   await recordAuditLog({
@@ -280,22 +301,13 @@ export async function publishConsentPolicyAction(formData: FormData): Promise<vo
   const archived = archivePolicy(bundleCandidate);
   const admin = getSupabaseAdmin();
 
-  const { error: deactErr } = await admin
-    .from('consent_policies')
-    .update({ is_active: false })
-    .eq('is_active', true);
-  if (deactErr) throw new Error(deactErr.message);
-
-  const { error: insErr } = await admin.from('consent_policies').upsert(
-    {
-      version: archived.version,
-      canonical: archived.canonical,
-      hash: archived.hash,
-      is_active: true,
-    },
-    { onConflict: 'version' }
-  );
-  if (insErr) throw new Error(insErr.message);
+  const { error: pubErr } = await admin.rpc('publish_consent_policy_atomic', {
+    p_version: archived.version,
+    p_canonical: archived.canonical,
+    p_hash: archived.hash,
+    p_admin_id: session.userId,
+  });
+  if (pubErr) throw new Error(pubErr.message);
 
   await recordAuditLog({
     actorId: session.userId,

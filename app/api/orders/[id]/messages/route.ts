@@ -8,6 +8,7 @@ import {
 } from '@/lib/crm/audit';
 import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { isSameOriginRequest } from '@/lib/security/safe-redirect';
+import { orderMessageBodySchema, uuidSchema } from '@/lib/validation/schemas';
 
 export async function GET(
   _request: NextRequest,
@@ -18,7 +19,12 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = await context.params;
+  const { id: rawId } = await context.params;
+  const parsedId = uuidSchema.safeParse(rawId);
+  if (!parsedId.success) {
+    return NextResponse.json({ error: 'Invalid order identifier.' }, { status: 400 });
+  }
+  const id = parsedId.data;
   const admin = getSupabaseAdmin();
 
   const { data: order } = await admin
@@ -62,32 +68,38 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = await context.params;
-  const payload = (await request.json().catch(() => null)) as {
-    body?: string;
-    is_internal_note?: boolean;
-  } | null;
-
-  const body = String(payload?.body ?? '').trim();
-  if (!body) {
-    return NextResponse.json({ error: 'Message body is required.' }, { status: 400 });
+  const { id: rawId } = await context.params;
+  const parsedId = uuidSchema.safeParse(rawId);
+  if (!parsedId.success) {
+    return NextResponse.json({ error: 'Invalid order identifier.' }, { status: 400 });
   }
-  if (body.length > 10000) {
+  const id = parsedId.data;
+
+  const rawPayload = await request.json().catch(() => null);
+  const parsedBody = orderMessageBodySchema.safeParse(rawPayload);
+  if (!parsedBody.success) {
     return NextResponse.json(
-      { error: 'Message body must not exceed 10,000 characters.' },
+      { error: parsedBody.error.issues[0]?.message ?? 'Invalid message payload.' },
       { status: 400 }
     );
   }
+  const body = parsedBody.data.body;
 
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
     .from('orders')
-    .select('id, client_id, code, title')
+    .select('id, client_id, code, title, status')
     .eq('id', id)
     .maybeSingle();
 
   if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (session.role !== 'admin' && order.status === 'cancelled') {
+    return NextResponse.json(
+      { error: 'Cancelled orders cannot receive new client messages.' },
+      { status: 403 }
+    );
   }
 
   try {
@@ -105,7 +117,7 @@ export async function POST(
     );
   }
 
-  const isInternalNote = session.role === 'admin' && Boolean(payload?.is_internal_note);
+  const isInternalNote = session.role === 'admin' && parsedBody.data.is_internal_note;
 
   const { data: inserted, error } = await admin
     .from('order_messages')
@@ -119,8 +131,9 @@ export async function POST(
     .single();
 
   if (error || !inserted) {
+    console.error('[orders/messages] insert failed:', error?.message);
     return NextResponse.json(
-      { error: error?.message ?? 'Could not send message.' },
+      { error: 'Could not send message.' },
       { status: 500 }
     );
   }

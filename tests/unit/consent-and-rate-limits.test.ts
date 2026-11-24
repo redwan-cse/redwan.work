@@ -17,13 +17,19 @@ const EXPECTED_RATE_LIMIT_KINDS = [
   'presign-ip',
   'otp',
   'otp-ip',
+  'otp-email',
   'auth',
   'retry-recovery',
   'retry-invite',
   'portal-presign',
   'password-login',
+  'password-login-email',
   'register-ip',
   'order-message',
+  'blogs-preload',
+  'file-download',
+  'admin-search',
+  'client-mutation',
 ] as const;
 
 function collectSourceFiles(dir: string): string[] {

@@ -92,19 +92,11 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       aal: 'aal2',
     });
 
-    const upserts: Array<Record<string, unknown>> = [];
+    const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
     mockGetSupabaseAdmin.mockReturnValue({
-      from: vi.fn((table: string) => {
-        expect(table).toBe('consent_policies');
-        return {
-          update: () => ({
-            eq: async () => ({ error: null }),
-          }),
-          upsert: async (row: Record<string, unknown>) => {
-            upserts.push(row);
-            return { error: null };
-          },
-        };
+      rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+        rpcCalls.push({ name, args });
+        return { data: { version: args.p_version, hash: args.p_hash }, error: null };
       }),
     });
 
@@ -117,13 +109,13 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
 
     await publishConsentPolicyAction(fd);
 
-    expect(upserts).toHaveLength(1);
-    const saved = upserts[0];
-    expect(saved.version).toBe('v2-2026');
-    expect(saved.is_active).toBe(true);
-    const parsedCanonical = JSON.parse(String(saved.canonical)) as unknown;
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe('publish_consent_policy_atomic');
+    const saved = rpcCalls[0].args;
+    expect(saved.p_version).toBe('v2-2026');
+    const parsedCanonical = JSON.parse(String(saved.p_canonical)) as unknown;
     const archived = archivePolicy(parsedCanonical);
-    expect(saved.hash).toBe(archived.hash);
+    expect(saved.p_hash).toBe(archived.hash);
     expect(parsePublicConsentPolicy(parsedCanonical)).not.toBeNull();
   });
 
@@ -135,6 +127,7 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       role: 'admin',
       aal: 'aal2',
     });
+    mockConsumeRateLimit.mockResolvedValue(true);
 
     const selectedByTable: Record<string, string> = {};
     mockGetSupabaseAdmin.mockReturnValue({
@@ -307,12 +300,13 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       fullName: 'Client User',
       role: 'client',
     });
+    const validOrderId = '11111111-2222-4333-8444-555555555555';
     mockGetSupabaseAdmin.mockReturnValue({
       from: vi.fn(() => ({
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: { id: 'ord-1', client_id: 'cli-1', code: 'ORD-1', title: 'Audit' },
+              data: { id: validOrderId, client_id: 'cli-1', code: 'ORD-1', title: 'Audit', status: 'in_progress' },
               error: null,
             }),
           }),
@@ -321,7 +315,21 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
     });
     mockConsumeRateLimit.mockResolvedValue(false);
 
-    const req = new NextRequest('http://127.0.0.1:3000/api/orders/ord-1/messages', {
+    const invalidReq = new NextRequest('http://127.0.0.1:3000/api/orders/not-a-uuid/messages', {
+      method: 'POST',
+      headers: {
+        host: '127.0.0.1:3000',
+        origin: 'http://127.0.0.1:3000',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ body: 'Invalid id test' }),
+    });
+    const invalidRes = await postOrderMessage(invalidReq, {
+      params: Promise.resolve({ id: 'not-a-uuid' }),
+    });
+    expect(invalidRes.status).toBe(400);
+
+    const req = new NextRequest(`http://127.0.0.1:3000/api/orders/${validOrderId}/messages`, {
       method: 'POST',
       headers: {
         host: '127.0.0.1:3000',
@@ -330,7 +338,7 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       },
       body: JSON.stringify({ body: 'Checking rate limit window' }),
     });
-    const res = await postOrderMessage(req, { params: Promise.resolve({ id: 'ord-1' }) });
+    const res = await postOrderMessage(req, { params: Promise.resolve({ id: validOrderId }) });
     expect(res.status).toBe(429);
     expect(mockConsumeRateLimit).toHaveBeenCalledWith('order-message', 'cli-1', 30, 60);
   });
@@ -522,11 +530,19 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       }),
     });
 
-    // 1. Custom quote order must include active consent_policy_version & consent_policy_hash
+    // 1. Custom quote order must require explicit consent checkbox and insert 'explicit-checkbox-v1' matching DB trigger
+    const uncheckedQuoteFd = new FormData();
+    uncheckedQuoteFd.set('service_slug', 'other-custom-engagement');
+    uncheckedQuoteFd.set('custom_budget_usd', '2500');
+    uncheckedQuoteFd.set('project_notes', 'Missing consent checkbox');
+    await expect(placePortalPackageOrderAction(uncheckedQuoteFd)).rejects.toThrow(/consent/i);
+    expect(inquiryInserts).toHaveLength(0);
+
     const quoteFd = new FormData();
     quoteFd.set('service_slug', 'other-custom-engagement');
     quoteFd.set('custom_budget_usd', '2500');
     quoteFd.set('project_notes', 'Need custom architecture review');
+    quoteFd.set('consent_accepted', 'true');
     await expect(placePortalPackageOrderAction(quoteFd)).rejects.toThrow(
       /NEXT_REDIRECT:\/portal\/orders\/new\?quote_submitted=1/
     );
@@ -535,7 +551,7 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
       expect.objectContaining({
         consent_policy_version: 'v2',
         consent_policy_hash: '1a699e66a0ca278d073abdf070313ae5e154a4449c0d6c2c053e40df238d3216',
-        consent_capture_method: 'checkbox_v1',
+        consent_capture_method: 'explicit-checkbox-v1',
       })
     );
     expect(typeof inquiryInserts[0].consent_at).toBe('string');

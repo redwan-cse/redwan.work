@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { isSameOriginRequest } from '@/lib/security/safe-redirect';
+import { logoutReasonSchema } from '@/lib/validation/schemas';
 
 async function handle(request: NextRequest): Promise<NextResponse> {
   // Same-origin check (enforced strictly on POST, and GET is restricted solely
@@ -54,12 +55,16 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
 
-  const reason = request.nextUrl.searchParams.get('reason');
+  const parsedReason = logoutReasonSchema.safeParse(request.nextUrl.searchParams.get('reason'));
+  const reason = parsedReason.success ? parsedReason.data : null;
   const loginUrl = new URL('/login', request.url);
   if (reason === 'deactivated') {
     loginUrl.searchParams.set('reason', 'deactivated');
   }
-  return NextResponse.redirect(loginUrl, { status: reason ? 302 : 303 });
+  const res = NextResponse.redirect(loginUrl, { status: reason ? 302 : 303 });
+  res.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return res;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

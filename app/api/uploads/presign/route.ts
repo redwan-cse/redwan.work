@@ -7,6 +7,26 @@ import {
 } from '@/lib/r2';
 import { sha256Hex } from '@/lib/contact/lead-schema';
 import { isAllowedMime } from '@/lib/mime';
+import { resolveTrustedIp } from '@/lib/security/trusted-ip';
+import { contactPresignRequestSchema } from '@/lib/validation/schemas';
+
+function isAllowedTurnstileHostname(hostname: unknown): boolean {
+  if (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.TEST_ENVIRONMENT === 'isolated-ci' ||
+    !process.env.NEXT_PUBLIC_SITE_URL
+  ) {
+    return true;
+  }
+  if (typeof hostname !== 'string' || !hostname.trim()) return false;
+  try {
+    const base = new URL(process.env.NEXT_PUBLIC_SITE_URL).hostname.toLowerCase().replace(/^www\./, '');
+    const actual = hostname.trim().toLowerCase();
+    return actual === base || actual === `www.${base}`;
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Presign API for contact-form attachments
@@ -128,13 +148,14 @@ export async function POST(request: NextRequest) {
     }
 
     // ---- 3. Body + per-file validation ----
-    let body: PresignRequestBody;
+    let rawBody: unknown;
     try {
-      body = await request.json();
+      rawBody = await request.json();
     } catch {
       return jsonError('Invalid request.', 400);
     }
 
+    const body = (rawBody && typeof rawBody === 'object' ? rawBody : {}) as PresignRequestBody;
     const files = body.files;
     if (!Array.isArray(files) || files.length < 1 || files.length > CONTACT_MAX_FILES) {
       return jsonError(
@@ -191,12 +212,16 @@ export async function POST(request: NextRequest) {
       return jsonError('Invalid verification token.', 400);
     }
 
+    const schemaCheck = contactPresignRequestSchema.safeParse({
+      files: validatedFiles,
+      turnstileToken,
+    });
+    if (!schemaCheck.success) {
+      return jsonError('Invalid request.', 400);
+    }
+
     // ---- 4. Per-IP presign budget (salted hash, fail-closed) ----
-    const clientIp =
-      request.headers.get('cf-connecting-ip') ||
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+    const clientIp = resolveTrustedIp(request.headers);
 
     const ipSalt = process.env.LEAD_IP_HASH_SALT ?? '';
     if (!ipSalt) {
@@ -262,7 +287,7 @@ export async function POST(request: NextRequest) {
 
         const turnstileResult: TurnstileValidationResponse = await turnstileResponse.json();
 
-        if (!turnstileResult.success) {
+        if (!turnstileResult.success || !isAllowedTurnstileHostname(turnstileResult.hostname)) {
           // Provider categories are untrusted response data, not safe log fields.
           console.warn('Contact presign verification rejected.');
           return jsonError('Security verification failed. Please reload the form.', 400);

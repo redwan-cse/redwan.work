@@ -4,7 +4,19 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import { deletePrivateObjects, isR2Configured, verifyStoredPortalObjectSize } from '@/lib/r2';
+import {
+  deletePrivateObjects,
+  getPrivateObjectHeadBytes,
+  isR2Configured,
+  verifyStoredPortalObjectSize,
+} from '@/lib/r2';
+import {
+  PORTAL_ALLOWED,
+  extFromFilename,
+  isAllowedMime,
+  resolveMimeType,
+  validateMagicBytes,
+} from '@/lib/mime';
 import {
   createInAppNotification,
   enqueueTransactionalEmail,
@@ -14,7 +26,12 @@ import {
 import { type ServicePillarKey } from '@/lib/content/site';
 import { getPublicServicesCatalog } from '@/lib/cms/queries';
 import { parseFormBoolean } from '@/lib/forms/boolean';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import {
+  currencySchema,
+  positiveFiniteFxRateSchema,
+} from '@/lib/validation/schemas';
 import {
   computeDepositSplit,
   computeInvoiceTotals,
@@ -107,6 +124,22 @@ function getSiteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
 }
 
+async function enforceClientMutationRateLimit(userId: string): Promise<void> {
+  try {
+    const allowed = await consumeRateLimit('client-mutation', userId, 30, 60);
+    if (!allowed) {
+      throw new Error('Too many requests. Please wait a minute and try again.');
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Too many requests')) {
+      throw err;
+    }
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Rate control service is temporarily unavailable. Please retry shortly.');
+    }
+  }
+}
+
 async function registerVaultAttachmentFromForm(
   admin: ReturnType<typeof getSupabaseAdmin>,
   opts: {
@@ -121,12 +154,18 @@ async function registerVaultAttachmentFromForm(
 ): Promise<string | null> {
   const r2Key = String(opts.formData.get('r2_key') ?? '').trim();
   const filename = String(opts.formData.get('filename') ?? '').trim();
-  const mime = String(opts.formData.get('mime') ?? '').trim();
+  const providedMime = String(opts.formData.get('mime') ?? '').trim();
   const sizeBytes = Number(opts.formData.get('size_bytes') ?? 0);
   const sha256Checksum = String(opts.formData.get('sha256_checksum') ?? '').trim() || null;
 
   if (!r2Key || !filename || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
     return null;
+  }
+
+  const ext = extFromFilename(filename);
+  const resolvedMime = resolveMimeType(filename, providedMime);
+  if (!ext || !isAllowedMime(ext, resolvedMime, PORTAL_ALLOWED)) {
+    throw new Error('Unsupported attachment file type or MIME signature.');
   }
 
   const expectedPrefix = `private/${opts.ownerClientId}/${opts.category}/`;
@@ -137,6 +176,10 @@ async function registerVaultAttachmentFromForm(
     const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
     if (!okSize) {
       throw new Error('Uploaded attachment could not be verified in private storage.');
+    }
+    const headBytes = await getPrivateObjectHeadBytes(r2Key, 64);
+    if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
+      throw new Error('Uploaded attachment signature does not match its declared file type.');
     }
   }
 
@@ -151,7 +194,7 @@ async function registerVaultAttachmentFromForm(
       category: opts.category,
       r2_key: r2Key,
       filename,
-      mime_type: mime || 'application/octet-stream',
+      mime_type: resolvedMime,
       size_bytes: Math.round(sizeBytes),
       sha256_checksum: sha256Checksum,
       retention_until: retentionUntil,
@@ -554,7 +597,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const requiresRoe = parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
   const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 10)));
 
-  if (!clientId || !title || totalUsd < 0) return;
+  if (!clientId || !title || !Number.isFinite(totalUsd) || totalUsd < 0) return;
 
   const totalCents = Math.round(totalUsd * 100);
   const admin = getSupabaseAdmin();
@@ -598,7 +641,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
         template: 'order_created',
         subject: `Order ${orderCode} Created — ${title}`,
         payload: {
-          message: `A new engagement order (${orderCode}: ${title}) for $${totalUsd.toLocaleString()} USD has been initialized in your Client Portal.`,
+          message: `A new engagement order (${orderCode}: ${title}) for ${currency} ${totalUsd.toLocaleString()} has been initialized in your Client Portal.`,
           actionUrl: `${getSiteOrigin()}/portal/orders/${parsed.order_id}`,
         },
         entityType: 'order',
@@ -715,7 +758,7 @@ export async function updateOrderStatusAndProgressAction(formData: FormData): Pr
 }
 
 export async function addOrderTaskAction(formData: FormData): Promise<void> {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const title = String(formData.get('title') ?? '').trim();
   const isClientVisible = parseFormBoolean(formData, 'is_client_visible');
@@ -723,14 +766,26 @@ export async function addOrderTaskAction(formData: FormData): Promise<void> {
   if (!orderId || !title) return;
 
   const admin = getSupabaseAdmin();
-  const { error } = await admin.from('order_tasks').insert({
-    order_id: orderId,
-    title,
-    is_client_visible: isClientVisible,
-  });
+  const { error } = await admin
+    .from('order_tasks')
+    .insert({
+      order_id: orderId,
+      title,
+      is_client_visible: isClientVisible,
+    });
   if (error) {
     throw new Error(error.message);
   }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId,
+    action: 'order.task_added',
+    entityType: 'order_task',
+    summary: `Added order task "${title}"`,
+    metadata: { isClientVisible },
+  });
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/portal/orders/${orderId}`);
@@ -738,7 +793,7 @@ export async function addOrderTaskAction(formData: FormData): Promise<void> {
 }
 
 export async function toggleOrderTaskAction(formData: FormData): Promise<void> {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   const taskId = String(formData.get('task_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const completed = parseFormBoolean(formData, 'is_completed');
@@ -756,6 +811,17 @@ export async function toggleOrderTaskAction(formData: FormData): Promise<void> {
   if (error) {
     throw new Error(error.message);
   }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId: orderId || null,
+    action: 'order.task_toggled',
+    entityType: 'order_task',
+    entityId: taskId,
+    summary: `Marked order task ${completed ? 'completed' : 'incomplete'}`,
+    metadata: { is_completed: completed },
+  });
 
   if (orderId) {
     revalidatePath(`/admin/orders/${orderId}`);
@@ -790,7 +856,13 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     throw new Error('Order does not match target client.');
   }
 
+  let resolvedDeliverableMime = resolveMimeType(filename, mime);
   if (r2Key && filename && sizeBytes > 0) {
+    const ext = extFromFilename(filename);
+    resolvedDeliverableMime = resolveMimeType(filename, mime);
+    if (!ext || !isAllowedMime(ext, resolvedDeliverableMime, PORTAL_ALLOWED)) {
+      throw new Error('Unsupported deliverable file type or MIME signature.');
+    }
     const expectedPrefix = `private/${clientId}/deliverable/`;
     if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
       throw new Error('Invalid deliverable storage key prefix.');
@@ -799,6 +871,10 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
       const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
       if (!okSize) {
         throw new Error('Uploaded deliverable object could not be verified in private storage.');
+      }
+      const headBytes = await getPrivateObjectHeadBytes(r2Key, 64);
+      if (!headBytes || !validateMagicBytes(headBytes, resolvedDeliverableMime)) {
+        throw new Error('Uploaded deliverable signature does not match its declared file type.');
       }
     }
   }
@@ -837,7 +913,7 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
         category: 'deliverable',
         r2_key: r2Key,
         filename,
-        mime_type: mime,
+        mime_type: resolvedDeliverableMime,
         size_bytes: sizeBytes,
         sha256_checksum: sha256Checksum,
         retention_until: retentionUntil,
@@ -916,10 +992,17 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
   const session = await requireAdminSession();
   const clientId = String(formData.get('client_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim() || null;
-  const currency = String(formData.get('currency') ?? 'USD')
-    .trim()
-    .toUpperCase();
-  const fxRate = Number(formData.get('fx_rate_to_usd') ?? 1) || 1;
+  const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
+  const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
+  const rawFxInput = formData.get('fx_rate_to_usd');
+  const parsedFx =
+    rawFxInput !== null && String(rawFxInput).trim() !== ''
+      ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
+      : { success: true as const, data: 1 };
+  if (!parsedFx.success) {
+    throw new Error('FX rate to USD must be a positive finite number.');
+  }
+  const fxRate = parsedFx.data;
   const description = String(formData.get('description') ?? '').trim();
   const amountMajor = Number(formData.get('amount_major') ?? 0);
   const discountMajor = Number(formData.get('discount_major') ?? 0);
@@ -928,7 +1011,7 @@ export async function createAndIssueInvoiceAction(formData: FormData): Promise<v
   const notes = String(formData.get('notes') ?? '').trim() || null;
   const isDeposit = parseFormBoolean(formData, 'is_deposit_invoice');
 
-  if (!clientId || !description || amountMajor <= 0) return;
+  if (!clientId || !description || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isFinite(discountMajor)) return;
 
   const subtotalCents = Math.round(amountMajor * 100);
   const discountCents = Math.max(0, Math.round(discountMajor * 100));
@@ -1168,6 +1251,33 @@ export async function toggleClientActiveStatusAction(formData: FormData): Promis
     .eq('role', 'client');
   if (error) throw new Error(error.message);
 
+  if (!nextActive) {
+    try {
+      const authAdmin = admin.auth?.admin as { signOut?: (jwtOrUid: string) => Promise<unknown> } | undefined;
+      if (typeof authAdmin?.signOut === 'function') {
+        await authAdmin.signOut(clientId).catch(() => undefined);
+      }
+    } catch {
+      // Non-fatal if signOut admin API is unavailable
+    }
+
+    const clientEmail = await lookupProfileEmail(clientId);
+    if (clientEmail) {
+      await enqueueTransactionalEmail({
+        toEmail: clientEmail,
+        template: 'account_deactivated',
+        subject: 'Your redwan.work Client Portal Account Was Deactivated',
+        payload: {
+          message:
+            'Your Client Portal access has been deactivated by an administrator. If you believe this was in error or need access restored, please contact support.',
+          actionUrl: `${getSiteOrigin()}/contact`,
+        },
+        entityType: 'client',
+        entityId: clientId,
+      });
+    }
+  }
+
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'admin',
@@ -1192,16 +1302,23 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
 
   if (!ticketId || !body) return;
 
+  if (session.role !== 'admin') {
+    await enforceClientMutationRateLimit(session.userId);
+  }
+
   const admin = getSupabaseAdmin();
   const { data: ticket } = await admin
     .from('tickets')
-    .select('client_id, code, subject')
+    .select('client_id, code, subject, status')
     .eq('id', ticketId)
     .maybeSingle();
 
   if (!ticket) return;
   if (session.role !== 'admin' && ticket.client_id !== session.userId) {
     throw new Error('Forbidden.');
+  }
+  if (session.role !== 'admin' && ticket.status === 'closed') {
+    throw new Error('Closed tickets cannot receive new client replies. Please open a new support ticket.');
   }
 
   const fileId = await registerVaultAttachmentFromForm(admin, {
@@ -1649,6 +1766,11 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
   const admin = getSupabaseAdmin();
 
   if (isCustomDeal) {
+    if (!parseFormBoolean(formData, 'consent_accepted')) {
+      throw new Error(
+        'Please accept the Data & Privacy Policy consent checkbox before submitting a custom quote request.'
+      );
+    }
     if (hasCustomBudget && customBudgetUsd < 25) {
       throw new Error('Custom quote budgets must be at least USD 25.');
     }
@@ -1689,7 +1811,7 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
         converted_client_id: session.userId,
         consent_policy_version: activeConsentVersion,
         consent_policy_hash: activeConsentPolicy.hash,
-        consent_capture_method: 'checkbox_v1',
+        consent_capture_method: 'explicit-checkbox-v1',
         consent_at: new Date().toISOString(),
         status: 'new',
       })
@@ -2217,6 +2339,11 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
           throw new Error('Uploaded payment proof file signature does not match its declared MIME type.');
         }
         verifiedSha256 = createHash('sha256').update(proofBytes).digest('hex');
+      } else {
+        const headBytes = await getPrivateObjectHeadBytes(r2Key, 64);
+        if (!headBytes || !validateMagicBytes(headBytes, resolvedProofMime)) {
+          throw new Error('Uploaded payment proof file signature does not match its declared MIME type.');
+        }
       }
     }
 
@@ -2692,8 +2819,17 @@ export async function createMultiLineInvoiceAction(formData: FormData): Promise<
   const clientId = String(formData.get('client_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim() || null;
   const milestoneId = String(formData.get('milestone_id') ?? '').trim() || null;
-  const currency = (String(formData.get('currency') ?? 'USD').trim() || 'USD').toUpperCase();
-  const fxRate = Math.max(0.0001, Number(formData.get('fx_rate_to_usd') ?? 1) || 1);
+  const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
+  const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
+  const rawFxInput = formData.get('fx_rate_to_usd');
+  const parsedFx =
+    rawFxInput !== null && String(rawFxInput).trim() !== ''
+      ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
+      : { success: true as const, data: 1 };
+  if (!parsedFx.success) {
+    throw new Error('FX rate to USD must be a positive finite number.');
+  }
+  const fxRate = parsedFx.data;
   const discountMajor = Math.max(0, Number(formData.get('discount_major') ?? 0) || 0);
   const taxRateBps = Math.max(0, Math.round(Number(formData.get('tax_rate_bps') ?? 0) || 0));
   const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 7) || 7));
@@ -2932,7 +3068,15 @@ export async function recordManualPaymentAction(formData: FormData): Promise<voi
   const amountCents = Math.round(amountMajor * 100);
   const reference = String(formData.get('reference') ?? '').trim();
   const rawFxRate = formData.get('fx_rate');
-  const parsedFxRate = rawFxRate !== null && String(rawFxRate).trim() !== '' ? Number(rawFxRate) : null;
+  const hasExplicitFx = rawFxRate !== null && String(rawFxRate).trim() !== '';
+  let validatedFxRate: number | null = null;
+  if (hasExplicitFx) {
+    const parsedFx = positiveFiniteFxRateSchema.safeParse(Number(rawFxRate));
+    if (!parsedFx.success) {
+      throw new Error('FX rate must be a positive finite number.');
+    }
+    validatedFxRate = parsedFx.data;
+  }
 
   if (!invoiceId || !Number.isFinite(amountCents) || amountCents <= 0 || !reference) {
     throw new Error('Invoice, positive payment amount, and transaction reference are required.');
@@ -2945,7 +3089,7 @@ export async function recordManualPaymentAction(formData: FormData): Promise<voi
     p_method: method,
     p_amount_cents: amountCents,
     p_reference: reference,
-    p_fx_rate: parsedFxRate && parsedFxRate > 0 ? parsedFxRate : null,
+    p_fx_rate: validatedFxRate,
   });
   if (error) throw new Error(error.message);
 
@@ -3246,41 +3390,14 @@ export async function renewRetainerCycleAction(formData: FormData): Promise<void
   if (!retainerId) return;
 
   const admin = getSupabaseAdmin();
-  const { data: rpcRes, error } = await admin.rpc('renew_retainer_cycle_atomic', {
+  // renew_retainer_cycle_atomic atomically creates the invoice, in-app notification,
+  // and transactional email_outbox row (template = 'retainer_renewed').
+  const { error } = await admin.rpc('renew_retainer_cycle_atomic', {
     p_retainer_id: retainerId,
     p_admin_id: session.userId,
+    p_force: true,
   });
   if (error) throw new Error(error.message);
-
-  const resultObj =
-    rpcRes && typeof rpcRes === 'object' && !Array.isArray(rpcRes)
-      ? (rpcRes as { invoice_id?: string; invoice_code?: string; period_start?: string })
-      : null;
-
-  const { data: ret } = await admin
-    .from('retainer_plans')
-    .select('client_id, title, currency, monthly_fee_cents')
-    .eq('id', retainerId)
-    .maybeSingle();
-
-  if (ret?.client_id) {
-    const displayFee = (ret.monthly_fee_cents / 100).toLocaleString();
-    // Note: renew_retainer_cycle_atomic already inserts the in-app notification atomically.
-    const clientEmail = await lookupProfileEmail(ret.client_id);
-    if (clientEmail && resultObj?.invoice_id) {
-      await enqueueTransactionalEmail({
-        toEmail: clientEmail,
-        template: 'retainer_renewed',
-        subject: `Retainer Cycle Invoice ${resultObj.invoice_code ?? ''} — ${ret.title}`,
-        payload: {
-          message: `Your retainer (${ret.title}) rolled into the new cycle (${resultObj.period_start ?? 'today'}) and invoice ${resultObj.invoice_code ?? ''} for ${ret.currency} ${displayFee} has been issued.`,
-          actionUrl: `${getSiteOrigin()}/portal/invoices/${resultObj.invoice_id}`,
-        },
-        entityType: 'invoice',
-        entityId: resultObj.invoice_id,
-      });
-    }
-  }
 
   revalidatePath('/admin/retainers');
   revalidatePath('/admin/billing');
@@ -3630,7 +3747,7 @@ export async function attachOrderRequirementFileAction(formData: FormData): Prom
 }
 
 export async function deleteOrderTaskAction(formData: FormData): Promise<void> {
-  await requireAdminSession();
+  const session = await requireAdminSession();
   const taskId = String(formData.get('task_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
   if (!taskId) return;
@@ -3638,6 +3755,16 @@ export async function deleteOrderTaskAction(formData: FormData): Promise<void> {
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('order_tasks').delete().eq('id', taskId);
   if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId: orderId || null,
+    action: 'order.task_deleted',
+    entityType: 'order_task',
+    entityId: taskId,
+    summary: 'Deleted order task',
+  });
 
   if (orderId) {
     revalidatePath(`/admin/orders/${orderId}`);

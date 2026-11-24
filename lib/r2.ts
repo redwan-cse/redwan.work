@@ -13,13 +13,20 @@ const KEY_RE = /^contact\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|docx|doc|xlsx|png|j
 export function isR2Configured(): boolean {
   return Boolean(process.env.R2_ENDPOINT && process.env.R2_PRIVATE_BUCKET && process.env.R2_PRIVATE_ACCESS_KEY_ID && process.env.R2_PRIVATE_SECRET_ACCESS_KEY);
 }
+let cachedPrivateClient: { sig: string; client: S3Client } | null = null;
+let cachedPublicClient: { sig: string; client: S3Client } | null = null;
+
 function privateClient(): S3Client {
   const endpoint = process.env.R2_ENDPOINT;
   const accessKeyId = process.env.R2_PRIVATE_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PRIVATE_SECRET_ACCESS_KEY;
   if (!endpoint || !accessKeyId || !secretAccessKey || !process.env.R2_PRIVATE_BUCKET) throw new Error('Private storage is not configured.');
+  const sig = `${endpoint}|${accessKeyId}|${secretAccessKey}`;
+  if (cachedPrivateClient && cachedPrivateClient.sig === sig) return cachedPrivateClient.client;
   // Keep requests and presigned URLs on the configured storage origin.
-  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
+  const client = new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
+  cachedPrivateClient = { sig, client };
+  return client;
 }
 export function validateContactFile(f: { filename: string; mime: string; size: number }): { ok: true; ext: string } | { ok: false; error: string } {
   if (!f || typeof f.filename !== 'string' || !f.filename.trim() || f.filename.length > 255 || typeof f.mime !== 'string' || f.mime.length > 128) return { ok: false, error: 'Invalid file metadata.' };
@@ -158,6 +165,25 @@ export async function getPrivateObjectBytes(key: string): Promise<Buffer> {
   const response = await privateClient().send(new GetObjectCommand({ Bucket: process.env.R2_PRIVATE_BUCKET, Key: key }));
   return Buffer.from(await response.Body?.transformToByteArray() ?? []);
 }
+export async function getPrivateObjectHeadBytes(key: string, maxBytes = 64): Promise<Buffer | null> {
+  if (!isPortalKey(key) && !isValidContactKey(key)) throw new Error('Invalid private key.');
+  const end = Math.max(3, Math.min(4095, Math.floor(maxBytes) - 1));
+  try {
+    const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+    const response = await privateClient().send(
+      new GetObjectCommand({
+        Bucket: process.env.R2_PRIVATE_BUCKET,
+        Key: key,
+        Range: `bytes=0-${end}`,
+      })
+    );
+    const bytes = await response.Body?.transformToByteArray();
+    return bytes ? Buffer.from(bytes.subarray(0, end + 1)) : null;
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'NotFound' || error.name === 'NoSuchKey')) return null;
+    throw error;
+  }
+}
 export async function putPrivateObject(key: string, body: Buffer, contentType: string): Promise<void> {
   if (!isPortalKey(key)||reservedFinalKey(key)) throw new Error('Invalid mutable portal key.');
   const { Upload } = await import('@aws-sdk/lib-storage');
@@ -195,7 +221,11 @@ function publicClient(): S3Client {
   const accessKeyId = process.env.R2_PUBLIC_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_PUBLIC_SECRET_ACCESS_KEY;
   if (!endpoint || !process.env.R2_PUBLIC_BUCKET || !accessKeyId || !secretAccessKey) throw new Error('Public storage is not configured.');
-  return new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
+  const sig = `${endpoint}|${accessKeyId}|${secretAccessKey}`;
+  if (cachedPublicClient && cachedPublicClient.sig === sig) return cachedPublicClient.client;
+  const client = new S3Client({ region: 'auto', endpoint, forcePathStyle: true, credentials: { accessKeyId, secretAccessKey } });
+  cachedPublicClient = { sig, client };
+  return client;
 }
 function assertValidAssetKey(key: string): void {
   if (typeof key !== 'string' || !key.startsWith('assets/') || key.includes('..') || key.includes('\\') || key.includes('//')) {

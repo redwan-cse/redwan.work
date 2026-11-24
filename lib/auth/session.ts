@@ -54,7 +54,10 @@ async function resolveCurrentSession(): Promise<SessionInfo | null> {
     const tokensValidAfter = Number(
       (profile as { tokens_valid_after?: number | null }).tokens_valid_after ?? 0
     );
-    if (tokensValidAfter > 0 && typeof claims.iat === 'number' && claims.iat < tokensValidAfter) {
+    if (
+      tokensValidAfter > 0 &&
+      (typeof claims.iat !== 'number' || !Number.isFinite(claims.iat) || claims.iat < tokensValidAfter)
+    ) {
       return null;
     }
 
@@ -71,17 +74,24 @@ async function resolveCurrentSession(): Promise<SessionInfo | null> {
         return null;
       }
     } else if (role === 'client') {
+      if (profile.mfa_enforced === true && claims.aal !== 'aal2') {
+        return null;
+      }
       const mfaApi = (
         supabase.auth as {
           mfa?: {
             getAuthenticatorAssuranceLevel?: () => Promise<{
               data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+              error?: unknown;
             }>;
           };
         }
       ).mfa;
       if (mfaApi?.getAuthenticatorAssuranceLevel) {
-        const aalRes = await mfaApi.getAuthenticatorAssuranceLevel().catch(() => ({ data: null }));
+        const aalRes = await mfaApi.getAuthenticatorAssuranceLevel();
+        if (aalRes?.error) {
+          return null;
+        }
         if (
           aalRes?.data?.nextLevel === 'aal2' &&
           aalRes?.data?.currentLevel !== 'aal2'
@@ -127,11 +137,21 @@ export async function getPendingMfaAdminSession(): Promise<{
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, is_active, mfa_enforced, full_name, email')
+      .select('role, is_active, mfa_enforced, tokens_valid_after, full_name, email')
       .eq('id', claims.sub)
       .maybeSingle();
 
     if (profileError || !profile || profile.is_active !== true || profile.role !== 'admin') {
+      return null;
+    }
+
+    const tokensValidAfter = Number(
+      (profile as { tokens_valid_after?: number | null }).tokens_valid_after ?? 0
+    );
+    if (
+      tokensValidAfter > 0 &&
+      (typeof claims.iat !== 'number' || !Number.isFinite(claims.iat) || claims.iat < tokensValidAfter)
+    ) {
       return null;
     }
 
