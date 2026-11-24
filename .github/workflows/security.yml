@@ -28,7 +28,7 @@ jobs:
       - name: Install without dependency lifecycle scripts
         run: npm ci --ignore-scripts
       - name: Audit the complete installed dependency graph
-        run: npm audit --audit-level=moderate
+        run: npm audit --audit-level=low
   secrets:
     name: Secret scan
     runs-on: ubuntu-24.04
