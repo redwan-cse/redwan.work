@@ -17,14 +17,18 @@ function sanitizeActionUrl(raw: unknown): string | null {
   return escapeHtml(trimmed);
 }
 
-const TEMPLATE_CTA_LABELS: Record<string, string> = {
+export const TEMPLATE_CTA_LABELS: Record<string, string> = {
   invoice_issued: 'View & Pay Invoice',
   invoice_overdue: 'Settle Overdue Invoice',
   invoice_credit_note: 'View Credit Adjustment',
   proposal_sent: 'Review Proposal Brief',
   proposal_accepted_admin: 'Inspect Accepted Order',
   proposal_declined_admin: 'Review Declined Proposal',
+  custom_quote_submitted: 'Review Custom Quote Request',
+  order_created: 'Open Order Workspace',
+  order_placed_client: 'Open Your Order Workspace',
   order_placed_admin: 'Open New Order',
+  order_status_updated: 'View Order Progress',
   deliverable_published: 'Inspect Deliverable',
   deliverable_accepted_admin: 'Inspect Signed-Off Order',
   deliverable_revision_requested_admin: 'Review Revision Request',
@@ -37,9 +41,14 @@ const TEMPLATE_CTA_LABELS: Record<string, string> = {
   ticket_reply: 'View Ticket Reply',
   ticket_reply_admin: 'Open Ticket in Helpdesk',
   ticket_created_admin: 'Open Support Queue',
+  ticket_status_updated: 'View Support Ticket',
   order_cancellation_requested: 'Review Cancellation Request',
   order_cancellation_resolved: 'View Order Status',
+  retainer_activated: 'View Retainer Plan',
   retainer_renewed: 'View Retainer & Invoice',
+  client_portal_invitation: 'Accept Portal Invitation',
+  inquiry_received_admin: 'Open Lead in Pipeline',
+  inquiry_received_customer: 'Visit redwan.work',
   account_deactivated: 'Contact Support',
 };
 

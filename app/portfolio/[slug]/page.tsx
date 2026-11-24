@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink } from 'lucide-react';
 import { getPublicPortfolioItems } from '@/lib/cms/queries';
-import { SERVICE_PILLARS, SITE } from '@/lib/content/site';
+import { PORTFOLIO_ITEMS, SERVICE_PILLARS, SITE } from '@/lib/content/site';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
 import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
@@ -12,6 +12,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const revalidate = 300;
+
+export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
+  try {
+    const items = await getPublicPortfolioItems();
+    if (items.length > 0) {
+      return items.map((item) => ({ slug: item.slug }));
+    }
+  } catch {
+    // Fall back to canonical case-study slugs during offline static builds.
+  }
+  return PORTFOLIO_ITEMS.map((item) => ({ slug: item.id }));
+}
 
 export async function generateMetadata({
   params,

@@ -52,7 +52,17 @@ import { parseBudgetRange } from '@/lib/contact/intake-contract';
 import { useContactConsentPolicy } from '@/hooks/use-contact-consent-policy';
 import { CONSENT_STALE_MESSAGE, CONSENT_UNAVAILABLE_MESSAGE } from '@/lib/contact/consent-client';
 import { SERVICE_CATALOG, type ServiceCatalogItem } from '@/lib/content/site';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
+const RichTextEditor = dynamic(
+  () => import('@/components/ui/rich-text-editor').then((m) => m.RichTextEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[160px] w-full rounded-xl border border-input bg-background/60 p-3 text-sm text-muted-foreground">
+        Loading editor...
+      </div>
+    ),
+  }
+);
 
 /**
  * Contact intake: /api/contact validates consent, Turnstile and rate limits,

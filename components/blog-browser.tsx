@@ -22,11 +22,11 @@ import { Input } from '@/components/ui/input';
 import { BlogPreviewModal } from '@/components/blog-preview-modal';
 import { InteractiveCard, ScrollReveal } from '@/components/motion/reveal';
 import { isDirectBlogImage } from '@/lib/blog-image-policy';
-import type { BlogPost, BlogTocItem } from '@/lib/blogger';
+import type { BlogPostSummary, BlogTocItem } from '@/lib/blogger';
 import { cn } from '@/lib/utils';
 
 export interface EnrichedBlogPost {
-  post: BlogPost;
+  post: BlogPostSummary;
   imageUrl: string;
   excerpt: string;
   readingMinutes: number;
