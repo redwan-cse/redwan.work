@@ -9,6 +9,7 @@ import {
   ServicesStudioTable,
 } from '@/components/admin/content-studio-drawers';
 import { ResumePdfManager } from '@/components/admin/resume-pdf-manager';
+import { SkillsMatrixEditor } from '@/components/admin/skills-matrix-editor';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -209,16 +210,7 @@ export async function ContentHubView({
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Technical Skills Categories (JSON Map)</Label>
-                  <Textarea
-                    name="technical_skills_json"
-                    aria-label="Technical Skills Categories JSON Map"
-                    rows={4}
-                    defaultValue={JSON.stringify(resumeData.settings.technical_skills ?? {}, null, 2)}
-                    className="font-mono text-xs"
-                  />
-                </div>
+                <SkillsMatrixEditor initialSkills={resumeData.settings.technical_skills ?? {}} />
 
                 <div className="flex justify-end">
                   <Button type="submit" size="sm" className="gap-1.5 rounded-full">

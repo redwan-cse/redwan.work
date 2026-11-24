@@ -42,9 +42,21 @@ export default async function ClientProposalDetailPage({
     notFound();
   }
 
+  let effectiveStatus = proposal.status;
+  if (session.role === 'client' && proposal.status === 'sent') {
+    const { error: viewErr } = await admin
+      .from('proposals')
+      .update({ status: 'viewed' })
+      .eq('id', proposal.id)
+      .eq('status', 'sent');
+    if (!viewErr) {
+      effectiveStatus = 'viewed';
+    }
+  }
+
   const todayIso = new Date().toISOString().slice(0, 10);
   const isExpired = Boolean(proposal.valid_until && proposal.valid_until < todayIso);
-  const canRespond = (proposal.status === 'sent' || proposal.status === 'viewed') && !isExpired;
+  const canRespond = (effectiveStatus === 'sent' || effectiveStatus === 'viewed') && !isExpired;
 
   return (
     <div className="space-y-6">
@@ -60,10 +72,10 @@ export default async function ClientProposalDetailPage({
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="font-mono text-base font-bold text-primary">{proposal.code}</span>
             <Badge
-              variant={proposal.status === 'declined' || isExpired ? 'destructive' : 'outline'}
+              variant={effectiveStatus === 'declined' || isExpired ? 'destructive' : 'outline'}
               className="font-mono text-xs uppercase"
             >
-              {isExpired && (proposal.status === 'sent' || proposal.status === 'viewed') ? 'expired' : proposal.status}
+              {isExpired && (effectiveStatus === 'sent' || effectiveStatus === 'viewed') ? 'expired' : effectiveStatus}
             </Badge>
             {proposal.requires_roe && (
               <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 font-mono text-[10px] text-amber-800 dark:text-amber-300">

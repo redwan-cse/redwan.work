@@ -65,15 +65,66 @@ export function AdminCommandPalette() {
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
+    let chordPending = false;
+    let chordTimer: number | null = null;
+    const CHORD_ROUTES: Record<string, string> = {
+      o: '/admin',
+      p: '/admin/pipeline',
+      d: '/admin/orders',
+      c: '/admin/clients',
+      b: '/admin/billing',
+      s: '/admin/support',
+      m: '/admin/content',
+      a: '/admin/ops',
+    };
+
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setOpen((prev) => !prev);
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (chordPending) {
+        chordPending = false;
+        if (chordTimer !== null) {
+          window.clearTimeout(chordTimer);
+          chordTimer = null;
+        }
+        const targetHref = CHORD_ROUTES[key];
+        if (targetHref) {
+          event.preventDefault();
+          router.push(targetHref);
+        }
+        return;
+      }
+
+      if (key === 'g') {
+        chordPending = true;
+        chordTimer = window.setTimeout(() => {
+          chordPending = false;
+          chordTimer = null;
+        }, 900);
       }
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (chordTimer !== null) window.clearTimeout(chordTimer);
+    };
+  }, [router]);
 
   const handleQueryChange = (val: string) => {
     setQuery(val);

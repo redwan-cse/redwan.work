@@ -124,6 +124,13 @@ function getSiteOrigin(): string {
   return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'https://redwan.work';
 }
 
+function revalidateHub(paths: string[]): void {
+  const unique = new Set(paths);
+  for (const p of unique) {
+    revalidatePath(p);
+  }
+}
+
 async function enforceClientMutationRateLimit(userId: string): Promise<void> {
   try {
     const allowed = await consumeRateLimit('client-mutation', userId, 30, 60);
@@ -380,6 +387,14 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     'cybersecurity') as ServicePillarKey;
   const executiveSummary = String(formData.get('executive_summary') ?? '').trim();
   const scopeItemsRaw = String(formData.get('scope_items') ?? '').trim();
+  const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
+  const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
+  const rawFxInput = formData.get('fx_rate_to_usd');
+  const parsedFx =
+    rawFxInput !== null && String(rawFxInput).trim() !== ''
+      ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
+      : { success: true as const, data: 1 };
+  const fxRate = parsedFx.success ? parsedFx.data : 1;
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
@@ -492,7 +507,8 @@ export async function createProposalAction(formData: FormData): Promise<void> {
       estimated_days: Math.max(1, deliveryDays),
       revisions_included: 2,
       requires_roe: requiresRoe,
-      currency: 'USD',
+      currency,
+      fx_rate_to_usd: fxRate,
       subtotal_cents: totalCents,
       total_cents: totalCents,
       deposit_percent: Math.min(100, Math.max(0, depositPercent)),
@@ -3891,5 +3907,387 @@ export async function addTypedClientNoteAction(formData: FormData): Promise<void
     metadata: { noteType, isPinned, followupDate },
   });
 
-  revalidatePath(`/admin/clients/${clientId}`);
+  revalidateHub([`/admin/clients/${clientId}`, '/admin/clients']);
+}
+
+// =============================================================================
+// 6. PHASE 3 ADMIN COMMAND CENTER V3 ACTIONS
+// =============================================================================
+
+export async function updateDraftProposalAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const proposalId = String(formData.get('proposal_id') ?? '').trim();
+  const title = String(formData.get('title') ?? '').trim();
+  const scopeSummary = String(formData.get('scope_summary') ?? '').trim();
+  const deliverablesSummary = String(formData.get('deliverables_summary') ?? '').trim();
+  const totalMajor = Number(formData.get('total_major') ?? 0);
+  const depositPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('deposit_percent') ?? 50))));
+  const estimatedDays = Math.max(1, Math.round(Number(formData.get('estimated_days') ?? 7)));
+  const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
+  const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
+  const requiresRoe = parseFormBoolean(formData, 'requires_roe');
+
+  if (!proposalId || !title || !scopeSummary || !Number.isFinite(totalMajor) || totalMajor <= 0) {
+    throw new Error('Title, executive scope summary, and a positive total are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: existing } = await admin
+    .from('proposals')
+    .select('id, code, status, client_id')
+    .eq('id', proposalId)
+    .maybeSingle();
+
+  if (!existing) throw new Error('Proposal not found.');
+  if (existing.status !== 'draft') {
+    throw new Error(`Only draft proposals can be edited (current status: ${existing.status}).`);
+  }
+
+  const totalCents = Math.round(totalMajor * 100);
+  const { error } = await admin
+    .from('proposals')
+    .update({
+      title,
+      scope_summary: scopeSummary,
+      deliverables_summary: deliverablesSummary || scopeSummary,
+      currency,
+      subtotal_cents: totalCents,
+      total_cents: totalCents,
+      deposit_percent: depositPercent,
+      estimated_days: estimatedDays,
+      requires_roe: requiresRoe,
+    })
+    .eq('id', proposalId)
+    .eq('status', 'draft');
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: existing.client_id,
+    action: 'proposal.draft_updated',
+    entityType: 'proposal',
+    entityId: proposalId,
+    summary: `Updated draft proposal ${existing.code ?? proposalId}`,
+    metadata: { totalCents, currency, depositPercent, estimatedDays },
+  });
+
+  revalidateHub([
+    `/admin/proposals/${proposalId}`,
+    '/admin/proposals',
+    '/admin/pipeline',
+    '/admin',
+  ]);
+}
+
+export async function voidProposalAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const proposalId = String(formData.get('proposal_id') ?? '').trim();
+  if (!proposalId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: existing } = await admin
+    .from('proposals')
+    .select('id, code, status, client_id')
+    .eq('id', proposalId)
+    .maybeSingle();
+
+  if (!existing) throw new Error('Proposal not found.');
+  if (existing.status === 'accepted') {
+    throw new Error('Accepted proposals cannot be voided.');
+  }
+
+  const { error } = await admin
+    .from('proposals')
+    .update({ status: 'expired' })
+    .eq('id', proposalId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: existing.client_id,
+    action: 'proposal.expired',
+    entityType: 'proposal',
+    entityId: proposalId,
+    summary: `Marked proposal ${existing.code ?? proposalId} as expired`,
+    metadata: { previousStatus: existing.status },
+  });
+
+  revalidateHub([
+    `/admin/proposals/${proposalId}`,
+    '/admin/proposals',
+    '/admin/pipeline',
+    `/portal/proposals/${proposalId}`,
+    '/portal/proposals',
+  ]);
+}
+
+export async function cloneProposalAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const proposalId = String(formData.get('proposal_id') ?? '').trim();
+  if (!proposalId) return;
+
+  const admin = getSupabaseAdmin();
+  const [{ data: source }, { data: sourceMilestones }] = await Promise.all([
+    admin.from('proposals').select('*').eq('id', proposalId).maybeSingle(),
+    admin.from('proposal_milestones').select('*').eq('proposal_id', proposalId).order('position'),
+  ]);
+  if (!source) throw new Error('Source proposal not found.');
+
+  const { data: cloned, error: cloneErr } = await admin
+    .from('proposals')
+    .insert({
+      client_id: source.client_id,
+      inquiry_id: source.inquiry_id,
+      recipient_name: source.recipient_name,
+      recipient_email: source.recipient_email,
+      title: `${source.title} (Copy)`,
+      pillar: source.pillar,
+      pricing_model: source.pricing_model,
+      scope_summary: source.scope_summary,
+      deliverables_summary: source.deliverables_summary,
+      estimated_days: source.estimated_days,
+      revisions_included: source.revisions_included,
+      requires_roe: source.requires_roe,
+      currency: source.currency,
+      fx_rate_to_usd: source.fx_rate_to_usd,
+      subtotal_cents: source.subtotal_cents,
+      discount_cents: source.discount_cents,
+      tax_rate_bps: source.tax_rate_bps,
+      tax_cents: source.tax_cents,
+      total_cents: source.total_cents,
+      deposit_percent: source.deposit_percent,
+      status: 'draft',
+      valid_until: new Date(Date.now() + 14 * 86400 * 1000).toISOString().slice(0, 10),
+      created_by: session.userId,
+    })
+    .select('id, code')
+    .single();
+  if (cloneErr || !cloned) throw new Error(cloneErr?.message ?? 'Could not clone proposal.');
+
+  if (sourceMilestones && sourceMilestones.length > 0) {
+    const { error: msErr } = await admin.from('proposal_milestones').insert(
+      sourceMilestones.map((ms, idx) => ({
+        proposal_id: cloned.id,
+        position: idx,
+        title: ms.title,
+        description: ms.description,
+        amount_cents: ms.amount_cents,
+        due_days_offset: ms.due_days_offset,
+        weight_percent: ms.weight_percent,
+      }))
+    );
+    if (msErr) throw new Error(msErr.message);
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: source.client_id,
+    action: 'proposal.cloned',
+    entityType: 'proposal',
+    entityId: cloned.id,
+    summary: `Cloned proposal ${source.code ?? proposalId} into draft ${cloned.code ?? cloned.id}`,
+    metadata: { sourceProposalId: proposalId },
+  });
+
+  revalidateHub(['/admin/proposals', '/admin/pipeline']);
+  redirect(`/admin/proposals/${cloned.id}`);
+}
+
+export async function editOrderMilestoneDetailsAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const milestoneId = String(formData.get('milestone_id') ?? '').trim();
+  const orderId = String(formData.get('order_id') ?? '').trim();
+  const title = String(formData.get('title') ?? '').trim();
+  const dueDate = String(formData.get('due_date') ?? '').trim() || null;
+  const amountMajorRaw = String(formData.get('amount_major') ?? '').trim();
+  const weightRaw = String(formData.get('weight_percent') ?? '').trim();
+
+  if (!milestoneId || !orderId || !title) {
+    throw new Error('Milestone ID, order ID, and title are required.');
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data: linkedInv } = await admin
+    .from('invoices')
+    .select('id')
+    .eq('milestone_id', milestoneId)
+    .neq('status', 'void')
+    .limit(1);
+
+  const updates: Database['public']['Tables']['order_milestones']['Update'] = {
+    title,
+    due_date: dueDate,
+  };
+  if (weightRaw !== '') {
+    const parsedW = Math.min(100, Math.max(0, Math.round(Number(weightRaw) || 0)));
+    updates.weight_percent = parsedW;
+  }
+  if (amountMajorRaw !== '') {
+    const parsedAmt = Math.round(Number(amountMajorRaw) * 100);
+    if (!Number.isFinite(parsedAmt) || parsedAmt < 0) {
+      throw new Error('Milestone amount must be zero or greater.');
+    }
+    if (!linkedInv || linkedInv.length === 0) {
+      updates.amount_cents = parsedAmt;
+    }
+  }
+
+  const { error } = await admin
+    .from('order_milestones')
+    .update(updates)
+    .eq('id', milestoneId)
+    .eq('order_id', orderId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    orderId,
+    action: 'order.milestone_edited',
+    entityType: 'order_milestone',
+    entityId: milestoneId,
+    summary: `Edited milestone "${title}"`,
+    metadata: updates,
+  });
+
+  revalidateHub([`/admin/orders/${orderId}`, `/portal/orders/${orderId}`]);
+}
+
+export async function revokeClientInvitationAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invitationId = String(formData.get('invitation_id') ?? '').trim();
+  if (!invitationId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: inv, error } = await admin
+    .from('client_invitations')
+    .update({ status: 'revoked' })
+    .eq('id', invitationId)
+    .eq('status', 'pending')
+    .select('email')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    action: 'client.invitation_revoked',
+    entityType: 'client_invitation',
+    entityId: invitationId,
+    summary: `Revoked pending invitation for ${inv?.email ?? invitationId}`,
+  });
+
+  revalidateHub(['/admin/clients', '/admin']);
+}
+
+export async function toggleClientNotePinAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const noteId = String(formData.get('note_id') ?? '').trim();
+  const clientId = String(formData.get('client_id') ?? '').trim();
+  const nextPinned = parseFormBoolean(formData, 'is_pinned');
+  if (!noteId || !clientId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('client_notes')
+    .update({ is_pinned: nextPinned })
+    .eq('id', noteId)
+    .eq('client_id', clientId);
+  if (error) throw new Error(error.message);
+
+  revalidateHub([`/admin/clients/${clientId}`]);
+}
+
+export async function deleteClientNoteAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const noteId = String(formData.get('note_id') ?? '').trim();
+  const clientId = String(formData.get('client_id') ?? '').trim();
+  if (!noteId || !clientId) return;
+
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('client_notes')
+    .delete()
+    .eq('id', noteId)
+    .eq('client_id', clientId);
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId,
+    action: 'client.note_deleted',
+    entityType: 'client_note',
+    entityId: noteId,
+    summary: 'Deleted internal CRM note from client record',
+  });
+
+  revalidateHub([`/admin/clients/${clientId}`]);
+}
+
+export async function updateDraftInvoiceAction(formData: FormData): Promise<void> {
+  const session = await requireAdminSession();
+  const invoiceId = String(formData.get('invoice_id') ?? '').trim();
+  const dueAt = String(formData.get('due_at') ?? '').trim() || null;
+  const discountMajor = Math.max(0, Number(formData.get('discount_major') ?? 0) || 0);
+  const taxRateBps = Math.max(0, Math.round(Number(formData.get('tax_rate_bps') ?? 0) || 0));
+  const paymentInstructions = String(formData.get('payment_instructions') ?? '').trim() || null;
+  const notes = String(formData.get('notes') ?? '').trim() || null;
+
+  if (!invoiceId) return;
+
+  const admin = getSupabaseAdmin();
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('id, code, status, subtotal_cents, client_id, order_id')
+    .eq('id', invoiceId)
+    .maybeSingle();
+
+  if (!invoice) throw new Error('Invoice not found.');
+  if (invoice.status !== 'draft') {
+    throw new Error('Only draft invoices can be edited.');
+  }
+
+  const discountCents = Math.round(discountMajor * 100);
+  const totals = computeInvoiceTotals({
+    subtotalCents: invoice.subtotal_cents,
+    discountCents,
+    taxRateBps,
+  });
+
+  const { error } = await admin
+    .from('invoices')
+    .update({
+      due_at: dueAt,
+      discount_cents: totals.discountCents,
+      tax_rate_bps: totals.taxRateBps,
+      tax_cents: totals.taxCents,
+      total_cents: totals.totalCents,
+      payment_instructions: paymentInstructions,
+      notes,
+    })
+    .eq('id', invoiceId)
+    .eq('status', 'draft');
+  if (error) throw new Error(error.message);
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    clientId: invoice.client_id,
+    orderId: invoice.order_id,
+    action: 'invoice.draft_updated',
+    entityType: 'invoice',
+    entityId: invoiceId,
+    summary: `Updated draft invoice ${invoice.code ?? invoiceId}`,
+    metadata: { dueAt, discountCents: totals.discountCents, taxRateBps: totals.taxRateBps, totalCents: totals.totalCents },
+  });
+
+  revalidateHub([
+    `/admin/invoices/${invoiceId}`,
+    '/admin/invoices',
+    '/admin/billing',
+  ]);
 }

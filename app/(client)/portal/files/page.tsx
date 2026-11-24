@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Clock, Download, FolderLock, Search, ShieldCheck } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { CopyValueButton } from '@/components/panel/copy-value-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -41,16 +42,32 @@ export default async function ClientVaultFilesPage({
   });
 
   const usedBytes = (files ?? []).reduce((sum, f) => sum + Number(f.size_bytes || 0), 0);
+  const quotaBytes = 500 * 1024 * 1024;
+  const usedPercent = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
+  const nowMs = new Date().getTime();
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1 space-y-2">
           <Badge variant="outline" className="font-mono text-xs">
             <ShieldCheck className="mr-1 h-3.5 w-3.5 text-primary" />
-            Encrypted Deliverables Vault · {(usedBytes / (1024 * 1024)).toFixed(2)} MB / 500 MB
+            Encrypted Deliverables Vault · {(usedBytes / (1024 * 1024)).toFixed(2)} MB / 500 MB ({usedPercent}%)
           </Badge>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">
+          <div
+            role="progressbar"
+            aria-label="Encrypted vault storage quota usage"
+            aria-valuenow={usedPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            className="h-2 max-w-xs overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className={`h-full transition-all ${usedPercent >= 85 ? 'bg-destructive' : 'bg-primary'}`}
+              style={{ width: `${Math.max(usedBytes > 0 ? 2 : 0, usedPercent)}%` }}
+            />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">
             Encrypted Deliverables &amp; File Vault
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -116,18 +133,35 @@ export default async function ClientVaultFilesPage({
                     )}
                   </div>
                   <div className="break-all font-mono text-sm font-bold">{file.filename}</div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
                     <span>{(file.size_bytes / 1024).toFixed(1)} KB</span>
                     <span>{file.mime_type}</span>
                     {file.sha256_checksum && (
-                      <span className="break-all">SHA-256: {file.sha256_checksum}</span>
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <span className="break-all">SHA-256: {file.sha256_checksum}</span>
+                        <CopyValueButton value={file.sha256_checksum} label="Copy SHA-256" />
+                      </span>
                     )}
                     <span>Uploaded {new Date(file.created_at).toLocaleDateString()}</span>
-                    {file.retention_until && (
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Retained until {new Date(file.retention_until).toLocaleDateString()}
-                      </span>
+                    {file.retention_until ? (
+                      (() => {
+                        const daysLeft = Math.max(
+                          0,
+                          Math.ceil(
+                            (new Date(file.retention_until).getTime() - nowMs) / 86_400_000
+                          )
+                        );
+                        return (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Retained until {new Date(file.retention_until).toLocaleDateString()} ({daysLeft}d left)
+                          </span>
+                        );
+                      })()
+                    ) : (
+                      <Badge variant="secondary" className="font-mono text-[10px]">
+                        Pinned Forever
+                      </Badge>
                     )}
                   </div>
                 </div>

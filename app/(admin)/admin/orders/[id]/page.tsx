@@ -34,6 +34,7 @@ import {
   deleteDeliverableOrVaultFileAction,
   deleteOrderMilestoneAction,
   deleteOrderTaskAction,
+  editOrderMilestoneDetailsAction,
   generateMilestoneInvoiceAction,
   resolveCancellationRequestAction,
   submitOrderDeliverableAction,
@@ -264,6 +265,38 @@ export default async function AdminOrderDetailPage({
       {/* TAB 1: DELIVERY & VAULT (DEFAULT) */}
       {activeTab === 'delivery' && (
         <div className="space-y-6">
+          {/* Linked Order Invoices Strip */}
+          <Card className="border-border/80">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3.5 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[11px] font-bold uppercase text-muted-foreground">
+                  Linked Invoices ({linkedInvoices?.length ?? 0}):
+                </span>
+                {(linkedInvoices ?? []).map((inv) => (
+                  <Link
+                    key={inv.id}
+                    href={`/admin/invoices/${inv.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/30 px-2.5 py-1 font-mono text-[11px] hover:border-primary/50"
+                  >
+                    <span className="font-bold text-primary">{inv.code}</span>
+                    <span>{formatMoney(inv.total_cents, inv.currency)}</span>
+                    <Badge variant="outline" className="px-1 py-0 text-[9px] uppercase">
+                      {inv.status}
+                    </Badge>
+                  </Link>
+                ))}
+                {(!linkedInvoices || linkedInvoices.length === 0) && (
+                  <span className="text-muted-foreground">No active invoices linked yet.</span>
+                )}
+              </div>
+              <Button asChild size="sm" variant="outline" className="h-7 rounded-full text-[11px]">
+                <Link href={`/admin/invoices/new?client_id=${order.client_id}&order_id=${order.id}`}>
+                  + New Order Invoice
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <div className="grid gap-6 lg:grid-cols-12">
             {/* Publish Versioned R2 Deliverable */}
             <Card className="lg:col-span-5">
@@ -698,6 +731,52 @@ export default async function AdminOrderDetailPage({
                         />
                       )}
                     </div>
+
+                    <details className="border-t border-border/40 pt-1.5">
+                      <summary className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-primary">
+                        Edit Milestone Details (Title / Amount / Due Date)
+                      </summary>
+                      <ActionFeedbackForm
+                        action={editOrderMilestoneDetailsAction}
+                        successMessage="Milestone details updated."
+                        className="mt-2 grid gap-2 sm:grid-cols-4"
+                      >
+                        <input type="hidden" name="milestone_id" value={ms.id} />
+                        <input type="hidden" name="order_id" value={order.id} />
+                        <Input
+                          name="title"
+                          defaultValue={ms.title}
+                          required
+                          aria-label="Milestone title"
+                          className="h-7 text-[11px] sm:col-span-2"
+                        />
+                        <Input
+                          name="amount_major"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          defaultValue={(ms.amount_cents / 100).toFixed(2)}
+                          disabled={Boolean(linkedInv)}
+                          aria-label="Milestone amount"
+                          className="h-7 font-mono text-[11px]"
+                        />
+                        <Input
+                          name="due_date"
+                          type="date"
+                          defaultValue={ms.due_date ?? ''}
+                          aria-label="Milestone due date"
+                          className="h-7 font-mono text-[11px]"
+                        />
+                        <div className="flex items-center justify-between gap-2 sm:col-span-4">
+                          <span className="text-[10px] text-muted-foreground">
+                            {linkedInv ? 'Amount locked because an invoice is already linked.' : 'Uninvoiced milestone amount can be adjusted.'}
+                          </span>
+                          <Button type="submit" size="sm" variant="secondary" className="h-6 px-2.5 text-[10px]">
+                            Save Details
+                          </Button>
+                        </div>
+                      </ActionFeedbackForm>
+                    </details>
                   </div>
                 );
               })}

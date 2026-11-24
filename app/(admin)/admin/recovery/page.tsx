@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, Download, FolderArchive, Pin, ShieldAlert, TimerReset } from 'lucide-react';
+import { Download, FolderArchive, Pin, ShieldAlert, TimerReset } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
@@ -75,23 +75,22 @@ export default async function AdminRecoveryPage() {
     .filter((obj) => !trackedKeys.has(obj.key))
     .slice(0, 40);
 
+  const opsTabs = [
+    { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops' },
+    { id: 'outbox', label: 'Email Outbox & Queue', href: '/admin/emails/outbox' },
+    { id: 'recovery', label: 'R2 Vault Recovery', href: '/admin/recovery', count: vaultFiles.length },
+    { id: 'settings', label: 'Consent & Security Settings', href: '/admin/settings' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/ops"
-          className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Security &amp; Ops Hub
-        </Link>
-
-        <AdminHubHeader
-          eyebrow="PRIVATE R2 VAULT GOVERNANCE & DISASTER RECOVERY"
-          title="Vault Quotas, Retention Controls & ZIP Recovery"
-          description="Inspect per-client encrypted storage consumption, extend or pin expiring security deliverables (90-day default), purge orphan keys, and download ZIP bundles per order."
-        />
-      </div>
+      <AdminHubHeader
+        eyebrow="PRIVATE R2 VAULT GOVERNANCE & DISASTER RECOVERY"
+        title="Vault Quotas, Retention Controls & ZIP Recovery"
+        description="Inspect per-client encrypted storage consumption, extend or pin expiring security deliverables (90-day default), purge orphan keys, and download ZIP bundles per order."
+        tabs={opsTabs}
+        activeTab="recovery"
+      />
 
       {/* Per-Client Quotas + Project ZIP Recovery Export */}
       <div className="grid gap-6 lg:grid-cols-2">

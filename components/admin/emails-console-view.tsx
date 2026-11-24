@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Mail, Play, RotateCw } from 'lucide-react';
+import { Mail, Play, RotateCw } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { drainEmailOutboxAction, retryOutboxEmailAction } from '@/lib/admin/ops-actions';
+import {
+  drainEmailOutboxAction,
+  retryAllFailedOutboxEmailsAction,
+  retryOutboxEmailAction,
+} from '@/lib/admin/ops-actions';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function EmailsConsoleView({
@@ -57,39 +61,39 @@ export async function EmailsConsoleView({
     (r) => r.status === 'failed' || r.status === 'dead_letter'
   ).length;
 
-  const tabs = [
+  const opsTabs = [
+    { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops' },
     {
       id: 'outbox',
-      label: 'Outbox Queue & Retries',
+      label: 'Email Outbox & Queue',
       href: '/admin/emails/outbox',
       count: pendingCount + failedCount,
     },
-    {
-      id: 'logs',
-      label: 'Delivery History (email_log)',
-      href: '/admin/emails',
-      count: emailLogs?.length ?? 0,
-    },
+    { id: 'recovery', label: 'R2 Vault Recovery', href: '/admin/recovery' },
+    { id: 'settings', label: 'Consent & Security Settings', href: '/admin/settings' },
   ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/ops"
-          className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Security &amp; Ops Hub
-        </Link>
-
-        <AdminHubHeader
-          eyebrow="TRANSACTIONAL EMAIL INFRASTRUCTURE"
-          title="Email Outbox Queue & Delivery Logs"
-          description="Monitor durable Resend outbox dispatches, retry failed/dead-lettered messages cleanly, and drain pending notifications immediately."
-          tabs={tabs}
-          activeTab={activeTab}
-          actions={
+      <AdminHubHeader
+        eyebrow="TRANSACTIONAL EMAIL INFRASTRUCTURE"
+        title="Email Outbox Queue & Delivery Logs"
+        description="Monitor durable Resend outbox dispatches, bulk-retry failed/dead-lettered messages cleanly, and drain pending notifications immediately."
+        tabs={opsTabs}
+        activeTab="outbox"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {failedCount > 0 && (
+              <ActionFeedbackForm
+                action={retryAllFailedOutboxEmailsAction}
+                successMessage="Reset all failed/dead-letter emails for immediate retry."
+              >
+                <Button type="submit" size="sm" variant="outline" className="gap-1.5 rounded-full text-xs">
+                  <RotateCw className="h-3.5 w-3.5" />
+                  Retry All Failed ({failedCount})
+                </Button>
+              </ActionFeedbackForm>
+            )}
             <ActionFeedbackForm
               action={drainEmailOutboxAction}
               successMessage="Processed pending outbox items."
@@ -99,8 +103,27 @@ export async function EmailsConsoleView({
                 Drain Outbox Now ({pendingCount})
               </Button>
             </ActionFeedbackForm>
-          }
-        />
+          </div>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          asChild
+          size="sm"
+          variant={activeTab === 'outbox' ? 'default' : 'outline'}
+          className="h-8 rounded-full text-xs"
+        >
+          <Link href="/admin/emails/outbox">Outbox Queue ({pendingCount + failedCount})</Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          variant={activeTab === 'logs' ? 'default' : 'outline'}
+          className="h-8 rounded-full text-xs"
+        >
+          <Link href="/admin/emails">Delivery History ({emailLogs?.length ?? 0})</Link>
+        </Button>
       </div>
 
       {/* Filter Bar */}

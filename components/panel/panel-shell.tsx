@@ -365,6 +365,13 @@ export function PanelShell({
                             {notif.href ? (
                               <Link
                                 href={notif.href}
+                                onClick={() => {
+                                  if (!notif.is_read) {
+                                    const fd = new FormData();
+                                    fd.set('notification_id', notif.id);
+                                    void markNotificationReadAction(fd);
+                                  }
+                                }}
                                 className="block font-semibold text-foreground hover:text-primary"
                               >
                                 {notif.title}
@@ -404,9 +411,42 @@ export function PanelShell({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 p-4 focus:outline-none sm:p-6 lg:p-8">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 pb-20 focus:outline-none sm:p-6 sm:pb-20 lg:p-8">
           {children}
         </main>
+
+        {/* Sticky Mobile Bottom Navigation Bar */}
+        <nav
+          aria-label="Mobile quick navigation"
+          className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border/80 bg-card/95 px-1.5 py-1.5 backdrop-blur-md print:hidden lg:hidden"
+        >
+          {navItems.slice(0, 4).map((item) => {
+            const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
+            const active = isNavItemActive(item);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-medium transition-colors',
+                  active ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="max-w-full truncate">{item.label.split(' ')[0]}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Menu className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="max-w-full truncate">More</span>
+          </button>
+        </nav>
       </div>
     </div>
   );

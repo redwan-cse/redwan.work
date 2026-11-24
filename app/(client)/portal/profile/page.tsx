@@ -38,6 +38,28 @@ export default async function ClientProfilePage() {
   ]);
 
   const billingAddr = (clientProfile?.billing_address ?? {}) as Record<string, string | undefined>;
+  const supportedTimezones: string[] = (() => {
+    try {
+      if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
+        return ['UTC', ...Intl.supportedValuesOf('timeZone')];
+      }
+    } catch {
+      // ignore
+    }
+    return [
+      'UTC',
+      'Asia/Dhaka',
+      'Asia/Kolkata',
+      'Asia/Singapore',
+      'Asia/Dubai',
+      'Europe/London',
+      'Europe/Berlin',
+      'America/New_York',
+      'America/Chicago',
+      'America/Los_Angeles',
+      'Australia/Sydney',
+    ];
+  })();
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -96,13 +118,19 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Timezone</Label>
+                <Label className="text-xs">Timezone (IANA)</Label>
                 <Input
                   name="timezone"
+                  list="iana-timezones"
                   defaultValue={profile?.timezone ?? 'UTC'}
                   placeholder="UTC / Asia/Dhaka / America/New_York"
                   className="h-9 text-xs"
                 />
+                <datalist id="iana-timezones">
+                  {supportedTimezones.map((tz) => (
+                    <option key={tz} value={tz} />
+                  ))}
+                </datalist>
               </div>
             </div>
 

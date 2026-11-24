@@ -352,7 +352,7 @@ export async function PipelineHubView({
                   />
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="space-y-1">
                     <Label className="text-xs">Pillar</Label>
                     <select
@@ -369,7 +369,21 @@ export async function PipelineHubView({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Total (USD) *</Label>
+                    <Label className="text-xs">Currency</Label>
+                    <select
+                      name="currency"
+                      aria-label="Proposal currency"
+                      defaultValue="USD"
+                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                    >
+                      <option value="USD">USD</option>
+                      <option value="BDT">BDT</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Total *</Label>
                     <Input
                       name="total_usd"
                       aria-label="Proposal total in USD"

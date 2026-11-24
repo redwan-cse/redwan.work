@@ -78,6 +78,43 @@ export async function retryOutboxEmailAction(formData: FormData): Promise<void> 
   revalidatePath('/admin/ops');
 }
 
+export async function retryAllFailedOutboxEmailsAction(): Promise<void> {
+  const session = await requireAdminSession();
+  const admin = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
+
+  const { data: resetRows, error } = await admin
+    .from('email_outbox')
+    .update({
+      status: 'pending',
+      attempts: 0,
+      locked_at: null,
+      last_error: null,
+      next_attempt_at: nowIso,
+    })
+    .in('status', ['failed', 'dead_letter'])
+    .select('id');
+  if (error) throw new Error(error.message);
+
+  const retriedCount = resetRows?.length ?? 0;
+  if (retriedCount > 0 && process.env.RESEND_API_KEY) {
+    await drainEmailOutbox(20).catch(() => undefined);
+  }
+
+  await recordAuditLog({
+    actorId: session.userId,
+    actorRole: 'admin',
+    action: 'email_outbox.bulk_retried',
+    entityType: 'email_outbox',
+    summary: `Reset ${retriedCount} failed/dead-letter email(s) for immediate retry`,
+    metadata: { retriedCount },
+  });
+
+  revalidatePath('/admin/emails');
+  revalidatePath('/admin/emails/outbox');
+  revalidatePath('/admin/ops');
+}
+
 export async function extendVaultRetentionAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const parsedId = uuidSchema.safeParse(formData.get('file_id'));

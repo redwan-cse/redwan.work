@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { ArrowRight, Search, UserPlus } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
+import { CsvExportButton } from '@/components/admin/csv-export-button';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
+import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,7 +20,10 @@ import {
 } from '@/components/ui/table';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAdminSession } from '@/lib/auth/session';
-import { inviteOrProvisionClientAction } from '@/lib/crm/actions';
+import {
+  inviteOrProvisionClientAction,
+  revokeClientInvitationAction,
+} from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -26,35 +31,55 @@ export const dynamic = 'force-dynamic';
 export default async function AdminClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; tier?: string }>;
+  searchParams: Promise<{ q?: string; tier?: string; sort?: string; followup?: string; page?: string }>;
 }) {
   await requireAdminSession();
   const params = await searchParams;
   const qFilter = (params.q ?? '').trim().toLowerCase();
   const tierFilter = (params.tier ?? '').trim();
+  const sortMode = (params.sort ?? '').trim();
+  const followupFilter = (params.followup ?? '').trim();
 
   const admin = getSupabaseAdmin();
-  const [{ data: profiles }, { data: clientProfiles }] = await Promise.all([
+  const [{ data: profiles }, { data: clientProfiles }, { data: invitations }] = await Promise.all([
     admin
       .from('profiles')
       .select('id, email, full_name, company, is_active, created_at')
       .eq('role', 'client')
       .order('created_at', { ascending: false }),
     admin.from('client_profiles').select('*'),
+    admin
+      .from('client_invitations')
+      .select('id, email, full_name, company, tier, status, expires_at, created_at')
+      .order('created_at', { ascending: false })
+      .limit(25),
   ]);
 
   const crmMap = new Map((clientProfiles ?? []).map((cp) => [cp.user_id, cp]));
+  const nowIso = new Date().toISOString();
 
-  const filteredClients = (profiles ?? []).filter((client) => {
-    const crm = crmMap.get(client.id);
-    const tier = crm?.tier ?? 'standard';
-    if (tierFilter && tier !== tierFilter) return false;
-    if (qFilter) {
-      const hay = `${client.full_name ?? ''} ${client.email} ${crm?.company_name ?? client.company ?? ''}`.toLowerCase();
-      if (!hay.includes(qFilter)) return false;
-    }
-    return true;
-  });
+  const filteredClients = (profiles ?? [])
+    .filter((client) => {
+      const crm = crmMap.get(client.id);
+      const tier = crm?.tier ?? 'standard';
+      if (tierFilter && tier !== tierFilter) return false;
+      if (followupFilter === 'due') {
+        if (!crm?.next_followup_at || crm.next_followup_at > nowIso) return false;
+      }
+      if (qFilter) {
+        const hay = `${client.full_name ?? ''} ${client.email} ${crm?.company_name ?? client.company ?? ''}`.toLowerCase();
+        if (!hay.includes(qFilter)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortMode === 'ltv_desc') {
+        const ltvA = crmMap.get(a.id)?.lifetime_value_usd_cents ?? 0;
+        const ltvB = crmMap.get(b.id)?.lifetime_value_usd_cents ?? 0;
+        return ltvB - ltvA;
+      }
+      return 0;
+    });
 
   return (
     <div className="space-y-6">
@@ -62,6 +87,25 @@ export default async function AdminClientsPage({
         eyebrow="LONG-TERM CLIENT RETENTION CRM"
         title="Clients 360° Directory"
         description="Invite portal accounts, segment VIP and Retainer clients, track USD Lifetime Value, and open complete 6-tab 360° client records."
+        actions={
+          <CsvExportButton
+            filename="clients-directory.csv"
+            headers={['Full Name', 'Email', 'Company', 'Tier', 'Active', 'USD LTV', 'Completed Orders', 'Next Follow-Up']}
+            rows={filteredClients.map((client) => {
+              const crm = crmMap.get(client.id);
+              return [
+                client.full_name ?? '',
+                client.email,
+                crm?.company_name ?? client.company ?? '',
+                crm?.tier ?? 'standard',
+                client.is_active !== false ? 'Yes' : 'No',
+                ((crm?.lifetime_value_usd_cents ?? 0) / 100).toFixed(2),
+                crm?.completed_orders_count ?? 0,
+                crm?.next_followup_at ? crm.next_followup_at.slice(0, 10) : '',
+              ];
+            })}
+          />
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-12">
@@ -157,6 +201,24 @@ export default async function AdminClientsPage({
                 <option value="retainer">retainer</option>
                 <option value="enterprise">enterprise</option>
               </select>
+              <select
+                name="sort"
+                aria-label="Sort clients"
+                defaultValue={sortMode}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Newest First</option>
+                <option value="ltv_desc">Highest LTV</option>
+              </select>
+              <select
+                name="followup"
+                aria-label="Filter by follow-up status"
+                defaultValue={followupFilter}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">All Follow-Ups</option>
+                <option value="due">Follow-Up Due</option>
+              </select>
               <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
                 Filter
               </Button>
@@ -249,6 +311,102 @@ export default async function AdminClientsPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Portal Invitations Tracker */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            Portal Invitations Ledger ({invitations?.length ?? 0})
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Track pending, accepted, expired, and revoked client invitations — resend or revoke pending invites cleanly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {invitations && invitations.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Recipient</TableHead>
+                  <TableHead className="text-xs">Tier / Status</TableHead>
+                  <TableHead className="text-xs">Expires</TableHead>
+                  <TableHead className="text-right text-xs">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitations.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="text-xs">
+                      <div className="font-semibold">{inv.full_name || inv.email}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground">
+                        {inv.email}
+                        {inv.company ? ` · ${inv.company}` : ''}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="font-mono text-[10px] uppercase">
+                          {inv.tier}
+                        </Badge>
+                        <Badge
+                          variant={
+                            inv.status === 'accepted'
+                              ? 'default'
+                              : inv.status === 'revoked' || inv.status === 'expired'
+                                ? 'destructive'
+                                : 'outline'
+                          }
+                          className="font-mono text-[10px] uppercase"
+                        >
+                          {inv.status}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {new Date(inv.expires_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {inv.status === 'pending' ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <ActionFeedbackForm
+                            action={inviteOrProvisionClientAction}
+                            successMessage="Invitation resent."
+                          >
+                            <input type="hidden" name="email" value={inv.email} />
+                            <input type="hidden" name="full_name" value={inv.full_name ?? ''} />
+                            <input type="hidden" name="company" value={inv.company ?? ''} />
+                            <input type="hidden" name="tier" value={inv.tier} />
+                            <Button type="submit" size="sm" variant="outline" className="h-7 text-[11px]">
+                              Resend
+                            </Button>
+                          </ActionFeedbackForm>
+                          <ConfirmActionButton
+                            action={revokeClientInvitationAction}
+                            hiddenFields={{ invitation_id: inv.id }}
+                            triggerLabel="Revoke"
+                            confirmTitle={`Revoke invite for ${inv.email}?`}
+                            confirmDescription="Marks this pending invitation as revoked in the audit ledger."
+                            confirmLabel="Revoke Invite"
+                            destructive
+                            variant="ghost"
+                            className="h-7 px-2 text-[11px] text-destructive"
+                          />
+                        </div>
+                      ) : (
+                        <span className="font-mono text-[11px] text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="py-8 text-center text-xs text-muted-foreground">
+              No portal invitations recorded yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

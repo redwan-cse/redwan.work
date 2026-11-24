@@ -104,14 +104,18 @@ export function ServicesStudioTable({
   services: AdminServiceStudioItem[];
 }) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<AdminServiceStudioItem | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const editing = React.useMemo(
+    () => (editingId ? (services.find((s) => s.id === editingId) ?? null) : null),
+    [editingId, services]
+  );
 
   const openCreate = () => {
-    setEditing(null);
+    setEditingId(null);
     setDrawerOpen(true);
   };
   const openEdit = (svc: AdminServiceStudioItem) => {
-    setEditing(svc);
+    setEditingId(svc.id);
     setDrawerOpen(true);
   };
 
@@ -587,7 +591,11 @@ export function PortfolioStudioTable({
   studies: AdminPortfolioStudioItem[];
 }) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<AdminPortfolioStudioItem | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const editing = React.useMemo(
+    () => (editingId ? (studies.find((s) => s.dbId === editingId) ?? null) : null),
+    [editingId, studies]
+  );
 
   return (
     <div className="space-y-4">
@@ -605,7 +613,7 @@ export function PortfolioStudioTable({
           <Button
             size="sm"
             onClick={() => {
-              setEditing(null);
+              setEditingId(null);
               setDrawerOpen(true);
             }}
             className="gap-1.5 rounded-full"
@@ -656,7 +664,7 @@ export function PortfolioStudioTable({
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setEditing(study);
+                          setEditingId(study.dbId);
                           setDrawerOpen(true);
                         }}
                         className="h-7 gap-1 text-xs"
@@ -859,7 +867,11 @@ export function PortfolioStudioTable({
 
 export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] }) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<ResumeItemRecord | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const editing = React.useMemo(
+    () => (editingId ? (items.find((i) => i.id === editingId) ?? null) : null),
+    [editingId, items]
+  );
 
   return (
     <div className="space-y-4">
@@ -874,7 +886,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
           <Button
             size="sm"
             onClick={() => {
-              setEditing(null);
+              setEditingId(null);
               setDrawerOpen(true);
             }}
             className="gap-1.5 rounded-full"
@@ -921,7 +933,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setEditing(item);
+                          setEditingId(item.id);
                           setDrawerOpen(true);
                         }}
                         className="h-7 gap-1 text-xs"

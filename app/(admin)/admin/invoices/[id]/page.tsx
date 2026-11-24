@@ -16,6 +16,7 @@ import {
   recordManualPaymentAction,
   reviewPaymentProofAction,
   sendDraftInvoiceAction,
+  updateDraftInvoiceAction,
   voidInvoiceAction,
 } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
@@ -160,9 +161,33 @@ export default async function AdminInvoiceDetailPage({
 
             <div className="space-y-1.5 border-t border-border pt-3 font-mono text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal / Total:</span>
+                <span className="text-muted-foreground">Subtotal:</span>
+                <span>{formatMoney(invoice.subtotal_cents ?? invoice.total_cents, invoice.currency)}</span>
+              </div>
+              {(invoice.discount_cents ?? 0) > 0 && (
+                <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
+                  <span>Discount:</span>
+                  <span>-{formatMoney(invoice.discount_cents, invoice.currency)}</span>
+                </div>
+              )}
+              {((invoice.tax_cents ?? 0) > 0 || (invoice.tax_rate_bps ?? 0) > 0) && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Tax ({((invoice.tax_rate_bps ?? 0) / 100).toFixed(2)}%):
+                  </span>
+                  <span>{formatMoney(invoice.tax_cents ?? 0, invoice.currency)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold">
+                <span>Invoice Total:</span>
                 <span>{formatMoney(invoice.total_cents, invoice.currency)}</span>
               </div>
+              {invoice.currency !== 'USD' && Number(invoice.fx_rate_to_usd ?? 1) > 0 && (
+                <div className="flex justify-between text-[11px] text-muted-foreground">
+                  <span>Locked FX Rate:</span>
+                  <span>1 USD = {Number(invoice.fx_rate_to_usd).toFixed(4)} {invoice.currency}</span>
+                </div>
+              )}
               {invoice.credited_cents > 0 && (
                 <div className="flex justify-between text-amber-800 dark:text-amber-300">
                   <span>Credit Notes Applied:</span>
@@ -178,6 +203,9 @@ export default async function AdminInvoiceDetailPage({
               <div className="flex justify-between border-t border-border/60 pt-2 text-sm font-bold">
                 <span>Balance Due:</span>
                 <span>{formatMoney(outstandingCents, invoice.currency)}</span>
+              </div>
+              <div className="hidden pt-1 text-[11px] uppercase print:block">
+                Status: {invoice.status.replace(/_/g, ' ')}
               </div>
             </div>
 
@@ -205,6 +233,80 @@ export default async function AdminInvoiceDetailPage({
 
         {/* Payment Verification & Manual/Credit Controls */}
         <div className="space-y-6 lg:col-span-5 print:hidden">
+          {invoice.status === 'draft' && (
+            <Card className="border-primary/35">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Edit Draft Invoice</CardTitle>
+                <CardDescription className="text-xs">
+                  Adjust due date, discount, tax rate, or payment instructions before issuing to the client.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ActionFeedbackForm
+                  action={updateDraftInvoiceAction}
+                  successMessage="Draft invoice updated."
+                  className="space-y-3"
+                >
+                  <input type="hidden" name="invoice_id" value={invoice.id} />
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Due Date</Label>
+                      <Input
+                        name="due_at"
+                        type="date"
+                        defaultValue={invoice.due_at ? invoice.due_at.slice(0, 10) : ''}
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Discount ({invoice.currency})</Label>
+                      <Input
+                        name="discount_major"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={((invoice.discount_cents ?? 0) / 100).toFixed(2)}
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Tax (bps)</Label>
+                      <Input
+                        name="tax_rate_bps"
+                        type="number"
+                        min="0"
+                        max="5000"
+                        defaultValue={invoice.tax_rate_bps ?? 0}
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Payment Instructions</Label>
+                    <Input
+                      name="payment_instructions"
+                      defaultValue={invoice.payment_instructions ?? ''}
+                      placeholder="Wire / Wise / bKash details..."
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Notes</Label>
+                    <Input
+                      name="notes"
+                      defaultValue={invoice.notes ?? ''}
+                      placeholder="Invoice memo or scope reference..."
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <Button type="submit" size="sm" variant="secondary" className="w-full rounded-full text-xs">
+                    Save Draft Settings
+                  </Button>
+                </ActionFeedbackForm>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">

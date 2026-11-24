@@ -189,7 +189,7 @@ export default async function Contact() {
                     STRUCTURED PROJECT INTAKE &amp; CUSTOM DEALS
                   </Badge>
                   <span className="font-mono text-xs text-muted-foreground">
-                    Encrypted &amp; GDPR-Aligned Intake (v1)
+                    Encrypted &amp; GDPR-Aligned Intake ({initialConsentPolicy?.version ?? 'v1'})
                   </span>
                 </div>
                 <CardTitle className="mt-2 text-2xl font-bold">

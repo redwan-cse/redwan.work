@@ -378,11 +378,13 @@ describe('PR #15 Adversarial Review Regression Suite', () => {
 
     for (const relPath of [
       'app/(client)/portal/tickets/page.tsx',
-      'app/(client)/portal/orders/new/page.tsx',
+      'components/panel/portal-order-store-form.tsx',
       'app/(client)/portal/orders/[id]/page.tsx',
       'app/(client)/portal/proposals/page.tsx',
       'app/(client)/portal/proposals/[id]/page.tsx',
       'app/(admin)/admin/orders/[id]/page.tsx',
+      'app/(admin)/admin/proposals/[id]/page.tsx',
+      'components/admin/orders-kanban-view.tsx',
       'app/(admin)/admin/invoices/[id]/page.tsx',
       'components/admin/billing-hub-view.tsx',
     ]) {

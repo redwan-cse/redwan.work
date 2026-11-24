@@ -27,15 +27,18 @@ export const dynamic = 'force-dynamic';
 export default async function AdminOverviewPage() {
   await requireAdminSession();
   const admin = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
   const [
     metricsRaw,
     { data: recentOrders },
     { data: pendingPayments },
-    { data: pendingCancellations },
+    { data: pendingCancellations, count: pendingCancellationsTotal },
     { data: overdueInvoices },
     { data: urgentTickets },
     { data: recentInquiries },
     { data: recentAudit },
+    { data: dueFollowups },
+    { data: recentClientMessages },
   ] = await Promise.all([
     getAdminCommandCenterMetrics(),
     admin
@@ -51,7 +54,7 @@ export default async function AdminOverviewPage() {
       .limit(5),
     admin
       .from('cancellation_requests')
-      .select('id, order_id, reason, created_at')
+      .select('id, order_id, reason, created_at', { count: 'exact' })
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(5),
@@ -77,14 +80,34 @@ export default async function AdminOverviewPage() {
       .select('id, action, actor_role, summary, created_at')
       .order('created_at', { ascending: false })
       .limit(8),
+    admin
+      .from('client_profiles')
+      .select('user_id, company_name, tier, next_followup_at')
+      .not('next_followup_at', 'is', null)
+      .lte('next_followup_at', nowIso)
+      .order('next_followup_at', { ascending: true })
+      .limit(6),
+    admin
+      .from('order_messages')
+      .select('id, order_id, body, created_at, author:profiles!order_messages_author_id_fkey(full_name, email, role), order:orders(code, title)')
+      .eq('is_internal_note', false)
+      .order('created_at', { ascending: false })
+      .limit(12),
   ]);
 
   const metrics = (metricsRaw ?? {}) as Record<string, number>;
   const actionQueueCount =
-    (pendingPayments?.length ?? 0) +
-    (pendingCancellations?.length ?? 0) +
-    (overdueInvoices?.length ?? 0) +
-    (urgentTickets?.length ?? 0);
+    (metrics.submitted_payments ?? pendingPayments?.length ?? 0) +
+    (pendingCancellationsTotal ?? pendingCancellations?.length ?? 0) +
+    (metrics.overdue_invoices ?? overdueInvoices?.length ?? 0) +
+    (metrics.open_tickets ?? urgentTickets?.length ?? 0);
+
+  const clientAuthoredMessages = (recentClientMessages ?? [])
+    .filter((m) => {
+      const author = Array.isArray(m.author) ? m.author[0] : m.author;
+      return author?.role === 'client';
+    })
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -426,6 +449,107 @@ export default async function AdminOverviewPage() {
               </div>
             ) : (
               <p className="py-8 text-center text-xs text-muted-foreground">No inquiries yet.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Follow-Ups Due & Recent Client Messages */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base">
+                CRM Follow-Ups Due ({dueFollowups?.length ?? 0})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Clients scheduled for outreach today or overdue.
+              </CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="gap-1 text-xs">
+              <Link href="/admin/clients?followup=due">
+                All Clients <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {dueFollowups && dueFollowups.length > 0 ? (
+              <div className="divide-y divide-border/70 text-xs">
+                {dueFollowups.map((f) => (
+                  <div key={f.user_id} className="flex items-center justify-between gap-2 py-2.5">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/clients/${f.user_id}`}
+                        className="font-semibold hover:text-primary"
+                      >
+                        {f.company_name || f.user_id.slice(0, 8)}
+                      </Link>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        Tier: {f.tier} · Due{' '}
+                        {f.next_followup_at
+                          ? new Date(f.next_followup_at).toLocaleDateString()
+                          : 'Today'}
+                      </div>
+                    </div>
+                    <Button asChild size="sm" variant="outline" className="h-7 rounded-full text-[11px]">
+                      <Link href={`/admin/clients/${f.user_id}`}>Open 360° →</Link>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                No overdue client follow-ups right now.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base">
+                Recent Client Contract Messages ({clientAuthoredMessages.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Latest inbound messages from active contract live chat threads.
+              </CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="gap-1 text-xs">
+              <Link href="/admin/orders">
+                Orders <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {clientAuthoredMessages.length > 0 ? (
+              <div className="divide-y divide-border/70 text-xs">
+                {clientAuthoredMessages.map((msg) => {
+                  const author = Array.isArray(msg.author) ? msg.author[0] : msg.author;
+                  const ord = Array.isArray(msg.order) ? msg.order[0] : msg.order;
+                  return (
+                    <Link
+                      key={msg.id}
+                      href={`/admin/orders/${msg.order_id}?tab=thread`}
+                      className="block py-2.5 hover:bg-muted/30"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[11px] font-bold text-primary">
+                          {ord?.code ?? 'ORD'} · {author?.full_name || author?.email || 'Client'}
+                        </span>
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 line-clamp-1 text-muted-foreground">{msg.body}</p>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                No recent client contract messages.
+              </p>
             )}
           </CardContent>
         </Card>
