@@ -29,6 +29,19 @@ export const passwordBoundsSchema = z
   .min(12, 'Password must be at least 12 characters.')
   .max(128, 'Password must not exceed 128 characters.');
 
+export const orderMessageAttachmentUploadSchema = z.object({
+  r2_key: z.string().trim().min(1).max(512),
+  filename: z.string().trim().min(1).max(255),
+  mime: z.string().trim().min(1).max(128),
+  size_bytes: z.number().int().min(1).max(100 * 1024 * 1024),
+  sha256_checksum: z
+    .string()
+    .trim()
+    .regex(/^[a-fA-F0-9]{64}$/)
+    .nullable()
+    .optional(),
+});
+
 export const orderMessageBodySchema = z.object({
   body: z
     .string()
@@ -40,6 +53,8 @@ export const orderMessageBodySchema = z.object({
         .max(10_000, 'Message body must not exceed 10,000 characters.')
     ),
   is_internal_note: z.boolean().optional().default(false),
+  attachment_file_ids: z.array(uuidSchema).max(5).optional().default([]),
+  attachment: orderMessageAttachmentUploadSchema.nullable().optional(),
 });
 
 export const contactPresignRequestSchema = z.object({

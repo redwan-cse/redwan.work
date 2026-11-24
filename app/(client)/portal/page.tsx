@@ -37,7 +37,7 @@ export default async function ClientPortalOverviewPage() {
     getClientPortalOverview(session.userId),
     admin
       .from('orders')
-      .select('id, code, title, pillar, status, progress_percent, total_cents, currency, due_at')
+      .select('id, code, title, pillar, status, progress_percent, total_cents, currency, due_at, requires_roe, roe_signed_at')
       .eq('client_id', session.userId)
       .order('created_at', { ascending: false })
       .limit(5),
@@ -140,6 +140,82 @@ export default async function ClientPortalOverviewPage() {
         </div>
       </div>
 
+      {/* Needs Your Attention Action Strip */}
+      {(() => {
+        const unpaidInvoicesList = (invoices ?? []).filter(
+          (i) => i.status === 'issued' || i.status === 'partially_paid' || i.status === 'overdue'
+        );
+        const unsignedRoeOrders = (orders ?? []).filter(
+          (o) =>
+            o.requires_roe &&
+            !o.roe_signed_at &&
+            o.status !== 'cancelled' &&
+            o.status !== 'completed'
+        );
+        const reviewReadyOrders = (orders ?? []).filter(
+          (o) => o.status === 'in_review' || o.status === 'delivered'
+        );
+        if (
+          unpaidInvoicesList.length === 0 &&
+          unsignedRoeOrders.length === 0 &&
+          reviewReadyOrders.length === 0 &&
+          (overview.pending_proposals ?? 0) === 0
+        ) {
+          return null;
+        }
+        return (
+          <Card className="border-primary/40 bg-primary/5">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-xs">
+              <div className="space-y-1">
+                <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+                  Needs Your Attention
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  {unpaidInvoicesList.length > 0 && (
+                    <span>
+                      <strong className="text-foreground">{unpaidInvoicesList.length}</strong> open invoice(s) awaiting payment
+                    </span>
+                  )}
+                  {unsignedRoeOrders.length > 0 && (
+                    <span>
+                      · <strong className="text-foreground">{unsignedRoeOrders.length}</strong> engagement(s) awaiting Rules of Engagement signature
+                    </span>
+                  )}
+                  {reviewReadyOrders.length > 0 && (
+                    <span>
+                      · <strong className="text-foreground">{reviewReadyOrders.length}</strong> deliverable(s) ready for sign-off
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {unpaidInvoicesList[0] && (
+                  <Button asChild size="sm" className="h-8 rounded-full text-xs">
+                    <Link href={`/portal/invoices/${unpaidInvoicesList[0].id}`}>
+                      Pay {unpaidInvoicesList[0].code} →
+                    </Link>
+                  </Button>
+                )}
+                {unsignedRoeOrders[0] && (
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
+                    <Link href={`/portal/orders/${unsignedRoeOrders[0].id}`}>
+                      Sign RoE ({unsignedRoeOrders[0].code}) →
+                    </Link>
+                  </Button>
+                )}
+                {reviewReadyOrders[0] && (
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
+                    <Link href={`/portal/orders/${reviewReadyOrders[0].id}`}>
+                      Review {reviewReadyOrders[0].code} →
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* KPI Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {kpis.map((item) => {
@@ -229,7 +305,7 @@ export default async function ClientPortalOverviewPage() {
               {(proposals ?? []).map((prp) => (
                 <Link
                   key={prp.id}
-                  href="/portal/proposals"
+                  href={`/portal/proposals/${prp.id}`}
                   className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 p-3.5 transition-colors hover:border-primary/40"
                 >
                   <div>

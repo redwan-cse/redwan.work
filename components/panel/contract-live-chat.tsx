@@ -3,18 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  Download,
   ExternalLink,
   Loader2,
   Lock,
   MessageSquare,
+  Paperclip,
   RefreshCw,
   Send,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { resolveMimeType } from '@/lib/mime';
 import { cn } from '@/lib/utils';
+
+export interface ContractChatAttachment {
+  id: string;
+  filename: string;
+  size_bytes: number;
+  mime_type: string;
+}
 
 export interface ContractChatMessage {
   id: string;
@@ -27,6 +38,7 @@ export interface ContractChatMessage {
     email?: string | null;
     role?: string | null;
   } | null;
+  attachments?: ContractChatAttachment[];
 }
 
 export interface ActiveContractOption {
@@ -63,8 +75,17 @@ export function ContractLiveChat({
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    r2_key: string;
+    filename: string;
+    mime: string;
+    size_bytes: number;
+    sha256_checksum: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pollMessages = useCallback(async (orderId: string) => {
     if (!orderId) return;
@@ -129,10 +150,69 @@ export function ContractLiveChat({
     }
   }, [messages.length]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = draft.trim();
-    if (!trimmed || !selectedOrderId || sending) return;
+  const handleAttachFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedOrderId) return;
+
+    setUploadingFile(true);
+    setError(null);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      const sha256 = Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+      const effectiveMime = resolveMimeType(file.name, file.type);
+
+      const presignRes = await fetch('/api/uploads/portal-presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          mime: effectiveMime,
+          size: file.size,
+          category: 'order_attachment',
+          orderId: selectedOrderId,
+        }),
+      });
+      if (!presignRes.ok) {
+        const body = (await presignRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || 'Could not presign attachment upload.');
+      }
+      const { key, uploadUrl, mime: resolvedMime } = (await presignRes.json()) as {
+        key: string;
+        uploadUrl: string;
+        mime?: string;
+      };
+      const contentType = resolvedMime || effectiveMime;
+
+      const putRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error('Direct upload to Encrypted Vault failed.');
+      }
+
+      setPendingAttachment({
+        r2_key: key,
+        filename: file.name,
+        mime: contentType,
+        size_bytes: file.size,
+        sha256_checksum: sha256,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Attachment upload failed.');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const submitMessage = async () => {
+    const trimmed = draft.trim() || (pendingAttachment ? `Attached file: ${pendingAttachment.filename}` : '');
+    if (!trimmed || !selectedOrderId || sending || uploadingFile) return;
 
     setSending(true);
     setError(null);
@@ -143,6 +223,7 @@ export function ContractLiveChat({
         body: JSON.stringify({
           body: trimmed,
           is_internal_note: viewerRole === 'admin' && isInternalNote,
+          ...(pendingAttachment ? { attachment: pendingAttachment } : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -155,12 +236,18 @@ export function ContractLiveChat({
       }
       setMessages((prev) => [...prev, data.message!]);
       setDraft('');
+      setPendingAttachment(null);
       setIsInternalNote(false);
     } catch {
       setError('Network error while sending message.');
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitMessage();
   };
 
   if (!selectedContract) return null;
@@ -273,6 +360,23 @@ export function ContractLiveChat({
                 <p className="whitespace-pre-wrap leading-relaxed text-foreground/95">
                   {msg.body}
                 </p>
+                {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {msg.attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={`/api/files/${att.id}/download`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-background/80 px-2.5 py-1 font-mono text-[11px] font-medium text-primary hover:bg-primary/10 hover:underline"
+                      >
+                        <Download className="h-3 w-3 shrink-0" />
+                        <span className="max-w-[200px] truncate">{att.filename}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          ({(att.size_bytes / 1024).toFixed(1)} KB)
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })
@@ -292,38 +396,87 @@ export function ContractLiveChat({
         {error && (
           <p className="text-xs font-medium text-destructive">{error}</p>
         )}
+        {pendingAttachment && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-mono text-[11px] text-primary">
+            <span className="inline-flex items-center gap-1.5 truncate">
+              <Paperclip className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{pendingAttachment.filename}</span>
+              <span className="text-[10px] text-muted-foreground">
+                ({(pendingAttachment.size_bytes / 1024).toFixed(1)} KB)
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setPendingAttachment(null)}
+              className="rounded p-0.5 text-muted-foreground hover:text-destructive"
+              aria-label="Remove attachment"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              void submitMessage();
+            }
+          }}
           rows={3}
-          required
+          required={!pendingAttachment}
           placeholder={
             viewerRole === 'admin'
-              ? 'Write a live contract update to the client or record an internal note...'
-              : 'Send a direct message regarding your active contract, scope, or deliverables...'
+              ? 'Write a live contract update to the client or record an internal note... (Ctrl+Enter to send)'
+              : 'Send a direct message regarding your active contract, scope, or deliverables... (Ctrl+Enter to send)'
           }
           className="bg-background text-xs"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {viewerRole === 'admin' ? (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={isInternalNote}
-                onChange={(e) => setIsInternalNote(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              Private Internal Note (Hidden from Client)
-            </label>
-          ) : (
-            <span className="font-mono text-[11px] text-muted-foreground">
-              Encrypted direct contract channel · Real-time sync
-            </span>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleAttachFile}
+              className="hidden"
+              aria-label="Attach file to contract message"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploadingFile || sending}
+              onClick={() => fileInputRef.current?.click()}
+              className="h-7 gap-1.5 rounded-full px-2.5 text-[11px]"
+            >
+              {uploadingFile ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Paperclip className="h-3 w-3 text-primary" />
+              )}
+              {uploadingFile ? 'Uploading...' : 'Attach File'}
+            </Button>
+            {viewerRole === 'admin' ? (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={isInternalNote}
+                  onChange={(e) => setIsInternalNote(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                Private Internal Note (Hidden from Client)
+              </label>
+            ) : (
+              <span className="font-mono text-[11px] text-muted-foreground">
+                Encrypted direct contract channel · Real-time sync
+              </span>
+            )}
+          </div>
           <Button
             type="submit"
             size="sm"
-            disabled={sending || !draft.trim()}
+            disabled={sending || uploadingFile || (!draft.trim() && !pendingAttachment)}
             className="gap-1.5 rounded-full"
           >
             {sending ? (

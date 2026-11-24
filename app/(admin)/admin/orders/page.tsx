@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
+import { CsvExportButton } from '@/components/admin/csv-export-button';
 import { OrdersKanbanBoard } from '@/components/admin/orders-kanban-view';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,6 +89,14 @@ export default async function AdminOrdersPage({
       return true;
     });
 
+  const buildViewHref = (nextView: 'table' | 'kanban') => {
+    const qs = new URLSearchParams();
+    qs.set('view', nextView);
+    if (statusFilter) qs.set('status', statusFilter);
+    if (params.q) qs.set('q', params.q);
+    return `/admin/orders?${qs.toString()}`;
+  };
+
   return (
     <div className="space-y-6">
       <AdminHubHeader
@@ -95,29 +104,46 @@ export default async function AdminOrdersPage({
         title="Client Orders & Deliverables (ORD-XXXX)"
         description="Manage active engagements in Table or Kanban board view, verify RoE authorizations, publish encrypted deliverables, and track milestones."
         actions={
-          <div className="inline-flex items-center rounded-full border border-border bg-muted/40 p-0.5">
-            <Link
-              href="/admin/orders?view=table"
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-                viewMode === 'table'
-                  ? 'bg-background text-foreground shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <List className="h-3.5 w-3.5" />
-              Table
-            </Link>
-            <Link
-              href="/admin/orders?view=kanban"
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-                viewMode === 'kanban'
-                  ? 'bg-background text-foreground shadow-2xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Columns3 className="h-3.5 w-3.5" />
-              Kanban Board
-            </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <CsvExportButton
+              filename="orders-export.csv"
+              headers={['Code', 'Title', 'Client', 'Pillar', 'Status', 'Progress %', 'Currency', 'Total', 'RoE Signed']}
+              rows={filteredOrders.map((o) => [
+                o.code ?? '',
+                o.title,
+                o.clientName,
+                o.pillar,
+                o.status,
+                o.progress_percent,
+                o.currency,
+                (o.total_cents / 100).toFixed(2),
+                o.requires_roe ? (o.roe_signed_at ? 'Yes' : 'Pending') : 'N/A',
+              ])}
+            />
+            <div className="inline-flex items-center rounded-full border border-border bg-muted/40 p-0.5">
+              <Link
+                href={buildViewHref('table')}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+                  viewMode === 'table'
+                    ? 'bg-background text-foreground shadow-2xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                Table
+              </Link>
+              <Link
+                href={buildViewHref('kanban')}
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+                  viewMode === 'kanban'
+                    ? 'bg-background text-foreground shadow-2xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Columns3 className="h-3.5 w-3.5" />
+                Kanban Board
+              </Link>
+            </div>
           </div>
         }
       />

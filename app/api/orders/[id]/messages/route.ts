@@ -6,6 +6,18 @@ import {
   enqueueTransactionalEmail,
   notifyAllAdmins,
 } from '@/lib/crm/audit';
+import {
+  PORTAL_ALLOWED,
+  extFromFilename,
+  isAllowedMime,
+  resolveMimeType,
+  validateMagicBytes,
+} from '@/lib/mime';
+import {
+  getPrivateObjectHeadBytes,
+  isR2Configured,
+  verifyStoredPortalObjectSize,
+} from '@/lib/r2';
 import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 import { orderMessageBodySchema, uuidSchema } from '@/lib/validation/schemas';
@@ -39,7 +51,9 @@ export async function GET(
 
   let query = admin
     .from('order_messages')
-    .select('id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)')
+    .select(
+      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+    )
     .eq('order_id', id)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -49,8 +63,38 @@ export async function GET(
   }
 
   const { data: messages } = await query;
+  const ordered = [...(messages ?? [])].reverse();
+
+  const allFileIds = Array.from(
+    new Set(
+      ordered.flatMap((m) =>
+        Array.isArray(m.attachment_file_ids) ? m.attachment_file_ids : []
+      )
+    )
+  );
+
+  let fileMap = new Map<
+    string,
+    { id: string; filename: string; size_bytes: number; mime_type: string }
+  >();
+  if (allFileIds.length > 0) {
+    const { data: vFiles } = await admin
+      .from('vault_files')
+      .select('id, filename, size_bytes, mime_type')
+      .in('id', allFileIds)
+      .is('archived_at', null);
+    fileMap = new Map((vFiles ?? []).map((f) => [f.id, f]));
+  }
+
+  const enriched = ordered.map((m) => ({
+    ...m,
+    attachments: (Array.isArray(m.attachment_file_ids) ? m.attachment_file_ids : [])
+      .map((fid) => fileMap.get(fid))
+      .filter(Boolean),
+  }));
+
   return NextResponse.json(
-    { messages: [...(messages ?? [])].reverse() },
+    { messages: enriched },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' } }
   );
 }
@@ -119,6 +163,91 @@ export async function POST(
 
   const isInternalNote = session.role === 'admin' && parsedBody.data.is_internal_note;
 
+  const attachmentIds: string[] = [];
+  const attachedMetadata: Array<{
+    id: string;
+    filename: string;
+    size_bytes: number;
+    mime_type: string;
+  }> = [];
+
+  if (parsedBody.data.attachment) {
+    const att = parsedBody.data.attachment;
+    const ext = extFromFilename(att.filename);
+    const resolvedMime = resolveMimeType(att.filename, att.mime);
+    if (!ext || !isAllowedMime(ext, resolvedMime, PORTAL_ALLOWED)) {
+      return NextResponse.json(
+        { error: 'Unsupported attachment file type or MIME signature.' },
+        { status: 400 }
+      );
+    }
+    const expectedPrefix = `private/${order.client_id}/order_attachment/`;
+    if (!att.r2_key.startsWith(expectedPrefix) || att.r2_key.includes('..')) {
+      return NextResponse.json(
+        { error: 'Invalid vault attachment storage prefix.' },
+        { status: 400 }
+      );
+    }
+    if (isR2Configured()) {
+      const okSize = await verifyStoredPortalObjectSize(att.r2_key, att.size_bytes);
+      if (!okSize) {
+        return NextResponse.json(
+          { error: 'Uploaded attachment could not be verified in private storage.' },
+          { status: 400 }
+        );
+      }
+      const headBytes = await getPrivateObjectHeadBytes(att.r2_key, 64);
+      if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
+        return NextResponse.json(
+          { error: 'Uploaded attachment signature does not match its declared file type.' },
+          { status: 400 }
+        );
+      }
+    }
+    const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
+    const { data: vFile, error: vfErr } = await admin
+      .from('vault_files')
+      .insert({
+        owner_client_id: order.client_id,
+        order_id: id,
+        category: 'order_attachment',
+        r2_key: att.r2_key,
+        filename: att.filename,
+        mime_type: resolvedMime,
+        size_bytes: Math.round(att.size_bytes),
+        sha256_checksum: att.sha256_checksum ? att.sha256_checksum.toLowerCase() : null,
+        retention_until: retentionUntil,
+        uploaded_by: session.userId,
+      })
+      .select('id, filename, size_bytes, mime_type')
+      .single();
+
+    if (vfErr || !vFile) {
+      return NextResponse.json(
+        { error: 'Could not register uploaded attachment.' },
+        { status: 500 }
+      );
+    }
+    attachmentIds.push(vFile.id);
+    attachedMetadata.push(vFile);
+  }
+
+  if (parsedBody.data.attachment_file_ids.length > 0) {
+    const { data: existingFiles } = await admin
+      .from('vault_files')
+      .select('id, filename, size_bytes, mime_type')
+      .in('id', parsedBody.data.attachment_file_ids)
+      .eq('owner_client_id', order.client_id)
+      .is('archived_at', null);
+
+    for (const vf of existingFiles ?? []) {
+      if (!attachmentIds.includes(vf.id)) {
+        attachmentIds.push(vf.id);
+        attachedMetadata.push(vf);
+      }
+    }
+  }
+
   const { data: inserted, error } = await admin
     .from('order_messages')
     .insert({
@@ -126,8 +255,11 @@ export async function POST(
       author_id: session.userId,
       body,
       is_internal_note: isInternalNote,
+      ...(attachmentIds.length > 0 ? { attachment_file_ids: attachmentIds } : {}),
     })
-    .select('id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)')
+    .select(
+      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+    )
     .single();
 
   if (error || !inserted) {
@@ -192,7 +324,7 @@ export async function POST(
   }
 
   return NextResponse.json(
-    { message: inserted },
+    { message: { ...inserted, attachments: attachedMetadata } },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' } }
   );
 }

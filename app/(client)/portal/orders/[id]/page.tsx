@@ -26,6 +26,7 @@ import {
 } from '@/lib/crm/actions';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
+import { CopyValueButton } from '@/components/panel/copy-value-button';
 import { OrderLiveChatServer } from '@/components/panel/order-live-chat-server';
 import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,7 @@ export default async function ClientOrderDetailPage({
     { data: visibleTasks },
     { data: requirementAttachments },
     { data: cancellationHistory },
+    { data: orderInvoices },
   ] = await Promise.all([
     admin
       .from('orders')
@@ -79,6 +81,15 @@ export default async function ClientOrderDetailPage({
       .select('*')
       .eq('order_id', id)
       .order('created_at', { ascending: false }),
+    admin
+      .from('invoices')
+      .select(
+        'id, code, status, total_cents, amount_paid_cents, credited_cents, currency, is_deposit_invoice, due_at'
+      )
+      .eq('order_id', id)
+      .neq('status', 'draft')
+      .neq('status', 'void')
+      .order('created_at', { ascending: true }),
   ]);
 
   if (!order || (session.role !== 'admin' && order.client_id !== session.userId)) {
@@ -103,6 +114,29 @@ export default async function ClientOrderDetailPage({
     order.status !== 'completed' &&
     order.status !== 'cancelled' &&
     !(cancellationHistory ?? []).some((c) => c.status === 'pending');
+
+  const openInvoice = (orderInvoices ?? []).find(
+    (inv) => inv.status === 'issued' || inv.status === 'partially_paid' || inv.status === 'overdue'
+  );
+  const hasSubmittedDeliverable = deliverables.some(
+    (d: { status: string }) => d.status === 'submitted'
+  );
+  const currentStepIndex = (() => {
+    if (order.status === 'awaiting_payment') return 0;
+    if (order.status === 'pending_requirements' && order.requires_roe && !order.roe_signed_at) return 2;
+    if (order.status === 'pending_requirements') return 1;
+    if (hasSubmittedDeliverable || order.status === 'in_review') return 4;
+    if (order.status === 'delivered' || order.status === 'completed') return 5;
+    return 3;
+  })();
+  const stepperSteps = [
+    { label: '1. Kickoff Deposit', done: order.status !== 'awaiting_payment' },
+    { label: '2. Technical Scope', done: Boolean(reqRecord?.target_scope_notes || isReqLocked) },
+    { label: '3. RoE & NDA', done: !order.requires_roe || Boolean(order.roe_signed_at) },
+    { label: '4. Execution', done: ['in_review', 'delivered', 'completed'].includes(order.status) },
+    { label: '5. Deliverable Sign-Off', done: ['delivered', 'completed'].includes(order.status) },
+    { label: '6. Final Balance & Review', done: order.status === 'completed' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -139,6 +173,67 @@ export default async function ClientOrderDetailPage({
           </div>
         </div>
       </div>
+
+      {/* 6-Step Guided Order Stepper & What's Next CTA */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="space-y-3 p-4 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+                Guided Engagement Stepper · What&apos;s Next
+              </span>
+              <p className="mt-0.5 text-muted-foreground">
+                {order.status === 'awaiting_payment'
+                  ? 'Step 1: Settle your kickoff deposit invoice to unlock active execution.'
+                  : order.requires_roe && !order.roe_signed_at
+                    ? 'Step 3: Digitally sign the Rules of Engagement below so testing can begin.'
+                    : hasSubmittedDeliverable
+                      ? 'Step 5: Download and review your published deliverable below, then sign off or request a revision.'
+                      : openInvoice
+                        ? `Step 6: Settle invoice ${openInvoice.code} to complete financial reconciliation.`
+                        : order.status === 'completed'
+                          ? 'Engagement completed! Download your deliverables anytime or leave an engagement review.'
+                          : 'Active execution in progress — track live checklist tasks and chat directly on this contract.'}
+              </p>
+            </div>
+            {openInvoice && (
+              <Button asChild size="sm" className="h-8 rounded-full text-xs">
+                <Link href={`/portal/invoices/${openInvoice.id}`}>
+                  Pay Invoice {openInvoice.code} ({openInvoice.currency}{' '}
+                  {(
+                    Math.max(
+                      0,
+                      openInvoice.total_cents -
+                        openInvoice.amount_paid_cents -
+                        openInvoice.credited_cents
+                    ) / 100
+                  ).toLocaleString()}
+                  ) →
+                </Link>
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+            {stepperSteps.map((st, idx) => {
+              const isCurrent = idx === currentStepIndex && order.status !== 'completed';
+              return (
+                <div
+                  key={st.label}
+                  className={`rounded-lg border px-2.5 py-1.5 font-mono text-[10px] ${
+                    isCurrent
+                      ? 'border-primary bg-primary text-primary-foreground font-bold'
+                      : st.done
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                        : 'border-border/70 bg-background/60 text-muted-foreground'
+                  }`}
+                >
+                  {st.label}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Explicit Mutual Confidentiality NDA Panel */}
       <Card className={order.nda_accepted_at ? 'border-emerald-500/35 bg-emerald-500/5' : 'border-border/80 bg-card/85'}>
@@ -315,6 +410,7 @@ export default async function ClientOrderDetailPage({
                   title: string;
                   status: string;
                   release_notes: string | null;
+                  client_feedback?: string | null;
                   auto_accept_at?: string | null;
                   vault_files?: Array<{ id: string; filename: string; size_bytes: number; sha256_checksum: string | null }>;
                 }) => {
@@ -350,6 +446,12 @@ export default async function ClientOrderDetailPage({
                         </p>
                       )}
 
+                      {del.client_feedback && (
+                        <div className="mt-2 rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs">
+                          <strong>Your Review Feedback:</strong> {del.client_feedback}
+                        </div>
+                      )}
+
                       {files.length > 0 && (
                         <div className="mt-3 space-y-1.5">
                           {files.map((f) => (
@@ -360,8 +462,14 @@ export default async function ClientOrderDetailPage({
                               <div className="min-w-0">
                                 <div className="break-all font-mono font-medium">{f.filename}</div>
                                 {f.sha256_checksum && (
-                                  <div className="break-all font-mono text-[10px] text-muted-foreground">
-                                    SHA-256: {f.sha256_checksum}
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                    <span className="break-all font-mono text-[10px] text-muted-foreground">
+                                      SHA-256: {f.sha256_checksum}
+                                    </span>
+                                    <CopyValueButton
+                                      value={f.sha256_checksum}
+                                      label="Copy SHA-256"
+                                    />
                                   </div>
                                 )}
                               </div>
@@ -581,6 +689,76 @@ export default async function ClientOrderDetailPage({
 
         {/* Right 5 Cols */}
         <div className="space-y-6 lg:col-span-5">
+          {/* Order Invoices & Financial Ledger */}
+          <Card className="border-border/80 bg-card/85">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-bold">
+                Contract Invoices &amp; Payments ({(orderInvoices ?? []).length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Direct links to deposit, milestone, and balance invoices for this contract.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs">
+              {(orderInvoices ?? []).map((inv) => {
+                const dueCents = Math.max(
+                  0,
+                  inv.total_cents - inv.amount_paid_cents - inv.credited_cents
+                );
+                const isOpen =
+                  inv.status === 'issued' ||
+                  inv.status === 'partially_paid' ||
+                  inv.status === 'overdue';
+                return (
+                  <div
+                    key={inv.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/60 p-3"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/portal/invoices/${inv.id}`}
+                          className="font-mono font-bold text-primary hover:underline"
+                        >
+                          {inv.code}
+                        </Link>
+                        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                          {inv.status.replace(/_/g, ' ')}
+                        </Badge>
+                        {inv.is_deposit_invoice && (
+                          <Badge variant="secondary" className="font-mono text-[10px]">
+                            Deposit
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                        Total: {inv.currency} {(inv.total_cents / 100).toLocaleString()}
+                        {dueCents > 0
+                          ? ` · Due: ${inv.currency} ${(dueCents / 100).toLocaleString()}`
+                          : ' · Paid in Full'}
+                      </div>
+                    </div>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant={isOpen ? 'default' : 'outline'}
+                      className="h-7 rounded-full text-[11px]"
+                    >
+                      <Link href={`/portal/invoices/${inv.id}`}>
+                        {isOpen ? 'Pay / Submit Proof' : 'View A4 Receipt'}
+                      </Link>
+                    </Button>
+                  </div>
+                );
+              })}
+              {(orderInvoices ?? []).length === 0 && (
+                <p className="py-2 text-center text-muted-foreground">
+                  No invoices issued for this contract yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <OrderLiveChatServer
             orderId={order.id}
             orderCode={order.code ?? 'ORD-XXXX'}

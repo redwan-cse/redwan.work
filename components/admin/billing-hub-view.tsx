@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
+import { CsvExportButton } from '@/components/admin/csv-export-button';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -104,12 +105,31 @@ export async function BillingHubView({
         tabs={tabs}
         activeTab={activeTab}
         actions={
-          <Button asChild size="sm" className="gap-1.5 rounded-full">
-            <Link href="/admin/invoices/new">
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              New Multi-Line Invoice
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <CsvExportButton
+              filename="invoices-ledger.csv"
+              headers={['Code', 'Client', 'Status', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Credited', 'FX Rate']}
+              rows={filteredInvoices.map((inv) => [
+                inv.code ?? '',
+                clientMap.get(inv.client_id) ?? 'Client',
+                inv.status,
+                inv.currency,
+                ((inv.subtotal_cents ?? inv.total_cents) / 100).toFixed(2),
+                ((inv.discount_cents ?? 0) / 100).toFixed(2),
+                ((inv.tax_cents ?? 0) / 100).toFixed(2),
+                (inv.total_cents / 100).toFixed(2),
+                (inv.amount_paid_cents / 100).toFixed(2),
+                (inv.credited_cents / 100).toFixed(2),
+                inv.fx_rate_to_usd,
+              ])}
+            />
+            <Button asChild size="sm" className="gap-1.5 rounded-full">
+              <Link href="/admin/invoices/new">
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                New Multi-Line Invoice
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -130,6 +150,20 @@ export async function BillingHubView({
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-bold text-primary">{pay.code}</span>
+                    {invoiceMap.get(pay.invoice_id) && (
+                      <Link
+                        href={`/admin/invoices/${pay.invoice_id}`}
+                        className="font-mono text-xs font-semibold text-primary hover:underline"
+                      >
+                        {invoiceMap.get(pay.invoice_id)?.code}
+                      </Link>
+                    )}
+                    <Link
+                      href={`/admin/clients/${pay.client_id}`}
+                      className="text-xs font-medium hover:underline"
+                    >
+                      {clientMap.get(pay.client_id) ?? 'Client'}
+                    </Link>
                     <Badge variant="outline" className="font-mono text-[10px]">
                       {pay.method}
                     </Badge>

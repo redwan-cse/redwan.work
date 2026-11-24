@@ -3,6 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Activity, FolderLock, Mail, Settings } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
+import { CsvExportButton } from '@/components/admin/csv-export-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,6 +74,19 @@ export async function OpsHubView({
         description="Inspect append-only audit logs, monitor transactional email outbox queues, manage encrypted R2 vault retention/recovery, and administer consent policies & admin credentials."
         tabs={tabs}
         activeTab="audit"
+        actions={
+          <CsvExportButton
+            filename="audit-logs-export.csv"
+            headers={['Timestamp', 'Action', 'Actor Role', 'Entity Type', 'Summary']}
+            rows={filteredLogs.map((l) => [
+              l.created_at,
+              l.action,
+              l.actor_role,
+              l.entity_type,
+              l.summary,
+            ])}
+          />
+        }
       />
 
       {/* Quick Console Cards */}
@@ -192,7 +206,21 @@ export async function OpsHubView({
                         {entry.actor_role}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs">{entry.summary}</TableCell>
+                    <TableCell className="text-xs">
+                      <div>{entry.summary}</div>
+                      {entry.metadata &&
+                        typeof entry.metadata === 'object' &&
+                        Object.keys(entry.metadata as Record<string, unknown>).length > 0 && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer font-mono text-[10px] text-primary hover:underline">
+                              Inspect JSON metadata
+                            </summary>
+                            <pre className="mt-1 max-h-36 overflow-auto rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-[10px] text-muted-foreground">
+                              {JSON.stringify(entry.metadata, null, 2)}
+                            </pre>
+                          </details>
+                        )}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
                       {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
                     </TableCell>

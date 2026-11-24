@@ -188,9 +188,33 @@ export default async function ClientInvoiceDetailPage({
 
               <div className="space-y-1 border-t border-border/70 pt-3 font-mono text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Invoice Total:</span>
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span>{formatMoney(invoice.subtotal_cents ?? invoice.total_cents, invoice.currency)}</span>
+                </div>
+                {(invoice.discount_cents ?? 0) > 0 && (
+                  <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
+                    <span>Discount:</span>
+                    <span>-{formatMoney(invoice.discount_cents, invoice.currency)}</span>
+                  </div>
+                )}
+                {((invoice.tax_cents ?? 0) > 0 || (invoice.tax_rate_bps ?? 0) > 0) && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Tax ({((invoice.tax_rate_bps ?? 0) / 100).toFixed(2)}%):
+                    </span>
+                    <span>{formatMoney(invoice.tax_cents ?? 0, invoice.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold">
+                  <span>Invoice Total:</span>
                   <span>{formatMoney(invoice.total_cents, invoice.currency)}</span>
                 </div>
+                {invoice.currency !== 'USD' && Number(invoice.fx_rate_to_usd ?? 1) > 0 && (
+                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                    <span>Locked FX Rate (to USD):</span>
+                    <span>1 USD = {Number(invoice.fx_rate_to_usd).toFixed(4)} {invoice.currency}</span>
+                  </div>
+                )}
                 {creditedCents > 0 && (
                   <div className="flex justify-between text-amber-800 dark:text-amber-300">
                     <span>Credit Notes Applied:</span>
@@ -208,6 +232,9 @@ export default async function ClientInvoiceDetailPage({
                   <span>
                     {invoice.currency} {balanceDueMajor.toLocaleString()}
                   </span>
+                </div>
+                <div className="hidden pt-1 text-[11px] uppercase print:block">
+                  Status: {invoice.status.replace(/_/g, ' ')}
                 </div>
               </div>
 

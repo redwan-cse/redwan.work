@@ -42,7 +42,7 @@ const Calendar = dynamic(
   { ssr: false }
 );
 import { Checkbox } from "@/components/ui/checkbox";
-import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react";
+import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, Copy, X } from "lucide-react";
 import Link from "next/link";
 import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Country } from "@/lib/countries-data";
 import { format } from "date-fns";
@@ -298,6 +298,7 @@ export default function EnhancedContactForm({
     gdprConsent: false,
   });
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+  const [copiedTicket, setCopiedTicket] = useState(false);
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1033,7 +1034,7 @@ export default function EnhancedContactForm({
         howDidYouFindMeReferral: '',
             gdprConsent: false,
       });
-      setSelectedCountryCode('+880');
+      setSelectedCountryCode('');
       setSelectedWhatsAppCountryCode('');
 
       // Clear uploaded attachments (they were persisted with this lead)
@@ -1050,11 +1051,7 @@ export default function EnhancedContactForm({
         (window as any).turnstile.reset();
       }
 
-      // Auto-hide success message after 5 seconds
-      setTimeout(() => {
-        setSubmitSuccess(false);
-        setSubmittedTicketId(null);
-      }, 5000);
+      setCopiedTicket(false);
 
     } catch (error) {
       console.error('❌ Form submission error:', error);
@@ -1304,8 +1301,12 @@ export default function EnhancedContactForm({
             </p>
           </div>
 
-          {/* Contact Preferences */}
-          <div className="grid items-start gap-6 lg:grid-cols-3">
+          {/* Optional Contact Preferences (Collapsible to keep intake fast & uncluttered) */}
+          <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-foreground">
+              Optional: Call Scheduling &amp; Contact Preferences
+            </summary>
+            <div className="mt-4 grid items-start gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor="preferredContactMethod" className="leading-snug">
                 Preferred Contact Method <span className="text-muted-foreground text-xs">(optional)</span>
@@ -1519,6 +1520,7 @@ export default function EnhancedContactForm({
               </p>
             </div>
           </div>
+          </details>
         </div>
         {/* Project Details Section */}
         <div className="space-y-6">
@@ -1826,14 +1828,11 @@ export default function EnhancedContactForm({
           </div>
         </div>
 
-        <div className="space-y-6">
-          {/* Additional Information Section */}
-          <div className="flex items-center gap-2 pb-2 border-b border-primary/20">
-            <Info className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Additional Information</h3>
-          </div>
-
-          <div className="space-y-2">
+        <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-foreground">
+            Optional: How Did You Find Me? (Referral &amp; Attribution)
+          </summary>
+          <div className="mt-4 space-y-2">
             <Label htmlFor="howDidYouFindMe">
               How did you find me? <span className="text-muted-foreground text-xs">(optional)</span>
             </Label>
@@ -1888,7 +1887,7 @@ export default function EnhancedContactForm({
               </div>
             )}
           </div>
-        </div>
+        </details>
 
         {policyLoading && <p role="status" className="text-sm text-muted-foreground">Loading privacy policy verification...</p>}
         {policyError && (
@@ -1918,16 +1917,41 @@ export default function EnhancedContactForm({
               className="text-sm font-medium cursor-pointer leading-normal inline"
             >
               <span className="text-destructive">*</span>{" "}
-              I agree that my information and any attached files will be processed to review and respond to my request in accordance with our{" "}
-              <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                Privacy Policy
-              </Link>{" "}
-              and{" "}
-              <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                Terms of Service
-              </Link>
-              .
+              {consentPolicy?.checkbox ? (
+                <>
+                  {consentPolicy.checkbox}{" "}
+                  <span className="text-xs text-muted-foreground">
+                    (
+                    <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                      Privacy Policy
+                    </Link>
+                    {" · "}
+                    <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                      Terms of Service
+                    </Link>
+                    {" · "}
+                    Policy {consentPolicy.version})
+                  </span>
+                </>
+              ) : (
+                <>
+                  I agree that my information and any attached files will be processed to review and respond to my request in accordance with our{" "}
+                  <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                    Privacy Policy
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                    Terms of Service
+                  </Link>
+                  .
+                </>
+              )}
             </Label>
+            {consentPolicy?.privacyNotice && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {consentPolicy.privacyNotice}
+              </p>
+            )}
             {errors.gdprConsent && (
               <p id="gdprConsent-error" className="text-xs text-destructive mt-2" role="alert">
                 {errors.gdprConsent}
@@ -1936,40 +1960,61 @@ export default function EnhancedContactForm({
           </div>
         </div>
 
-        {/* Submission Status Messages */}
+        {/* Persistent Submission Confirmation Card */}
         {submitSuccess && submittedTicketId && (
-          <Card className="border-green-500 bg-green-500/10">
-            <CardContent className="flex items-center gap-3 p-4">
-              <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
+          <Card role="status" className="border-emerald-500/60 bg-emerald-500/10">
+            <CardContent className="flex items-start gap-3 p-4">
+              <CheckCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div className="flex-1">
-                <p className="font-semibold text-green-500">Thank you! Your request has been received.</p>
-                <p className="text-sm text-muted-foreground">
-                  I&apos;ll review your inquiry and get back to you within 24 hours.
+                <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+                  Thank you! Your request has been received.
                 </p>
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  Save your reference below — I&apos;ll review your inquiry and get back to you within 12–24 hours.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-foreground">
-                    Your Ticket ID: <span className="font-mono font-bold text-green-600 dark:text-green-400">{submittedTicketId}</span>
+                    Your Ticket ID:{' '}
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                      {submittedTicketId}
+                    </span>
                   </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-7 px-2 gap-1"
+                    className="h-7 gap-1 px-2 text-xs"
                     onClick={() => {
-                      navigator.clipboard.writeText(submittedTicketId);
-                      // Optional: Show a toast notification
-                      const button = document.activeElement as HTMLButtonElement;
-                      if (button) {
-                        const originalText = button.innerHTML;
-                        button.innerHTML = 'Copied!';
-                        setTimeout(() => {
-                          button.innerHTML = originalText;
-                        }, 2000);
-                      }
+                      void navigator.clipboard.writeText(submittedTicketId).then(() => {
+                        setCopiedTicket(true);
+                        window.setTimeout(() => setCopiedTicket(false), 2000);
+                      });
                     }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                    Copy
+                    {copiedTicket ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy Ticket ID
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setSubmitSuccess(false);
+                      setSubmittedTicketId(null);
+                      setCopiedTicket(false);
+                    }}
+                  >
+                    Dismiss
                   </Button>
                 </div>
               </div>

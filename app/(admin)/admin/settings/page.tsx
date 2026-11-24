@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { PasswordChangeCard } from '@/components/panel/password-change-card';
@@ -37,23 +36,22 @@ export default async function AdminSettingsPage() {
   const activePolicy = (policies ?? []).find((p) => p.is_active);
   const activeBundle = parsePolicySafe(activePolicy?.canonical);
 
+  const opsTabs = [
+    { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops' },
+    { id: 'outbox', label: 'Email Outbox & Queue', href: '/admin/emails/outbox' },
+    { id: 'recovery', label: 'R2 Vault Recovery', href: '/admin/recovery' },
+    { id: 'settings', label: 'Consent & Security Settings', href: '/admin/settings' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/ops"
-          className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Security &amp; Ops Hub
-        </Link>
-
-        <AdminHubHeader
-          eyebrow="GOVERNANCE, PRIVACY CONSENT & ADMIN CREDENTIALS"
-          title="Policies & Security Settings"
-          description="Publish cryptographic consent policy versions enforced on public inquiry intake forms and update your AAL2 Administrator password."
-        />
-      </div>
+      <AdminHubHeader
+        eyebrow="GOVERNANCE, PRIVACY CONSENT & ADMIN CREDENTIALS"
+        title="Policies & Security Settings"
+        description="Publish cryptographic consent policy versions enforced on public inquiry intake forms and update your AAL2 Administrator password."
+        tabs={opsTabs}
+        activeTab="settings"
+      />
 
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-7">

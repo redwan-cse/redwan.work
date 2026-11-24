@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
+import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { updateOrderStatusAndProgressAction } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
 
 interface OrderBoardItem {
@@ -40,15 +43,20 @@ const KANBAN_COLUMNS = [
     statuses: new Set(['in_review', 'revision_requested']),
   },
   {
-    id: 'done',
-    label: 'Delivered / Closed',
-    statuses: new Set(['delivered', 'completed', 'on_hold', 'cancelled']),
+    id: 'delivered',
+    label: 'Delivered & Completed',
+    statuses: new Set(['delivered', 'completed']),
+  },
+  {
+    id: 'paused',
+    label: 'On Hold & Cancelled',
+    statuses: new Set(['on_hold', 'cancelled']),
   },
 ];
 
 export function OrdersKanbanBoard({ orders }: { orders: OrderBoardItem[] }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {KANBAN_COLUMNS.map((col) => {
         const colOrders = orders.filter((o) => col.statuses.has(o.status));
         return (
@@ -104,6 +112,34 @@ export function OrdersKanbanBoard({ orders }: { orders: OrderBoardItem[] }) {
                           </span>
                         )}
                       </div>
+                      <ActionFeedbackForm
+                        action={updateOrderStatusAndProgressAction}
+                        successMessage="Moved stage."
+                        className="flex items-center gap-1 border-t border-border/50 pt-2"
+                      >
+                        <input type="hidden" name="order_id" value={ord.id} />
+                        <input type="hidden" name="progress_percent" value={String(ord.progress_percent)} />
+                        <select
+                          name="status"
+                          aria-label={`Change status for ${ord.code}`}
+                          defaultValue={ord.status}
+                          className="h-6 min-w-0 flex-1 rounded border border-border bg-background px-1 font-mono text-[10px]"
+                        >
+                          <option value="awaiting_payment">awaiting_payment</option>
+                          <option value="pending_requirements">pending_requirements</option>
+                          <option value="queued">queued</option>
+                          <option value="in_progress">in_progress</option>
+                          <option value="in_review">in_review</option>
+                          <option value="revision_requested">revision_requested</option>
+                          <option value="delivered">delivered</option>
+                          <option value="completed">completed</option>
+                          <option value="on_hold">on_hold</option>
+                          <option value="cancelled">cancelled</option>
+                        </select>
+                        <Button type="submit" size="sm" variant="ghost" className="h-6 px-1.5 text-[10px]">
+                          Move
+                        </Button>
+                      </ActionFeedbackForm>
                     </CardContent>
                   </Card>
                 ))

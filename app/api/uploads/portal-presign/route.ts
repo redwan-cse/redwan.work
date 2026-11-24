@@ -108,21 +108,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ownerClientId =
+    const admin = getSupabaseAdmin();
+
+    let ownerClientId =
       session.role === 'admin' && typeof body.clientId === 'string' && body.clientId
         ? body.clientId
         : session.userId;
 
-    const admin = getSupabaseAdmin();
-
-    if (orderId && session.role !== 'admin') {
+    if (orderId && (session.role !== 'admin' || !body.clientId)) {
       const { data: orderRow, error: orderErr } = await admin
         .from('orders')
         .select('id, client_id')
         .eq('id', orderId)
         .maybeSingle();
-      if (orderErr || !orderRow || orderRow.client_id !== session.userId) {
+      if (orderErr || !orderRow || (session.role !== 'admin' && orderRow.client_id !== session.userId)) {
         return NextResponse.json({ error: 'Forbidden order scope.' }, { status: 403 });
+      }
+      if (session.role === 'admin' && !body.clientId) {
+        ownerClientId = orderRow.client_id;
       }
     }
 

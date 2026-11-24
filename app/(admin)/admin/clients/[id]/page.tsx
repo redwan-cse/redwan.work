@@ -22,7 +22,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { requireAdminSession } from '@/lib/auth/session';
 import {
   addTypedClientNoteAction,
+  deleteClientNoteAction,
   toggleClientActiveStatusAction,
+  toggleClientNotePinAction,
   updateClientCrmAndNoteAction,
 } from '@/lib/crm/actions';
 import { formatMoney } from '@/lib/format';
@@ -600,9 +602,35 @@ export default async function AdminClientDetailPage({
                           <span className="text-muted-foreground">Follow-up: {n.followup_date}</span>
                         )}
                       </div>
-                      <span className="text-muted-foreground">
-                        {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">
+                          {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                        </span>
+                        <ActionFeedbackForm
+                          action={toggleClientNotePinAction}
+                          successMessage={n.is_pinned ? 'Note unpinned.' : 'Note pinned.'}
+                        >
+                          <input type="hidden" name="note_id" value={n.id} />
+                          <input type="hidden" name="client_id" value={profile.id} />
+                          <input type="hidden" name="is_pinned" value={n.is_pinned ? 'false' : 'true'} />
+                          <button
+                            type="submit"
+                            className="font-mono text-[10px] text-primary hover:underline"
+                          >
+                            {n.is_pinned ? 'Unpin' : 'Pin'}
+                          </button>
+                        </ActionFeedbackForm>
+                        <ConfirmActionButton
+                          action={deleteClientNoteAction}
+                          hiddenFields={{ note_id: n.id, client_id: profile.id }}
+                          triggerLabel="Delete"
+                          confirmTitle="Delete internal CRM note?"
+                          confirmDescription="Permanently removes this relationship note from the client record."
+                          destructive
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px] text-destructive"
+                        />
+                      </div>
                     </div>
                     <p className="whitespace-pre-wrap leading-relaxed">{n.body}</p>
                   </div>

@@ -20,7 +20,7 @@ export async function OrderLiveChatServer({
   let query = admin
     .from('order_messages')
     .select(
-      'id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
     )
     .eq('order_id', orderId)
     .order('created_at', { ascending: false })
@@ -31,16 +31,41 @@ export async function OrderLiveChatServer({
   }
 
   const { data } = await query;
-  const initialMessages = [...(data ?? [])]
-    .reverse()
-    .map((m) => ({
-      id: m.id,
-      body: m.body,
-      created_at: m.created_at,
-      is_internal_note: m.is_internal_note,
-      author_id: m.author_id,
-      author: Array.isArray(m.author) ? (m.author[0] ?? null) : (m.author ?? null),
-    }));
+  const ordered = [...(data ?? [])].reverse();
+  const allFileIds = Array.from(
+    new Set(
+      ordered.flatMap((m) =>
+        Array.isArray(m.attachment_file_ids) ? m.attachment_file_ids : []
+      )
+    )
+  );
+  let fileMap = new Map<
+    string,
+    { id: string; filename: string; size_bytes: number; mime_type: string }
+  >();
+  if (allFileIds.length > 0) {
+    const { data: vFiles } = await admin
+      .from('vault_files')
+      .select('id, filename, size_bytes, mime_type')
+      .in('id', allFileIds)
+      .is('archived_at', null);
+    fileMap = new Map((vFiles ?? []).map((f) => [f.id, f]));
+  }
+
+  const initialMessages = ordered.map((m) => ({
+    id: m.id,
+    body: m.body,
+    created_at: m.created_at,
+    is_internal_note: m.is_internal_note,
+    author_id: m.author_id,
+    author: Array.isArray(m.author) ? (m.author[0] ?? null) : (m.author ?? null),
+    attachments: (Array.isArray(m.attachment_file_ids) ? m.attachment_file_ids : [])
+      .map((fid) => fileMap.get(fid))
+      .filter(
+        (f): f is { id: string; filename: string; size_bytes: number; mime_type: string } =>
+          Boolean(f)
+      ),
+  }));
 
   return (
     <ContractLiveChat
