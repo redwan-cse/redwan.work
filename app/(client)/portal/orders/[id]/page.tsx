@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -759,14 +760,20 @@ export default async function ClientOrderDetailPage({
             </CardContent>
           </Card>
 
-          <OrderLiveChatServer
-            orderId={order.id}
-            orderCode={order.code ?? 'ORD-XXXX'}
-            orderTitle={order.title}
-            orderStatus={order.status}
-            viewerId={session.userId}
-            viewerRole={session.role === 'admin' ? 'admin' : 'client'}
-          />
+          <Suspense
+            fallback={
+              <div className="h-72 animate-pulse rounded-2xl border border-border/70 bg-muted/30" />
+            }
+          >
+            <OrderLiveChatServer
+              orderId={order.id}
+              orderCode={order.code ?? 'ORD-XXXX'}
+              orderTitle={order.title}
+              orderStatus={order.status}
+              viewerId={session.userId}
+              viewerRole={session.role === 'admin' ? 'admin' : 'client'}
+            />
+          </Suspense>
 
           {/* Client Review & Testimonial */}
           <Card className="border-border/80 bg-card/85">

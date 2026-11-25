@@ -21,6 +21,14 @@ export function ContactActiveChat() {
   const [data, setData] = useState<ActiveContractsPayload | null>(null);
 
   useEffect(() => {
+    // Skip anonymous network fetch when no Supabase session cookie is present
+    if (
+      typeof document !== 'undefined' &&
+      !/\bsb-[^=]+-auth-token/i.test(document.cookie)
+    ) {
+      return;
+    }
+
     let active = true;
     const controller = new AbortController();
 

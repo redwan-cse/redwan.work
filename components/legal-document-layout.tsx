@@ -24,25 +24,38 @@ export function LegalDocumentLayout({
   const [activeId, setActiveId] = useState<string>(sections[0]?.id ?? '');
 
   useEffect(() => {
-    const handleScroll = () => {
-      const offset = 160;
-      let current = sections[0]?.id ?? '';
-      for (const sec of sections) {
-        const el = document.getElementById(sec.id);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          if (rect.top <= offset) {
-            current = sec.id;
+    const ids = sections.map((sec) => sec.id);
+    if (ids.length === 0) return;
+
+    const elements = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (elements.length === 0 || typeof IntersectionObserver === 'undefined') return;
+
+    const visibleIds = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visibleIds.add(entry.target.id);
+          } else {
+            visibleIds.delete(entry.target.id);
           }
         }
-      }
-      setActiveId(current);
-    };
+        const firstVisible = ids.find((id) => visibleIds.has(id));
+        if (firstVisible) {
+          setActiveId(firstVisible);
+        }
+      },
+      { rootMargin: '-120px 0px -65% 0px', threshold: 0 }
+    );
 
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    for (const el of elements) {
+      observer.observe(el);
+    }
+
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      observer.disconnect();
     };
   }, [sections]);
 

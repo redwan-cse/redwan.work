@@ -56,71 +56,130 @@ export default async function AdminClientDetailPage({
   const [
     { data: profile },
     { data: crm },
-    { data: notes },
-    { data: orders },
-    { data: proposals },
-    { data: invoices },
-    { data: creditNotes },
-    { data: tickets },
-    { data: retainers },
-    { data: vaultFiles },
-    { data: auditLogs },
+    ordersCountRes,
+    proposalsCountRes,
+    invoicesCountRes,
+    ticketsCountRes,
+    retainersCountRes,
+    notesCountRes,
+    ordersDataRes,
+    proposalsDataRes,
+    invoicesDataRes,
+    creditNotesDataRes,
+    ticketsDataRes,
+    retainersDataRes,
+    notesDataRes,
+    vaultFilesDataRes,
+    auditLogsDataRes,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', id).maybeSingle(),
     admin.from('client_profiles').select('*').eq('user_id', id).maybeSingle(),
-    admin
-      .from('client_notes')
-      .select('*')
-      .eq('client_id', id)
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false }),
-    admin
-      .from('orders')
-      .select('id, code, title, pillar, status, total_cents, currency, created_at')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('proposals')
-      .select('id, code, title, status, total_cents, currency, created_at')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('invoices')
-      .select('id, code, status, total_cents, amount_paid_cents, credited_cents, currency, issued_at')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('credit_notes')
-      .select('*')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('tickets')
-      .select('id, code, subject, status, priority, last_message_at')
-      .eq('client_id', id)
-      .order('last_message_at', { ascending: false }),
-    admin
-      .from('retainer_plans')
-      .select('*')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('vault_files')
-      .select('size_bytes')
-      .eq('owner_client_id', id)
-      .is('archived_at', null),
-    admin
-      .from('audit_logs')
-      .select('id, action, summary, created_at')
-      .eq('client_id', id)
-      .order('created_at', { ascending: false })
-      .limit(20),
+    activeTab === 'orders'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('orders').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'orders'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('proposals').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'invoices'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('invoices').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'tickets'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('tickets').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'tickets'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('retainer_plans').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'notes'
+      ? Promise.resolve({ count: null as number | null })
+      : admin.from('client_notes').select('id', { count: 'exact', head: true }).eq('client_id', id),
+    activeTab === 'orders'
+      ? admin
+          .from('orders')
+          .select('id, code, title, pillar, status, total_cents, currency, created_at')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'orders'
+      ? admin
+          .from('proposals')
+          .select('id, code, title, status, total_cents, currency, created_at')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'invoices'
+      ? admin
+          .from('invoices')
+          .select('id, code, status, total_cents, amount_paid_cents, credited_cents, currency, issued_at')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'invoices'
+      ? admin
+          .from('credit_notes')
+          .select('*')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'tickets'
+      ? admin
+          .from('tickets')
+          .select('id, code, subject, status, priority, last_message_at')
+          .eq('client_id', id)
+          .order('last_message_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'tickets'
+      ? admin
+          .from('retainer_plans')
+          .select('*')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'notes'
+      ? admin
+          .from('client_notes')
+          .select('*')
+          .eq('client_id', id)
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: null }),
+    activeTab === 'security'
+      ? admin
+          .from('vault_files')
+          .select('size_bytes')
+          .eq('owner_client_id', id)
+          .is('archived_at', null)
+      : Promise.resolve({ data: null }),
+    activeTab === 'security'
+      ? admin
+          .from('audit_logs')
+          .select('id, action, summary, created_at')
+          .eq('client_id', id)
+          .order('created_at', { ascending: false })
+          .limit(20)
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!profile) notFound();
 
+  const orders = ordersDataRes.data ?? [];
+  const proposals = proposalsDataRes.data ?? [];
+  const invoices = invoicesDataRes.data ?? [];
+  const creditNotes = creditNotesDataRes.data ?? [];
+  const tickets = ticketsDataRes.data ?? [];
+  const retainers = retainersDataRes.data ?? [];
+  const notes = notesDataRes.data ?? [];
+  const vaultFiles = vaultFilesDataRes.data ?? [];
+  const auditLogs = auditLogsDataRes.data ?? [];
+
+  const ordersCount = activeTab === 'orders' ? orders.length : (ordersCountRes.count ?? 0);
+  const proposalsCount = activeTab === 'orders' ? proposals.length : (proposalsCountRes.count ?? 0);
+  const invoicesCount = activeTab === 'invoices' ? invoices.length : (invoicesCountRes.count ?? 0);
+  const ticketsCount = activeTab === 'tickets' ? tickets.length : (ticketsCountRes.count ?? 0);
+  const retainersCount = activeTab === 'tickets' ? retainers.length : (retainersCountRes.count ?? 0);
+  const notesCount = activeTab === 'notes' ? notes.length : (notesCountRes.count ?? 0);
+
   const billingAddr = (crm?.billing_address ?? {}) as Record<string, string | undefined>;
-  const vaultUsedBytes = (vaultFiles ?? []).reduce((sum, f) => sum + Number(f.size_bytes || 0), 0);
+  const vaultUsedBytes = vaultFiles.reduce((sum, f) => sum + Number(f.size_bytes || 0), 0);
 
   const tabs = [
     { id: 'overview', label: 'Overview & CRM', href: `/admin/clients/${id}?tab=overview` },
@@ -128,25 +187,25 @@ export default async function AdminClientDetailPage({
       id: 'orders',
       label: 'Orders & Proposals',
       href: `/admin/clients/${id}?tab=orders`,
-      count: (orders?.length ?? 0) + (proposals?.length ?? 0),
+      count: ordersCount + proposalsCount,
     },
     {
       id: 'invoices',
       label: 'Invoices & Credits',
       href: `/admin/clients/${id}?tab=invoices`,
-      count: invoices?.length ?? 0,
+      count: invoicesCount,
     },
     {
       id: 'tickets',
       label: 'Tickets & Retainers',
       href: `/admin/clients/${id}?tab=tickets`,
-      count: (tickets?.length ?? 0) + (retainers?.length ?? 0),
+      count: ticketsCount + retainersCount,
     },
     {
       id: 'notes',
       label: 'Typed Notes',
       href: `/admin/clients/${id}?tab=notes`,
-      count: notes?.length ?? 0,
+      count: notesCount,
     },
     { id: 'security', label: 'Security & Quota', href: `/admin/clients/${id}?tab=security` },
   ];

@@ -124,36 +124,38 @@ export async function GET(
       return NextResponse.json({ error: 'Stored file object not found.' }, { status: 404 });
     }
 
-    const signedUrl = await presignPrivateGet(file.r2_key, 60, file.filename);
-
-    const { error: incErr } = await admin.rpc('increment_vault_file_download', {
-      p_file_id: file.id,
-    });
-    if (incErr) {
-      await admin
-        .from('vault_files')
-        .update({
-          download_count: (file.download_count ?? 0) + 1,
-          last_downloaded_at: new Date().toISOString(),
-        })
-        .eq('id', file.id);
-    }
-
-    await recordAuditLog({
-      actorId: session.userId,
-      actorRole: session.role,
-      clientId: file.owner_client_id,
-      orderId: file.order_id,
-      action: 'vault_file.downloaded',
-      entityType: 'vault_file',
-      entityId: file.id,
-      summary: `${session.role === 'admin' ? 'Admin' : 'Client'} downloaded ${file.filename}`,
-      metadata: {
-        filename: file.filename,
-        size_bytes: file.size_bytes,
-        deliverable_id: file.deliverable_id,
-      },
-    });
+    const [signedUrl] = await Promise.all([
+      presignPrivateGet(file.r2_key, 60, file.filename),
+      (async () => {
+        const { error: incErr } = await admin.rpc('increment_vault_file_download', {
+          p_file_id: file.id,
+        });
+        if (incErr) {
+          await admin
+            .from('vault_files')
+            .update({
+              download_count: (file.download_count ?? 0) + 1,
+              last_downloaded_at: new Date().toISOString(),
+            })
+            .eq('id', file.id);
+        }
+      })(),
+      recordAuditLog({
+        actorId: session.userId,
+        actorRole: session.role,
+        clientId: file.owner_client_id,
+        orderId: file.order_id,
+        action: 'vault_file.downloaded',
+        entityType: 'vault_file',
+        entityId: file.id,
+        summary: `${session.role === 'admin' ? 'Admin' : 'Client'} downloaded ${file.filename}`,
+        metadata: {
+          filename: file.filename,
+          size_bytes: file.size_bytes,
+          deliverable_id: file.deliverable_id,
+        },
+      }),
+    ]);
 
     return NextResponse.redirect(signedUrl, {
       status: 302,

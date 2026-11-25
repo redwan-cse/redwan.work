@@ -232,22 +232,42 @@ export type PublicPortfolioRecord = PortfolioCaseStudy & {
 const fetchPublicPortfolioItemsCached = reactCache(async function fetchPublicPortfolioItems(
   includeUnpublished: boolean
 ): Promise<PublicPortfolioRecord[]> {
+  const fallbackMapped = PORTFOLIO_ITEMS.map((item, idx) => ({
+    ...item,
+    dbId: item.id,
+    slug: item.id,
+    isPublished: true,
+    isFeatured: idx < 6,
+    sortOrder: (idx + 1) * 10,
+  }));
+
   try {
     const admin = getSupabaseAdmin();
-    const { data, error } = await admin
+    let query = admin
       .from('portfolio_items')
-      .select('*')
+      .select(
+        'id, slug, code, pillar, pillar_label, title, client_sector, year, headline_metric, summary, challenge, approach, outcomes, stack, related_service_slug, external_url, is_published, is_featured, sort_order'
+      )
       .order('sort_order', { ascending: true });
 
-    const fallbackMapped = PORTFOLIO_ITEMS.map((item, idx) => ({
-      ...item,
-      dbId: item.id,
-      slug: item.id,
-      isPublished: true,
-      isFeatured: idx < 6,
-      sortOrder: (idx + 1) * 10,
-    }));
-    if (error || !data || data.length === 0) return fallbackMapped;
+    if (!includeUnpublished && typeof query.eq === 'function') {
+      query = query.eq('is_published', true);
+    }
+
+    const { data, error } = await query;
+
+    if (error) return fallbackMapped;
+    if (!data || data.length === 0) {
+      if (!includeUnpublished) {
+        const countRes = await admin
+          .from('portfolio_items')
+          .select('id', { count: 'exact', head: true });
+        if ((countRes.count ?? 0) > 0) {
+          return [];
+        }
+      }
+      return fallbackMapped;
+    }
 
     const dbMapped = data.map((row) => ({
       dbId: row.id,
@@ -272,23 +292,9 @@ const fetchPublicPortfolioItemsCached = reactCache(async function fetchPublicPor
       sortOrder: row.sort_order ?? 0,
     }));
 
-    const visibleDbMapped = dbMapped.filter((item) => item.isPublished);
-    if (includeUnpublished) {
-      return dbMapped;
-    }
-    if (dbMapped.length > 0) {
-      return visibleDbMapped;
-    }
-    return fallbackMapped;
+    return includeUnpublished ? dbMapped : dbMapped.filter((item) => item.isPublished);
   } catch {
-    return PORTFOLIO_ITEMS.map((item, idx) => ({
-      ...item,
-      dbId: item.id,
-      slug: item.id,
-      isPublished: true,
-      isFeatured: idx < 6,
-      sortOrder: (idx + 1) * 10,
-    }));
+    return fallbackMapped;
   }
 });
 
@@ -299,7 +305,8 @@ export async function getPublicPortfolioItems(options?: {
 }
 
 const fetchSiteSettingsAndResumeCached = reactCache(async function fetchSiteSettingsAndResume(
-  includeHidden: boolean
+  includeHidden: boolean,
+  skipResumeItems: boolean
 ): Promise<{
   settings: SiteSettingsRecord;
   items: ResumeItemRecord[];
@@ -308,18 +315,28 @@ const fetchSiteSettingsAndResumeCached = reactCache(async function fetchSiteSett
 
   try {
     const admin = getSupabaseAdmin();
-    let itemsQuery = admin
-      .from('resume_items')
+    const settingsPromise = admin
+      .from('site_settings')
       .select('*')
-      .order('sort_order', { ascending: true });
+      .eq('id', 'default')
+      .maybeSingle();
 
-    if (!includeHidden) {
-      itemsQuery = itemsQuery.eq('is_visible', true);
-    }
+    const itemsPromise = skipResumeItems
+      ? Promise.resolve({ data: null as ResumeItemRecord[] | null })
+      : (() => {
+          let itemsQuery = admin
+            .from('resume_items')
+            .select('*')
+            .order('sort_order', { ascending: true });
+          if (!includeHidden) {
+            itemsQuery = itemsQuery.eq('is_visible', true);
+          }
+          return itemsQuery;
+        })();
 
     const [{ data: settingsRow }, { data: itemsRows }] = await Promise.all([
-      admin.from('site_settings').select('*').eq('id', 'default').maybeSingle(),
-      itemsQuery,
+      settingsPromise,
+      itemsPromise,
     ]);
 
     const mergedCredentials = reconcileCredentials(
@@ -390,6 +407,10 @@ const fetchSiteSettingsAndResumeCached = reactCache(async function fetchSiteSett
           ),
         }
       : defaultSettings;
+
+    if (skipResumeItems) {
+      return { settings, items: [] };
+    }
 
     const dbItems: ResumeItemRecord[] = (itemsRows ?? []).map((r) => ({
       id: r.id,
@@ -517,11 +538,15 @@ const fetchSiteSettingsAndResumeCached = reactCache(async function fetchSiteSett
 
 export async function getSiteSettingsAndResume(options?: {
   includeHidden?: boolean;
+  skipResumeItems?: boolean;
 }): Promise<{
   settings: SiteSettingsRecord;
   items: ResumeItemRecord[];
 }> {
-  return fetchSiteSettingsAndResumeCached(Boolean(options?.includeHidden));
+  return fetchSiteSettingsAndResumeCached(
+    Boolean(options?.includeHidden),
+    Boolean(options?.skipResumeItems)
+  );
 }
 
 export const getPublicContactChannels = reactCache(async function fetchPublicContactChannels(): Promise<{

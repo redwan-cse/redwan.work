@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { m, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
   Bot,
@@ -28,7 +27,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { InteractiveCard, ScrollReveal } from '@/components/motion/reveal';
 import {
-  SERVICE_CATALOG,
   SERVICE_PILLARS,
   type ServiceCatalogItem,
   type ServicePillarKey,
@@ -55,12 +53,11 @@ interface ServiceDraftConfig {
 }
 
 export function ServicesShowcase({
-  initialServices = SERVICE_CATALOG,
+  initialServices = [],
 }: {
   initialServices?: ServiceCatalogItem[];
 }) {
   const searchParams = useSearchParams();
-  const prefersReducedMotion = useReducedMotion();
   const urlPillar = searchParams?.get('pillar') as ServicePillarKey | null;
 
   const [selectedPillar, setSelectedPillar] = useState<'all' | ServicePillarKey>(
@@ -140,22 +137,12 @@ export function ServicesShowcase({
               className={cn(
                 'relative inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
                 isActive
-                  ? 'border-primary text-primary-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                   : 'border-border/80 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
               )}
             >
-              {isActive &&
-                (prefersReducedMotion ? (
-                  <span className="absolute inset-0 rounded-full bg-primary" />
-                ) : (
-                  <m.span
-                    layoutId="service-pillar-pill"
-                    transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-                    className="absolute inset-0 rounded-full bg-primary"
-                  />
-                ))}
-              <Icon className="relative z-10 h-4 w-4" />
-              <span className="relative z-10">{label}</span>
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
             </button>
           );
         })}

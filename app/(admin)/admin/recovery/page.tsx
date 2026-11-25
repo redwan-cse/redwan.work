@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Download, FolderArchive, Pin, ShieldAlert, TimerReset } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
@@ -30,12 +31,71 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
+async function OrphanR2InventoryCard({
+  trackedKeys,
+  r2Ready,
+}: {
+  trackedKeys: Set<string>;
+  r2Ready: boolean;
+}) {
+  const r2PrivateList = r2Ready
+    ? await listPrivateVaultObjects().catch(() => [] as R2ObjectSummary[])
+    : [];
+  const orphanObjects = r2PrivateList
+    .filter((obj) => !trackedKeys.has(obj.key))
+    .slice(0, 40);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldAlert className="h-4 w-4 text-amber-500" />
+          Orphan R2 Storage Inventory ({orphanObjects.length})
+        </CardTitle>
+        <CardDescription className="text-xs">
+          Objects present in R2 Private bucket without an active tracking row in PostgreSQL.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 text-xs">
+        {!r2Ready ? (
+          <p className="text-muted-foreground">Private R2 bucket environment variables are not set.</p>
+        ) : orphanObjects.length > 0 ? (
+          orphanObjects.map((obj) => (
+            <div
+              key={obj.key}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2"
+            >
+              <div className="min-w-0 font-mono">
+                <div className="break-all text-[11px] font-semibold">{obj.key}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {(obj.size / 1024).toFixed(1)} KB · Last modified {obj.lastModified.toISOString()}
+                </div>
+              </div>
+              <ConfirmActionButton
+                action={purgeOrphanPrivateObjectAction}
+                hiddenFields={{ r2_key: obj.key }}
+                triggerLabel="Purge Orphan"
+                confirmTitle="Purge untracked R2 object?"
+                confirmDescription={`Deletes ${obj.key} permanently from Private R2 storage.`}
+                destructive
+                variant="outline"
+              />
+            </div>
+          ))
+        ) : (
+          <p className="text-muted-foreground">Zero untracked orphan objects detected in R2 inventory.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default async function AdminRecoveryPage() {
   await requireAdminSession();
   const admin = getSupabaseAdmin();
   const r2Ready = isR2Configured();
 
-  const [{ data: allTrackedVaultFiles }, { data: clients }, { data: orders }, r2PrivateList] =
+  const [{ data: allTrackedVaultFiles }, { data: clients }, { data: orders }] =
     await Promise.all([
       admin
         .from('vault_files')
@@ -48,7 +108,6 @@ export default async function AdminRecoveryPage() {
         .select('id, code, title, client_id')
         .order('created_at', { ascending: false })
         .limit(30),
-      r2Ready ? listPrivateVaultObjects().catch(() => [] as R2ObjectSummary[]) : Promise.resolve([]),
     ]);
 
   const vaultFiles = (allTrackedVaultFiles ?? []).slice(0, 100);
@@ -70,10 +129,6 @@ export default async function AdminRecoveryPage() {
       fileCountByOrder.set(vf.order_id, (fileCountByOrder.get(vf.order_id) ?? 0) + 1);
     }
   }
-
-  const orphanObjects = (r2PrivateList ?? [])
-    .filter((obj) => !trackedKeys.has(obj.key))
-    .slice(0, 40);
 
   const opsTabs = [
     { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops' },
@@ -284,48 +339,27 @@ export default async function AdminRecoveryPage() {
         </CardContent>
       </Card>
 
-      {/* Unlinked Orphan R2 Keys */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldAlert className="h-4 w-4 text-amber-500" />
-            Orphan R2 Storage Inventory ({orphanObjects.length})
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Objects present in R2 Private bucket without an active tracking row in PostgreSQL.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-xs">
-          {!r2Ready ? (
-            <p className="text-muted-foreground">Private R2 bucket environment variables are not set.</p>
-          ) : orphanObjects.length > 0 ? (
-            orphanObjects.map((obj) => (
-              <div
-                key={obj.key}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2"
-              >
-                <div className="min-w-0 font-mono">
-                  <div className="break-all text-[11px] font-semibold">{obj.key}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {(obj.size / 1024).toFixed(1)} KB · Last modified {obj.lastModified.toISOString()}
-                  </div>
-                </div>
-                <ConfirmActionButton
-                  action={purgeOrphanPrivateObjectAction}
-                  hiddenFields={{ r2_key: obj.key }}
-                  triggerLabel="Purge Orphan"
-                  confirmTitle="Purge untracked R2 object?"
-                  confirmDescription={`Deletes ${obj.key} permanently from Private R2 storage.`}
-                  destructive
-                  variant="outline"
-                />
-              </div>
-            ))
-          ) : (
-            <p className="text-muted-foreground">Zero untracked orphan objects detected in R2 inventory.</p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Unlinked Orphan R2 Keys (streamed independently so S3 listing never blocks Postgres dashboard) */}
+      <Suspense
+        fallback={
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldAlert className="h-4 w-4 text-amber-500" />
+                Orphan R2 Storage Inventory
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Scanning Private R2 bucket objects against PostgreSQL tracking records…
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-20 animate-pulse rounded-lg bg-muted/40" />
+            </CardContent>
+          </Card>
+        }
+      >
+        <OrphanR2InventoryCard trackedKeys={trackedKeys} r2Ready={r2Ready} />
+      </Suspense>
     </div>
   );
 }

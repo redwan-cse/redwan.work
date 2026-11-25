@@ -1,9 +1,5 @@
-'use client';
-
-import { useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useReactToPrint } from 'react-to-print';
 import {
   Award,
   BookOpen,
@@ -16,26 +12,27 @@ import {
   Mail,
   MapPin,
   Phone,
-  Printer,
   ShieldCheck,
   Users,
 } from 'lucide-react';
 import { GithubIcon, LinkedinIcon, OrcidIcon } from '@/components/social-links';
 import { Button } from '@/components/ui/button';
-import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field';
 import {
   HeroReveal,
   HeroRevealItem,
-  InteractiveCard,
   ScrollReveal,
 } from '@/components/motion/reveal';
-import { PrintableResume } from '@/components/printable-resume';
+import { ResumePrintButton, ResumePrintHost } from '@/components/resume-print-controls';
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import type { ResumeItemRecord, SiteSettingsRecord } from '@/lib/cms/queries';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
+
+const RESUME_SECTION_CARD_CLASS =
+  'border-border/80 border-l-4 border-l-primary shadow-xs transition-[border-color,box-shadow] duration-300 hover:border-primary/45 hover:shadow-md';
 
 export function ResumeView({
   settings,
@@ -44,29 +41,6 @@ export function ResumeView({
   settings: SiteSettingsRecord;
   items: ResumeItemRecord[];
 }) {
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `${settings.full_name.replace(/\s+/g, '_')}_Resume`,
-    pageStyle: `
-      @page {
-        size: A4;
-        margin: 0;
-      }
-      @media print {
-        body {
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-        html, body {
-          height: 100%;
-          overflow: visible;
-        }
-        @page { size: A4; margin: 0; }
-      }
-    `,
-  });
 
   const personalInfo = {
     name: settings.full_name || 'Md. Redwan Ahmed',
@@ -181,28 +155,27 @@ export function ResumeView({
   const resumeDownloadHref =
     configuredPdfUrl === '/resume.pdf' ? '/resume.pdf?download=1' : configuredPdfUrl;
 
+  const printableData = {
+    personalInfo,
+    summary,
+    researchInterests,
+    technicalSkills,
+    softSkills,
+    otherSkills,
+    experience,
+    education,
+    vendorCertifications,
+    professionalCertificates,
+    research,
+    leadership,
+    hobbies,
+    references,
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Hidden printable A4 version */}
-      <div className="hidden">
-        <PrintableResume
-          ref={printRef}
-          personalInfo={personalInfo}
-          summary={summary}
-          researchInterests={researchInterests}
-          technicalSkills={technicalSkills}
-          softSkills={softSkills}
-          otherSkills={otherSkills}
-          experience={experience}
-          education={education}
-          vendorCertifications={vendorCertifications}
-          professionalCertificates={professionalCertificates}
-          research={research}
-          leadership={leadership}
-          hobbies={hobbies}
-          references={references}
-        />
-      </div>
+      {/* On-demand A4 print host (loads PrintableResume + react-to-print only when clicked) */}
+      <ResumePrintHost data={printableData} />
 
       {/* Animated Antigravity Hero Header */}
       <section className="relative overflow-hidden border-b border-border/70 py-14 md:py-18">
@@ -210,7 +183,7 @@ export function ResumeView({
         <div className="container relative z-10">
           <div className="mx-auto max-w-5xl">
             <HeroReveal>
-              <InteractiveCard className="overflow-hidden border-border/80 bg-card/85 p-6 backdrop-blur-md sm:p-8">
+              <Card className="overflow-hidden border-border/80 bg-card/85 p-6 shadow-xs backdrop-blur-md sm:p-8">
                 <div className="flex flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
                   <div className="flex-1 space-y-3">
                     <HeroRevealItem>
@@ -311,7 +284,7 @@ export function ResumeView({
                   </div>
 
                   {/* Action Buttons */}
-                  <HeroRevealItem className="w-full shrink-0 sm:w-auto sm:min-w-[190px]">
+                  <HeroRevealItem className="w-full shrink-0 print:hidden sm:w-auto sm:min-w-[190px]">
                     <div className="flex flex-col gap-2.5">
                       <Button asChild size="default" className="w-full gap-2 rounded-full">
                         <a
@@ -337,20 +310,14 @@ export function ResumeView({
                           LinkedIn Profile
                         </a>
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="default"
-                        onClick={handlePrint}
+                      <ResumePrintButton
+                        label="Print CV"
                         className="w-full gap-2 rounded-full"
-                      >
-                        <Printer className="h-4 w-4" />
-                        Print CV
-                      </Button>
+                      />
                     </div>
                   </HeroRevealItem>
                 </div>
-              </InteractiveCard>
+              </Card>
             </HeroReveal>
           </div>
         </div>
@@ -360,7 +327,7 @@ export function ResumeView({
         <div className="mx-auto max-w-5xl space-y-8">
           {/* 1. Summary */}
           <ScrollReveal>
-            <InteractiveCard className="border-l-4 border-l-primary">
+            <Card className={RESUME_SECTION_CARD_CLASS}>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Briefcase className="h-5 w-5 text-primary" />
@@ -372,12 +339,12 @@ export function ResumeView({
                   {summary}
                 </p>
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 2. Research Interests */}
           <ScrollReveal delay={0.04}>
-            <InteractiveCard className="border-l-4 border-l-primary">
+            <Card className={RESUME_SECTION_CARD_CLASS}>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <BookOpen className="h-5 w-5 text-primary" />
@@ -397,12 +364,12 @@ export function ResumeView({
                   ))}
                 </div>
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 3. Professional Experience */}
           <ScrollReveal delay={0.06}>
-            <InteractiveCard id="experience" className="scroll-mt-24 border-l-4 border-l-primary">
+            <Card id="experience" className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Briefcase className="h-5 w-5 text-primary" />
@@ -443,12 +410,12 @@ export function ResumeView({
                   </div>
                 ))}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 4. Education */}
           <ScrollReveal delay={0.08}>
-            <InteractiveCard id="education" className="scroll-mt-24 border-l-4 border-l-primary">
+            <Card id="education" className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <GraduationCap className="h-5 w-5 text-primary" />
@@ -476,12 +443,12 @@ export function ResumeView({
                   </div>
                 ))}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 5. Technical Skills */}
           <ScrollReveal delay={0.1}>
-            <InteractiveCard id="skills" className="scroll-mt-24 border-l-4 border-l-primary">
+            <Card id="skills" className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Award className="h-5 w-5 text-primary" />
@@ -508,14 +475,14 @@ export function ResumeView({
                   </div>
                 ))}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 6. Certifications (Exam/Vendor) */}
           <ScrollReveal delay={0.12}>
-            <InteractiveCard
+            <Card
               id="certifications"
-              className="scroll-mt-24 border-l-4 border-l-primary"
+              className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
@@ -635,12 +602,12 @@ export function ResumeView({
                   );
                 })}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 7. Professional Certificates & Course Completions */}
           <ScrollReveal delay={0.14}>
-            <InteractiveCard className="border-l-4 border-l-primary">
+            <Card className={RESUME_SECTION_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Award className="h-5 w-5 text-primary" />
@@ -684,12 +651,12 @@ export function ResumeView({
                   </Link>
                 </div>
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 8. Research & Publications */}
           <ScrollReveal delay={0.16}>
-            <InteractiveCard id="research" className="scroll-mt-24 border-l-4 border-l-primary">
+            <Card id="research" className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <BookOpen className="h-5 w-5 text-primary" />
@@ -739,12 +706,12 @@ export function ResumeView({
                   </div>
                 ))}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 9. Leadership Experience */}
           <ScrollReveal delay={0.18}>
-            <InteractiveCard id="leadership" className="scroll-mt-24 border-l-4 border-l-primary">
+            <Card id="leadership" className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Users className="h-5 w-5 text-primary" />
@@ -779,15 +746,15 @@ export function ResumeView({
                   </div>
                 ))}
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 10. Soft & Workplace Skills */}
           {(softSkills.length > 0 || otherSkills.length > 0) && (
             <ScrollReveal delay={0.19}>
-              <InteractiveCard
+              <Card
                 id="additional-skills"
-                className="scroll-mt-24 border-l-4 border-l-primary"
+                className={`scroll-mt-24 ${RESUME_SECTION_CARD_CLASS}`}
               >
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
@@ -826,13 +793,13 @@ export function ResumeView({
                     </div>
                   )}
                 </CardContent>
-              </InteractiveCard>
+              </Card>
             </ScrollReveal>
           )}
 
           {/* 11. Languages */}
           <ScrollReveal delay={0.2}>
-            <InteractiveCard className="border-l-4 border-l-primary">
+            <Card className={RESUME_SECTION_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                   <Globe className="h-5 w-5 text-primary" />
@@ -851,13 +818,13 @@ export function ResumeView({
                   </div>
                 </div>
               </CardContent>
-            </InteractiveCard>
+            </Card>
           </ScrollReveal>
 
           {/* 11. Hobbies & Interests */}
           {hobbies.length > 0 && (
             <ScrollReveal delay={0.22}>
-              <InteractiveCard className="border-l-4 border-l-primary">
+              <Card className={RESUME_SECTION_CARD_CLASS}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                     <Heart className="h-5 w-5 text-primary" />
@@ -875,14 +842,14 @@ export function ResumeView({
                     </div>
                   ))}
                 </CardContent>
-              </InteractiveCard>
+              </Card>
             </ScrollReveal>
           )}
 
           {/* 12. Academic References */}
           {references.length > 0 && (
             <ScrollReveal delay={0.24}>
-              <InteractiveCard className="border-l-4 border-l-primary">
+              <Card className={RESUME_SECTION_CARD_CLASS}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
                     <Users className="h-5 w-5 text-primary" />
@@ -928,14 +895,14 @@ export function ResumeView({
                     );
                   })}
                 </CardContent>
-              </InteractiveCard>
+              </Card>
             </ScrollReveal>
           )}
 
           {/* Bottom Footer Actions & Lower-Right Official C|EH Logo per EC-Council Guidelines Section 6(c) */}
           <ScrollReveal delay={0.26}>
             <div className="flex flex-col items-center justify-between gap-6 border-t border-border/70 pt-6 sm:flex-row">
-              <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
+              <div className="flex flex-wrap justify-center gap-4 print:hidden sm:justify-start">
                 <Button asChild size="lg" className="gap-2 rounded-full">
                   <a
                     href={resumeDownloadHref}
@@ -945,16 +912,12 @@ export function ResumeView({
                     Download CV
                   </a>
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
+                <ResumePrintButton
+                  label="Print Resume"
                   size="lg"
-                  onClick={handlePrint}
                   className="gap-2 rounded-full"
-                >
-                  <Printer className="h-5 w-5" />
-                  Print Resume
-                </Button>
+                  iconClassName="h-5 w-5"
+                />
               </div>
 
               <div className="flex items-center gap-3 self-center sm:self-end">

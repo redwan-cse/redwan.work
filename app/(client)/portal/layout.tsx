@@ -4,6 +4,7 @@ import { getCurrentSession } from '@/lib/auth/session';
 import { getClientPortalOverview } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PanelShell, type PanelNavItem } from '@/components/panel/panel-shell';
+import { Toaster } from '@/components/ui/sonner';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,15 +80,18 @@ export default async function ClientPortalLayout({
   ];
 
   return (
-    <PanelShell
-      role="client"
-      userEmail={session.email}
-      userName={session.fullName}
-      unreadNotifications={overview.unread_notifications ?? 0}
-      recentNotifications={recentNotifications ?? []}
-      navItems={navItems}
-    >
-      {children}
-    </PanelShell>
+    <>
+      <PanelShell
+        role="client"
+        userEmail={session.email}
+        userName={session.fullName}
+        unreadNotifications={overview.unread_notifications ?? 0}
+        recentNotifications={recentNotifications ?? []}
+        navItems={navItems}
+      >
+        {children}
+      </PanelShell>
+      <Toaster richColors position="bottom-right" />
+    </>
   );
 }

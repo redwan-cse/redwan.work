@@ -5,7 +5,6 @@ import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field
 import { HeroReveal, HeroRevealItem } from '@/components/motion/reveal';
 import { BlogBrowser, type EnrichedBlogPost } from '@/components/blog-browser';
 import { BlogPagination } from '@/components/blog-pagination';
-import { BlogPreloader } from '@/components/blog-preloader';
 import {
   BLOG_FIRST_PAGE_COUNT,
   BLOG_GRID_PER_PAGE,
@@ -174,7 +173,6 @@ export default async function BlogsPage({
             visibleCount={allPosts.length}
             isCapped={isCapped}
           />
-          <BlogPreloader nextPage={currentPage < totalPages ? currentPage + 1 : null} />
         </div>
       </section>
     </div>

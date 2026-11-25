@@ -141,7 +141,7 @@ export function AnalyticsScripts() {
         <Script
           id="ga4-gtag-src"
           src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`}
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
         />
       )}
@@ -149,7 +149,7 @@ export function AnalyticsScripts() {
         <Script
           id="ms-clarity-loader"
           src={`https://www.clarity.ms/tag/${encodeURIComponent(clarityId)}`}
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           onLoad={() => pushConsentSignals(allowsAnalyticsStorage())}
         />
       )}

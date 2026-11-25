@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import {
   m,
-  useMotionTemplate,
   useMotionValue,
   useReducedMotion,
   useSpring,
@@ -37,12 +36,10 @@ export function AntigravityHeroField() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
-  const pointerX = useMotionValue(520);
-  const pointerY = useMotionValue(260);
+  const pointerX = useMotionValue(200);
+  const pointerY = useMotionValue(-60);
   const smoothX = useSpring(pointerX, { stiffness: 140, damping: 26, mass: 0.5 });
   const smoothY = useSpring(pointerY, { stiffness: 140, damping: 26, mass: 0.5 });
-
-  const ambientSpotlight = useMotionTemplate`radial-gradient(640px circle at ${smoothX}px ${smoothY}px, oklch(from var(--primary) l c h / 0.14), transparent 72%)`;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -54,10 +51,23 @@ export function AntigravityHeroField() {
 
     let width = 0;
     let height = 0;
+    let rectLeft = 0;
+    let rectTop = 0;
+    let rectDirty = true;
     let animationFrameId = 0;
     let isVisible = true;
     const mouse = { x: -1000, y: -1000, active: false };
     let dashes: MicroDash[] = [];
+
+    const syncRect = () => {
+      const rect = container.getBoundingClientRect();
+      rectLeft = rect.left;
+      rectTop = rect.top;
+      width = rect.width;
+      height = rect.height;
+      rectDirty = false;
+      return rect;
+    };
 
     const createDashes = (w: number, h: number): MicroDash[] => {
       const area = w * h;
@@ -85,16 +95,14 @@ export function AntigravityHeroField() {
     };
 
     const resize = () => {
-      const rect = container.getBoundingClientRect();
+      const rect = syncRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = rect.width;
-      height = rect.height;
-      canvas.width = Math.max(1, Math.floor(width * dpr));
-      canvas.height = Math.max(1, Math.floor(height * dpr));
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      dashes = createDashes(width, height);
+      dashes = createDashes(rect.width, rect.height);
     };
 
     resize();
@@ -181,18 +189,25 @@ export function AntigravityHeroField() {
     animationFrameId = window.requestAnimationFrame(render);
 
     const handlePointerMove = (event: PointerEvent) => {
-      const rect = container.getBoundingClientRect();
-      const localX = event.clientX - rect.left;
-      const localY = event.clientY - rect.top;
-      if (localX >= 0 && localX <= rect.width && localY >= 0 && localY <= rect.height) {
-        pointerX.set(localX);
-        pointerY.set(localY);
+      if (!isVisible) return;
+      if (rectDirty) {
+        syncRect();
+      }
+      const localX = event.clientX - rectLeft;
+      const localY = event.clientY - rectTop;
+      if (localX >= 0 && localX <= width && localY >= 0 && localY <= height) {
+        pointerX.set(localX - 320);
+        pointerY.set(localY - 320);
         mouse.x = localX;
         mouse.y = localY;
         mouse.active = true;
       } else {
         mouse.active = false;
       }
+    };
+
+    const handleScroll = () => {
+      rectDirty = true;
     };
 
     const handlePointerLeave = () => {
@@ -204,9 +219,11 @@ export function AntigravityHeroField() {
         const nowVisible = entry?.isIntersecting ?? true;
         if (nowVisible && !isVisible) {
           isVisible = true;
+          rectDirty = true;
           animationFrameId = window.requestAnimationFrame(render);
         } else if (!nowVisible) {
           isVisible = false;
+          mouse.active = false;
           window.cancelAnimationFrame(animationFrameId);
         }
       },
@@ -224,6 +241,7 @@ export function AntigravityHeroField() {
 
     observer.observe(container);
     window.addEventListener('resize', resize);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     document.addEventListener('visibilitychange', handleVisibilityChange);
     container.addEventListener('pointerleave', handlePointerLeave);
@@ -233,6 +251,7 @@ export function AntigravityHeroField() {
       window.cancelAnimationFrame(animationFrameId);
       observer.disconnect();
       window.removeEventListener('resize', resize);
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       container.removeEventListener('pointerleave', handlePointerLeave);
@@ -249,8 +268,13 @@ export function AntigravityHeroField() {
     >
       {!prefersReducedMotion && (
         <m.div
-          className="absolute inset-0 transition-opacity duration-500"
-          style={{ background: ambientSpotlight }}
+          className="pointer-events-none absolute top-0 left-0 h-[640px] w-[640px] rounded-full will-change-transform"
+          style={{
+            x: smoothX,
+            y: smoothY,
+            background:
+              'radial-gradient(circle, oklch(from var(--primary) l c h / 0.14) 0%, transparent 72%)',
+          }}
         />
       )}
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-90" />

@@ -5,6 +5,7 @@ import { getAdminCommandCenterMetrics } from '@/lib/crm/overview-queries';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { PanelShell, type PanelNavItem } from '@/components/panel/panel-shell';
 import { AdminCommandPalette } from '@/components/admin/admin-command-palette';
+import { Toaster } from '@/components/ui/sonner';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,16 +83,19 @@ export default async function AdminLayout({
   ];
 
   return (
-    <PanelShell
-      role="admin"
-      userEmail={session.email}
-      userName={session.fullName}
-      unreadNotifications={metrics.unread_notifications ?? 0}
-      recentNotifications={recentNotifications ?? []}
-      navItems={navItems}
-      headerSlot={<AdminCommandPalette />}
-    >
-      {children}
-    </PanelShell>
+    <>
+      <PanelShell
+        role="admin"
+        userEmail={session.email}
+        userName={session.fullName}
+        unreadNotifications={metrics.unread_notifications ?? 0}
+        recentNotifications={recentNotifications ?? []}
+        navItems={navItems}
+        headerSlot={<AdminCommandPalette />}
+      >
+        {children}
+      </PanelShell>
+      <Toaster richColors position="bottom-right" />
+    </>
   );
 }

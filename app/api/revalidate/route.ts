@@ -1,5 +1,6 @@
 // app/api/revalidate/route.ts
-import { revalidatePath } from 'next/cache';
+import * as nextCache from 'next/cache';
+const { revalidatePath } = nextCache;
 import { NextRequest, NextResponse } from 'next/server';
 import { requireBearer } from '@/lib/auth/bearer';
 import { clearBlogCache } from '@/lib/blogger';
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
 
   try {
     revalidatePath(path);
+    if (typeof nextCache.revalidateTag === 'function') {
+      nextCache.revalidateTag('blogs', 'max');
+    }
     // Also drop the in-process Blogger TTL cache so the next render
     // fetches fresh data even before Next's data cache revalidates
     clearBlogCache();

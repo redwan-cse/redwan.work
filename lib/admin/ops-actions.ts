@@ -1,6 +1,7 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import * as nextCache from 'next/cache';
+const { revalidatePath } = nextCache;
 import { requireAdminSession } from '@/lib/auth/session';
 import { clearBlogCache } from '@/lib/blogger';
 import { archivePolicy } from '@/lib/contact/consent-policy';
@@ -316,6 +317,9 @@ export async function deletePublicAssetAction(formData: FormData): Promise<void>
 export async function syncBloggerCacheAction(): Promise<void> {
   const session = await requireAdminSession();
   clearBlogCache();
+  if (typeof nextCache.revalidateTag === 'function') {
+    nextCache.revalidateTag('blogs', 'max');
+  }
   revalidatePath('/blogs');
   revalidatePath('/');
   revalidatePath('/sitemap.xml');

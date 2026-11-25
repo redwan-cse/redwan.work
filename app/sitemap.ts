@@ -1,27 +1,30 @@
 import type { MetadataRoute } from 'next';
-import { getBlogPostsPage } from '@/lib/blogger';
-import { getPublicPortfolioItems, getPublicServicesCatalog } from '@/lib/cms/queries';
-import { SITE } from '@/lib/content/site';
+import { getLatestBlogPostTimestamp } from '@/lib/blogger';
+import { PORTFOLIO_ITEMS, SERVICE_CATALOG, SITE } from '@/lib/content/site';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+
+export const revalidate = 3600;
 
 const FALLBACK_LAST_MODIFIED = '2026-11-04T00:00:00.000Z';
 
+function parseIsoOrNull(candidate: unknown): string | null {
+  if (typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
+    return new Date(candidate).toISOString();
+  }
+  return null;
+}
+
 async function resolveLatestBlogTimestamp(): Promise<string> {
   try {
-    const page = await getBlogPostsPage(1, 1, 1);
-    const latest = page.posts[0];
-    const candidate = latest?.published;
-    if (typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
-      return new Date(candidate).toISOString();
-    }
-    return FALLBACK_LAST_MODIFIED;
+    const candidate = await getLatestBlogPostTimestamp();
+    return parseIsoOrNull(candidate) ?? FALLBACK_LAST_MODIFIED;
   } catch {
     return FALLBACK_LAST_MODIFIED;
   }
 }
 
 async function resolveLatestTimestamp(
-  table: 'site_settings' | 'services' | 'portfolio_items' | 'resume_items'
+  table: 'site_settings' | 'resume_items'
 ): Promise<string> {
   try {
     const admin = getSupabaseAdmin();
@@ -30,9 +33,8 @@ async function resolveLatestTimestamp(
       .select('updated_at')
       .order('updated_at', { ascending: false })
       .limit(1);
-    const candidate = data?.[0]?.updated_at;
-    if (!error && typeof candidate === 'string' && !Number.isNaN(Date.parse(candidate))) {
-      return new Date(candidate).toISOString();
+    if (!error) {
+      return parseIsoOrNull(data?.[0]?.updated_at) ?? FALLBACK_LAST_MODIFIED;
     }
     return FALLBACK_LAST_MODIFIED;
   } catch {
@@ -40,24 +42,83 @@ async function resolveLatestTimestamp(
   }
 }
 
+async function resolvePublicServicesForSitemap(): Promise<{
+  slugs: Array<{ slug: string; updatedAt: string }>;
+  latestUpdated: string;
+}> {
+  const fallback = SERVICE_CATALOG.map((svc) => ({
+    slug: svc.slug,
+    updatedAt: FALLBACK_LAST_MODIFIED,
+  }));
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from('services')
+      .select('slug, updated_at')
+      .eq('is_public', true)
+      .order('sort_order', { ascending: true });
+    if (error || !data || data.length === 0) {
+      return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+    }
+    const slugs = data.map((row) => ({
+      slug: row.slug,
+      updatedAt: parseIsoOrNull(row.updated_at) ?? FALLBACK_LAST_MODIFIED,
+    }));
+    const latestUpdated =
+      slugs.map((s) => s.updatedAt).sort().at(-1) ?? FALLBACK_LAST_MODIFIED;
+    return { slugs, latestUpdated };
+  } catch {
+    return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+  }
+}
+
+async function resolvePublicPortfolioForSitemap(): Promise<{
+  slugs: Array<{ slug: string; updatedAt: string }>;
+  latestUpdated: string;
+}> {
+  const fallback = PORTFOLIO_ITEMS.map((item) => ({
+    slug: item.id,
+    updatedAt: FALLBACK_LAST_MODIFIED,
+  }));
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin
+      .from('portfolio_items')
+      .select('slug, updated_at')
+      .eq('is_published', true)
+      .order('sort_order', { ascending: true });
+    if (error || !data || data.length === 0) {
+      return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+    }
+    const slugs = data.map((row) => ({
+      slug: row.slug,
+      updatedAt: parseIsoOrNull(row.updated_at) ?? FALLBACK_LAST_MODIFIED,
+    }));
+    const latestUpdated =
+      slugs.map((s) => s.updatedAt).sort().at(-1) ?? FALLBACK_LAST_MODIFIED;
+    return { slugs, latestUpdated };
+  } catch {
+    return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [
     siteUpdated,
-    servicesUpdated,
-    portfolioUpdated,
     resumeUpdated,
     blogsUpdated,
-    services,
-    portfolioItems,
+    servicesResult,
+    portfolioResult,
   ] = await Promise.all([
     resolveLatestTimestamp('site_settings'),
-    resolveLatestTimestamp('services'),
-    resolveLatestTimestamp('portfolio_items'),
     resolveLatestTimestamp('resume_items'),
     resolveLatestBlogTimestamp(),
-    getPublicServicesCatalog().catch(() => []),
-    getPublicPortfolioItems().catch(() => []),
+    resolvePublicServicesForSitemap(),
+    resolvePublicPortfolioForSitemap(),
   ]);
+
+  const servicesUpdated = servicesResult.latestUpdated;
+  const portfolioUpdated = portfolioResult.latestUpdated;
 
   const homeModified =
     [siteUpdated, servicesUpdated, portfolioUpdated, resumeUpdated, blogsUpdated].sort().at(-1) ??
@@ -77,15 +138,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { route: '/contact', lastModified: siteUpdated, changeFrequency: 'monthly', priority: 0.6 },
     { route: '/privacy', lastModified: FALLBACK_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.5 },
     { route: '/tos', lastModified: FALLBACK_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.5 },
-    ...services.map((svc) => ({
+    ...servicesResult.slugs.map((svc) => ({
       route: `/services/${svc.slug}`,
-      lastModified: servicesUpdated,
+      lastModified: svc.updatedAt,
       changeFrequency: 'monthly' as const,
       priority: 0.75,
     })),
-    ...portfolioItems.map((item) => ({
+    ...portfolioResult.slugs.map((item) => ({
       route: `/portfolio/${item.slug}`,
-      lastModified: portfolioUpdated,
+      lastModified: item.updatedAt,
       changeFrequency: 'monthly' as const,
       priority: 0.65,
     })),

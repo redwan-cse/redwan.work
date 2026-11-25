@@ -86,28 +86,86 @@ export function ContractLiveChat({
   const [error, setError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastCreatedAtRef = useRef<string | null>(
+    (selectedContract?.initialMessages ?? []).at(-1)?.created_at ?? null
+  );
+  const etagRef = useRef<string | null>(null);
+  const idlePollsRef = useRef(0);
 
-  const pollMessages = useCallback(async (orderId: string) => {
-    if (!orderId) return;
-    try {
-      const res = await fetch(`/api/orders/${orderId}/messages`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as { messages?: ContractChatMessage[] };
-      if (Array.isArray(data.messages)) {
+  const pollMessages = useCallback(
+    async (orderId: string, options?: { full?: boolean }): Promise<boolean> => {
+      if (!orderId) return false;
+      const useDelta = !options?.full && Boolean(lastCreatedAtRef.current);
+      const url = useDelta
+        ? `/api/orders/${orderId}/messages?after=${encodeURIComponent(lastCreatedAtRef.current!)}`
+        : `/api/orders/${orderId}/messages`;
+
+      try {
+        const headers: Record<string, string> = {};
+        if (!options?.full && etagRef.current) {
+          headers['If-None-Match'] = etagRef.current;
+        }
+        const res = await fetch(url, {
+          cache: 'no-store',
+          headers,
+        });
+        if (res.status === 304) {
+          return false;
+        }
+        if (!res.ok) return false;
+
+        const nextEtag = res.headers.get('etag');
+        if (nextEtag) {
+          etagRef.current = nextEtag;
+        }
+
+        const data = (await res.json()) as {
+          messages?: ContractChatMessage[];
+          delta?: boolean;
+        };
+        if (!Array.isArray(data.messages)) return false;
+
+        if (useDelta || data.delta) {
+          if (data.messages.length === 0) return false;
+          const incoming = data.messages;
+          const latest = incoming[incoming.length - 1];
+          if (latest?.created_at) {
+            lastCreatedAtRef.current = latest.created_at;
+            etagRef.current = null;
+          }
+          setMessages((prev) => {
+            const seen = new Set(prev.map((m) => m.id));
+            const merged = [...prev];
+            for (const msg of incoming) {
+              if (!seen.has(msg.id)) {
+                seen.add(msg.id);
+                merged.push(msg);
+              }
+            }
+            return merged;
+          });
+          return true;
+        }
+
+        const latest = data.messages[data.messages.length - 1];
+        lastCreatedAtRef.current = latest?.created_at ?? null;
         setMessages(data.messages);
+        return data.messages.length > 0;
+      } catch {
+        // Ignore transient network errors during background poll
+        return false;
       }
-    } catch {
-      // Ignore transient network errors during background poll
-    }
-  }, []);
+    },
+    []
+  );
 
   const handleManualRefresh = async () => {
     if (!selectedOrderId || refreshing) return;
     setRefreshing(true);
+    etagRef.current = null;
+    idlePollsRef.current = 0;
     try {
-      await pollMessages(selectedOrderId);
+      await pollMessages(selectedOrderId, { full: true });
     } finally {
       setRefreshing(false);
     }
@@ -115,7 +173,11 @@ export function ContractLiveChat({
 
   const handleSelectContract = (orderId: string) => {
     setSelectedOrderId(orderId);
-    setMessages(contracts.find((c) => c.id === orderId)?.initialMessages ?? []);
+    const nextInitial = contracts.find((c) => c.id === orderId)?.initialMessages ?? [];
+    setMessages(nextInitial);
+    lastCreatedAtRef.current = nextInitial.at(-1)?.created_at ?? null;
+    etagRef.current = null;
+    idlePollsRef.current = 0;
   };
 
   const hasInitialMessagesForSelected = contracts.some(
@@ -124,22 +186,49 @@ export function ContractLiveChat({
 
   useEffect(() => {
     if (!selectedOrderId) return;
-    if (!hasInitialMessagesForSelected) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void pollMessages(selectedOrderId);
-    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const pollIfVisible = () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      void pollMessages(selectedOrderId);
+    const getPollDelayMs = () => {
+      if (idlePollsRef.current >= 8) return 30_000;
+      if (idlePollsRef.current >= 4) return 15_000;
+      return 5_000;
     };
 
-    const interval = setInterval(pollIfVisible, 5000);
-    document.addEventListener('visibilitychange', pollIfVisible);
+    const scheduleNext = () => {
+      if (cancelled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        if (cancelled) return;
+        if (typeof document !== 'undefined' && document.hidden) {
+          scheduleNext();
+          return;
+        }
+        const hadUpdates = await pollMessages(selectedOrderId);
+        idlePollsRef.current = hadUpdates ? 0 : idlePollsRef.current + 1;
+        scheduleNext();
+      }, getPollDelayMs());
+    };
+
+    if (!hasInitialMessagesForSelected) {
+      void pollMessages(selectedOrderId, { full: true }).finally(scheduleNext);
+    } else {
+      scheduleNext();
+    }
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        idlePollsRef.current = 0;
+        void pollMessages(selectedOrderId).finally(scheduleNext);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', pollIfVisible);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [selectedOrderId, hasInitialMessagesForSelected, pollMessages]);
 
@@ -234,7 +323,15 @@ export function ContractLiveChat({
         setError(data.error || 'Could not send message.');
         return;
       }
-      setMessages((prev) => [...prev, data.message!]);
+      const newMsg = data.message!;
+      if (newMsg.created_at) {
+        lastCreatedAtRef.current = newMsg.created_at;
+      }
+      etagRef.current = null;
+      idlePollsRef.current = 0;
+      setMessages((prev) =>
+        prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
+      );
       setDraft('');
       setPendingAttachment(null);
       setIsInternalNote(false);
