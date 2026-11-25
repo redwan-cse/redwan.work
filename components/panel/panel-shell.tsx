@@ -50,6 +50,7 @@ import {
 
 export interface PanelNavItem {
   label: string;
+  shortLabel?: string;
   href: string;
   icon: string;
   badge?: number;
@@ -308,20 +309,29 @@ export function PanelShell({
             )}
 
             <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="relative inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                  aria-label={`Notifications (${unreadNotifications} unread)`}
-                >
-                  <Bell className="h-4 w-4" aria-hidden="true" />
-                  {unreadNotifications > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-bold text-primary-foreground">
-                      {unreadNotifications}
-                    </span>
-                  )}
-                </button>
-              </PopoverTrigger>
+              <div className="relative inline-flex">
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full border border-border/80 bg-card p-2 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                    aria-label={
+                      unreadNotifications > 0
+                        ? `Notifications, ${unreadNotifications} unread`
+                        : 'Notifications'
+                    }
+                  >
+                    <Bell className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </PopoverTrigger>
+                {unreadNotifications > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] font-bold text-primary-foreground"
+                  >
+                    {unreadNotifications}
+                  </span>
+                )}
+              </div>
               <PopoverContent align="end" className="w-80 p-0">
                 <div className="flex items-center justify-between border-b border-border/70 px-3.5 py-2.5">
                   <span className="text-xs font-bold">
@@ -426,7 +436,9 @@ export function PanelShell({
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="max-w-full truncate">{item.label.split(' ')[0]}</span>
+                <span className="max-w-full truncate">
+                  {item.shortLabel ?? item.label.split(' ')[0]}
+                </span>
               </Link>
             );
           })}

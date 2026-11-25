@@ -37,7 +37,7 @@ export function PasswordChangeCard() {
               required
               autoComplete="current-password"
               placeholder="Enter current password"
-              className="h-9 text-xs"
+              className="h-10 text-base md:h-9 md:text-xs"
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -53,7 +53,7 @@ export function PasswordChangeCard() {
                 required
                 autoComplete="new-password"
                 placeholder="••••••••••••"
-                className="h-9 text-xs"
+                className="h-10 text-base md:h-9 md:text-xs"
               />
             </div>
             <div className="flex flex-col justify-end gap-1.5">
@@ -68,7 +68,7 @@ export function PasswordChangeCard() {
                 required
                 autoComplete="new-password"
                 placeholder="••••••••••••"
-                className="h-9 text-xs"
+                className="h-10 text-base md:h-9 md:text-xs"
               />
             </div>
           </div>

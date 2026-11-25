@@ -126,7 +126,7 @@ export function R2FileUploader({
           aria-label={label}
           onChange={handleFileChange}
           disabled={status === 'uploading'}
-          className="h-9 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer text-xs"
+          className="h-10 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer text-base md:h-9 md:text-xs"
         />
       </div>
 

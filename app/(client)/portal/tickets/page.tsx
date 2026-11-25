@@ -46,7 +46,7 @@ export default async function ClientTicketsPage() {
 
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left: Open New Ticket */}
-        <Card className="border-primary/30 bg-card/90 lg:col-span-5">
+        <Card className="min-w-0 border-primary/30 bg-card/90 lg:col-span-5">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base font-bold">
               <Plus className="h-4 w-4 text-primary" />
@@ -66,7 +66,7 @@ export default async function ClientTicketsPage() {
                   name="subject"
                   required
                   placeholder="Need re-verification of patched API endpoint"
-                  className="h-9 text-xs"
+                  className="h-10 text-base md:h-9 md:text-xs"
                 />
               </div>
 
@@ -78,7 +78,7 @@ export default async function ClientTicketsPage() {
                     name="priority"
                     aria-label="Ticket priority"
                     defaultValue="medium"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
                   >
                     <option value="low">Low (48h SLA)</option>
                     <option value="medium">Medium (24h SLA)</option>
@@ -94,7 +94,7 @@ export default async function ClientTicketsPage() {
                     name="category"
                     aria-label="Ticket category"
                     defaultValue="general"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
                   >
                     <option value="general">General Support</option>
                     <option value="technical_support">Technical Support / Outage</option>
@@ -113,7 +113,7 @@ export default async function ClientTicketsPage() {
                   name="order_id"
                   aria-label="Related order"
                   defaultValue=""
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
                 >
                   <option value="">General Account / Retainer</option>
                   {(orders ?? []).map((ord) => (
@@ -132,7 +132,7 @@ export default async function ClientTicketsPage() {
                   rows={4}
                   required
                   placeholder="Describe the issue, logs, or reproduction steps..."
-                  className="text-xs"
+                  className="text-base md:text-xs"
                 />
               </div>
 
@@ -149,7 +149,7 @@ export default async function ClientTicketsPage() {
         </Card>
 
         {/* Right: Ticket List */}
-        <div className="space-y-3 lg:col-span-7">
+        <div className="min-w-0 space-y-3 lg:col-span-7">
           {(tickets ?? []).map((tkt) => {
             const orderObj = Array.isArray(tkt.order) ? tkt.order[0] : tkt.order;
             return (

@@ -56,7 +56,7 @@ export function PortalOrderStoreClient({
   return (
     <div className="grid gap-6 lg:grid-cols-12">
       {/* Left: Instant Order & Custom Deal Form */}
-      <Card className="border-primary/30 bg-card/90 lg:col-span-5">
+      <Card className="min-w-0 border-primary/30 bg-card/90 lg:col-span-5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-bold">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -77,7 +77,7 @@ export function PortalOrderStoreClient({
                 aria-label="Service category selection"
                 value={serviceSlug}
                 onChange={(e) => setServiceSlug(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
               >
                 {catalog.map((service) => {
                   const pillar = SERVICE_PILLARS[service.pillar];
@@ -101,7 +101,7 @@ export function PortalOrderStoreClient({
                 aria-label="Package selection tier"
                 value={tier}
                 onChange={(e) => setTier(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
               >
                 <option value="starter">Starter Tier — Essential Scope</option>
                 <option value="standard">Standard Tier (Most Popular)</option>
@@ -156,7 +156,7 @@ export function PortalOrderStoreClient({
                     value={customBudget}
                     onChange={(e) => setCustomBudget(e.target.value)}
                     placeholder="Leave blank for package price"
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono text-base md:h-9 md:text-xs"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -168,7 +168,7 @@ export function PortalOrderStoreClient({
                     min={1}
                     max={365}
                     placeholder="e.g. 7"
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono text-base md:h-9 md:text-xs"
                   />
                 </div>
               </div>
@@ -184,7 +184,7 @@ export function PortalOrderStoreClient({
                     ? `${selectedService.title} — ${selectedPkg.name}`
                     : 'Custom Engagement Title'
                 }
-                className="h-9 text-xs"
+                className="h-10 text-base md:h-9 md:text-xs"
               />
             </div>
 
@@ -196,7 +196,7 @@ export function PortalOrderStoreClient({
                 rows={3}
                 defaultValue={initialRequirements}
                 placeholder="Add your specific requirements, deliverables, timeline, or custom budget notes..."
-                className="text-xs"
+                className="text-base md:text-xs"
               />
             </div>
 
@@ -207,7 +207,7 @@ export function PortalOrderStoreClient({
                 name="target_scope_notes"
                 rows={3}
                 placeholder="List target URLs, APIs, cloud accounts, or repository links..."
-                className="font-mono text-xs"
+                className="font-mono text-base md:text-xs"
               />
             </div>
 
@@ -235,7 +235,7 @@ export function PortalOrderStoreClient({
       </Card>
 
       {/* Right: Interactive Live Database Catalog Reference */}
-      <div className="space-y-4 lg:col-span-7">
+      <div className="min-w-0 space-y-4 lg:col-span-7">
         {catalog.map((service) => {
           const pillar = SERVICE_PILLARS[service.pillar];
           const isServiceActive = service.slug === serviceSlug;

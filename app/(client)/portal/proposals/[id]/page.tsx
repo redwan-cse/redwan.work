@@ -64,7 +64,7 @@ export default async function ClientProposalDetailPage({
         <div>
           <Link
             href="/portal/proposals"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-6 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Proposals
@@ -106,7 +106,7 @@ export default async function ClientProposalDetailPage({
       )}
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-7">
+        <Card className="min-w-0 lg:col-span-7">
           <CardHeader>
             <CardTitle className="text-base">Scope Summary &amp; Deliverables</CardTitle>
           </CardHeader>
@@ -125,7 +125,7 @@ export default async function ClientProposalDetailPage({
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-5">
+        <Card className="min-w-0 lg:col-span-5">
           <CardHeader>
             <CardTitle className="text-base">Milestone Payment Schedule</CardTitle>
             <CardDescription className="text-xs">
@@ -186,7 +186,7 @@ export default async function ClientProposalDetailPage({
                         name="decline_reason"
                         rows={3}
                         placeholder="Budget constraints, scope shift, or timeline adjustment..."
-                        className="text-xs"
+                        className="text-base md:text-xs"
                       />
                     </div>
                   }

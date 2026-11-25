@@ -70,7 +70,7 @@ export default async function ClientProposalsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={`/portal/proposals/${prp.id}`}
-                      className="font-mono text-xs font-bold text-primary hover:underline"
+                      className="inline-flex min-h-6 items-center font-mono text-xs font-bold text-primary hover:underline"
                     >
                       {prp.code}
                     </Link>
@@ -98,7 +98,7 @@ export default async function ClientProposalsPage() {
                   </div>
                 </div>
                 <CardTitle className="mt-2 text-lg font-bold">
-                  <Link href={`/portal/proposals/${prp.id}`} className="hover:text-primary">
+                  <Link href={`/portal/proposals/${prp.id}`} className="inline-flex min-h-6 items-center hover:text-primary">
                     {prp.title}
                   </Link>
                 </CardTitle>
@@ -153,7 +153,7 @@ export default async function ClientProposalsPage() {
                     )}
                     <Link
                       href={`/portal/proposals/${prp.id}`}
-                      className="font-semibold text-primary hover:underline"
+                      className="inline-flex min-h-6 items-center font-semibold text-primary hover:underline"
                     >
                       Open Full Brief →
                     </Link>
@@ -182,12 +182,13 @@ export default async function ClientProposalsPage() {
                           variant="outline"
                           extraContent={
                             <div className="space-y-1">
-                              <Label className="text-xs">Reason / Feedback (Optional)</Label>
+                              <Label htmlFor={`proposal-decline-${prp.id}`} className="text-xs">Reason / Feedback (Optional)</Label>
                               <Textarea
+                                id={`proposal-decline-${prp.id}`}
                                 name="decline_reason"
                                 rows={3}
                                 placeholder="Budget target, timing shift, or different scope needed..."
-                                className="text-xs"
+                                className="text-base md:text-xs"
                               />
                             </div>
                           }

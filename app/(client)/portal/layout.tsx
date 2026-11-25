@@ -38,16 +38,18 @@ export default async function ClientPortalLayout({
   ]);
 
   const navItems: PanelNavItem[] = [
-    { label: 'Workspace Overview', href: '/portal', icon: 'dashboard' },
-    { label: 'Order New Service', href: '/portal/orders/new', icon: 'store' },
+    { label: 'Workspace Overview', shortLabel: 'Overview', href: '/portal', icon: 'dashboard' },
+    { label: 'Order New Service', shortLabel: 'New Order', href: '/portal/orders/new', icon: 'store' },
     {
       label: 'Proposals',
+      shortLabel: 'Proposals',
       href: '/portal/proposals',
       icon: 'proposals',
       badge: overview.pending_proposals ?? 0,
     },
     {
       label: 'My Orders & Projects',
+      shortLabel: 'Orders',
       href: '/portal/orders',
       icon: 'orders',
       badge: overview.active_orders ?? 0,

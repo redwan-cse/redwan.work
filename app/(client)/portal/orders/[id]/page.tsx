@@ -145,7 +145,7 @@ export default async function ClientOrderDetailPage({
         <div>
           <Link
             href="/portal/orders"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-6 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to My Orders
@@ -332,7 +332,7 @@ export default async function ClientOrderDetailPage({
                       rows={3}
                       required
                       placeholder="app.example.com&#10;api.example.com&#10;203.0.113.0/28"
-                      className="font-mono text-xs"
+                      className="font-mono text-base md:text-xs"
                     />
                   </div>
                   <div className="space-y-1">
@@ -342,28 +342,28 @@ export default async function ClientOrderDetailPage({
                       name="excluded_systems"
                       rows={3}
                       placeholder="Third-party payment gateways, production ERP..."
-                      className="font-mono text-xs"
+                      className="font-mono text-base md:text-xs"
                     />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label htmlFor="roe-window-start" className="text-xs">Testing Window Start (Optional)</Label>
-                    <Input id="roe-window-start" name="testing_window_start" type="date" className="h-9 font-mono text-xs" />
+                    <Input id="roe-window-start" name="testing_window_start" type="date" className="h-10 font-mono text-base md:h-9 md:text-xs" />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="roe-window-end" className="text-xs">Testing Window End (Optional)</Label>
-                    <Input id="roe-window-end" name="testing_window_end" type="date" className="h-9 font-mono text-xs" />
+                    <Input id="roe-window-end" name="testing_window_end" type="date" className="h-10 font-mono text-base md:h-9 md:text-xs" />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="flex flex-col justify-end gap-1.5">
                     <Label htmlFor="roe-em-name" className="mb-auto text-xs">Emergency Contact Name *</Label>
-                    <Input id="roe-em-name" name="emergency_contact_name" required className="h-9 text-xs" />
+                    <Input id="roe-em-name" name="emergency_contact_name" required className="h-10 text-base md:h-9 md:text-xs" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
                     <Label htmlFor="roe-em-phone" className="mb-auto text-xs">Emergency Phone *</Label>
-                    <Input id="roe-em-phone" name="emergency_contact_phone" required className="h-9 text-xs" />
+                    <Input id="roe-em-phone" name="emergency_contact_phone" required className="h-10 text-base md:h-9 md:text-xs" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
                     <Label htmlFor="roe-signer-name" className="mb-auto text-xs">Your Full Legal Name *</Label>
@@ -372,12 +372,12 @@ export default async function ClientOrderDetailPage({
                       name="signer_full_name"
                       defaultValue={session.fullName ?? ''}
                       required
-                      className="h-9 text-xs"
+                      className="h-10 text-base md:h-9 md:text-xs"
                     />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
                     <Label htmlFor="roe-signer-title" className="mb-auto text-xs">Your Role / Title</Label>
-                    <Input id="roe-signer-title" name="signer_title" placeholder="CTO / Founder" className="h-9 text-xs" />
+                    <Input id="roe-signer-title" name="signer_title" placeholder="CTO / Founder" className="h-10 text-base md:h-9 md:text-xs" />
                   </div>
                 </div>
                 <label className="flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
@@ -396,7 +396,7 @@ export default async function ClientOrderDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left 7 Cols */}
-        <div className="space-y-6 lg:col-span-7">
+        <div className="min-w-0 space-y-6 lg:col-span-7">
           {/* Deliverables & Client Acceptance Sign-off */}
           <Card className="border-border/80 bg-card/85">
             <CardHeader className="pb-3">
@@ -500,7 +500,7 @@ export default async function ClientOrderDetailPage({
                             name="feedback"
                             aria-label="Deliverable review feedback"
                             placeholder="Optional sign-off note or specific revision feedback..."
-                            className="h-9 text-xs"
+                            className="h-10 text-base md:h-9 md:text-xs"
                           />
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -634,7 +634,7 @@ export default async function ClientOrderDetailPage({
                       rows={3}
                       defaultValue={reqRecord?.target_scope_notes ?? ''}
                       placeholder="Provide target URLs, repo links, staging environments, or business requirements..."
-                      className="text-xs"
+                      className="text-base md:text-xs"
                     />
                   </div>
                   <div className="space-y-1">
@@ -645,7 +645,7 @@ export default async function ClientOrderDetailPage({
                       rows={2}
                       defaultValue={reqRecord?.access_instructions ?? ''}
                       placeholder="Test account roles, VPN/IP whitelisting notes (do not paste raw production secrets in plain text)..."
-                      className="text-xs"
+                      className="text-base md:text-xs"
                     />
                   </div>
                   <Button type="submit" size="sm" variant="outline">
@@ -695,7 +695,7 @@ export default async function ClientOrderDetailPage({
         </div>
 
         {/* Right 5 Cols */}
-        <div className="space-y-6 lg:col-span-5">
+        <div className="min-w-0 space-y-6 lg:col-span-5">
           {/* Order Invoices & Financial Ledger */}
           <Card className="border-border/80 bg-card/85">
             <CardHeader className="pb-2">
@@ -725,7 +725,7 @@ export default async function ClientOrderDetailPage({
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/portal/invoices/${inv.id}`}
-                          className="font-mono font-bold text-primary hover:underline"
+                          className="inline-flex min-h-6 items-center font-mono font-bold text-primary hover:underline"
                         >
                           {inv.code}
                         </Link>
@@ -808,7 +808,7 @@ export default async function ClientOrderDetailPage({
                       name="rating_overall"
                       aria-label="Overall rating"
                       defaultValue={String(existingReview?.rating_overall ?? 5)}
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
                     >
                       <option value="5">★★★★★ (5/5 — Exceptional)</option>
                       <option value="4">★★★★☆ (4/5 — Very Good)</option>
@@ -824,7 +824,7 @@ export default async function ClientOrderDetailPage({
                       name="headline"
                       defaultValue={existingReview?.headline ?? ''}
                       placeholder="Thorough VAPT audit and fast remediation support"
-                      className="h-9 text-xs"
+                      className="h-10 text-base md:h-9 md:text-xs"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -836,7 +836,7 @@ export default async function ClientOrderDetailPage({
                       required
                       defaultValue={existingReview?.review_text ?? ''}
                       placeholder="Share your experience working on this engagement..."
-                      className="text-xs"
+                      className="text-base md:text-xs"
                     />
                   </div>
                   <Button type="submit" size="sm" variant="outline" className="w-full">
@@ -892,7 +892,7 @@ export default async function ClientOrderDetailPage({
                       minLength={5}
                       rows={2}
                       placeholder="Reason for requesting order cancellation..."
-                      className="text-xs"
+                      className="text-base md:text-xs"
                     />
                     <Button type="submit" size="sm" variant="outline" className="w-full text-xs text-destructive hover:text-destructive">
                       Request Order Cancellation

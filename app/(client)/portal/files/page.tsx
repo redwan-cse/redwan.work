@@ -75,22 +75,22 @@ export default async function ClientVaultFilesPage({
           </p>
         </div>
 
-        <form method="get" className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <form method="get" className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-initial">
+            <Search className="pointer-events-none absolute top-3 left-2.5 h-3.5 w-3.5 text-muted-foreground md:top-2" aria-hidden="true" />
             <Input
               name="q"
               aria-label="Search vault files by filename or SHA-256"
               defaultValue={params.q ?? ''}
               placeholder="Search filename or SHA-256..."
-              className="h-8 w-52 pl-8 text-xs"
+              className="h-10 w-full pl-8 text-base sm:w-56 md:h-8 md:text-xs"
             />
           </div>
           <select
             name="category"
             aria-label="Filter vault files by category"
             defaultValue={categoryFilter}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            className="h-10 min-w-0 max-w-full rounded-md border border-input bg-background px-2 text-base md:h-8 md:text-xs"
           >
             <option value="">All Categories</option>
             <option value="deliverable">Deliverables</option>
@@ -98,7 +98,7 @@ export default async function ClientVaultFilesPage({
             <option value="ticket_attachment">Ticket Attachments</option>
             <option value="payment_proof">Payment Receipts</option>
           </select>
-          <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+          <Button type="submit" size="sm" variant="outline" className="h-10 text-xs md:h-8">
             Filter
           </Button>
         </form>
@@ -127,7 +127,7 @@ export default async function ClientVaultFilesPage({
                     {orderObj && (
                       <Link
                         href={`/portal/orders/${orderObj.id}`}
-                        className="font-mono text-xs font-semibold text-primary hover:underline"
+                        className="inline-flex min-h-6 items-center font-mono text-xs font-semibold text-primary hover:underline"
                       >
                         {orderObj.code}: {orderObj.title}
                       </Link>
