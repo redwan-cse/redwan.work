@@ -126,22 +126,23 @@ export function ServicesShowcase({
   return (
     <div id="packages" className="space-y-12">
       {/* Pillar Filter Bar with Antigravity Shared-Layout Indicator */}
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Filter services by pillar">
         {PILLAR_TABS.map(({ key, label, icon: Icon }) => {
           const isActive = selectedPillar === key;
           return (
             <button
               key={key}
               type="button"
+              aria-pressed={isActive}
               onClick={() => setSelectedPillar(key)}
               className={cn(
-                'relative inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
+                'relative inline-flex min-h-9 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
                 isActive
                   ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                   : 'border-border/80 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               <span>{label}</span>
             </button>
           );
@@ -261,9 +262,10 @@ export function ServicesShowcase({
                               )}
                               <button
                                 type="button"
+                                aria-pressed={isSelected}
                                 onClick={() => togglePackageTier(service, pkg.tier)}
                                 className={cn(
-                                  'inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition',
+                                  'inline-flex min-h-7 max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition',
                                   isSelected
                                     ? 'border-primary bg-primary text-primary-foreground'
                                     : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground'
@@ -271,7 +273,7 @@ export function ServicesShowcase({
                               >
                                 {isSelected ? (
                                   <>
-                                    <Check className="h-3 w-3" /> Selected (Click to Unselect)
+                                    <Check className="h-3 w-3" aria-hidden="true" /> Selected (Click to Unselect)
                                   </>
                                 ) : (
                                   'Select Package'
@@ -363,9 +365,9 @@ export function ServicesShowcase({
                         <button
                           type="button"
                           onClick={() => updateDraft(service, { selectedTier: null })}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
+                          className="inline-flex min-h-7 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/60 hover:text-destructive"
                         >
-                          <XCircle className="h-3.5 w-3.5" />
+                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                           Unselect Package
                         </button>
                       )}

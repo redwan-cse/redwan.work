@@ -277,8 +277,9 @@ export default async function AdminClientDetailPage({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Client Tier</Label>
+                    <Label htmlFor="crm-tier" className="text-xs">Client Tier</Label>
                     <select
+                      id="crm-tier"
                       name="tier"
                       aria-label="Client CRM tier"
                       defaultValue={crm?.tier ?? 'standard'}
@@ -291,8 +292,9 @@ export default async function AdminClientDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Company Name</Label>
+                    <Label htmlFor="crm-company" className="text-xs">Company Name</Label>
                     <Input
+                      id="crm-company"
                       name="company_name"
                       defaultValue={crm?.company_name ?? ''}
                       className="h-9 text-xs"
@@ -301,11 +303,12 @@ export default async function AdminClientDetailPage({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="flex items-center gap-1.5 text-xs">
-                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                  <Label htmlFor="crm-followup" className="flex items-center gap-1.5 text-xs">
+                    <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     Next Follow-Up Date
                   </Label>
                   <Input
+                    id="crm-followup"
                     name="next_followup_at"
                     type="date"
                     defaultValue={crm?.next_followup_at ? crm.next_followup_at.slice(0, 10) : ''}
@@ -314,8 +317,9 @@ export default async function AdminClientDetailPage({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Executive Relationship Summary</Label>
+                  <Label htmlFor="crm-summary" className="text-xs">Executive Relationship Summary</Label>
                   <Textarea
+                    id="crm-summary"
                     name="relationship_summary"
                     rows={3}
                     defaultValue={crm?.relationship_summary ?? ''}
@@ -325,8 +329,9 @@ export default async function AdminClientDetailPage({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Quick Note (Optional)</Label>
+                  <Label htmlFor="crm-quick-note" className="text-xs">Quick Note (Optional)</Label>
                   <Textarea
+                    id="crm-quick-note"
                     name="note_body"
                     rows={2}
                     placeholder="Optional quick log entry..."
@@ -601,8 +606,9 @@ export default async function AdminClientDetailPage({
                 <input type="hidden" name="client_id" value={profile.id} />
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Note Type</Label>
+                    <Label htmlFor="typed-note-type" className="text-xs">Note Type</Label>
                     <select
+                      id="typed-note-type"
                       name="note_type"
                       aria-label="Client CRM note type"
                       defaultValue="general"
@@ -615,19 +621,20 @@ export default async function AdminClientDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Follow-Up Date</Label>
-                    <Input name="followup_date" type="date" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="typed-note-followup" className="text-xs">Follow-Up Date</Label>
+                    <Input id="typed-note-followup" name="followup_date" type="date" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
                 <Textarea
                   name="body"
+                  aria-label="Typed relationship note body"
                   required
                   rows={4}
                   placeholder="Call notes, expansion opportunity, SLA escalation..."
                   className="text-xs"
                 />
-                <label className="flex items-center gap-2 text-xs">
-                  <input type="checkbox" name="is_pinned" className="h-4 w-4 rounded" />
+                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs">
+                  <input type="checkbox" name="is_pinned" className="h-6 w-6 rounded border-border accent-primary" />
                   Pin note to top
                 </label>
                 <Button type="submit" size="sm" className="gap-1.5 rounded-full">

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import { useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExternalLink, ShieldCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Pause, Play, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { SITE } from '@/lib/content/site';
@@ -24,6 +24,7 @@ export function TestimonialCarousel({
   reviews?: ApprovedClientReview[];
 }) {
   const prefersReducedMotion = useReducedMotion();
+  const [isPaused, setIsPaused] = React.useState(false);
   const plugins = React.useMemo(
     () =>
       prefersReducedMotion || reviews.length <= 1
@@ -36,6 +37,30 @@ export function TestimonialCarousel({
     { loop: !prefersReducedMotion && reviews.length > 2 },
     plugins
   );
+
+  const toggleAutoplay = React.useCallback(() => {
+    const autoplayPlugin = emblaApi?.plugins()?.autoplay as
+      | { stop?: () => void; play?: () => void }
+      | undefined;
+    if (!autoplayPlugin) {
+      setIsPaused((prev) => !prev);
+      return;
+    }
+    if (isPaused) {
+      autoplayPlugin.play?.();
+      setIsPaused(false);
+    } else {
+      autoplayPlugin.stop?.();
+      setIsPaused(true);
+    }
+  }, [emblaApi, isPaused]);
+
+  const handleFocusCapture = React.useCallback(() => {
+    const autoplayPlugin = emblaApi?.plugins()?.autoplay as
+      | { stop?: () => void }
+      | undefined;
+    autoplayPlugin?.stop?.();
+  }, [emblaApi]);
 
   if (reviews.length === 0) {
     return (
@@ -75,14 +100,15 @@ export function TestimonialCarousel({
       role="region"
       aria-roledescription="carousel"
       aria-label="Verified client reviews"
+      onFocusCapture={handleFocusCapture}
       className="space-y-4"
     >
       <div
         className="overflow-hidden"
         ref={emblaRef}
-        data-autoplay={prefersReducedMotion || reviews.length <= 1 ? 'disabled' : 'enabled'}
+        data-autoplay={prefersReducedMotion || reviews.length <= 1 || isPaused ? 'disabled' : 'enabled'}
       >
-        <div className="flex">
+        <div className="-ml-4 flex">
           {reviews.map((review) => (
             <div
               key={review.id}
@@ -98,7 +124,7 @@ export function TestimonialCarousel({
                       {initialsFromName(review.authorName)}
                     </div>
                     <div className="min-w-0">
-                      <CardTitle className="truncate text-base">{review.authorName}</CardTitle>
+                      <CardTitle as="h3" className="truncate text-base">{review.authorName}</CardTitle>
                       <CardDescription className="truncate text-xs">
                         {review.authorRole}
                       </CardDescription>
@@ -145,6 +171,23 @@ export function TestimonialCarousel({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
+          {!prefersReducedMotion && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={toggleAutoplay}
+              aria-pressed={isPaused}
+              aria-label={isPaused ? 'Resume review autoplay' : 'Pause review autoplay'}
+            >
+              {isPaused ? (
+                <Play className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -153,7 +196,7 @@ export function TestimonialCarousel({
             onClick={() => emblaApi?.scrollNext()}
             aria-label="Next review"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       )}

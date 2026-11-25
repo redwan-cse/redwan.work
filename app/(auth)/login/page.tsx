@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useActionState, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { UserPlus, LogIn, KeyRound, Sparkles, Lock, ArrowRight } from 'lucide-react';
+import { UserPlus, LogIn, KeyRound, Sparkles, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,9 +34,7 @@ function LoginPageContent() {
 
   const [mode, setMode] = useState<'signin' | 'forgot'>(initialMode);
   const [email, setEmail] = useState(prefilledEmail);
-  const [expanded, setExpanded] = useState(Boolean(prefilledEmail));
   const [authMethod, setAuthMethod] = useState<'password' | 'magic'>('password');
-  const [phaseError, setPhaseError] = useState('');
 
   const [signInState, signIn, signInPending] = useActionState(signInWithPasswordAction, initial);
   const [magicState, magic, magicPending] = useActionState(requestMagicLinkAction, initial);
@@ -58,16 +56,6 @@ function LoginPageContent() {
     const qs = params.toString();
     return qs ? `/register?${qs}` : '/register';
   })();
-
-  const handleContinue = () => {
-    const trimmed = email.trim();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setPhaseError('Please enter a valid email address to continue.');
-      return;
-    }
-    setPhaseError('');
-    setExpanded(true);
-  };
 
   // Dev-only StrictMode note: remount fires verifyOtp twice; the second call
   // fails single-use validation but cookies are already set — prod unaffected.
@@ -164,23 +152,9 @@ function LoginPageContent() {
             >
               <input type="hidden" name="next" value={nextPath} />
 
-              {/* Phase 1: Single Email Input */}
+              {/* Email Input */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="email">Email</Label>
-                  {expanded && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExpanded(false);
-                        setPhaseError('');
-                      }}
-                      className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
-                    >
-                      Change
-                    </button>
-                  )}
-                </div>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   name="email"
@@ -188,59 +162,42 @@ function LoginPageContent() {
                   autoComplete="email"
                   placeholder="you@company.com"
                   value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (phaseError) setPhaseError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (!expanded && e.key === 'Enter') {
-                      e.preventDefault();
-                      handleContinue();
-                    }
-                  }}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
 
-              {phaseError && <FormMessage state={{ error: phaseError }} />}
-
-              {!expanded && (
-                <Button
-                  type="button"
-                  className="w-full gap-1.5"
-                  onClick={handleContinue}
+              {/* Authentication Method Switcher & Credentials */}
+              <div className="space-y-3.5 pt-1">
+                <div
+                  role="group"
+                  aria-label="Sign-in method"
+                  className="grid grid-cols-2 gap-1.5 rounded-lg border border-border/70 bg-muted/25 p-1"
                 >
-                  Continue
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
-
-              {/* Phase 2: Expands after Continue (or on programmatic focus/fill) */}
-              <div className={expanded ? 'space-y-3.5 pt-1' : 'sr-only'}>
-                {/* Method Switcher Tabs (Password by default vs One-Time Link) */}
-                <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-border/70 bg-muted/25 p-1">
                   <button
                     type="button"
+                    aria-pressed={authMethod === 'password'}
                     onClick={() => setAuthMethod('password')}
-                    className={`flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                    className={`flex min-h-8 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
                       authMethod === 'password'
                         ? 'bg-background text-foreground shadow-2xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Lock className="h-3.5 w-3.5 text-primary" />
+                    <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     Password
                   </button>
                   <button
                     type="button"
+                    aria-pressed={authMethod === 'magic'}
                     onClick={() => setAuthMethod('magic')}
-                    className={`flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                    className={`flex min-h-8 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
                       authMethod === 'magic'
                         ? 'bg-background text-foreground shadow-2xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     One-Time Link
                   </button>
                 </div>
@@ -253,7 +210,7 @@ function LoginPageContent() {
                         <button
                           type="button"
                           onClick={() => setMode('forgot')}
-                          className="text-xs text-primary underline-offset-4 hover:underline"
+                          className="inline-flex min-h-6 items-center text-xs text-primary underline-offset-4 hover:underline"
                         >
                           Forgot / Reset password?
                         </button>
@@ -263,9 +220,7 @@ function LoginPageContent() {
                         name="password"
                         type="password"
                         autoComplete="current-password"
-                        onFocus={() => setExpanded(true)}
-                        onChange={() => setExpanded(true)}
-                        required={authMethod === 'password'}
+                        required
                       />
                     </div>
                     <FormMessage state={signInState} />
@@ -344,7 +299,13 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>}>
+    <Suspense
+      fallback={
+        <Card className="min-h-[420px]">
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent>
+        </Card>
+      }
+    >
       <LoginPageContent />
     </Suspense>
   );

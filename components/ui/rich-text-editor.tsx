@@ -81,7 +81,13 @@ function renderFormattedPreview(text: string): React.ReactNode {
       if (rows.length > 0) {
         const [header, ...body] = rows;
         blocks.push(
-          <div key={`tbl-${i}`} className="my-2 overflow-x-auto rounded-md border border-border/80">
+          <div
+            key={`tbl-${i}`}
+            role="region"
+            aria-label="Preview table"
+            tabIndex={0}
+            className="my-2 overflow-x-auto rounded-md border border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <table className="w-full text-left text-xs">
               <thead className="border-b border-border/80 bg-muted/60 font-semibold text-foreground">
                 <tr>
@@ -434,28 +440,30 @@ export function RichTextEditor({
         <div className="flex items-center gap-1 rounded-md bg-background/80 p-0.5 border border-border/60">
           <button
             type="button"
+            aria-pressed={mode === 'write'}
             onClick={() => setMode('write')}
             className={cn(
-              'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+              'inline-flex min-h-6 items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
               mode === 'write'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <PenLine className="h-3 w-3" />
+            <PenLine className="h-3 w-3" aria-hidden="true" />
             Write
           </button>
           <button
             type="button"
+            aria-pressed={mode === 'preview'}
             onClick={() => setMode('preview')}
             className={cn(
-              'inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+              'inline-flex min-h-6 items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
               mode === 'preview'
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <Eye className="h-3 w-3" />
+            <Eye className="h-3 w-3" aria-hidden="true" />
             Preview
           </button>
         </div>
@@ -475,7 +483,7 @@ export function RichTextEditor({
         className={cn(
           'rounded-none border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
           minHeightClassName,
-          mode === 'preview' && 'sr-only'
+          mode === 'preview' && 'hidden'
         )}
       />
 

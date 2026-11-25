@@ -158,7 +158,7 @@ export default async function AdminOverviewPage() {
             <CardTitle className="font-mono text-xl">{metrics.active_orders ?? 0}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Link href="/admin/orders" className="text-[11px] font-medium text-primary hover:underline">
+            <Link href="/admin/orders" className="inline-flex min-h-6 items-center text-[11px] font-medium text-primary hover:underline">
               {metrics.awaiting_review_orders ?? 0} awaiting sign-off →
             </Link>
           </CardContent>
@@ -173,7 +173,7 @@ export default async function AdminOverviewPage() {
             <CardTitle className="font-mono text-xl">{metrics.new_inquiries ?? 0}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Link href="/admin/pipeline" className="text-[11px] font-medium text-primary hover:underline">
+            <Link href="/admin/pipeline" className="inline-flex min-h-6 items-center text-[11px] font-medium text-primary hover:underline">
               Triage pipeline →
             </Link>
           </CardContent>
@@ -188,7 +188,7 @@ export default async function AdminOverviewPage() {
             <CardTitle className="font-mono text-xl">{metrics.submitted_payments ?? 0}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Link href="/admin/billing" className="text-[11px] font-medium text-primary hover:underline">
+            <Link href="/admin/billing" className="inline-flex min-h-6 items-center text-[11px] font-medium text-primary hover:underline">
               {metrics.overdue_invoices ?? 0} overdue invoices →
             </Link>
           </CardContent>
@@ -203,7 +203,7 @@ export default async function AdminOverviewPage() {
             <CardTitle className="font-mono text-xl">{metrics.total_clients ?? 0}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Link href="/admin/clients" className="text-[11px] font-medium text-primary hover:underline">
+            <Link href="/admin/clients" className="inline-flex min-h-6 items-center text-[11px] font-medium text-primary hover:underline">
               {metrics.vip_clients ?? 0} VIP / Retainer →
             </Link>
           </CardContent>
@@ -220,7 +220,7 @@ export default async function AdminOverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <Link href="/admin/support" className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+            <Link href="/admin/support" className="inline-flex min-h-6 items-center gap-1 text-[11px] font-medium text-primary hover:underline">
               <Repeat className="h-3 w-3" /> Open SLA queue →
             </Link>
           </CardContent>

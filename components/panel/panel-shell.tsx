@@ -331,7 +331,7 @@ export function PanelShell({
                     <form action={markAllNotificationsReadAction}>
                       <button
                         type="submit"
-                        className="font-mono text-[11px] font-medium text-primary hover:underline"
+                        className="inline-flex min-h-6 items-center rounded px-1.5 font-mono text-[11px] font-medium text-primary hover:underline"
                       >
                         Mark all read
                       </button>
@@ -373,7 +373,7 @@ export function PanelShell({
                               <input type="hidden" name="notification_id" value={notif.id} />
                               <button
                                 type="submit"
-                                className="shrink-0 font-mono text-[10px] text-primary hover:underline"
+                                className="inline-flex min-h-6 shrink-0 items-center rounded px-1.5 font-mono text-[10px] text-primary hover:underline"
                                 title="Mark as read"
                               >
                                 Read

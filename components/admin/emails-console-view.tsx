@@ -130,6 +130,7 @@ export async function EmailsConsoleView({
       <form method="get" className="flex flex-wrap items-center gap-2 rounded-xl border border-border/80 bg-card p-3">
         <Input
           name="q"
+          aria-label="Search email outbox by recipient, subject, or template"
           defaultValue={qFilter}
           placeholder="Search recipient, subject, or template..."
           className="h-8 min-w-[200px] flex-1 text-xs"

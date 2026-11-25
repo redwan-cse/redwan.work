@@ -366,7 +366,7 @@ export function ContractLiveChat({
               {selectedContract.status.replace(/_/g, ' ')}
             </Badge>
           </div>
-          <h3 className="text-sm font-bold sm:text-base">{selectedContract.title}</h3>
+          <h2 className="text-sm font-bold sm:text-base">{selectedContract.title}</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -414,6 +414,9 @@ export function ContractLiveChat({
       {/* Messages Stream */}
       <div
         ref={scrollContainerRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Live contract messages"
         className="max-h-96 space-y-3 overflow-y-auto p-5"
       >
         {messages.length > 0 ? (
@@ -491,12 +494,12 @@ export function ContractLiveChat({
         className="space-y-3 border-t border-border/70 bg-muted/20 p-4"
       >
         {error && (
-          <p className="text-xs font-medium text-destructive">{error}</p>
+          <p role="alert" className="text-xs font-medium text-destructive">{error}</p>
         )}
         {pendingAttachment && (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-mono text-[11px] text-primary">
             <span className="inline-flex items-center gap-1.5 truncate">
-              <Paperclip className="h-3.5 w-3.5 shrink-0" />
+              <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate">{pendingAttachment.filename}</span>
               <span className="text-[10px] text-muted-foreground">
                 ({(pendingAttachment.size_bytes / 1024).toFixed(1)} KB)
@@ -505,14 +508,15 @@ export function ContractLiveChat({
             <button
               type="button"
               onClick={() => setPendingAttachment(null)}
-              className="rounded p-0.5 text-muted-foreground hover:text-destructive"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-destructive"
               aria-label="Remove attachment"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </div>
         )}
         <Textarea
+          aria-label="Contract chat message"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -555,12 +559,12 @@ export function ContractLiveChat({
               {uploadingFile ? 'Uploading...' : 'Attach File'}
             </Button>
             {viewerRole === 'admin' ? (
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={isInternalNote}
                   onChange={(e) => setIsInternalNote(e.target.checked)}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-6 w-6 rounded border-border accent-primary"
                 />
                 Private Internal Note (Hidden from Client)
               </label>

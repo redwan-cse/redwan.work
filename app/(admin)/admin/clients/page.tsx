@@ -125,8 +125,9 @@ export default async function AdminClientsPage({
               className="space-y-3"
             >
               <div className="space-y-1">
-                <Label className="text-xs">Client Email *</Label>
+                <Label htmlFor="invite-client-email" className="text-xs">Client Email *</Label>
                 <Input
+                  id="invite-client-email"
                   name="email"
                   type="email"
                   required
@@ -135,8 +136,9 @@ export default async function AdminClientsPage({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Full Name *</Label>
+                <Label htmlFor="invite-client-name" className="text-xs">Full Name *</Label>
                 <Input
+                  id="invite-client-name"
                   name="full_name"
                   required
                   placeholder="Sarah Jenkins"
@@ -145,12 +147,13 @@ export default async function AdminClientsPage({
               </div>
               <div className="grid gap-2.5 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Company / Org</Label>
-                  <Input name="company" placeholder="Acme Security Inc." className="h-9 text-xs" />
+                  <Label htmlFor="invite-client-company" className="text-xs">Company / Org</Label>
+                  <Input id="invite-client-company" name="company" placeholder="Acme Security Inc." className="h-9 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Relationship Tier</Label>
+                  <Label htmlFor="invite-client-tier" className="text-xs">Relationship Tier</Label>
                   <select
+                    id="invite-client-tier"
                     name="tier"
                     aria-label="Client invite tier"
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
@@ -181,9 +184,10 @@ export default async function AdminClientsPage({
             </div>
             <form method="get" className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                 <Input
                   name="q"
+                  aria-label="Search clients"
                   defaultValue={params.q ?? ''}
                   placeholder="Search clients..."
                   className="h-8 w-44 pl-8 text-xs"

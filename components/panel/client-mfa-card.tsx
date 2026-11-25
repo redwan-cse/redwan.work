@@ -193,8 +193,9 @@ export function ClientMfaCard() {
             )}
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 space-y-1">
-                <Label className="text-xs">Enter 6-Digit Verification Code</Label>
+                <Label htmlFor="mfa-totp-code" className="text-xs">Enter 6-Digit Verification Code</Label>
                 <Input
+                  id="mfa-totp-code"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
                   maxLength={8}

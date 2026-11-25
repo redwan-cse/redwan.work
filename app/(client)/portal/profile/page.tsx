@@ -84,8 +84,9 @@ export default async function ClientProfilePage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Full Name</Label>
+                <Label htmlFor="prof-full-name" className="text-xs">Full Name</Label>
                 <Input
+                  id="prof-full-name"
                   name="full_name"
                   aria-label="Full Name"
                   defaultValue={profile?.full_name ?? session.fullName ?? ''}
@@ -93,8 +94,9 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Account Email (Verified)</Label>
+                <Label htmlFor="prof-email" className="text-xs">Account Email (Verified)</Label>
                 <Input
+                  id="prof-email"
                   aria-label="Account Email"
                   value={session.email}
                   disabled
@@ -105,8 +107,9 @@ export default async function ClientProfilePage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Phone / WhatsApp (E.164)</Label>
+                <Label htmlFor="prof-phone" className="text-xs">Phone / WhatsApp (E.164)</Label>
                 <Input
+                  id="prof-phone"
                   name="phone_e164"
                   defaultValue={profile?.phone ?? ''}
                   placeholder="+14155550199"
@@ -114,8 +117,9 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Timezone (IANA)</Label>
+                <Label htmlFor="prof-timezone" className="text-xs">Timezone (IANA)</Label>
                 <Input
+                  id="prof-timezone"
                   name="timezone"
                   list="iana-timezones"
                   defaultValue={profile?.timezone ?? 'UTC'}
@@ -132,8 +136,9 @@ export default async function ClientProfilePage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Company / Organization Name</Label>
+                <Label htmlFor="prof-company" className="text-xs">Company / Organization Name</Label>
                 <Input
+                  id="prof-company"
                   name="company_name"
                   defaultValue={clientProfile?.company_name ?? ''}
                   placeholder="Acme Security Inc."
@@ -141,8 +146,9 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Your Role / Title</Label>
+                <Label htmlFor="prof-role" className="text-xs">Your Role / Title</Label>
                 <Input
+                  id="prof-role"
                   name="company_role"
                   defaultValue={clientProfile?.company_role ?? ''}
                   placeholder="CTO / Engineering Lead"
@@ -153,8 +159,9 @@ export default async function ClientProfilePage() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="flex flex-col justify-end gap-1.5">
-                <Label className="mb-auto text-xs">Company Website</Label>
+                <Label htmlFor="prof-website" className="mb-auto text-xs">Company Website</Label>
                 <Input
+                  id="prof-website"
                   name="website_url"
                   defaultValue={clientProfile?.website_url ?? ''}
                   placeholder="https://example.com"
@@ -162,8 +169,9 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
-                <Label className="mb-auto text-xs">VAT / Tax ID</Label>
+                <Label htmlFor="prof-tax-id" className="mb-auto text-xs">VAT / Tax ID</Label>
                 <Input
+                  id="prof-tax-id"
                   name="tax_id"
                   defaultValue={clientProfile?.tax_id ?? ''}
                   placeholder="Optional for invoices"
@@ -171,8 +179,9 @@ export default async function ClientProfilePage() {
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
-                <Label className="mb-auto text-xs">Preferred Billing Currency</Label>
+                <Label htmlFor="prof-currency" className="mb-auto text-xs">Preferred Billing Currency</Label>
                 <select
+                  id="prof-currency"
                   name="preferred_currency"
                   aria-label="Preferred billing currency"
                   defaultValue={clientProfile?.preferred_currency ?? 'USD'}
@@ -192,12 +201,14 @@ export default async function ClientProfilePage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Input
                   name="billing_line1"
+                  aria-label="Billing street address line 1"
                   defaultValue={billingAddr.line1 ?? ''}
                   placeholder="Street Address Line 1"
                   className="h-9 text-xs"
                 />
                 <Input
                   name="billing_line2"
+                  aria-label="Billing suite or unit"
                   defaultValue={billingAddr.line2 ?? ''}
                   placeholder="Suite / Unit (Optional)"
                   className="h-9 text-xs"
@@ -206,24 +217,28 @@ export default async function ClientProfilePage() {
               <div className="grid gap-3 sm:grid-cols-4">
                 <Input
                   name="billing_city"
+                  aria-label="Billing city"
                   defaultValue={billingAddr.city ?? ''}
                   placeholder="City"
                   className="h-9 text-xs"
                 />
                 <Input
                   name="billing_state"
+                  aria-label="Billing state or region"
                   defaultValue={billingAddr.state ?? ''}
                   placeholder="State / Region"
                   className="h-9 text-xs"
                 />
                 <Input
                   name="billing_postal_code"
+                  aria-label="Billing postal code"
                   defaultValue={billingAddr.postal_code ?? ''}
                   placeholder="Postal Code"
                   className="h-9 font-mono text-xs"
                 />
                 <Input
                   name="billing_country"
+                  aria-label="Billing country"
                   defaultValue={billingAddr.country ?? ''}
                   placeholder="Country"
                   className="h-9 text-xs"

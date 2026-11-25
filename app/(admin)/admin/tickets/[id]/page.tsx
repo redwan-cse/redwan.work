@@ -174,6 +174,7 @@ export default async function AdminTicketDetailPage({
             <input type="hidden" name="ticket_id" value={ticket.id} />
             <Textarea
               name="body"
+              aria-label="Ticket reply or internal note"
               required
               rows={4}
               placeholder="Write a reply to the client or an internal note..."
@@ -185,11 +186,11 @@ export default async function AdminTicketDetailPage({
               label="Attach Evidence / Patch Archive (Optional)"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
                   name="is_internal_note"
-                  className="h-4 w-4 rounded border-border"
+                  className="h-6 w-6 rounded border-border accent-primary"
                 />
                 Internal Admin Note (Hidden from Client)
               </label>

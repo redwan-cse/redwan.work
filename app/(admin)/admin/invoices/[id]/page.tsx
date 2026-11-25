@@ -250,8 +250,9 @@ export default async function AdminInvoiceDetailPage({
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="grid gap-2.5 sm:grid-cols-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">Due Date</Label>
+                      <Label htmlFor="draft-inv-due" className="text-xs">Due Date</Label>
                       <Input
+                        id="draft-inv-due"
                         name="due_at"
                         type="date"
                         defaultValue={invoice.due_at ? invoice.due_at.slice(0, 10) : ''}
@@ -259,8 +260,9 @@ export default async function AdminInvoiceDetailPage({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Discount ({invoice.currency})</Label>
+                      <Label htmlFor="draft-inv-discount" className="text-xs">Discount ({invoice.currency})</Label>
                       <Input
+                        id="draft-inv-discount"
                         name="discount_major"
                         type="number"
                         step="0.01"
@@ -270,8 +272,9 @@ export default async function AdminInvoiceDetailPage({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Tax (bps)</Label>
+                      <Label htmlFor="draft-inv-tax" className="text-xs">Tax (bps)</Label>
                       <Input
+                        id="draft-inv-tax"
                         name="tax_rate_bps"
                         type="number"
                         min="0"
@@ -282,8 +285,9 @@ export default async function AdminInvoiceDetailPage({
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Payment Instructions</Label>
+                    <Label htmlFor="draft-inv-instructions" className="text-xs">Payment Instructions</Label>
                     <Input
+                      id="draft-inv-instructions"
                       name="payment_instructions"
                       defaultValue={invoice.payment_instructions ?? ''}
                       placeholder="Wire / Wise / bKash details..."
@@ -291,8 +295,9 @@ export default async function AdminInvoiceDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Notes</Label>
+                    <Label htmlFor="draft-inv-notes" className="text-xs">Notes</Label>
                     <Input
+                      id="draft-inv-notes"
                       name="notes"
                       defaultValue={invoice.notes ?? ''}
                       placeholder="Invoice memo or scope reference..."
@@ -402,8 +407,9 @@ export default async function AdminInvoiceDetailPage({
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">Method</Label>
+                      <Label htmlFor="manual-pay-method" className="text-xs">Method</Label>
                       <select
+                        id="manual-pay-method"
                         name="method"
                         aria-label="Payment method"
                         defaultValue="manual"
@@ -419,8 +425,9 @@ export default async function AdminInvoiceDetailPage({
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Amount ({invoice.currency}) *</Label>
+                      <Label htmlFor="manual-pay-amount" className="text-xs">Amount ({invoice.currency}) *</Label>
                       <Input
+                        id="manual-pay-amount"
                         name="amount_major"
                         aria-label="Manual payment amount"
                         type="number"
@@ -434,8 +441,9 @@ export default async function AdminInvoiceDetailPage({
                   </div>
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">Reference *</Label>
+                      <Label htmlFor="manual-pay-ref" className="text-xs">Reference *</Label>
                       <Input
+                        id="manual-pay-ref"
                         name="reference"
                         required
                         placeholder="WIRE-REF-001"
@@ -443,8 +451,9 @@ export default async function AdminInvoiceDetailPage({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">FX → USD</Label>
+                      <Label htmlFor="manual-pay-fx" className="text-xs">FX → USD</Label>
                       <Input
+                        id="manual-pay-fx"
                         name="fx_rate"
                         aria-label="Payment exchange rate to USD"
                         type="number"
@@ -480,8 +489,9 @@ export default async function AdminInvoiceDetailPage({
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="space-y-1">
-                    <Label className="text-xs">Credit Amount ({invoice.currency}) *</Label>
+                    <Label htmlFor="credit-note-amount" className="text-xs">Credit Amount ({invoice.currency}) *</Label>
                     <Input
+                      id="credit-note-amount"
                       name="amount_major"
                       type="number"
                       step="0.01"
@@ -493,8 +503,9 @@ export default async function AdminInvoiceDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Adjustment Reason *</Label>
+                    <Label htmlFor="credit-note-reason" className="text-xs">Adjustment Reason *</Label>
                     <Input
+                      id="credit-note-reason"
                       name="reason"
                       required
                       placeholder="Scope adjustment or courtesy credit"

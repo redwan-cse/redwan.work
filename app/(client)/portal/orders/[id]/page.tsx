@@ -325,8 +325,9 @@ export default async function ClientOrderDetailPage({
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Authorized Domains / IPs / Repos (one per line) *</Label>
+                    <Label htmlFor="roe-targets" className="text-xs">Authorized Domains / IPs / Repos (one per line) *</Label>
                     <Textarea
+                      id="roe-targets"
                       name="authorized_targets"
                       rows={3}
                       required
@@ -335,8 +336,9 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Out-of-Scope / Excluded Systems</Label>
+                    <Label htmlFor="roe-excluded" className="text-xs">Out-of-Scope / Excluded Systems</Label>
                     <Textarea
+                      id="roe-excluded"
                       name="excluded_systems"
                       rows={3}
                       placeholder="Third-party payment gateways, production ERP..."
@@ -346,26 +348,27 @@ export default async function ClientOrderDetailPage({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Testing Window Start (Optional)</Label>
-                    <Input name="testing_window_start" type="date" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="roe-window-start" className="text-xs">Testing Window Start (Optional)</Label>
+                    <Input id="roe-window-start" name="testing_window_start" type="date" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Testing Window End (Optional)</Label>
-                    <Input name="testing_window_end" type="date" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="roe-window-end" className="text-xs">Testing Window End (Optional)</Label>
+                    <Input id="roe-window-end" name="testing_window_end" type="date" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label className="mb-auto text-xs">Emergency Contact Name *</Label>
-                    <Input name="emergency_contact_name" required className="h-9 text-xs" />
+                    <Label htmlFor="roe-em-name" className="mb-auto text-xs">Emergency Contact Name *</Label>
+                    <Input id="roe-em-name" name="emergency_contact_name" required className="h-9 text-xs" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label className="mb-auto text-xs">Emergency Phone *</Label>
-                    <Input name="emergency_contact_phone" required className="h-9 text-xs" />
+                    <Label htmlFor="roe-em-phone" className="mb-auto text-xs">Emergency Phone *</Label>
+                    <Input id="roe-em-phone" name="emergency_contact_phone" required className="h-9 text-xs" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label className="mb-auto text-xs">Your Full Legal Name *</Label>
+                    <Label htmlFor="roe-signer-name" className="mb-auto text-xs">Your Full Legal Name *</Label>
                     <Input
+                      id="roe-signer-name"
                       name="signer_full_name"
                       defaultValue={session.fullName ?? ''}
                       required
@@ -373,12 +376,12 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label className="mb-auto text-xs">Your Role / Title</Label>
-                    <Input name="signer_title" placeholder="CTO / Founder" className="h-9 text-xs" />
+                    <Label htmlFor="roe-signer-title" className="mb-auto text-xs">Your Role / Title</Label>
+                    <Input id="roe-signer-title" name="signer_title" placeholder="CTO / Founder" className="h-9 text-xs" />
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-xs font-medium">
-                  <input type="checkbox" name="ownership_attested" required className="rounded" />
+                <label className="flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
+                  <input type="checkbox" name="ownership_attested" required className="h-6 w-6 shrink-0 rounded border-border accent-primary" />
                   I attest that I am legally authorized to grant testing/access permission for the targets listed above.
                 </label>
                 <Button type="submit" size="sm" className="gap-1.5">
@@ -495,6 +498,7 @@ export default async function ClientOrderDetailPage({
                           <input type="hidden" name="order_id" value={order.id} />
                           <Input
                             name="feedback"
+                            aria-label="Deliverable review feedback"
                             placeholder="Optional sign-off note or specific revision feedback..."
                             className="h-9 text-xs"
                           />
@@ -623,8 +627,9 @@ export default async function ClientOrderDetailPage({
                 >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1">
-                    <Label className="text-xs">Target Scope, Architecture &amp; Endpoints</Label>
+                    <Label htmlFor="req-scope-notes" className="text-xs">Target Scope, Architecture &amp; Endpoints</Label>
                     <Textarea
+                      id="req-scope-notes"
                       name="target_scope_notes"
                       rows={3}
                       defaultValue={reqRecord?.target_scope_notes ?? ''}
@@ -633,8 +638,9 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Secure Access / Testing Instructions</Label>
+                    <Label htmlFor="req-access-notes" className="text-xs">Secure Access / Testing Instructions</Label>
                     <Textarea
+                      id="req-access-notes"
                       name="access_instructions"
                       rows={2}
                       defaultValue={reqRecord?.access_instructions ?? ''}
@@ -796,8 +802,9 @@ export default async function ClientOrderDetailPage({
                 >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Overall Rating (1 to 5 Stars)</Label>
+                    <Label htmlFor="review-rating" className="text-xs">Overall Rating (1 to 5 Stars)</Label>
                     <select
+                      id="review-rating"
                       name="rating_overall"
                       aria-label="Overall rating"
                       defaultValue={String(existingReview?.rating_overall ?? 5)}
@@ -811,8 +818,9 @@ export default async function ClientOrderDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Headline</Label>
+                    <Label htmlFor="review-headline" className="text-xs">Headline</Label>
                     <Input
+                      id="review-headline"
                       name="headline"
                       defaultValue={existingReview?.headline ?? ''}
                       placeholder="Thorough VAPT audit and fast remediation support"
@@ -820,8 +828,9 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Written Review *</Label>
+                    <Label htmlFor="review-text" className="text-xs">Written Review *</Label>
                     <Textarea
+                      id="review-text"
                       name="review_text"
                       rows={3}
                       required
@@ -878,6 +887,7 @@ export default async function ClientOrderDetailPage({
                     <input type="hidden" name="order_id" value={order.id} />
                     <Textarea
                       name="reason"
+                      aria-label="Reason for requesting order cancellation"
                       required
                       minLength={5}
                       rows={2}

@@ -5,7 +5,6 @@ import Script from 'next/script';
 import {
   allowsAnalyticsStorage,
   COOKIE_PREFERENCES_CHANGED_EVENT,
-  type CookieConsentState,
 } from '@/components/cookie-preferences';
 
 function resolveGaId(): string | null {
@@ -102,38 +101,42 @@ export function trackAnalyticsEvent(
   }
 }
 
+function subscribeAnalyticsConsent(onStoreChange: () => void) {
+  window.addEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onStoreChange);
+  window.addEventListener('storage', onStoreChange);
+  return () => {
+    window.removeEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onStoreChange);
+    window.removeEventListener('storage', onStoreChange);
+  };
+}
+
+function getAnalyticsScriptsSnapshot(): boolean {
+  if (typeof navigator !== 'undefined' && navigator.webdriver === true) return false;
+  return allowsAnalyticsStorage();
+}
+
+function getAnalyticsScriptsServerSnapshot(): boolean {
+  return false;
+}
+
 export function AnalyticsScripts() {
   const gaId = resolveGaId();
   const clarityId = resolveClarityId();
+  const scriptsEnabled = React.useSyncExternalStore(
+    subscribeAnalyticsConsent,
+    getAnalyticsScriptsSnapshot,
+    getAnalyticsScriptsServerSnapshot
+  );
 
   React.useEffect(() => {
     if (!gaId && !clarityId) return;
+    if (typeof navigator !== 'undefined' && navigator.webdriver === true) return;
 
     bootstrapAnalyticsRuntime(gaId, clarityId);
+    pushConsentSignals(scriptsEnabled);
+  }, [gaId, clarityId, scriptsEnabled]);
 
-    // Sync live consent changes immediately whenever the visitor saves or updates choices
-    const onConsentChange = (event: Event) => {
-      const detail = (event as CustomEvent<CookieConsentState>).detail;
-      const analyticsGranted =
-        detail && typeof detail.analytics === 'boolean'
-          ? detail.analytics
-          : allowsAnalyticsStorage();
-      pushConsentSignals(analyticsGranted);
-    };
-
-    const onStorageChange = () => {
-      pushConsentSignals(allowsAnalyticsStorage());
-    };
-
-    window.addEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onConsentChange);
-    window.addEventListener('storage', onStorageChange);
-    return () => {
-      window.removeEventListener(COOKIE_PREFERENCES_CHANGED_EVENT, onConsentChange);
-      window.removeEventListener('storage', onStorageChange);
-    };
-  }, [gaId, clarityId]);
-
-  if (!gaId && !clarityId) return null;
+  if ((!gaId && !clarityId) || !scriptsEnabled) return null;
 
   return (
     <>

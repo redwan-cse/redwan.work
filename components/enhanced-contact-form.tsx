@@ -1674,8 +1674,8 @@ export default function EnhancedContactForm({
               onChange={(val) => handleInputChange('projectSummary', val)}
               placeholder="Please describe your project scope, security requirements, or questions in detail. Use the toolbar above for headings, bold, italic, bullet points, or tables..."
               minHeightClassName="min-h-[160px]"
-              aria-invalid={!!errors.projectSummary}
-              aria-describedby={errors.projectSummary ? "projectSummary-error" : undefined}
+              error={!!errors.projectSummary}
+              ariaDescribedBy={errors.projectSummary ? "projectSummary-error" : undefined}
               disabled={isSubmitting}
             />
             {errors.projectSummary && (
@@ -1881,6 +1881,7 @@ export default function EnhancedContactForm({
               <div className="pt-2">
                 <Input
                   id="howDidYouFindMeReferral"
+                  aria-label="Who referred you"
                   type="text"
                   value={formData.howDidYouFindMeReferral}
                   onChange={(e) => handleInputChange('howDidYouFindMeReferral', e.target.value)}
@@ -1895,6 +1896,7 @@ export default function EnhancedContactForm({
               <div className="pt-2">
                 <Input
                   id="howDidYouFindMeOther"
+                  aria-label="Specify how you found me"
                   type="text"
                   value={formData.howDidYouFindMeOther}
                   onChange={(e) => handleInputChange('howDidYouFindMeOther', e.target.value)}
@@ -1929,41 +1931,27 @@ export default function EnhancedContactForm({
             className={`mt-0.5 ${errors.gdprConsent ? "border-destructive" : ""}`}
           />
           <div className="space-y-1 flex-1">
-            <Label
-              htmlFor="gdprConsent"
-              className="text-sm font-medium cursor-pointer leading-normal inline"
-            >
-              <span className="text-destructive">*</span>{" "}
-              {consentPolicy?.checkbox ? (
-                <>
-                  {consentPolicy.checkbox}{" "}
-                  <span className="text-xs text-muted-foreground">
-                    (
-                    <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                      Privacy Policy
-                    </Link>
-                    {" · "}
-                    <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                      Terms of Service
-                    </Link>
-                    {" · "}
-                    Policy {consentPolicy.version})
-                  </span>
-                </>
-              ) : (
-                <>
-                  I agree that my information and any attached files will be processed to review and respond to my request in accordance with our{" "}
-                  <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                    Privacy Policy
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
-                    Terms of Service
-                  </Link>
-                  .
-                </>
-              )}
-            </Label>
+            <div className="text-sm leading-normal">
+              <Label
+                htmlFor="gdprConsent"
+                className="text-sm font-medium cursor-pointer leading-normal inline"
+              >
+                <span className="text-destructive">*</span>{" "}
+                {consentPolicy?.checkbox ??
+                  'I agree that my information and any attached files will be processed to review and respond to my request.'}
+              </Label>{" "}
+              <span className="text-xs text-muted-foreground">
+                (
+                <Link href="/privacy" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                  Privacy Policy
+                </Link>
+                {" · "}
+                <Link href="/tos" className="text-primary underline underline-offset-4 hover:text-primary/80">
+                  Terms of Service
+                </Link>
+                {consentPolicy?.version ? ` · Policy ${consentPolicy.version}` : ''})
+              </span>
+            </div>
             {consentPolicy?.privacyNotice && (
               <p className="text-xs text-muted-foreground mt-1">
                 {consentPolicy.privacyNotice}
@@ -2040,7 +2028,7 @@ export default function EnhancedContactForm({
         )}
 
         {errors.submit && (
-          <Card className="border-destructive bg-destructive/10">
+          <Card role="alert" className="border-destructive bg-destructive/10">
             <CardContent className="p-4">
               <p className="text-sm font-semibold text-destructive">{errors.submit}</p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -2114,7 +2102,7 @@ export default function EnhancedContactForm({
 
         {/* Turnstile Error Message - Below the form row */}
         {turnstileError && (
-          <Card className="border-destructive/50 bg-destructive/10 -mt-2">
+          <Card role="alert" className="border-destructive/50 bg-destructive/10 -mt-2">
             <CardContent className="p-3">
               <p className="text-xs text-destructive text-center">
                 {turnstileError}

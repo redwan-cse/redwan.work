@@ -77,7 +77,7 @@ export default async function ClientInvoiceDetailPage({
             Back to Invoices
           </Link>
           <div className="mt-1 flex items-center gap-2">
-            <span className="font-mono text-lg font-bold text-primary">{invoice.code}</span>
+            <h1 className="font-mono text-lg font-bold text-primary">{invoice.code}</h1>
             <Badge
               variant={invoice.status === 'paid' ? 'default' : 'outline'}
               className="font-mono text-xs uppercase"
@@ -372,8 +372,9 @@ export default async function ClientInvoiceDetailPage({
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Payment Method *</Label>
+                    <Label htmlFor="payment-method" className="text-xs">Payment Method *</Label>
                     <select
+                      id="payment-method"
                       name="method"
                       aria-label="Payment proof method"
                       defaultValue="bank_transfer"
@@ -390,10 +391,11 @@ export default async function ClientInvoiceDetailPage({
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">
+                    <Label htmlFor="payment-amount" className="text-xs">
                       Amount Sent ({invoice.currency}) *
                     </Label>
                     <Input
+                      id="payment-amount"
                       name="amount_major"
                       type="number"
                       step="0.01"
@@ -404,8 +406,9 @@ export default async function ClientInvoiceDetailPage({
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Transaction ID / Reference *</Label>
+                    <Label htmlFor="payment-reference" className="text-xs">Transaction ID / Reference *</Label>
                     <Input
+                      id="payment-reference"
                       name="reference"
                       required
                       placeholder="TXN-98412093 / SWIFT Ref"
@@ -414,11 +417,10 @@ export default async function ClientInvoiceDetailPage({
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Upload Transfer Receipt (PDF / Screenshot)</Label>
                     <R2FileUploader
                       category="payment_proof"
                       orderId={invoice.order_id}
-                      label="Attach Payment Receipt"
+                      label="Upload Transfer Receipt (PDF / Screenshot)"
                     />
                   </div>
 

@@ -112,9 +112,9 @@ export default async function ServiceDetailPage({
           {service.requiresRoe && (
             <Badge
               variant="outline"
-              className="gap-1 border-amber-500/40 bg-amber-500/10 font-mono text-xs text-amber-600 dark:text-amber-400"
+              className="gap-1 border-amber-600/40 bg-amber-500/10 font-mono text-xs text-amber-800 dark:border-amber-400/40 dark:text-amber-300"
             >
-              <ShieldAlert className="h-3 w-3" />
+              <ShieldAlert className="h-3 w-3" aria-hidden="true" />
               Rules of Engagement Governed
             </Badge>
           )}
@@ -195,7 +195,7 @@ export default async function ServiceDetailPage({
                     {pkg.deliveryDays}d · {pkg.revisions} rev
                   </span>
                 </div>
-                <CardTitle className="mt-2 text-lg">{pkg.name}</CardTitle>
+                <CardTitle as="h3" className="mt-2 text-lg">{pkg.name}</CardTitle>
                 <div className="font-mono text-2xl font-extrabold text-primary">
                   ${(pkg.priceCents / 100).toLocaleString()}
                 </div>
@@ -230,7 +230,7 @@ export default async function ServiceDetailPage({
               <Card key={study.slug} className="border-border/80">
                 <CardHeader className="pb-2">
                   <span className="font-mono text-xs font-bold text-primary">{study.code}</span>
-                  <CardTitle className="text-base">{study.title}</CardTitle>
+                  <CardTitle as="h3" className="text-base">{study.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
                   <p className="line-clamp-3 text-muted-foreground">{study.summary}</p>

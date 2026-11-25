@@ -59,7 +59,10 @@ export function BlogPagination({
   const isLoading = activeTargetPage !== null;
 
   return (
-    <div className="mt-14 flex flex-col items-center gap-4 border-t border-border/70 pt-8">
+    <nav
+      aria-label="Blog pagination"
+      className="mt-14 flex flex-col items-center gap-4 border-t border-border/70 pt-8"
+    >
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button
           asChild={currentPage !== 1}
@@ -120,7 +123,7 @@ export function BlogPagination({
                 className="h-9 w-9 rounded-full font-mono text-xs"
               >
                 {pageNum === currentPage ? (
-                  <span>{pageNum}</span>
+                  <span aria-current="page">{pageNum}</span>
                 ) : (
                   <Link href={href} onClick={(e) => navigateToPage(e, href, pageNum)}>
                     {isLoading && activeTargetPage === pageNum ? (
@@ -181,6 +184,6 @@ export function BlogPagination({
           )}
         </p>
       )}
-    </div>
+    </nav>
   );
 }

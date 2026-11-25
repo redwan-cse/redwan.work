@@ -69,22 +69,23 @@ export function PortfolioShowcase({
   return (
     <div className="space-y-10">
       {/* Category Filter Pills */}
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Filter case studies by category">
         {FILTER_TABS.map(({ key, label, icon: Icon }) => {
           const isActive = selectedCategory === key;
           return (
             <button
               key={key}
               type="button"
+              aria-pressed={isActive}
               onClick={() => setSelectedCategory(key)}
               className={cn(
-                'relative inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
+                'relative inline-flex min-h-9 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
                 isActive
                   ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                   : 'border-border/80 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               <span>{label}</span>
             </button>
           );
@@ -181,18 +182,18 @@ export function PortfolioShowcase({
 
             <div className="space-y-5 text-sm">
               <div>
-                <h4 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                <h3 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   1. The Challenge
-                </h4>
+                </h3>
                 <p className="mt-1.5 leading-relaxed text-foreground/90">
                   {activeStudy.challenge}
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                <h3 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   2. Technical Execution &amp; Methodology
-                </h4>
+                </h3>
                 <ul className="mt-2 space-y-2">
                   {activeStudy.approach.map((step) => (
                     <li key={step} className="flex items-start gap-2 text-foreground/90">
@@ -204,9 +205,9 @@ export function PortfolioShowcase({
               </div>
 
               <div>
-                <h4 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                <h3 className="font-mono text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   3. Verified Outcomes
-                </h4>
+                </h3>
                 <ul className="mt-2 space-y-2">
                   {activeStudy.outcomes.map((outcome) => (
                     <li key={outcome} className="flex items-start gap-2 text-foreground/90">

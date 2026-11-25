@@ -77,9 +77,10 @@ export default async function ClientVaultFilesPage({
 
         <form method="get" className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             <Input
               name="q"
+              aria-label="Search vault files by filename or SHA-256"
               defaultValue={params.q ?? ''}
               placeholder="Search filename or SHA-256..."
               className="h-8 w-52 pl-8 text-xs"
