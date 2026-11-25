@@ -70,7 +70,28 @@ export default async function PortfolioPage() {
         {/* Interactive Portfolio Grid */}
         <section className="py-16">
           <div className="container">
-            <Suspense fallback={<div className="py-12 text-center text-sm text-muted-foreground">Loading case studies...</div>}>
+            <Suspense
+              fallback={
+                <div className="min-h-[920px] space-y-8" aria-busy="true" aria-label="Loading case studies">
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="h-9 w-28 animate-pulse rounded-full border border-border/60 bg-muted/60"
+                      />
+                    ))}
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="h-72 animate-pulse rounded-2xl border border-border/60 bg-card/70 p-6"
+                      />
+                    ))}
+                  </div>
+                </div>
+              }
+            >
               <PortfolioShowcase initialItems={portfolioItems} />
             </Suspense>
           </div>

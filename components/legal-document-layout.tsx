@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface LegalSectionItem {
@@ -68,16 +69,20 @@ export function LegalDocumentLayout({
         </div>
 
         <div className="grid items-start gap-8 lg:grid-cols-12 lg:gap-12">
-          {/* Sticky CONTENTS Navigation Sidebar (stays visible throughout scroll) */}
+          {/* Sticky CONTENTS Navigation Sidebar (collapsible on mobile, sticky on desktop) */}
           <aside
             aria-label="Document table of contents"
-            className="min-w-0 lg:sticky lg:top-24 lg:col-span-4 lg:self-start xl:col-span-3"
+            className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:col-span-4 lg:self-start xl:col-span-3"
           >
-            <div className="rounded-2xl border border-border/80 bg-card/85 p-4 shadow-2xs backdrop-blur-xs sm:p-5">
-              <div className="mb-3 px-2 font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                Contents
-              </div>
-              <nav className="space-y-1">
+            <details className="group rounded-2xl border border-border/80 bg-card/85 p-4 shadow-2xs backdrop-blur-xs lg:hidden">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-mono text-xs font-bold uppercase tracking-widest text-foreground [&::-webkit-details-marker]:hidden">
+                <span>Contents ({sections.length} sections)</span>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <nav aria-label="Mobile document sections" className="mt-3 space-y-1 border-t border-border/60 pt-3">
                 {sections.map((sec) => {
                   const isActive = activeId === sec.id;
                   return (
@@ -107,12 +112,49 @@ export function LegalDocumentLayout({
                   );
                 })}
               </nav>
-              {footerSlot && (
-                <div className="mt-4 border-t border-border/70 pt-4">
-                  {footerSlot}
-                </div>
-              )}
+            </details>
+
+            <div className="hidden rounded-2xl border border-border/80 bg-card/85 p-5 shadow-2xs backdrop-blur-xs lg:block">
+              <div className="mb-3 px-2 font-mono text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                Contents
+              </div>
+              <nav aria-label="Document sections" className="space-y-1">
+                {sections.map((sec) => {
+                  const isActive = activeId === sec.id;
+                  return (
+                    <a
+                      key={sec.id}
+                      href={`#${sec.id}`}
+                      onClick={() => setActiveId(sec.id)}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl px-3 py-2 text-xs transition-colors sm:text-sm',
+                        isActive
+                          ? 'bg-primary/12 font-semibold text-primary'
+                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] font-bold',
+                          isActive
+                            ? 'border-primary/40 bg-primary/15 text-primary'
+                            : 'border-border bg-background text-muted-foreground'
+                        )}
+                      >
+                        {sec.number}
+                      </span>
+                      <span className="truncate">{sec.title}</span>
+                    </a>
+                  );
+                })}
+              </nav>
             </div>
+
+            {footerSlot && (
+              <div className="rounded-2xl border border-border/80 bg-card/85 p-4 shadow-2xs backdrop-blur-xs">
+                {footerSlot}
+              </div>
+            )}
           </aside>
 
           {/* Numbered Legal Document Sections */}

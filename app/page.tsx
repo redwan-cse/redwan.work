@@ -102,10 +102,10 @@ export default async function Home() {
         <section className="relative overflow-hidden border-b border-border/70">
           <AntigravityHeroField />
 
-          <div className="container relative z-10 py-16 md:py-24 lg:py-28">
-            <div className="grid items-center gap-12 lg:grid-cols-12">
+          <div className="container relative z-10 py-10 sm:py-16 md:py-24 lg:py-28">
+            <div className="grid items-center gap-8 sm:gap-10 lg:grid-cols-12 lg:gap-12">
               {/* Left Column: Staggered Reveal Copy & Credentials */}
-              <HeroReveal className="flex flex-col gap-6 lg:col-span-7">
+              <HeroReveal className="flex flex-col gap-5 sm:gap-6 lg:col-span-7">
                 <HeroRevealItem>
                   <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-primary/30 bg-primary/8 px-3.5 py-1.5 text-xs font-medium text-primary backdrop-blur-sm">
                     <ShieldCheck className="h-3.5 w-3.5" />
@@ -118,7 +118,7 @@ export default async function Home() {
                 </HeroRevealItem>
 
                 <HeroRevealItem>
-                  <h1 className="text-4xl font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+                  <h1 className="text-fluid-display font-bold tracking-tight text-balance">
                     Offensive Security Rigor.{' '}
                     <span className="bg-gradient-to-r from-primary via-primary/85 to-chart-2 bg-clip-text text-transparent">
                       Full-Stack Execution.
@@ -267,7 +267,7 @@ export default async function Home() {
               <Badge variant="outline" className="mb-3 font-mono text-xs text-primary">
                 5 CORE SERVICE PILLARS
               </Badge>
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              <h2 className="text-fluid-heading font-bold tracking-tight">
                 One Trusted Specialist Across Security, Code &amp; Infrastructure
               </h2>
               <p className="mt-3 text-base text-muted-foreground sm:text-lg">
@@ -393,7 +393,7 @@ export default async function Home() {
               <Badge variant="outline" className="mb-3 font-mono text-xs text-primary">
                 END-TO-END CLIENT PORTAL
               </Badge>
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              <h2 className="text-fluid-heading font-bold tracking-tight">
                 Built for Transparent Delivery &amp; Long-Term Partnerships
               </h2>
               <p className="mt-3 text-base text-muted-foreground">
@@ -432,7 +432,7 @@ export default async function Home() {
                 <Badge variant="outline" className="mb-3 font-mono text-xs text-primary">
                   PROVEN TRACK RECORD
                 </Badge>
-                <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                <h2 className="text-fluid-heading font-bold tracking-tight">
                   Selected Case Studies &amp; Engineering Work
                 </h2>
               </div>
@@ -499,7 +499,7 @@ export default async function Home() {
               <Badge variant="outline" className="mb-3 font-mono text-xs text-primary">
                 CLIENT FEEDBACK
               </Badge>
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              <h2 className="text-fluid-heading font-bold tracking-tight">
                 Trusted by Global Founders &amp; Security Teams
               </h2>
               <p className="mt-3 text-base text-muted-foreground">

@@ -96,4 +96,89 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
     const recoverySrc = readSrc('app/(admin)/admin/recovery/page.tsx');
     expect(recoverySrc).toContain('role="progressbar"');
   });
+
+  it('[UI-V4-06] scales 4K TV (min-width: 2400px) container/root typography, adds fluid clamp() headings, and enforces high-visibility :focus-visible rings', () => {
+    const css = readSrc('app/globals.css');
+    expect(css).toContain('@media (width >= 2400px)');
+    expect(css).toContain('max-width: 1840px');
+    expect(css).toContain('@media (min-width: 2400px)');
+    expect(css).toContain('clamp(18px, 0.52vw, 20px)');
+    expect(css).toContain('text-fluid-display');
+    expect(css).toContain('text-fluid-heading');
+    expect(css).toContain('outline: 2px solid var(--ring)');
+    expect(css).toContain('outline: 3px solid var(--ring)');
+
+    const heroFieldSrc = readSrc('components/motion/antigravity-hero-field.tsx');
+    expect(heroFieldSrc).toContain('hasPointerMoved');
+    expect(heroFieldSrc).toContain('rect.width / 2 - 320');
+  });
+
+  it('[UI-V4-07] caps PanelShell main width for 4K TV, scrolls drawers, uses dvh, and prevents Toaster vs bottom-nav overlap', () => {
+    const shellSrc = readSrc('components/panel/panel-shell.tsx');
+    expect(shellSrc).toContain('min-h-dvh');
+    expect(shellSrc).toContain('max-w-[1600px]');
+    expect(shellSrc).toContain('min-h-0 flex-1 space-y-1 overflow-y-auto');
+    expect(shellSrc).toContain('env(safe-area-inset-bottom)');
+
+    for (const layoutPath of [
+      'app/(admin)/admin/layout.tsx',
+      'app/(client)/portal/layout.tsx',
+    ]) {
+      const src = readSrc(layoutPath);
+      expect(src).toContain('position="top-right"');
+      expect(src).toContain('mobileOffset=');
+    }
+
+    const kanbanSrc = readSrc('components/admin/orders-kanban-view.tsx');
+    expect(kanbanSrc).toContain('overflow-x-auto');
+    expect(kanbanSrc).toContain('w-[272px]');
+    expect(kanbanSrc).toContain('2xl:grid-cols-6');
+    expect(kanbanSrc).toContain('tabIndex={0}');
+  });
+
+  it('[UI-V4-08] prevents iOS Safari zoom on inputs, bounds dialogs/popovers, uses flexible Turnstile, and compacts mobile privacy banner', () => {
+    for (const uiPath of [
+      'components/ui/input.tsx',
+      'components/ui/textarea.tsx',
+      'components/ui/select.tsx',
+    ]) {
+      expect(readSrc(uiPath), `${uiPath} should use 16px text on mobile`).toContain('text-base md:text-sm');
+    }
+
+    const dialogSrc = readSrc('components/ui/dialog.tsx');
+    expect(dialogSrc).toContain('w-[calc(100%-2rem)]');
+    expect(dialogSrc).toContain('max-h-[90dvh]');
+
+    const alertDialogSrc = readSrc('components/ui/alert-dialog.tsx');
+    expect(alertDialogSrc).toContain('w-[calc(100%-2rem)]');
+    expect(alertDialogSrc).toContain('max-h-[90dvh]');
+
+    const popoverSrc = readSrc('components/ui/popover.tsx');
+    expect(popoverSrc).toContain('max-w-[calc(100vw-1.5rem)]');
+
+    const blogModalSrc = readSrc('components/blog-preview-modal.tsx');
+    expect(blogModalSrc).not.toContain('[&>button]:hidden');
+    expect(blogModalSrc).toContain('max-h-[90dvh]');
+
+    const contactSrc = readSrc('components/enhanced-contact-form.tsx');
+    expect(contactSrc).toContain('data-size="flexible"');
+    expect(contactSrc).toContain('w-[112px] shrink-0 sm:w-[140px]');
+
+    const cookieSrc = readSrc('components/cookie-preferences.tsx');
+    expect(cookieSrc).toContain('window.innerWidth >= 640');
+    expect(cookieSrc).toContain('max-h-[min(38dvh,300px)]');
+  });
+
+  it('[UI-V4-09] reserves /portfolio Suspense skeleton height and preserves A4 invoice print headers & full-width layout', () => {
+    const portfolioSrc = readSrc('app/portfolio/page.tsx');
+    expect(portfolioSrc).toContain('min-h-[920px]');
+
+    const clientInvSrc = readSrc('app/(client)/portal/invoices/[id]/page.tsx');
+    expect(clientInvSrc).not.toContain('flex flex-wrap items-center justify-between gap-3 print:hidden');
+    expect(clientInvSrc).toContain('<div className="print:hidden">');
+
+    const adminInvSrc = readSrc('app/(admin)/admin/invoices/[id]/page.tsx');
+    expect(adminInvSrc).toContain('hidden border-slate-300 bg-white shadow-none print:block');
+    expect(adminInvSrc).toContain('grid gap-6 lg:grid-cols-12 print:block');
+  });
 });

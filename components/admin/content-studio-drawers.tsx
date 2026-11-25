@@ -924,29 +924,40 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs">Section</TableHead>
+                <TableHead className="hidden text-xs sm:table-cell">Section</TableHead>
                 <TableHead className="text-xs">Title &amp; Organization</TableHead>
-                <TableHead className="text-xs">Period / Location</TableHead>
-                <TableHead className="text-xs">Visible</TableHead>
+                <TableHead className="hidden text-xs md:table-cell">Period / Location</TableHead>
+                <TableHead className="hidden text-xs sm:table-cell">Visible</TableHead>
                 <TableHead className="text-right text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant="secondary" className="font-mono text-[10px] uppercase">
                       {item.section}
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    <div className="mb-1 flex flex-wrap items-center gap-1 sm:hidden">
+                      <Badge variant="secondary" className="font-mono text-[10px] uppercase">
+                        {item.section}
+                      </Badge>
+                      <Badge variant={item.is_visible ? 'default' : 'outline'} className="font-mono text-[10px]">
+                        {item.is_visible ? 'Visible' : 'Hidden'}
+                      </Badge>
+                    </div>
                     <div className="text-xs font-semibold sm:text-sm">{item.title}</div>
                     <div className="text-[11px] text-muted-foreground">{item.organization}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-muted-foreground md:hidden">
+                      {[item.period, item.location].filter(Boolean).join(' · ') || '—'}
+                    </div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
+                  <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">
                     {[item.period, item.location].filter(Boolean).join(' · ') || '—'}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant={item.is_visible ? 'default' : 'outline'} className="font-mono text-[10px]">
                       {item.is_visible ? 'Visible' : 'Hidden'}
                     </Badge>

@@ -1236,7 +1236,7 @@ export default function EnhancedContactForm({
                     }
                   }}
                 >
-                  <SelectTrigger aria-label="WhatsApp country calling code" className="w-[140px]">
+                  <SelectTrigger aria-label="WhatsApp country calling code" className="w-[112px] shrink-0 sm:w-[140px]">
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
@@ -2052,7 +2052,7 @@ export default function EnhancedContactForm({
                 className="cf-turnstile"
                 data-sitekey={TURNSTILE_SITE_KEY}
                 data-theme="auto"
-                data-size="normal"
+                data-size="flexible"
                 data-action="contact-form"
                 data-retry="auto"
                 data-retry-interval="8000"
@@ -2114,7 +2114,7 @@ export default function EnhancedContactForm({
 
       {/* Validation Dialog */}
       <Dialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
-        <DialogContent hideCloseButton className="w-[90vw] max-w-sm md:max-w-md my-6 rounded-2xl shadow-xl p-0 gap-0 animate-in fade-in-0 zoom-in-95 duration-150">
+        <DialogContent hideCloseButton className="w-[90vw] max-h-[90dvh] max-w-sm overflow-y-auto md:max-w-md my-6 rounded-2xl shadow-xl p-0 gap-0 animate-in fade-in-0 zoom-in-95 duration-150">
           <DialogHeader className="px-6 pt-5 pb-3 space-y-3">
             <DialogTitle className="text-base md:text-lg font-semibold flex items-center justify-center gap-2 leading-tight">
               <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />

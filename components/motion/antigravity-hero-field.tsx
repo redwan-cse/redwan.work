@@ -56,6 +56,7 @@ export function AntigravityHeroField() {
     let rectDirty = true;
     let animationFrameId = 0;
     let isVisible = true;
+    let hasPointerMoved = false;
     const mouse = { x: -1000, y: -1000, active: false };
     let dashes: MicroDash[] = [];
 
@@ -102,6 +103,10 @@ export function AntigravityHeroField() {
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!hasPointerMoved) {
+        pointerX.set(rect.width / 2 - 320);
+        pointerY.set(Math.max(-120, rect.height * 0.28 - 320));
+      }
       dashes = createDashes(rect.width, rect.height);
     };
 
@@ -196,6 +201,7 @@ export function AntigravityHeroField() {
       const localX = event.clientX - rectLeft;
       const localY = event.clientY - rectTop;
       if (localX >= 0 && localX <= width && localY >= 0 && localY <= height) {
+        hasPointerMoved = true;
         pointerX.set(localX - 320);
         pointerY.set(localY - 320);
         mouse.x = localX;

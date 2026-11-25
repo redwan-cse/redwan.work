@@ -67,7 +67,7 @@ export function Navigation() {
         {/* Desktop Navigation */}
         <nav
           aria-label="Main navigation"
-          className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/40 p-1.5 lg:flex"
+          className="hidden items-center gap-0.5 rounded-full border border-border/80 bg-muted/40 p-1 lg:flex xl:gap-1 xl:p-1.5"
         >
           {navigation.map(({ name, href }) => {
             const isActive =
@@ -78,7 +78,7 @@ export function Navigation() {
                 href={href}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'relative rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 xl:px-3.5',
+                  'relative whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-medium transition-colors duration-200 xl:px-3.5',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
@@ -148,7 +148,7 @@ export function Navigation() {
                 </SheetDescription>
               </SheetHeader>
 
-              <nav aria-label="Mobile navigation" className="flex flex-col gap-1.5 p-4">
+              <nav aria-label="Mobile navigation" className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-4">
                 {navigation.map(({ name, href, icon: Icon }) => {
                   const isActive =
                     href === '/' ? pathname === '/' : pathname === href || pathname?.startsWith(`${href}/`);

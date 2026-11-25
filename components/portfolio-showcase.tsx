@@ -162,7 +162,7 @@ export function PortfolioShowcase({
         }}
       >
         {activeStudy && (
-          <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
+          <DialogContent className="max-h-[88dvh] max-w-2xl overflow-y-auto">
             <DialogHeader>
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="font-mono text-xs text-primary">
