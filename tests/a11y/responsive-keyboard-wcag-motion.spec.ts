@@ -77,6 +77,38 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
     }
   });
 
+  test('[RESPONSIVE-4K-TV] scales 10-foot typography and container ergonomically at 3840x2160 without overflow', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 3840, height: 2160 });
+    for (const route of ['/', '/services', '/portfolio']) {
+      const resp = await page.goto(route, { waitUntil: 'domcontentloaded' });
+      expect(resp?.status(), `HTTP status on ${route} @ 3840px`).toBe(200);
+
+      const tvMetrics = await page.evaluate(() => {
+        const rootFontPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize);
+        const container = document.querySelector('main .container');
+        const containerWidth = container ? container.getBoundingClientRect().width : 0;
+        const h1 = document.querySelector('h1');
+        const h1FontPx = h1 ? parseFloat(window.getComputedStyle(h1).fontSize) : 0;
+        return {
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+          rootFontPx,
+          containerWidth,
+          h1FontPx,
+        };
+      });
+
+      expect(tvMetrics.scrollWidth, `No 4K horizontal overflow on ${route}`).toBeLessThanOrEqual(
+        tvMetrics.innerWidth
+      );
+      expect(tvMetrics.rootFontPx, `10-foot root font size on ${route}`).toBeGreaterThanOrEqual(18);
+      expect(tvMetrics.containerWidth, `Expanded 4K container on ${route}`).toBeGreaterThanOrEqual(1600);
+      expect(tvMetrics.h1FontPx, `Readable 4K h1 on ${route}`).toBeGreaterThanOrEqual(48);
+    }
+  });
+
   test('[KEYBOARD-FOCUS] supports skip-to-content link, mobile navigation drawer Escape dismissal, and modal dialog focus/Escape', async ({
     page,
     browser,

@@ -173,7 +173,7 @@ export function ResumeView({
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col">
       {/* On-demand A4 print host (loads PrintableResume + react-to-print only when clicked) */}
       <ResumePrintHost data={printableData} />
 

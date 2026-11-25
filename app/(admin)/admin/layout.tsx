@@ -95,7 +95,12 @@ export default async function AdminLayout({
       >
         {children}
       </PanelShell>
-      <Toaster richColors position="bottom-right" />
+      <Toaster
+        richColors
+        position="top-right"
+        offset={{ top: '4.75rem', right: '1rem' }}
+        mobileOffset={{ top: '4.75rem', right: '0.75rem', left: '0.75rem' }}
+      />
     </>
   );
 }

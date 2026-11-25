@@ -56,13 +56,18 @@ const KANBAN_COLUMNS = [
 
 export function OrdersKanbanBoard({ orders }: { orders: OrderBoardItem[] }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div
+      role="region"
+      aria-label="Orders Kanban board"
+      tabIndex={0}
+      className="flex gap-3 overflow-x-auto pb-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring 2xl:grid 2xl:grid-cols-6 2xl:overflow-visible"
+    >
       {KANBAN_COLUMNS.map((col) => {
         const colOrders = orders.filter((o) => col.statuses.has(o.status));
         return (
           <div
             key={col.id}
-            className="flex flex-col rounded-xl border border-border/80 bg-muted/25 p-2.5"
+            className="flex w-[272px] shrink-0 flex-col rounded-xl border border-border/80 bg-muted/25 p-2.5 2xl:w-auto 2xl:min-w-0"
           >
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-xs font-bold tracking-tight">{col.label}</span>

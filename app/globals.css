@@ -179,15 +179,50 @@
   @media (width >= 1024px) {
     padding-inline: 2rem;
   }
+  @media (width >= 1536px) {
+    max-width: 1360px;
+  }
+  @media (width >= 2400px) {
+    max-width: 1840px;
+    padding-inline: 3rem;
+  }
+}
+
+@utility text-fluid-display {
+  font-size: clamp(2rem, 4vw + 1rem, 3.75rem);
+  line-height: 1.08;
+}
+
+@utility text-fluid-heading {
+  font-size: clamp(1.625rem, 2.2vw + 0.85rem, 2.5rem);
+  line-height: 1.18;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    scroll-behavior: smooth;
+  }
+  @media (min-width: 2400px) {
+    html {
+      font-size: clamp(18px, 0.52vw, 20px);
+    }
+  }
   body {
     @apply bg-background text-foreground font-sans;
     letter-spacing: var(--tracking-normal);
+  }
+  :where(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (min-width: 2400px) {
+    :where(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [tabindex]:not([tabindex="-1"])):focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 3px;
+    }
   }
   select {
     @apply border-input bg-background text-foreground ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;

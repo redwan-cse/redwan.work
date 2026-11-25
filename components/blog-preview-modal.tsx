@@ -64,7 +64,7 @@ export function BlogPreviewModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {children ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>button]:hidden border border-border/80 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-2xl max-h-[90dvh] overflow-y-auto p-0 gap-0 border border-border/80 shadow-2xl [&>button]:z-20 [&>button]:rounded-full [&>button]:border [&>button]:border-border/80 [&>button]:bg-background/90 [&>button]:text-foreground [&>button]:opacity-95 [&>button]:shadow-md [&>button]:backdrop-blur-xs [&>button]:hover:opacity-100">
         <div className="relative aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
           <Image
             src={imageUrl}

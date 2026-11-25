@@ -67,11 +67,11 @@ export default async function ClientInvoiceDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link
             href="/portal/invoices"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground print:hidden"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Invoices
@@ -88,7 +88,9 @@ export default async function ClientInvoiceDetailPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <PrintInvoiceButton />
+          <div className="print:hidden">
+            <PrintInvoiceButton />
+          </div>
           <div className="text-right">
             <div className="font-mono text-2xl font-extrabold">
               {invoice.currency} {(invoice.total_cents / 100).toLocaleString()}

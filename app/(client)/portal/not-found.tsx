@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 
 export default function PortalNotFound() {
   return (
-    <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+    <div className="flex min-h-[55dvh] flex-col items-center justify-center gap-4 px-6 py-16 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-muted/40">
         <FolderSearch className="h-6 w-6 text-primary" />
       </div>

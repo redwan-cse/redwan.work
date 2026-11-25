@@ -126,7 +126,7 @@ export function PanelShell({
   };
 
   const renderNavList = (onItemClick?: () => void) => (
-    <nav aria-label={role === 'admin' ? 'Admin navigation' : 'Client portal navigation'} className="flex-1 space-y-1 px-3 py-4">
+    <nav aria-label={role === 'admin' ? 'Admin navigation' : 'Client portal navigation'} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
       {navItems.map((item) => {
         const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;
         const active = isNavItemActive(item);
@@ -166,7 +166,7 @@ export function PanelShell({
   );
 
   return (
-    <div className="flex min-h-screen overflow-x-clip bg-background text-foreground">
+    <div className="flex min-h-dvh overflow-x-clip bg-background text-foreground">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-lg focus:outline-2 focus:outline-offset-2 focus:outline-ring"
@@ -399,14 +399,18 @@ export function PanelShell({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 p-4 pb-20 focus:outline-none sm:p-6 sm:pb-20 lg:p-8">
-          {children}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 p-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] focus:outline-none sm:p-6 sm:pb-[calc(5.25rem+env(safe-area-inset-bottom))] lg:p-8"
+        >
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
 
         {/* Sticky Mobile Bottom Navigation Bar */}
         <nav
           aria-label="Mobile quick navigation"
-          className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border/80 bg-card/95 px-1.5 py-1.5 backdrop-blur-md print:hidden lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around border-t border-border/80 bg-card/95 px-1.5 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))] backdrop-blur-md print:hidden lg:hidden"
         >
           {navItems.slice(0, 4).map((item) => {
             const Icon = ICON_MAP[item.icon] ?? LayoutDashboard;

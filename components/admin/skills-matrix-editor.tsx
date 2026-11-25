@@ -84,7 +84,7 @@ export function SkillsMatrixEditor({
         <Label className="text-xs font-semibold">
           Visual Technical Skills Matrix ({categories.length} categories)
         </Label>
-        <div className="flex items-center gap-1.5">
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           <Input
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
@@ -96,7 +96,7 @@ export function SkillsMatrixEditor({
             }}
             placeholder="New category (e.g. Cloud & DevSecOps)"
             aria-label="New technical skill category name"
-            className="h-8 w-56 text-xs"
+            className="h-8 min-w-0 flex-1 text-xs sm:w-56 sm:flex-initial"
           />
           <Button
             type="button"

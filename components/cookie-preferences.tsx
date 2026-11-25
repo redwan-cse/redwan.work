@@ -117,7 +117,7 @@ export function CookiePreferences() {
         const latest = readSavedConsentState();
         setExperienceEnabled(latest ? latest.experience : true);
         setAnalyticsEnabled(latest ? latest.analytics : true);
-        setExpanded(true);
+        setExpanded(window.innerWidth >= 640);
         setVisible(true);
       }, 450);
     }
@@ -308,7 +308,7 @@ export function CookiePreferences() {
             id="rw-privacy-storage-details"
             className="mt-4 space-y-3 border-t border-border/70 pt-3.5"
           >
-            <div className="max-h-[min(38vh,300px)] space-y-2.5 overflow-y-auto pr-1">
+            <div className="max-h-[min(38dvh,300px)] space-y-2.5 overflow-y-auto pr-1">
               {/* Essential Security & Auth */}
               <div className="rounded-xl border border-border/70 bg-background/70 p-3">
                 <div className="flex items-start justify-between gap-3">

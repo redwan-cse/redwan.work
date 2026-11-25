@@ -128,9 +128,58 @@ export default async function AdminInvoiceDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
+      {/* Formal Seller & Billed-To Letterhead for A4 Print */}
+      <Card className="hidden border-slate-300 bg-white shadow-none print:block">
+        <CardContent className="grid grid-cols-2 gap-6 p-5 text-xs">
+          <div className="space-y-1">
+            <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-primary">
+              Issued By (Seller)
+            </div>
+            <div className="text-sm font-bold">Md. Redwan Ahmed — redwan.work</div>
+            <div className="text-muted-foreground">Security Engineering &amp; Software Advisory</div>
+            <div className="font-mono text-[11px] text-muted-foreground">
+              contact@redwan.work · https://redwan.work
+            </div>
+          </div>
+
+          <div className="space-y-1 text-right">
+            <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Billed To ({invoice.code})
+            </div>
+            <div className="text-sm font-bold">{client?.full_name || client?.email}</div>
+            {clientBilling?.company_name && (
+              <div className="font-medium">{clientBilling.company_name}</div>
+            )}
+            {billingAddr.line1 && (
+              <div className="text-muted-foreground">
+                {[
+                  billingAddr.line1,
+                  billingAddr.line2,
+                  billingAddr.city,
+                  billingAddr.state,
+                  billingAddr.postal_code,
+                  billingAddr.country,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </div>
+            )}
+            {clientBilling?.tax_id && (
+              <div className="font-mono text-[11px] text-muted-foreground">
+                Tax / VAT ID: {clientBilling.tax_id}
+              </div>
+            )}
+            <div className="font-mono text-[11px] text-muted-foreground">
+              Issued: {invoice.issued_at ? new Date(invoice.issued_at).toLocaleDateString() : 'Draft'}
+              {invoice.due_at ? ` · Due: ${new Date(invoice.due_at).toLocaleDateString()}` : ''}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-12 print:block">
         {/* Statement Breakdown */}
-        <Card className="lg:col-span-7">
+        <Card className="lg:col-span-7 print:border-slate-300 print:shadow-none">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Statement Breakdown</CardTitle>
             {billingAddr.line1 && (
