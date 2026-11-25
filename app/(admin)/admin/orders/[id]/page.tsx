@@ -259,8 +259,9 @@ export default async function AdminOrderDetailPage({
             <input type="hidden" name="order_id" value={order.id} />
             <div className="flex flex-wrap items-end gap-3">
               <div className="space-y-1">
-                <Label className="text-[11px]">Order Status</Label>
+                <Label htmlFor="admin-order-status" className="text-[11px]">Order Status</Label>
                 <select
+                  id="admin-order-status"
                   name="status"
                   aria-label="Order lifecycle status"
                   defaultValue={order.status}
@@ -279,8 +280,9 @@ export default async function AdminOrderDetailPage({
                 </select>
               </div>
               <div className="space-y-1">
-                <Label className="text-[11px]">Progress %</Label>
+                <Label htmlFor="admin-order-progress" className="text-[11px]">Progress %</Label>
                 <Input
+                  id="admin-order-progress"
                   name="progress_percent"
                   type="number"
                   min="0"
@@ -361,8 +363,9 @@ export default async function AdminOrderDetailPage({
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1 sm:col-span-2">
-                      <Label className="text-xs">Deliverable Title *</Label>
+                      <Label htmlFor="dlv-title" className="text-xs">Deliverable Title *</Label>
                       <Input
+                        id="dlv-title"
                         name="title"
                         required
                         placeholder="VAPT Final Technical & Executive Report"
@@ -370,8 +373,9 @@ export default async function AdminOrderDetailPage({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Version</Label>
+                      <Label htmlFor="dlv-version" className="text-xs">Version</Label>
                       <Input
+                        id="dlv-version"
                         name="version_label"
                         defaultValue={`v1.${deliverables?.length ?? 0}`}
                         className="h-9 font-mono text-xs"
@@ -380,8 +384,9 @@ export default async function AdminOrderDetailPage({
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Release Notes / Remediation Summary</Label>
+                    <Label htmlFor="dlv-release-notes" className="text-xs">Release Notes / Remediation Summary</Label>
                     <Textarea
+                      id="dlv-release-notes"
                       name="release_notes"
                       rows={3}
                       placeholder="Summarize key findings, patches, or deployment instructions..."
@@ -396,12 +401,12 @@ export default async function AdminOrderDetailPage({
                     label="Upload Deliverable File to Encrypted Deliverables Vault"
                   />
 
-                  <label className="flex items-center gap-2 text-xs font-medium">
+                  <label className="flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
                     <input
                       type="checkbox"
                       name="is_final_delivery"
                       defaultChecked
-                      className="h-4 w-4 rounded border-border"
+                      className="h-6 w-6 shrink-0 rounded border-border accent-primary"
                     />
                     Mark as Final Delivery (Starts {order.auto_accept_days}-day client review timer)
                   </label>
@@ -831,12 +836,14 @@ export default async function AdminOrderDetailPage({
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Input
                     name="title"
+                    aria-label="New milestone title"
                     required
                     placeholder="New milestone title"
                     className="h-8 sm:col-span-2 text-xs"
                   />
                   <Input
                     name="amount_usd"
+                    aria-label="New milestone amount"
                     type="number"
                     min="0"
                     defaultValue="250"
@@ -927,16 +934,17 @@ export default async function AdminOrderDetailPage({
                 <input type="hidden" name="order_id" value={order.id} />
                 <Input
                   name="title"
+                  aria-label="New execution task title"
                   required
                   placeholder="Add execution task..."
                   className="h-8 min-w-[180px] flex-1 text-xs"
                 />
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
                     name="is_client_visible"
                     defaultChecked
-                    className="h-3.5 w-3.5 rounded"
+                    className="h-6 w-6 rounded border-border accent-primary"
                   />
                   Client-visible
                 </label>
@@ -970,8 +978,9 @@ export default async function AdminOrderDetailPage({
                 <input type="hidden" name="order_id" value={order.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Extra Revision Rounds *</Label>
+                    <Label htmlFor="rev-extra-rounds" className="text-xs">Extra Revision Rounds *</Label>
                     <Input
+                      id="rev-extra-rounds"
                       name="extra_revisions"
                       type="number"
                       min="1"
@@ -982,8 +991,9 @@ export default async function AdminOrderDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Addendum Fee ({order.currency}) *</Label>
+                    <Label htmlFor="rev-fee-major" className="text-xs">Addendum Fee ({order.currency}) *</Label>
                     <Input
+                      id="rev-fee-major"
                       name="fee_major"
                       type="number"
                       step="0.01"
@@ -995,8 +1005,9 @@ export default async function AdminOrderDetailPage({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Revision Scope Description *</Label>
+                  <Label htmlFor="rev-summary" className="text-xs">Revision Scope Description *</Label>
                   <Textarea
+                    id="rev-summary"
                     name="summary"
                     rows={3}
                     required

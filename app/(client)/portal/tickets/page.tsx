@@ -60,8 +60,9 @@ export default async function ClientTicketsPage() {
               className="space-y-3.5"
             >
               <div className="space-y-1">
-                <Label className="text-xs">Subject *</Label>
+                <Label htmlFor="ticket-subject" className="text-xs">Subject *</Label>
                 <Input
+                  id="ticket-subject"
                   name="subject"
                   required
                   placeholder="Need re-verification of patched API endpoint"
@@ -71,8 +72,9 @@ export default async function ClientTicketsPage() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col justify-end gap-1">
-                  <Label className="mb-auto text-xs">Priority</Label>
+                  <Label htmlFor="ticket-priority" className="mb-auto text-xs">Priority</Label>
                   <select
+                    id="ticket-priority"
                     name="priority"
                     aria-label="Ticket priority"
                     defaultValue="medium"
@@ -86,8 +88,9 @@ export default async function ClientTicketsPage() {
                 </div>
 
                 <div className="flex flex-col justify-end gap-1">
-                  <Label className="mb-auto text-xs">Category</Label>
+                  <Label htmlFor="ticket-category" className="mb-auto text-xs">Category</Label>
                   <select
+                    id="ticket-category"
                     name="category"
                     aria-label="Ticket category"
                     defaultValue="general"
@@ -104,8 +107,9 @@ export default async function ClientTicketsPage() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">Related Order (Optional)</Label>
+                <Label htmlFor="ticket-order" className="text-xs">Related Order (Optional)</Label>
                 <select
+                  id="ticket-order"
                   name="order_id"
                   aria-label="Related order"
                   defaultValue=""
@@ -121,8 +125,9 @@ export default async function ClientTicketsPage() {
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">Issue Details *</Label>
+                <Label htmlFor="ticket-body" className="text-xs">Issue Details *</Label>
                 <Textarea
+                  id="ticket-body"
                   name="body"
                   rows={4}
                   required

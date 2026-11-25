@@ -211,6 +211,7 @@ export default async function AdminOrdersPage({
         <input type="hidden" name="view" value={viewMode} />
         <Input
           name="q"
+          aria-label="Search orders by code, title, client, or pillar"
           defaultValue={params.q ?? ''}
           placeholder="Filter by ORD code, title, client, or pillar..."
           className="h-8 min-w-[200px] flex-1 text-xs"
@@ -257,8 +258,9 @@ export default async function AdminOrdersPage({
                 className="space-y-3"
               >
                 <div className="space-y-1">
-                  <Label className="text-xs">Client *</Label>
+                  <Label htmlFor="direct-order-client" className="text-xs">Client *</Label>
                   <select
+                    id="direct-order-client"
                     name="client_id"
                     aria-label="Order client"
                     required
@@ -274,8 +276,9 @@ export default async function AdminOrdersPage({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Order Title *</Label>
+                  <Label htmlFor="direct-order-title" className="text-xs">Order Title *</Label>
                   <Input
+                    id="direct-order-title"
                     name="title"
                     required
                     placeholder="Web & API Penetration Test (VAPT)"
@@ -285,8 +288,9 @@ export default async function AdminOrdersPage({
 
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Service Pillar</Label>
+                    <Label htmlFor="direct-order-pillar" className="text-xs">Service Pillar</Label>
                     <select
+                      id="direct-order-pillar"
                       name="pillar"
                       aria-label="Order service pillar"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
@@ -299,8 +303,9 @@ export default async function AdminOrdersPage({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Currency</Label>
+                    <Label htmlFor="direct-order-currency" className="text-xs">Currency</Label>
                     <select
+                      id="direct-order-currency"
                       name="currency"
                       aria-label="Order currency"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
@@ -315,22 +320,23 @@ export default async function AdminOrdersPage({
 
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Total *</Label>
-                    <Input name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="direct-order-total" className="text-xs">Total *</Label>
+                    <Input id="direct-order-total" name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Deposit %</Label>
-                    <Input name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="direct-order-deposit" className="text-xs">Deposit %</Label>
+                    <Input id="direct-order-deposit" name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Due Days</Label>
-                    <Input name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="direct-order-due" className="text-xs">Due Days</Label>
+                    <Input id="direct-order-due" name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Scope Summary</Label>
+                  <Label htmlFor="direct-order-desc" className="text-xs">Scope Summary</Label>
                   <Textarea
+                    id="direct-order-desc"
                     name="description"
                     rows={2}
                     placeholder="Key target environments, milestones, or SLA deliverables..."

@@ -22,13 +22,16 @@ export default async function AdminNewInvoicePage({
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/admin/billing"
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Billing Hub
-      </Link>
+      <div className="space-y-2">
+        <Link
+          href="/admin/billing"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Back to Billing Hub
+        </Link>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Create Multi-Line Invoice</h1>
+      </div>
 
       <MultiLineInvoiceComposer
         clients={clients ?? []}

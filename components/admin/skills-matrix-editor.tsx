@@ -145,9 +145,9 @@ export function SkillsMatrixEditor({
                     type="button"
                     onClick={() => removeSkill(cat.id, skill)}
                     aria-label={`Remove skill ${skill}`}
-                    className="rounded-full p-0.5 hover:text-destructive"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-full hover:text-destructive"
                   >
-                    <X className="h-2.5 w-2.5" />
+                    <X className="h-3 w-3" aria-hidden="true" />
                   </button>
                 </Badge>
               ))}

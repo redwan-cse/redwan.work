@@ -150,15 +150,15 @@ export default async function PortfolioCaseStudyPage({
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div>
-              <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Problem Statement
-              </h2>
+              </h3>
               <p className="leading-relaxed text-muted-foreground">{study.challenge}</p>
             </div>
             <div>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Execution Steps
-              </h2>
+              </h3>
               <ol className="list-decimal space-y-1.5 pl-4 text-muted-foreground">
                 {study.approach.map((step) => (
                   <li key={step}>{step}</li>
@@ -182,9 +182,9 @@ export default async function PortfolioCaseStudyPage({
               ))}
             </ul>
             <div>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Tools &amp; Technologies
-              </h2>
+              </h3>
               <div className="flex flex-wrap gap-1.5">
                 {study.stack.map((tech) => (
                   <Badge key={tech} variant="outline" className="font-mono text-xs">

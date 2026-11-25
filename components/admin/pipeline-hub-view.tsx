@@ -299,8 +299,9 @@ export async function PipelineHubView({
                 {prefill ? <input type="hidden" name="inquiry_id" value={prefill.id} /> : null}
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Portal Client (or auto-match by email)</Label>
+                  <Label htmlFor="prop-client-id" className="text-xs">Portal Client (or auto-match by email)</Label>
                   <select
+                    id="prop-client-id"
                     name="client_id"
                     aria-label="Portal client"
                     defaultValue={prefill?.converted_client_id ?? ''}
@@ -317,8 +318,9 @@ export async function PipelineHubView({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Recipient Name *</Label>
+                    <Label htmlFor="prop-recipient-name" className="text-xs">Recipient Name *</Label>
                     <Input
+                      id="prop-recipient-name"
                       name="recipient_name"
                       required
                       defaultValue={prefill?.name ?? ''}
@@ -327,8 +329,9 @@ export async function PipelineHubView({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Recipient Email *</Label>
+                    <Label htmlFor="prop-recipient-email" className="text-xs">Recipient Email *</Label>
                     <Input
+                      id="prop-recipient-email"
                       name="recipient_email"
                       type="email"
                       required
@@ -340,8 +343,9 @@ export async function PipelineHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Proposal Title *</Label>
+                  <Label htmlFor="prop-title" className="text-xs">Proposal Title *</Label>
                   <Input
+                    id="prop-title"
                     name="title"
                     required
                     defaultValue={
@@ -354,8 +358,9 @@ export async function PipelineHubView({
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="space-y-1">
-                    <Label className="text-xs">Pillar</Label>
+                    <Label htmlFor="prop-pillar" className="text-xs">Pillar</Label>
                     <select
+                      id="prop-pillar"
                       name="pillar"
                       aria-label="Service pillar"
                       defaultValue={prefill?.service_pillar ?? 'cybersecurity'}
@@ -369,8 +374,9 @@ export async function PipelineHubView({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Currency</Label>
+                    <Label htmlFor="prop-currency" className="text-xs">Currency</Label>
                     <select
+                      id="prop-currency"
                       name="currency"
                       aria-label="Proposal currency"
                       defaultValue="USD"
@@ -383,8 +389,9 @@ export async function PipelineHubView({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Total *</Label>
+                    <Label htmlFor="prop-total-usd" className="text-xs">Total *</Label>
                     <Input
+                      id="prop-total-usd"
                       name="total_usd"
                       aria-label="Proposal total in USD"
                       type="number"
@@ -395,8 +402,9 @@ export async function PipelineHubView({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Deposit %</Label>
+                    <Label htmlFor="prop-deposit-pct" className="text-xs">Deposit %</Label>
                     <Input
+                      id="prop-deposit-pct"
                       name="deposit_percent"
                       aria-label="Proposal deposit percentage"
                       type="number"
@@ -408,8 +416,9 @@ export async function PipelineHubView({
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Est. Delivery Days</Label>
+                    <Label htmlFor="prop-delivery-days" className="text-xs">Est. Delivery Days</Label>
                     <Input
+                      id="prop-delivery-days"
                       name="estimated_delivery_days"
                       aria-label="Estimated delivery days"
                       type="number"
@@ -417,7 +426,7 @@ export async function PipelineHubView({
                       className="h-9 font-mono text-xs"
                     />
                   </div>
-                  <label className="mt-5 flex items-center gap-2.5 text-xs font-medium">
+                  <label className="mt-5 flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
                     <input
                       type="checkbox"
                       name="requires_roe"
@@ -429,8 +438,9 @@ export async function PipelineHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Executive Summary *</Label>
+                  <Label htmlFor="prop-exec-summary" className="text-xs">Executive Summary *</Label>
                   <Textarea
+                    id="prop-exec-summary"
                     name="executive_summary"
                     required
                     rows={3}
@@ -441,8 +451,9 @@ export async function PipelineHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Deliverables / Scope Items (One per line)</Label>
+                  <Label htmlFor="prop-scope-items" className="text-xs">Deliverables / Scope Items (One per line)</Label>
                   <Textarea
+                    id="prop-scope-items"
                     name="scope_items"
                     rows={3}
                     placeholder="OWASP API Top 10 Manual Exploitation&#10;Executive PDF & CVSS v3.1 Matrix&#10;1x Retest Patch Verification"

@@ -9,7 +9,7 @@ export default function PortalNotFound() {
         <FolderSearch className="h-6 w-6 text-primary" />
       </div>
       <div className="space-y-1">
-        <h2 className="text-2xl font-bold tracking-tight">Resource not found</h2>
+        <h1 className="text-2xl font-bold tracking-tight">Resource not found</h1>
         <p className="max-w-md text-sm text-muted-foreground">
           This order, invoice, proposal, or support thread does not exist or belongs to a different account.
         </p>

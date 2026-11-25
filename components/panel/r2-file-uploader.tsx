@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { CheckCircle2, Loader2, UploadCloud } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ export function R2FileUploader({
   orderId?: string | null;
   label?: string;
 }) {
+  const inputId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -116,10 +117,11 @@ export function R2FileUploader({
 
   return (
     <div ref={containerRef} className="space-y-2">
-      <Label className="text-xs font-medium">{label}</Label>
+      <Label htmlFor={inputId} className="text-xs font-medium">{label}</Label>
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
-        <UploadCloud className="h-5 w-5 shrink-0 text-primary" />
+        <UploadCloud className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <Input
+          id={inputId}
           type="file"
           aria-label={label}
           onChange={handleFileChange}
@@ -129,16 +131,16 @@ export function R2FileUploader({
       </div>
 
       {status === 'uploading' && (
-        <p className="inline-flex items-center gap-1.5 font-mono text-xs text-primary">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <p role="status" className="inline-flex items-center gap-1.5 font-mono text-xs text-primary">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           Encrypting &amp; uploading to Secure Vault...
         </p>
       )}
 
       {status === 'done' && fileMeta && (
-        <div className="rounded-lg border border-primary/25 bg-primary/8 p-2.5 font-mono text-[11px] text-primary">
+        <div role="status" className="rounded-lg border border-primary/25 bg-primary/8 p-2.5 font-mono text-[11px] text-primary">
           <div className="flex items-center gap-1.5 font-semibold">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
             Uploaded: {fileMeta.filename} ({(fileMeta.sizeBytes / 1024).toFixed(1)} KB)
           </div>
           <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
@@ -148,7 +150,7 @@ export function R2FileUploader({
       )}
 
       {status === 'error' && (
-        <p className="text-xs text-destructive">{errorMsg}</p>
+        <p role="alert" className="text-xs text-destructive">{errorMsg}</p>
       )}
 
       <input type="hidden" name="r2_key" value={fileMeta?.r2Key ?? ''} />

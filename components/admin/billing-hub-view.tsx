@@ -196,8 +196,9 @@ export async function BillingHubView({
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="confirmed" />
                     <div className="flex items-center gap-1">
-                      <Label className="text-[11px] text-muted-foreground">FX→USD:</Label>
+                      <Label htmlFor={`pay-fx-${pay.id}`} className="text-[11px] text-muted-foreground">FX→USD:</Label>
                       <Input
+                        id={`pay-fx-${pay.id}`}
                         name="fx_rate"
                         aria-label="Exchange rate to USD"
                         type="number"
@@ -263,8 +264,9 @@ export async function BillingHubView({
                 className="space-y-3"
               >
                 <div className="space-y-1">
-                  <Label className="text-xs">Client *</Label>
+                  <Label htmlFor="quick-inv-client" className="text-xs">Client *</Label>
                   <select
+                    id="quick-inv-client"
                     name="client_id"
                     aria-label="Invoice client"
                     required
@@ -280,8 +282,9 @@ export async function BillingHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Link to Order (Optional)</Label>
+                  <Label htmlFor="quick-inv-order" className="text-xs">Link to Order (Optional)</Label>
                   <select
+                    id="quick-inv-order"
                     name="order_id"
                     aria-label="Linked order"
                     className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
@@ -296,8 +299,9 @@ export async function BillingHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Description *</Label>
+                  <Label htmlFor="quick-inv-desc" className="text-xs">Description *</Label>
                   <Input
+                    id="quick-inv-desc"
                     name="description"
                     required
                     placeholder="Milestone 2 Payment or Retainer Billing"
@@ -307,8 +311,9 @@ export async function BillingHubView({
 
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Currency</Label>
+                    <Label htmlFor="quick-inv-currency" className="text-xs">Currency</Label>
                     <select
+                      id="quick-inv-currency"
                       name="currency"
                       aria-label="Invoice currency"
                       className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
@@ -320,8 +325,9 @@ export async function BillingHubView({
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Amount *</Label>
+                    <Label htmlFor="quick-inv-amount" className="text-xs">Amount *</Label>
                     <Input
+                      id="quick-inv-amount"
                       name="amount_major"
                       aria-label="Invoice amount"
                       type="number"
@@ -332,8 +338,9 @@ export async function BillingHubView({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">FX→USD</Label>
+                    <Label htmlFor="quick-inv-fx" className="text-xs">FX→USD</Label>
                     <Input
+                      id="quick-inv-fx"
                       name="fx_rate_to_usd"
                       aria-label="Exchange rate to USD"
                       type="number"
@@ -346,8 +353,9 @@ export async function BillingHubView({
 
                 <div className="grid gap-2.5 sm:grid-cols-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Discount</Label>
+                    <Label htmlFor="quick-inv-discount" className="text-xs">Discount</Label>
                     <Input
+                      id="quick-inv-discount"
                       name="discount_major"
                       aria-label="Discount amount"
                       type="number"
@@ -357,8 +365,9 @@ export async function BillingHubView({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Tax bps</Label>
+                    <Label htmlFor="quick-inv-tax" className="text-xs">Tax bps</Label>
                     <Input
+                      id="quick-inv-tax"
                       name="tax_rate_bps"
                       aria-label="Tax rate in basis points"
                       type="number"
@@ -367,8 +376,9 @@ export async function BillingHubView({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Due Days</Label>
+                    <Label htmlFor="quick-inv-due" className="text-xs">Due Days</Label>
                     <Input
+                      id="quick-inv-due"
                       name="due_days"
                       aria-label="Due days"
                       type="number"
@@ -379,8 +389,8 @@ export async function BillingHubView({
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs">Invoice Notes</Label>
-                  <Textarea name="notes" rows={2} placeholder="Bank wire memo or Net-7 terms" className="text-xs" />
+                  <Label htmlFor="quick-inv-notes" className="text-xs">Invoice Notes</Label>
+                  <Textarea id="quick-inv-notes" name="notes" rows={2} placeholder="Bank wire memo or Net-7 terms" className="text-xs" />
                 </div>
 
                 <Button type="submit" className="w-full gap-1.5 rounded-full">
@@ -527,8 +537,9 @@ export async function BillingHubView({
                 className="space-y-3"
               >
                 <div className="space-y-1">
-                  <Label className="text-xs">Client *</Label>
+                  <Label htmlFor="ret-client" className="text-xs">Client *</Label>
                   <select
+                    id="ret-client"
                     name="client_id"
                     aria-label="Retainer client"
                     required
@@ -543,8 +554,9 @@ export async function BillingHubView({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Retainer Plan Title *</Label>
+                  <Label htmlFor="ret-title" className="text-xs">Retainer Plan Title *</Label>
                   <Input
+                    id="ret-title"
                     name="title"
                     aria-label="Retainer plan title"
                     required
@@ -554,12 +566,12 @@ export async function BillingHubView({
                 </div>
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Monthly Rate (USD)</Label>
-                    <Input name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="ret-usd" className="text-xs">Monthly Rate (USD)</Label>
+                    <Input id="ret-usd" name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-9 font-mono text-xs" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Hours / Month</Label>
-                    <Input name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-9 font-mono text-xs" />
+                    <Label htmlFor="ret-hours" className="text-xs">Hours / Month</Label>
+                    <Input id="ret-hours" name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-9 font-mono text-xs" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full gap-1.5 rounded-full">
@@ -611,10 +623,11 @@ export async function BillingHubView({
                       >
                         <input type="hidden" name="retainer_id" value={ret.id} />
                         <div className="space-y-1">
-                          <Label className="text-[11px]">
+                          <Label htmlFor={`ret-used-${ret.id}`} className="text-[11px]">
                             Hours Used ({ret.hours_per_month}h incl.)
                           </Label>
                           <Input
+                            id={`ret-used-${ret.id}`}
                             name="hours_used_current_period"
                             aria-label="Hours used in current period"
                             type="number"
@@ -624,8 +637,9 @@ export async function BillingHubView({
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-[11px]">Status</Label>
+                          <Label htmlFor={`ret-status-${ret.id}`} className="text-[11px]">Status</Label>
                           <select
+                            id={`ret-status-${ret.id}`}
                             name="status"
                             aria-label="Retainer status"
                             defaultValue={ret.status}

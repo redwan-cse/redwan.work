@@ -55,6 +55,7 @@ export function ProposalMilestonesEditor() {
           {rows.map((row, idx) => (
             <div key={idx} className="grid grid-cols-12 items-center gap-1.5">
               <Input
+                aria-label={`Milestone ${idx + 1} title`}
                 value={row.title}
                 onChange={(e) =>
                   setRows((prev) =>
@@ -65,6 +66,7 @@ export function ProposalMilestonesEditor() {
                 className="col-span-6 h-8 text-xs"
               />
               <Input
+                aria-label={`Milestone ${idx + 1} amount in USD`}
                 type="number"
                 value={row.amount_usd}
                 onChange={(e) =>
@@ -76,6 +78,7 @@ export function ProposalMilestonesEditor() {
                 className="col-span-3 h-8 font-mono text-xs"
               />
               <Input
+                aria-label={`Milestone ${idx + 1} due days offset`}
                 type="number"
                 value={row.due_days_offset}
                 onChange={(e) =>

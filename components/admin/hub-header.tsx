@@ -48,6 +48,7 @@ export function AdminHubHeader({
               <Link
                 key={tab.id}
                 href={tab.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
                   isActive

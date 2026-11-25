@@ -176,7 +176,14 @@ export default async function AdminRecoveryPage() {
                           {(used / (1024 * 1024)).toFixed(2)} MB ({pct}%)
                         </span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        role="progressbar"
+                        aria-label={`${client.full_name || client.email} vault storage quota usage`}
+                        aria-valuenow={pct}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                      >
                         <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                       </div>
                     </div>

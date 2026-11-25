@@ -76,15 +76,17 @@ export function BlogBrowser({
     currentPage === 1 && !query.trim() && selectedLabel === 'All' && filtered.length > 0;
   const featuredItem = showFeatured ? filtered[0] : null;
   const gridItems = showFeatured ? filtered.slice(1) : filtered;
+  const GridHeading = showFeatured ? 'h3' : 'h2';
 
   return (
     <div className="space-y-10">
       {/* Search & Label Filter Bar */}
       <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-card/60 p-4 backdrop-blur-sm sm:p-5">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <Input
             type="search"
+            aria-label="Search articles by title, security topic, or tag"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search articles by title, security topic, or tag..."
@@ -94,25 +96,26 @@ export function BlogBrowser({
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="absolute top-1/2 right-2.5 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label="Clear search"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
         </div>
 
         {allLabels.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter articles by topic">
             {allLabels.map((label) => {
               const active = selectedLabel === label;
               return (
                 <button
                   key={label}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => setSelectedLabel(label)}
                   className={cn(
-                    'relative rounded-full border px-3.5 py-1 text-xs font-medium transition-colors',
+                    'relative min-h-7 rounded-full border px-3.5 py-1 text-xs font-medium transition-colors',
                     active
                       ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                       : 'border-border/70 bg-background/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
@@ -276,7 +279,7 @@ export function BlogBrowser({
                       </span>
                     </div>
 
-                    <h3 className="line-clamp-2 text-lg font-bold leading-snug">
+                    <GridHeading className="line-clamp-2 text-lg font-bold leading-snug">
                       <button
                         type="button"
                         onClick={() => setPreviewItem(item)}
@@ -284,7 +287,7 @@ export function BlogBrowser({
                       >
                         {post.title}
                       </button>
-                    </h3>
+                    </GridHeading>
 
                     <p className="mt-2.5 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                       {excerpt}
@@ -325,7 +328,7 @@ export function BlogBrowser({
               <BookOpen className="h-8 w-8" />
             </div>
             <div className="max-w-md space-y-1.5">
-              <h3 className="text-xl font-bold">No Matching Articles</h3>
+              <h2 className="text-xl font-bold">No Matching Articles</h2>
               <p className="text-sm text-muted-foreground">
                 Try clearing your search filter or exploring another topic tag.
               </p>

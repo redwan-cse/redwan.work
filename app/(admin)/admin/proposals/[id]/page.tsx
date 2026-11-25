@@ -133,12 +133,13 @@ export default async function AdminProposalDetailPage({
               <input type="hidden" name="proposal_id" value={proposal.id} />
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">Title *</Label>
-                  <Input name="title" required defaultValue={proposal.title} className="h-9 text-xs" />
+                  <Label htmlFor="draft-prop-title" className="text-xs">Title *</Label>
+                  <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-9 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Currency</Label>
+                  <Label htmlFor="draft-prop-currency" className="text-xs">Currency</Label>
                   <select
+                    id="draft-prop-currency"
                     name="currency"
                     aria-label="Draft proposal currency"
                     defaultValue={proposal.currency}
@@ -151,8 +152,9 @@ export default async function AdminProposalDetailPage({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Total *</Label>
+                  <Label htmlFor="draft-prop-total" className="text-xs">Total *</Label>
                   <Input
+                    id="draft-prop-total"
                     name="total_major"
                     type="number"
                     min="1"
@@ -164,8 +166,9 @@ export default async function AdminProposalDetailPage({
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Dep %</Label>
+                    <Label htmlFor="draft-prop-deposit" className="text-xs">Dep %</Label>
                     <Input
+                      id="draft-prop-deposit"
                       name="deposit_percent"
                       type="number"
                       min="0"
@@ -175,8 +178,9 @@ export default async function AdminProposalDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Days</Label>
+                    <Label htmlFor="draft-prop-days" className="text-xs">Days</Label>
                     <Input
+                      id="draft-prop-days"
                       name="estimated_days"
                       type="number"
                       min="1"
@@ -188,8 +192,9 @@ export default async function AdminProposalDetailPage({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Executive Scope Summary *</Label>
+                  <Label htmlFor="draft-prop-scope" className="text-xs">Executive Scope Summary *</Label>
                   <Textarea
+                    id="draft-prop-scope"
                     name="scope_summary"
                     rows={3}
                     required
@@ -198,8 +203,9 @@ export default async function AdminProposalDetailPage({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Deliverables Summary</Label>
+                  <Label htmlFor="draft-prop-deliv" className="text-xs">Deliverables Summary</Label>
                   <Textarea
+                    id="draft-prop-deliv"
                     name="deliverables_summary"
                     rows={3}
                     defaultValue={proposal.deliverables_summary}
@@ -208,12 +214,12 @@ export default async function AdminProposalDetailPage({
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-xs font-medium">
+                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
                   <input
                     type="checkbox"
                     name="requires_roe"
                     defaultChecked={proposal.requires_roe}
-                    className="h-4 w-4 rounded accent-primary"
+                    className="h-6 w-6 rounded accent-primary"
                   />
                   Requires Signed Rules of Engagement (RoE)
                 </label>

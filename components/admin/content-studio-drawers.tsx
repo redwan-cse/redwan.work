@@ -239,8 +239,9 @@ export function ServicesStudioTable({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Service Title *</Label>
+                  <Label htmlFor="svc-title" className="text-xs">Service Title *</Label>
                   <Input
+                    id="svc-title"
                     name="title"
                     required
                     defaultValue={editing?.title ?? ''}
@@ -249,8 +250,9 @@ export function ServicesStudioTable({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">URL Slug *</Label>
+                  <Label htmlFor="svc-slug" className="text-xs">URL Slug *</Label>
                   <Input
+                    id="svc-slug"
                     name="slug"
                     required
                     defaultValue={editing?.slug ?? ''}
@@ -262,8 +264,9 @@ export function ServicesStudioTable({
 
               <div className="grid gap-3 sm:grid-cols-4">
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">Pillar *</Label>
+                  <Label htmlFor="svc-pillar" className="text-xs">Pillar *</Label>
                   <select
+                    id="svc-pillar"
                     name="pillar"
                     aria-label="Service or study pillar"
                     defaultValue={editing?.pillar ?? 'cybersecurity'}
@@ -277,8 +280,9 @@ export function ServicesStudioTable({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Starting USD</Label>
+                  <Label htmlFor="svc-starting-usd" className="text-xs">Starting USD</Label>
                   <Input
+                    id="svc-starting-usd"
                     name="starting_price_usd"
                     type="number"
                     min="10"
@@ -288,8 +292,9 @@ export function ServicesStudioTable({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Sort Order</Label>
+                  <Label htmlFor="svc-sort-order" className="text-xs">Sort Order</Label>
                   <Input
+                    id="svc-sort-order"
                     name="sort_order"
                     type="number"
                     defaultValue={editing?.sortOrder ?? (services.length + 1) * 10}
@@ -300,8 +305,9 @@ export function ServicesStudioTable({
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">Short Tagline *</Label>
+                  <Label htmlFor="svc-tagline" className="text-xs">Short Tagline *</Label>
                   <Input
+                    id="svc-tagline"
                     name="tagline"
                     required
                     defaultValue={editing?.tagline ?? ''}
@@ -310,8 +316,9 @@ export function ServicesStudioTable({
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   <div className="space-y-1">
-                    <Label className="text-xs">Min Days</Label>
+                    <Label htmlFor="svc-min-days" className="text-xs">Min Days</Label>
                     <Input
+                      id="svc-min-days"
                       name="delivery_days_min"
                       type="number"
                       defaultValue={editing?.deliveryDaysMin ?? 3}
@@ -319,8 +326,9 @@ export function ServicesStudioTable({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Max Days</Label>
+                    <Label htmlFor="svc-max-days" className="text-xs">Max Days</Label>
                     <Input
+                      id="svc-max-days"
                       name="delivery_days_max"
                       type="number"
                       defaultValue={editing?.deliveryDaysMax ?? 14}
@@ -331,8 +339,9 @@ export function ServicesStudioTable({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs">Tools Tags (Comma separated)</Label>
+                <Label htmlFor="svc-tools-tags" className="text-xs">Tools Tags (Comma separated)</Label>
                 <Input
+                  id="svc-tools-tags"
                   name="tools_tags"
                   defaultValue={(editing?.toolsTags ?? []).join(', ')}
                   placeholder="OWASP ASVS, Burp Suite Pro, Nuclei, Terraform"
@@ -342,8 +351,9 @@ export function ServicesStudioTable({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Detailed Description</Label>
+                  <Label htmlFor="svc-description" className="text-xs">Detailed Description</Label>
                   <Textarea
+                    id="svc-description"
                     name="description"
                     rows={3}
                     defaultValue={editing?.description ?? ''}
@@ -351,8 +361,9 @@ export function ServicesStudioTable({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Highlights (One per line)</Label>
+                  <Label htmlFor="svc-highlights" className="text-xs">Highlights (One per line)</Label>
                   <Textarea
+                    id="svc-highlights"
                     name="highlights"
                     rows={3}
                     defaultValue={(editing?.highlights ?? []).join('\n')}
@@ -437,8 +448,9 @@ export function ServicesStudioTable({
 
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label className="text-[11px]">Package Name</Label>
+                          <Label htmlFor={`pkg-name-${pkg.id}`} className="text-[11px]">Package Name</Label>
                           <Input
+                            id={`pkg-name-${pkg.id}`}
                             name="package_name"
                             defaultValue={pkg.package_name}
                             required
@@ -447,8 +459,9 @@ export function ServicesStudioTable({
                         </div>
                         <div className="grid grid-cols-2 gap-1.5">
                           <div className="space-y-1">
-                            <Label className="text-[11px]">Price (USD)</Label>
+                            <Label htmlFor={`pkg-price-${pkg.id}`} className="text-[11px]">Price (USD)</Label>
                             <Input
+                              id={`pkg-price-${pkg.id}`}
                               name="price_usd"
                               type="number"
                               defaultValue={Math.round(pkg.price_cents / 100)}
@@ -457,8 +470,9 @@ export function ServicesStudioTable({
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[11px]">Deposit %</Label>
+                            <Label htmlFor={`pkg-dep-${pkg.id}`} className="text-[11px]">Deposit %</Label>
                             <Input
+                              id={`pkg-dep-${pkg.id}`}
                               name="deposit_percent"
                               type="number"
                               min="0"
@@ -472,8 +486,9 @@ export function ServicesStudioTable({
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <Label className="text-[11px]">Delivery Days</Label>
+                          <Label htmlFor={`pkg-days-${pkg.id}`} className="text-[11px]">Delivery Days</Label>
                           <Input
+                            id={`pkg-days-${pkg.id}`}
                             name="delivery_days"
                             type="number"
                             defaultValue={pkg.delivery_days}
@@ -481,8 +496,9 @@ export function ServicesStudioTable({
                           />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-[11px]">Revisions Included</Label>
+                          <Label htmlFor={`pkg-rev-${pkg.id}`} className="text-[11px]">Revisions Included</Label>
                           <Input
+                            id={`pkg-rev-${pkg.id}`}
                             name="revisions_included"
                             type="number"
                             defaultValue={pkg.revisions_included}
@@ -492,13 +508,14 @@ export function ServicesStudioTable({
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-[11px]">Summary</Label>
-                        <Input name="summary" defaultValue={pkg.summary} required className="h-8 text-xs" />
+                        <Label htmlFor={`pkg-sum-${pkg.id}`} className="text-[11px]">Summary</Label>
+                        <Input id={`pkg-sum-${pkg.id}`} name="summary" defaultValue={pkg.summary} required className="h-8 text-xs" />
                       </div>
 
                       <div className="space-y-1">
-                        <Label className="text-[11px]">Features (One per line)</Label>
+                        <Label htmlFor={`pkg-feat-${pkg.id}`} className="text-[11px]">Features (One per line)</Label>
                         <Textarea
+                          id={`pkg-feat-${pkg.id}`}
                           name="features"
                           rows={2}
                           defaultValue={(pkg.features ?? []).join('\n')}
@@ -508,21 +525,21 @@ export function ServicesStudioTable({
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                         <div className="flex items-center gap-3 text-[11px]">
-                          <label className="flex items-center gap-1.5">
+                          <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
                             <input
                               type="checkbox"
                               name="is_popular"
                               defaultChecked={pkg.is_popular}
-                              className="h-3.5 w-3.5 rounded"
+                              className="h-6 w-6 rounded accent-primary"
                             />
                             Popular
                           </label>
-                          <label className="flex items-center gap-1.5">
+                          <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
                             <input
                               type="checkbox"
                               name="is_active"
                               defaultChecked={pkg.is_active}
-                              className="h-3.5 w-3.5 rounded"
+                              className="h-6 w-6 rounded accent-primary"
                             />
                             Active
                           </label>
@@ -556,19 +573,19 @@ export function ServicesStudioTable({
                       <option value="Enterprise">Enterprise</option>
                       <option value="Custom">Custom</option>
                     </select>
-                    <Input name="package_name" placeholder="Package Name *" required className="h-8 sm:col-span-2 text-xs" />
+                    <Input name="package_name" aria-label="New package name" placeholder="Package Name *" required className="h-8 sm:col-span-2 text-xs" />
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <Input name="price_usd" type="number" defaultValue={500} required placeholder="USD" className="h-8 font-mono text-xs" />
-                    <Input name="deposit_percent" type="number" defaultValue={50} placeholder="Dep %" className="h-8 font-mono text-xs" />
-                    <Input name="delivery_days" type="number" defaultValue={7} placeholder="Days" className="h-8 font-mono text-xs" />
-                    <Input name="revisions_included" type="number" defaultValue={2} placeholder="Rev" className="h-8 font-mono text-xs" />
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <Input name="price_usd" aria-label="New tier price in USD" type="number" defaultValue={500} required placeholder="USD" className="h-8 font-mono text-xs" />
+                    <Input name="deposit_percent" aria-label="New tier deposit percent" type="number" defaultValue={50} placeholder="Dep %" className="h-8 font-mono text-xs" />
+                    <Input name="delivery_days" aria-label="New tier delivery days" type="number" defaultValue={7} placeholder="Days" className="h-8 font-mono text-xs" />
+                    <Input name="revisions_included" aria-label="New tier revisions included" type="number" defaultValue={2} placeholder="Rev" className="h-8 font-mono text-xs" />
                   </div>
-                  <Input name="summary" placeholder="Short tier summary *" required className="h-8 text-xs" />
-                  <Textarea name="features" rows={2} placeholder="Features (one per line)" className="font-mono text-xs" />
+                  <Input name="summary" aria-label="New tier short summary" placeholder="Short tier summary *" required className="h-8 text-xs" />
+                  <Textarea name="features" aria-label="New tier features" rows={2} placeholder="Features (one per line)" className="font-mono text-xs" />
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-xs">
-                      <input type="checkbox" name="is_active" defaultChecked className="h-3.5 w-3.5 rounded" />
+                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs">
+                      <input type="checkbox" name="is_active" defaultChecked className="h-6 w-6 rounded accent-primary" />
                       Active tier
                     </label>
                     <Button type="submit" size="sm" className="h-8 rounded-full text-xs">
@@ -712,8 +729,9 @@ export function PortfolioStudioTable({
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label className="text-xs">Code *</Label>
+                <Label htmlFor="cs-code" className="text-xs">Code *</Label>
                 <Input
+                  id="cs-code"
                   name="code"
                   required
                   defaultValue={editing?.code ?? `CS-${101 + studies.length}`}
@@ -721,12 +739,13 @@ export function PortfolioStudioTable({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Year *</Label>
-                <Input name="year" required defaultValue={editing?.year ?? '2026'} className="h-9 font-mono text-xs" />
+                <Label htmlFor="cs-year" className="text-xs">Year *</Label>
+                <Input id="cs-year" name="year" required defaultValue={editing?.year ?? '2026'} className="h-9 font-mono text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Pillar *</Label>
+                <Label htmlFor="cs-pillar" className="text-xs">Pillar *</Label>
                 <select
+                  id="cs-pillar"
                   name="pillar"
                   aria-label="Case study pillar"
                   defaultValue={editing?.pillar ?? 'cybersecurity'}
@@ -743,30 +762,31 @@ export function PortfolioStudioTable({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Title *</Label>
-                <Input name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
+                <Label htmlFor="cs-title" className="text-xs">Title *</Label>
+                <Input id="cs-title" name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">URL Slug *</Label>
-                <Input name="slug" required defaultValue={editing?.slug ?? ''} className="h-9 font-mono text-xs" />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Client Sector *</Label>
-                <Input name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-9 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Headline Metric *</Label>
-                <Input name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-9 font-mono text-xs" />
+                <Label htmlFor="cs-slug" className="text-xs">URL Slug *</Label>
+                <Input id="cs-slug" name="slug" required defaultValue={editing?.slug ?? ''} className="h-9 font-mono text-xs" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Related Service Slug *</Label>
+                <Label htmlFor="cs-sector" className="text-xs">Client Sector *</Label>
+                <Input id="cs-sector" name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-9 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cs-metric" className="text-xs">Headline Metric *</Label>
+                <Input id="cs-metric" name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-9 font-mono text-xs" />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="cs-related-svc" className="text-xs">Related Service Slug *</Label>
                 <Input
+                  id="cs-related-svc"
                   name="related_service_slug"
                   required
                   defaultValue={editing?.relatedServiceSlug ?? 'vapt-penetration-testing'}
@@ -774,8 +794,9 @@ export function PortfolioStudioTable({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">External Reference / Repo URL</Label>
+                <Label htmlFor="cs-external-url" className="text-xs">External Reference / Repo URL</Label>
                 <Input
+                  id="cs-external-url"
                   name="external_url"
                   defaultValue={editing?.externalUrl ?? ''}
                   placeholder="https://github.com/..."
@@ -785,18 +806,19 @@ export function PortfolioStudioTable({
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Executive Summary *</Label>
-              <Textarea name="summary" rows={2} required defaultValue={editing?.summary ?? ''} className="text-xs" />
+              <Label htmlFor="cs-summary" className="text-xs">Executive Summary *</Label>
+              <Textarea id="cs-summary" name="summary" rows={2} required defaultValue={editing?.summary ?? ''} className="text-xs" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Challenge / Problem *</Label>
-                <Textarea name="challenge" rows={3} required defaultValue={editing?.challenge ?? ''} className="text-xs" />
+                <Label htmlFor="cs-challenge" className="text-xs">Challenge / Problem *</Label>
+                <Textarea id="cs-challenge" name="challenge" rows={3} required defaultValue={editing?.challenge ?? ''} className="text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Approach (One step per line)</Label>
+                <Label htmlFor="cs-approach" className="text-xs">Approach (One step per line)</Label>
                 <Textarea
+                  id="cs-approach"
                   name="approach"
                   rows={3}
                   defaultValue={(editing?.approach ?? []).join('\n')}
@@ -807,8 +829,9 @@ export function PortfolioStudioTable({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Verified Outcomes (One per line)</Label>
+                <Label htmlFor="cs-outcomes" className="text-xs">Verified Outcomes (One per line)</Label>
                 <Textarea
+                  id="cs-outcomes"
                   name="outcomes"
                   rows={3}
                   defaultValue={(editing?.outcomes ?? []).join('\n')}
@@ -816,8 +839,9 @@ export function PortfolioStudioTable({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Tech Stack (Comma separated)</Label>
+                <Label htmlFor="cs-stack" className="text-xs">Tech Stack (Comma separated)</Label>
                 <Textarea
+                  id="cs-stack"
                   name="stack"
                   rows={3}
                   defaultValue={(editing?.stack ?? []).join(', ')}
@@ -830,6 +854,7 @@ export function PortfolioStudioTable({
               <div className="flex flex-wrap items-center gap-4 text-xs">
                 <Input
                   name="sort_order"
+                  aria-label="Case study sort order"
                   type="number"
                   defaultValue={editing?.sortOrder ?? (studies.length + 1) * 10}
                   className="h-8 w-20 font-mono text-xs"
@@ -981,8 +1006,9 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Section *</Label>
+                <Label htmlFor="cv-section" className="text-xs">Section *</Label>
                 <select
+                  id="cv-section"
                   name="section"
                   aria-label="Resume section category"
                   defaultValue={editing?.section ?? 'experience'}
@@ -997,8 +1023,9 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                 </select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Period / Year Label</Label>
+                <Label htmlFor="cv-period" className="text-xs">Period / Year Label</Label>
                 <Input
+                  id="cv-period"
                   name="period"
                   defaultValue={editing?.period ?? ''}
                   placeholder="2025 – Present"
@@ -1008,45 +1035,46 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Title / Role / Degree / Paper *</Label>
-              <Input name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
+              <Label htmlFor="cv-title" className="text-xs">Title / Role / Degree / Paper *</Label>
+              <Input id="cv-title" name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Organization / Issuer</Label>
-                <Input name="organization" defaultValue={editing?.organization ?? ''} className="h-9 text-xs" />
+                <Label htmlFor="cv-org" className="text-xs">Organization / Issuer</Label>
+                <Input id="cv-org" name="organization" defaultValue={editing?.organization ?? ''} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Role Type</Label>
-                <Input name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-9 text-xs" />
+                <Label htmlFor="cv-role-type" className="text-xs">Role Type</Label>
+                <Input id="cv-role-type" name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-9 text-xs" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-xs">Location</Label>
-                <Input name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-9 text-xs" />
+                <Label htmlFor="cv-location" className="text-xs">Location</Label>
+                <Input id="cv-location" name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Badge Label</Label>
-                <Input name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-9 font-mono text-xs" />
+                <Label htmlFor="cv-badge" className="text-xs">Badge Label</Label>
+                <Input id="cv-badge" name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-9 font-mono text-xs" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Verification / DOI Link</Label>
-              <Input name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-9 font-mono text-xs" />
+              <Label htmlFor="cv-verify-url" className="text-xs">Verification / DOI Link</Label>
+              <Input id="cv-verify-url" name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-9 font-mono text-xs" />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Summary / Abstract Description</Label>
-              <Textarea name="description" rows={2} defaultValue={editing?.description ?? ''} className="text-xs" />
+              <Label htmlFor="cv-desc" className="text-xs">Summary / Abstract Description</Label>
+              <Textarea id="cv-desc" name="description" rows={2} defaultValue={editing?.description ?? ''} className="text-xs" />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Highlights / Bullets (One per line)</Label>
+              <Label htmlFor="cv-highlights" className="text-xs">Highlights / Bullets (One per line)</Label>
               <Textarea
+                id="cv-highlights"
                 name="highlights"
                 rows={3}
                 defaultValue={(editing?.highlights ?? []).join('\n')}
@@ -1058,6 +1086,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
               <div className="flex items-center gap-3 text-xs">
                 <Input
                   name="sort_order"
+                  aria-label="Resume entry sort order"
                   type="number"
                   defaultValue={editing?.sort_order ?? 10}
                   className="h-8 w-20 font-mono text-xs"

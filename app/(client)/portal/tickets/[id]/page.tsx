@@ -138,6 +138,7 @@ export default async function ClientTicketDetailPage({
             <input type="hidden" name="ticket_id" value={ticket.id} />
             <Textarea
               name="body"
+              aria-label="Ticket reply message"
               rows={3}
               required
               placeholder="Write a reply..."

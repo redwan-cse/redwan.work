@@ -91,7 +91,14 @@ export function AdminCommandPalette() {
         return;
       }
 
-      if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+      if (
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableTarget(event.target) ||
+        document.querySelector('[role="dialog"], [role="alertdialog"]')
+      ) {
         return;
       }
 
@@ -204,8 +211,14 @@ export function AdminCommandPalette() {
         </kbd>
       </Button>
 
-      <CommandDialog open={open} onOpenChange={handleOpenChange}>
+      <CommandDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title="Admin Workspace Command Palette"
+        description="Search orders, clients, invoices, tickets, or jump directly to admin hubs."
+      >
         <CommandInput
+          aria-label="Search orders, clients, invoices, tickets, or jump to hub"
           value={query}
           onValueChange={handleQueryChange}
           placeholder="Search orders, clients, invoices, tickets, or jump to hub..."

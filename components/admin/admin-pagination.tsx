@@ -62,7 +62,10 @@ export function AdminPagination({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
+    <nav
+      aria-label="Table pagination"
+      className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground"
+    >
       <span className="font-mono">
         Showing {startIndex + 1}–{endIndex} of {totalItems} · Page {page}/{totalPages}
       </span>
@@ -70,13 +73,13 @@ export function AdminPagination({
         {page > 1 ? (
           <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2.5 text-xs">
             <Link href={buildHref(page - 1)}>
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
               Prev
             </Link>
           </Button>
         ) : (
           <Button size="sm" variant="outline" disabled className="h-7 gap-1 px-2.5 text-xs">
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
             Prev
           </Button>
         )}
@@ -84,16 +87,16 @@ export function AdminPagination({
           <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2.5 text-xs">
             <Link href={buildHref(page + 1)}>
               Next
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
           </Button>
         ) : (
           <Button size="sm" variant="outline" disabled className="h-7 gap-1 px-2.5 text-xs">
             Next
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         )}
       </div>
-    </div>
+    </nav>
   );
 }

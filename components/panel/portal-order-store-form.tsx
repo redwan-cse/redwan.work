@@ -70,8 +70,9 @@ export function PortalOrderStoreClient({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label className="text-xs">Service Offering *</Label>
+              <Label htmlFor="store-service-slug" className="text-xs">Service Offering *</Label>
               <select
+                id="store-service-slug"
                 name="service_slug"
                 aria-label="Service category selection"
                 value={serviceSlug}
@@ -93,8 +94,9 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Package Selection (or Unselect for Custom Scope) *</Label>
+              <Label htmlFor="store-tier" className="text-xs">Package Selection (or Unselect for Custom Scope) *</Label>
               <select
+                id="store-tier"
                 name="tier"
                 aria-label="Package selection tier"
                 value={tier}
@@ -144,8 +146,9 @@ export function PortalOrderStoreClient({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[11px]">Custom Budget Offer (USD)</Label>
+                  <Label htmlFor="store-custom-budget" className="text-[11px]">Custom Budget Offer (USD)</Label>
                   <Input
+                    id="store-custom-budget"
                     name="custom_budget_usd"
                     type="number"
                     min={25}
@@ -157,8 +160,9 @@ export function PortalOrderStoreClient({
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[11px]">Desired Delivery (Days)</Label>
+                  <Label htmlFor="store-custom-days" className="text-[11px]">Desired Delivery (Days)</Label>
                   <Input
+                    id="store-custom-days"
                     name="custom_delivery_days"
                     type="number"
                     min={1}
@@ -171,8 +175,9 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Custom Project Title (Optional)</Label>
+              <Label htmlFor="store-custom-title" className="text-xs">Custom Project Title (Optional)</Label>
               <Input
+                id="store-custom-title"
                 name="title"
                 placeholder={
                   selectedService && selectedPkg
@@ -184,8 +189,9 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Project Requirements, Scope &amp; Deal Terms</Label>
+              <Label htmlFor="store-description" className="text-xs">Project Requirements, Scope &amp; Deal Terms</Label>
               <Textarea
+                id="store-description"
                 name="description"
                 rows={3}
                 defaultValue={initialRequirements}
@@ -195,8 +201,9 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Target Domains / Repos / Scope Notes</Label>
+              <Label htmlFor="store-scope-notes" className="text-xs">Target Domains / Repos / Scope Notes</Label>
               <Textarea
+                id="store-scope-notes"
                 name="target_scope_notes"
                 rows={3}
                 placeholder="List target URLs, APIs, cloud accounts, or repository links..."
@@ -204,13 +211,13 @@ export function PortalOrderStoreClient({
               />
             </div>
 
-            <label className="flex items-start gap-2.5 rounded-lg border border-border/80 bg-background/60 p-3 text-xs leading-relaxed text-muted-foreground">
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/80 bg-background/60 p-3 text-xs leading-relaxed text-muted-foreground">
               <input
                 type="checkbox"
                 name="consent_accepted"
                 value="true"
                 required={isCustomQuoteFlow}
-                className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                className="mt-0.5 h-6 w-6 shrink-0 rounded border-input accent-primary"
               />
               <span>
                 I agree to the active Data &amp; Privacy Policy for processing these scope details (required for custom quote requests).
@@ -261,7 +268,7 @@ export function PortalOrderStoreClient({
                   </span>
                 </div>
 
-                <h3 className="mt-2 text-base font-bold">{service.title}</h3>
+                <h2 className="mt-2 text-base font-bold">{service.title}</h2>
                 <p className="mt-1 text-xs text-muted-foreground">{service.description}</p>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -272,6 +279,7 @@ export function PortalOrderStoreClient({
                       <button
                         type="button"
                         key={pkg.tier}
+                        aria-pressed={isSelectedCard}
                         onClick={() => {
                           setServiceSlug(service.slug);
                           setTier(pkg.tier);

@@ -160,6 +160,7 @@ export async function OpsHubView({
           <form method="get" className="flex flex-wrap items-center gap-2">
             <Input
               name="q"
+              aria-label="Search audit log summary or action"
               defaultValue={qFilter}
               placeholder="Search summary/action..."
               className="h-8 w-44 text-xs"
