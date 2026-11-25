@@ -187,13 +187,19 @@ export function resolveCallbackOrigin(input: {
       const candidate = new URL(`${proto}://${rawHost}`);
       const hostname = candidate.hostname.toLowerCase();
       if (!candidate.username && !candidate.password) {
-        if (hostname === '127.0.0.1' || hostname === 'localhost') {
+        const allowLoopback =
+          process.env.NODE_ENV !== 'production' ||
+          process.env.TEST_ENVIRONMENT === 'isolated-ci' ||
+          (configured !== null &&
+            (configured.hostname === '127.0.0.1' || configured.hostname === 'localhost'));
+        if (allowLoopback && (hostname === '127.0.0.1' || hostname === 'localhost')) {
           return candidate.origin;
         }
         if (configured) {
           const base = configured.hostname.toLowerCase().replace(/^www\./, '');
           if (hostname === base || hostname === `www.${base}`) {
-            return `${configured.protocol}//${candidate.host}`;
+            const safePort = configured.port ? `:${configured.port}` : '';
+            return `${configured.protocol}//${hostname}${safePort}`;
           }
         }
       }

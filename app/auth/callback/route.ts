@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { consumeRateLimit } from '@/lib/security/rate-limit';
 import {
   resolveCallbackOrigin,
   sanitizeRelativeRedirectPath,
   shouldUseSecureCookies,
 } from '@/lib/security/safe-redirect';
+import { resolveTrustedIp } from '@/lib/security/trusted-ip';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +60,14 @@ function redirectWithCookies(
   return response;
 }
 
+function secureRedirect(url: URL | string): NextResponse {
+  const response = NextResponse.redirect(url);
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return response;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const origin = resolveCallbackOrigin({
@@ -75,7 +85,7 @@ export async function GET(request: NextRequest) {
 
   if (tokenHash && type) {
     if (type === 'recovery') {
-      return NextResponse.redirect(
+      return secureRedirect(
         new URL(`/reset-password?token_hash=${encodeURIComponent(tokenHash)}`, origin)
       );
     }
@@ -84,10 +94,15 @@ export async function GET(request: NextRequest) {
       inviteUrl.searchParams.set('token_hash', tokenHash);
       const email = searchParams.get('email');
       if (email) inviteUrl.searchParams.set('email', email);
-      return NextResponse.redirect(inviteUrl);
+      return secureRedirect(inviteUrl);
     }
     if (type === 'signup' || type === 'email') {
       try {
+        const ip = resolveTrustedIp(request.headers);
+        const allowed = await consumeRateLimit('auth-callback', ip, 30, 300);
+        if (!allowed) {
+          return secureRedirect(new URL('/login?verified=0', origin));
+        }
         const res = await runWithCallbackClient(request, (supabase) =>
           supabase.auth.verifyOtp({
             type: type as 'signup' | 'email',
@@ -95,38 +110,49 @@ export async function GET(request: NextRequest) {
           })
         );
         if (res.ok) {
-          return redirectWithCookies(next, origin, res.cookiesToSet);
+          const resp = redirectWithCookies(next, origin, res.cookiesToSet);
+          resp.headers.set('Cache-Control', 'private, no-store, max-age=0');
+          resp.headers.set('Referrer-Policy', 'no-referrer');
+          return resp;
         }
       } catch {
         // fall through to login notice
       }
-      return NextResponse.redirect(new URL('/login?verified=0', origin));
+      return secureRedirect(new URL('/login?verified=0', origin));
     }
     const loginUrl = new URL('/login', origin);
     loginUrl.searchParams.set('token_hash', tokenHash);
     loginUrl.searchParams.set('type', type);
     if (rawNext) loginUrl.searchParams.set('next', rawNext);
-    return NextResponse.redirect(loginUrl);
+    return secureRedirect(loginUrl);
   }
 
   if (code) {
     try {
+      const ip = resolveTrustedIp(request.headers);
+      const allowed = await consumeRateLimit('auth-callback', ip, 30, 300);
+      if (!allowed) {
+        return secureRedirect(new URL('/login', origin));
+      }
       const res = await runWithCallbackClient(request, (supabase) =>
         supabase.auth.exchangeCodeForSession(code)
       );
       if (res.ok) {
-        if (type === 'recovery') {
-          return redirectWithCookies('/reset-password?session=1', origin, res.cookiesToSet);
-        }
-        if (type === 'invite') {
-          return redirectWithCookies('/invite/accept?session=1', origin, res.cookiesToSet);
-        }
-        return redirectWithCookies(next, origin, res.cookiesToSet);
+        const dest =
+          type === 'recovery'
+            ? '/reset-password?session=1'
+            : type === 'invite'
+              ? '/invite/accept?session=1'
+              : next;
+        const resp = redirectWithCookies(dest, origin, res.cookiesToSet);
+        resp.headers.set('Cache-Control', 'private, no-store, max-age=0');
+        resp.headers.set('Referrer-Policy', 'no-referrer');
+        return resp;
       }
     } catch {
       // fall through to login error redirect
     }
   }
 
-  return NextResponse.redirect(new URL('/login', origin));
+  return secureRedirect(new URL('/login', origin));
 }

@@ -124,12 +124,22 @@ export async function drainEmailOutbox(
         payload: item.payload,
       });
 
+      const payloadObj =
+        item.payload && typeof item.payload === 'object' && !Array.isArray(item.payload)
+          ? (item.payload as Record<string, unknown>)
+          : null;
+      const retryNonce =
+        typeof payloadObj?._retryNonce === 'number' && Number.isInteger(payloadObj._retryNonce) && payloadObj._retryNonce > 0
+          ? payloadObj._retryNonce
+          : null;
+      const idempotencyKey = retryNonce ? `outbox-${item.id}-r${retryNonce}` : `outbox-${item.id}`;
+
       const response = await fetch(`${baseUrl}/emails`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'Idempotency-Key': `outbox-${item.id}`,
+          'Idempotency-Key': idempotencyKey,
         },
         body: JSON.stringify({
           from: fromEmail,

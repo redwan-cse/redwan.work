@@ -40,7 +40,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
     const secFetchMode = request.headers.get('sec-fetch-mode') ?? '';
     const reason = request.nextUrl.searchParams.get('reason');
     if (
-      secFetchSite === 'cross-site' ||
+      (secFetchSite && secFetchSite !== 'same-origin' && secFetchSite !== 'none') ||
       (secFetchDest && secFetchDest !== 'document') ||
       (secFetchMode && secFetchMode !== 'navigate') ||
       (reason !== 'deactivated' && reason !== 'session_invalid')
@@ -53,7 +53,13 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   }
 
   const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  // GET bounces only clear the local browser session (preventing subdomain/GET CSRF from
+  // terminating all other devices); explicit same-origin POST logout performs full signOut.
+  if (request.method === 'GET') {
+    await supabase.auth.signOut({ scope: 'local' });
+  } else {
+    await supabase.auth.signOut();
+  }
 
   const parsedReason = logoutReasonSchema.safeParse(request.nextUrl.searchParams.get('reason'));
   const reason = parsedReason.success ? parsedReason.data : null;

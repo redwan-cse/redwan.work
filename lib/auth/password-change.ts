@@ -115,8 +115,18 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
     if(revoked.error)return changedUnknown;
     // Refresh the retained session so its newly minted JWT has an iat >= tokens_valid_after
     // before advancing the account-wide cutoff that immediately invalidates other sessions' access tokens.
+    const beforeRefreshIat =
+      typeof before.data?.claims?.iat === 'number' && Number.isFinite(before.data.claims.iat)
+        ? Math.floor(before.data.claims.iat)
+        : 0;
     if (typeof original.auth.refreshSession === 'function') {
-      await original.auth.refreshSession().catch(() => undefined);
+      const refreshed = await original.auth.refreshSession().catch(() => ({
+        data: { session: null },
+        error: new Error('refresh_failed'),
+      }));
+      if (refreshed?.error) {
+        return changedUnknown;
+      }
     }
     // Scope others can suppress missing-session errors; local JWT claims are not liveness.
     // Require point-in-time Auth acceptance before the final original-session binding.
@@ -129,6 +139,9 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
       typeof retained.data?.claims?.iat === 'number' && Number.isFinite(retained.data.claims.iat)
         ? Math.floor(retained.data.claims.iat)
         : nowSec;
+    if (beforeRefreshIat > 0 && retainedIat < beforeRefreshIat) {
+      return changedUnknown;
+    }
     const cutoffSec = Math.min(nowSec, retainedIat);
     const { error: cutoffErr } = await getSupabaseAdmin()
       .from('profiles')

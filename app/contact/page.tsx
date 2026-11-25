@@ -119,7 +119,7 @@ export default async function Contact() {
                 <div className="mt-6 pt-2">
                   <Button asChild variant="outline" size="sm" className="w-full gap-1.5 rounded-full">
                     <Link
-                      href={`https://wa.me/${channels.whatsapp_number}`}
+                      href={`https://wa.me/${channels.whatsapp_number.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

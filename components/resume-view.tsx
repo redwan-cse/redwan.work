@@ -35,7 +35,7 @@ import {
 import { PrintableResume } from '@/components/printable-resume';
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL, SITE } from '@/lib/content/site';
 import type { ResumeItemRecord, SiteSettingsRecord } from '@/lib/cms/queries';
-import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 
 export function ResumeView({
   settings,
@@ -77,9 +77,10 @@ export function ResumeView({
     email: settings.email || 'contact@redwan.work',
     phone: settings.phone || '+88017-7638-7624',
     location: settings.location || 'Dhaka, BD',
-    linkedin: settings.linkedin_url || 'https://www.linkedin.com/in/redwancse',
-    github: settings.github_url || 'https://github.com/redwan-cse',
-    website: settings.website_url || 'https://redwan.work',
+    linkedin:
+      trySanitizeHttpUrl(settings.linkedin_url) ?? 'https://www.linkedin.com/in/redwancse',
+    github: trySanitizeHttpUrl(settings.github_url) ?? 'https://github.com/redwan-cse',
+    website: trySanitizeHttpUrl(settings.website_url) ?? 'https://redwan.work',
   };
 
   const vendorCertifications = items
@@ -88,7 +89,7 @@ export function ResumeView({
       name: i.title,
       issuer: i.organization,
       date: i.period ?? '',
-      verificationUrl: i.verification_url ?? undefined,
+      verificationUrl: trySanitizeHttpUrl(i.verification_url) ?? undefined,
     }));
 
   const professionalCertificates = items
@@ -97,7 +98,7 @@ export function ResumeView({
       name: i.title,
       issuer: i.organization,
       date: i.period ?? '',
-      verificationUrl: i.verification_url ?? undefined,
+      verificationUrl: trySanitizeHttpUrl(i.verification_url) ?? undefined,
     }));
 
   const researchItems = items.filter((i) => i.section === 'research');
@@ -126,12 +127,12 @@ export function ResumeView({
   const research = {
     journal: {
       title: journalResearch.title,
-      url: journalResearch.verification_url ?? '#',
+      url: trySanitizeHttpUrl(journalResearch.verification_url) ?? '',
       details: journalResearch.highlights,
     },
     conference: {
       title: conferenceResearch.title,
-      url: conferenceResearch.verification_url ?? '#',
+      url: trySanitizeHttpUrl(conferenceResearch.verification_url) ?? '',
       details: conferenceResearch.highlights,
     },
   };
@@ -175,7 +176,8 @@ export function ResumeView({
       ? settings.research_interests
       : ['Cyber Security', 'Machine Learning', 'Artificial Intelligence'];
   const summary = settings.executive_summary;
-  const configuredPdfUrl = (settings.resume_pdf_url || '/resume.pdf').trim();
+  const configuredPdfUrl =
+    trySanitizeHttpUrl(settings.resume_pdf_url, { allowRelative: true }) ?? '/resume.pdf';
   const resumeDownloadHref =
     configuredPdfUrl === '/resume.pdf' ? '/resume.pdf?download=1' : configuredPdfUrl;
 
@@ -708,21 +710,24 @@ export function ResumeView({
                         </Badge>
                       )}
                     </div>
-                    {pub.verification_url ? (
-                      <Link
-                        href={pub.verification_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group"
-                      >
-                        <h3 className="mb-3 flex items-center gap-2 text-base font-semibold group-hover:text-primary sm:text-lg">
-                          <span>{pub.title}</span>
-                          <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
-                        </h3>
-                      </Link>
-                    ) : (
-                      <h3 className="mb-3 text-base font-semibold sm:text-lg">{pub.title}</h3>
-                    )}
+                    {(() => {
+                      const pubHref = trySanitizeHttpUrl(pub.verification_url);
+                      return pubHref ? (
+                        <Link
+                          href={pubHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group"
+                        >
+                          <h3 className="mb-3 flex items-center gap-2 text-base font-semibold group-hover:text-primary sm:text-lg">
+                            <span>{pub.title}</span>
+                            <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
+                          </h3>
+                        </Link>
+                      ) : (
+                        <h3 className="mb-3 text-base font-semibold sm:text-lg">{pub.title}</h3>
+                      );
+                    })()}
                     <ul className="space-y-1.5 text-sm text-muted-foreground">
                       {pub.highlights.map((detail, index) => (
                         <li key={index} className="flex items-start gap-2">
@@ -886,9 +891,7 @@ export function ResumeView({
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   {references.map((refItem, index) => {
-                    const scholarHref = refItem.scholarUrl
-                      ? sanitizeHttpUrl(refItem.scholarUrl)
-                      : null;
+                    const scholarHref = trySanitizeHttpUrl(refItem.scholarUrl);
                     return (
                       <div
                         key={index}

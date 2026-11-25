@@ -1937,6 +1937,7 @@ export type Database = {
           currency: string
           current_period_end: string
           current_period_start: string
+          fx_rate_to_usd: number
           hours_per_month: number
           hours_used_current_period: number
           id: string
@@ -1955,6 +1956,7 @@ export type Database = {
           currency?: string
           current_period_end?: string
           current_period_start?: string
+          fx_rate_to_usd?: number
           hours_per_month?: number
           hours_used_current_period?: number
           id?: string
@@ -1973,6 +1975,7 @@ export type Database = {
           currency?: string
           current_period_end?: string
           current_period_start?: string
+          fx_rate_to_usd?: number
           hours_per_month?: number
           hours_used_current_period?: number
           id?: string
@@ -2539,6 +2542,7 @@ export type Database = {
           p_deposit_percent: number
           p_description?: string | null
           p_due_days: number
+          p_fx_rate_to_usd?: number
           p_pillar: Database["public"]["Enums"]["service_pillar"]
           p_requires_roe: boolean
           p_title: string
@@ -2654,6 +2658,26 @@ export type Database = {
           p_decision: string
           p_deliverable_id: string
           p_feedback?: string
+        }
+        Returns: Json
+      }
+      revoke_auth_user_sessions: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      sign_order_roe_atomic: {
+        Args: {
+          p_actor_id: string
+          p_authorized_targets: string[]
+          p_emergency_contact_name: string
+          p_emergency_contact_phone: string
+          p_excluded_systems?: string | null
+          p_order_id: string
+          p_signer_full_name: string
+          p_signer_ip_hash?: string | null
+          p_signer_title?: string | null
+          p_testing_window_end: string
+          p_testing_window_start: string
         }
         Returns: Json
       }

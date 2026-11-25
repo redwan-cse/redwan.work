@@ -184,8 +184,8 @@ export default async function AdminInvoiceDetailPage({
               </div>
               {invoice.currency !== 'USD' && Number(invoice.fx_rate_to_usd ?? 1) > 0 && (
                 <div className="flex justify-between text-[11px] text-muted-foreground">
-                  <span>Locked FX Rate:</span>
-                  <span>1 USD = {Number(invoice.fx_rate_to_usd).toFixed(4)} {invoice.currency}</span>
+                  <span>Locked FX Rate (to USD):</span>
+                  <span>1 {invoice.currency} = {Number(invoice.fx_rate_to_usd).toFixed(4)} USD</span>
                 </div>
               )}
               {invoice.credited_cents > 0 && (

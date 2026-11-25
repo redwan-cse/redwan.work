@@ -1,11 +1,13 @@
 'use server';
 
+import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
   deletePrivateObjects,
+  getPrivateObjectBytes,
   getPrivateObjectHeadBytes,
   isR2Configured,
   verifyStoredPortalObjectSize,
@@ -28,6 +30,7 @@ import { getPublicServicesCatalog } from '@/lib/cms/queries';
 import { parseFormBoolean } from '@/lib/forms/boolean';
 import { consumeRateLimit } from '@/lib/security/rate-limit';
 import { sanitizeHttpUrl } from '@/lib/security/safe-redirect';
+import { resolveTrustedIp } from '@/lib/security/trusted-ip';
 import {
   currencySchema,
   positiveFiniteFxRateSchema,
@@ -77,6 +80,40 @@ const ALLOWED_PAYMENT_METHODS = new Set<PaymentMethod>([
   'paypal',
   'manual',
 ]);
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_PG_INT_CENTS = 2147483647;
+
+async function awaitMutationWithRowCheck(
+  query: unknown,
+  missingMessage: string
+): Promise<void> {
+  const q = query as
+    | {
+        select?: (cols: string) => {
+          maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      }
+    | Promise<{ error: { message: string } | null }>;
+
+  if (q && typeof (q as { select?: unknown }).select === 'function') {
+    const { data, error } = await (
+      q as {
+        select: (cols: string) => {
+          maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      }
+    )
+      .select('id')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error(missingMessage);
+    return;
+  }
+
+  const res = (await (q as Promise<{ error?: { message: string } | null }>)) ?? {};
+  if (res.error) throw new Error(res.error.message);
+}
 
 async function requireAdminSession() {
   const session = await getCurrentSession();
@@ -163,7 +200,6 @@ async function registerVaultAttachmentFromForm(
   const filename = String(opts.formData.get('filename') ?? '').trim();
   const providedMime = String(opts.formData.get('mime') ?? '').trim();
   const sizeBytes = Number(opts.formData.get('size_bytes') ?? 0);
-  const sha256Checksum = String(opts.formData.get('sha256_checksum') ?? '').trim() || null;
 
   if (!r2Key || !filename || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
     return null;
@@ -179,14 +215,23 @@ async function registerVaultAttachmentFromForm(
   if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
     throw new Error('Invalid vault attachment storage prefix.');
   }
+  let verifiedSha256: string | null = null;
   if (isR2Configured()) {
     const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
     if (!okSize) {
       throw new Error('Uploaded attachment could not be verified in private storage.');
     }
-    const headBytes = await getPrivateObjectHeadBytes(r2Key, 64);
-    if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
-      throw new Error('Uploaded attachment signature does not match its declared file type.');
+    if (sizeBytes <= 10 * 1024 * 1024) {
+      const objectBytes = await getPrivateObjectBytes(r2Key);
+      if (!validateMagicBytes(objectBytes, resolvedMime)) {
+        throw new Error('Uploaded attachment signature does not match its declared file type.');
+      }
+      verifiedSha256 = createHash('sha256').update(objectBytes).digest('hex');
+    } else {
+      const headBytes = await getPrivateObjectHeadBytes(r2Key, 64);
+      if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
+        throw new Error('Uploaded attachment signature does not match its declared file type.');
+      }
     }
   }
 
@@ -203,7 +248,7 @@ async function registerVaultAttachmentFromForm(
       filename,
       mime_type: resolvedMime,
       size_bytes: Math.round(sizeBytes),
-      sha256_checksum: sha256Checksum,
+      sha256_checksum: verifiedSha256,
       retention_until: retentionUntil,
       uploaded_by: opts.uploadedBy,
     })
@@ -469,6 +514,14 @@ export async function createProposalAction(formData: FormData): Promise<void> {
           tier: 'standard',
           acquisition_source: inquiryId ? 'contact_inquiry' : 'proposal_invite',
         });
+        await admin.from('client_invitations').insert({
+          email: recipientEmail,
+          full_name: recipientName || null,
+          tier: 'standard',
+          invited_by: session.userId,
+          accepted_user_id: clientId,
+          status: 'pending',
+        });
       }
     } catch {
       // fall through to explicit check below
@@ -608,6 +661,17 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const rawCurrency = String(formData.get('currency') ?? 'USD').trim().toUpperCase();
   const currency =
     rawCurrency === 'BDT' || rawCurrency === 'EUR' || rawCurrency === 'GBP' ? rawCurrency : 'USD';
+  const rawFxInput = formData.get('fx_rate_to_usd');
+  const parsedFx =
+    currency === 'USD'
+      ? { success: true as const, data: 1 }
+      : rawFxInput !== null && String(rawFxInput).trim() !== ''
+        ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
+        : { success: true as const, data: 1 };
+  if (!parsedFx.success) {
+    throw new Error('FX rate to USD must be a positive finite number.');
+  }
+  const fxRate = parsedFx.data;
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Math.min(100, Math.max(0, Math.round(Number(formData.get('deposit_percent') ?? 50))));
   const requiresRoe = parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
@@ -629,6 +693,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
     p_requires_roe: requiresRoe,
     p_due_days: dueDays,
     p_currency: currency,
+    p_fx_rate_to_usd: fxRate,
   });
 
   if (rpcErr) {
@@ -1260,21 +1325,39 @@ export async function toggleClientActiveStatusAction(formData: FormData): Promis
   if (!clientId) return;
 
   const admin = getSupabaseAdmin();
+  const nowIso = new Date().toISOString();
   const { error } = await admin
     .from('profiles')
-    .update({ is_active: nextActive })
+    .update({ is_active: nextActive, tokens_valid_after: nowIso })
     .eq('id', clientId)
     .eq('role', 'client');
   if (error) throw new Error(error.message);
 
+  try {
+    const authAdmin = admin.auth?.admin as
+      | {
+          updateUserById?: (
+            id: string,
+            attributes: { ban_duration?: string }
+          ) => Promise<unknown>;
+        }
+      | undefined;
+    if (typeof authAdmin?.updateUserById === 'function') {
+      await authAdmin
+        .updateUserById(clientId, { ban_duration: nextActive ? 'none' : '876000h' })
+        .catch(() => undefined);
+    }
+  } catch {
+    // Non-fatal if GoTrue admin ban API is unavailable in unit mocks
+  }
+
   if (!nextActive) {
     try {
-      const authAdmin = admin.auth?.admin as { signOut?: (jwtOrUid: string) => Promise<unknown> } | undefined;
-      if (typeof authAdmin?.signOut === 'function') {
-        await authAdmin.signOut(clientId).catch(() => undefined);
+      if (typeof admin.rpc === 'function') {
+        await admin.rpc('revoke_auth_user_sessions', { p_user_id: clientId });
       }
     } catch {
-      // Non-fatal if signOut admin API is unavailable
+      // Non-fatal in unit mocks without RPC handler
     }
 
     const clientEmail = await lookupProfileEmail(clientId);
@@ -1717,6 +1800,7 @@ export async function acceptProposalClientAction(formData: FormData): Promise<vo
 
 export async function placePortalPackageOrderAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const serviceSlug = String(formData.get('service_slug') ?? '').trim();
   const tier = String(formData.get('tier') ?? 'standard').trim().toLowerCase();
   const projectTitle = String(formData.get('title') ?? '').trim();
@@ -1807,6 +1891,12 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
     );
     if (consentCtrlErr || !activeConsentVersion || !activeConsentPolicy?.hash) {
       throw new Error('Could not verify active privacy consent policy. Please retry shortly.');
+    }
+    const submittedConsentVersion = String(formData.get('consent_policy_version') ?? '').trim();
+    if (submittedConsentVersion && submittedConsentVersion !== activeConsentVersion) {
+      throw new Error(
+        'The privacy consent policy has been updated. Please refresh the page and re-accept the current policy.'
+      );
     }
 
     const { data: inquiry, error: inqErr } = await admin
@@ -1992,6 +2082,7 @@ export async function placePortalPackageOrderAction(formData: FormData): Promise
 
 export async function submitOrderRequirementsAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const orderId = String(formData.get('order_id') ?? '').trim();
   const targetScopeNotes = String(formData.get('target_scope_notes') ?? '').trim();
   const accessInstructions = String(formData.get('access_instructions') ?? '').trim();
@@ -2008,6 +2099,9 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
   if (!order || order.client_id !== session.userId) {
     throw new Error('Forbidden.');
   }
+  if (order.status === 'cancelled' || order.status === 'completed') {
+    throw new Error(`Order is ${order.status} and requirements can no longer be edited.`);
+  }
 
   const { data: existingReq } = await admin
     .from('order_requirements')
@@ -2019,18 +2113,36 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
     throw new Error('Verified order requirements are locked and cannot be edited.');
   }
 
-  const { error: reqErr } = await admin.from('order_requirements').upsert(
-    {
+  const nowIso = new Date().toISOString();
+  if (existingReq?.id) {
+    const { data: updatedReq, error: reqErr } = await admin
+      .from('order_requirements')
+      .update({
+        target_scope_notes: targetScopeNotes,
+        access_instructions: accessInstructions,
+        updated_at: nowIso,
+      })
+      .eq('id', existingReq.id)
+      .is('verified_by_admin_at', null)
+      .select('id')
+      .maybeSingle();
+    if (reqErr) {
+      throw new Error(reqErr.message);
+    }
+    if (!updatedReq) {
+      throw new Error('Verified order requirements are locked and cannot be edited.');
+    }
+  } else {
+    const { error: reqErr } = await admin.from('order_requirements').insert({
       order_id: orderId,
       client_id: session.userId,
       target_scope_notes: targetScopeNotes,
       access_instructions: accessInstructions,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'order_id' }
-  );
-  if (reqErr) {
-    throw new Error(reqErr.message);
+      updated_at: nowIso,
+    });
+    if (reqErr) {
+      throw new Error(reqErr.message);
+    }
   }
 
   if (order.status === 'pending_requirements') {
@@ -2069,6 +2181,7 @@ export async function submitOrderRequirementsAction(formData: FormData): Promise
 
 export async function signOrderRoeAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const orderId = String(formData.get('order_id') ?? '').trim();
   const targetsRaw = String(formData.get('authorized_targets') ?? '').trim();
   const excludedSystems = String(formData.get('excluded_systems') ?? '').trim() || null;
@@ -2110,6 +2223,9 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
   if (!order || order.client_id !== session.userId) {
     throw new Error('Forbidden.');
   }
+  if (order.status === 'cancelled' || order.status === 'completed') {
+    throw new Error(`Order is ${order.status} and cannot accept a Rules of Engagement signature.`);
+  }
 
   if (order.roe_signed_at) {
     throw new Error('Rules of Engagement have already been signed for this engagement.');
@@ -2128,50 +2244,36 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
       : parsedEnd.toISOString();
 
   let signerIpHash: string | null = null;
+  const ipSalt = process.env.LEAD_IP_HASH_SALT?.trim();
+  if (!ipSalt && process.env.NODE_ENV === 'production' && process.env.TEST_ENVIRONMENT !== 'isolated-ci') {
+    throw new Error('Server security configuration incomplete (LEAD_IP_HASH_SALT).');
+  }
   try {
     const { headers } = await import('next/headers');
-    const { createHash } = await import('node:crypto');
     const hdrs = await headers();
-    const rawIp =
-      hdrs.get('cf-connecting-ip') ||
-      hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      hdrs.get('x-real-ip') ||
-      'unknown';
+    const rawIp = resolveTrustedIp(hdrs);
     signerIpHash = createHash('sha256')
-      .update(`${process.env.LEAD_IP_HASH_SALT ?? 'redwan-roe'}:${rawIp}`)
+      .update(`${ipSalt || 'dev-roe-salt'}:${rawIp}`)
       .digest('hex');
   } catch {
     signerIpHash = null;
   }
 
-  const { error: roeErr } = await admin.from('engagement_authorizations').insert({
-    order_id: orderId,
-    client_id: session.userId,
-    authorized_targets: authorizedTargets,
-    excluded_systems: excludedSystems,
-    testing_window_start: startIso,
-    testing_window_end: endIso,
-    emergency_contact_name: emergencyName,
-    emergency_contact_phone: emergencyPhone,
-    signer_full_name: signerFullName,
-    signer_title: signerTitle,
-    signer_ip_hash: signerIpHash,
-    ownership_attested: true,
-    signed_at: nowIso,
+  const { error: roeRpcErr } = await admin.rpc('sign_order_roe_atomic', {
+    p_order_id: orderId,
+    p_actor_id: session.userId,
+    p_authorized_targets: authorizedTargets,
+    p_excluded_systems: excludedSystems,
+    p_testing_window_start: startIso,
+    p_testing_window_end: endIso,
+    p_emergency_contact_name: emergencyName,
+    p_emergency_contact_phone: emergencyPhone,
+    p_signer_full_name: signerFullName,
+    p_signer_title: signerTitle,
+    p_signer_ip_hash: signerIpHash,
   });
-  if (roeErr) {
-    throw new Error(roeErr.message);
-  }
-
-  const { error: orderErr } = await admin
-    .from('orders')
-    .update({
-      roe_signed_at: nowIso,
-      status: order.status === 'pending_requirements' ? 'in_progress' : order.status,
-    })
-    .eq('id', orderId);
-  if (orderErr) {
-    throw new Error(orderErr.message);
+  if (roeRpcErr) {
+    throw new Error(roeRpcErr.message);
   }
 
   await notifyAllAdmins({
@@ -2199,6 +2301,7 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
 
 export async function reviewDeliverableClientAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const deliverableId = String(formData.get('deliverable_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
   const decision = String(formData.get('decision') ?? '').trim();
@@ -2269,6 +2372,7 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
 
 export async function submitInvoicePaymentProofAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const invoiceId = String(formData.get('invoice_id') ?? '').trim();
   const rawMethod = (String(formData.get('method') ?? 'bank_transfer').trim() ||
     'bank_transfer') as PaymentMethod;
@@ -2282,12 +2386,10 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   const filename = String(formData.get('filename') ?? '').trim();
   const providedMime = String(formData.get('mime') || formData.get('mime_type') || '').trim();
   const sizeBytes = Number(formData.get('size_bytes') ?? 0);
-  const declaredSha256 = String(formData.get('sha256_checksum') ?? '').trim().toLowerCase() || null;
 
   if (!invoiceId || !reference || amountMajor <= 0) return;
 
   const { PORTAL_ALLOWED, extFromFilename, isAllowedMime, resolveMimeType, validateMagicBytes } = await import('@/lib/mime');
-  const { createHash } = await import('node:crypto');
 
   if (r2Key && filename) {
     const proofExt = extFromFilename(filename);
@@ -2341,15 +2443,13 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     if (!r2Key.startsWith(expectedPrefix) || r2Key.includes('..')) {
       throw new Error('Invalid payment proof storage key prefix.');
     }
-    let verifiedSha256: string | null =
-      declaredSha256 && /^[a-f0-9]{64}$/.test(declaredSha256) ? declaredSha256 : null;
+    let verifiedSha256: string | null = null;
     if (isR2Configured()) {
       const okSize = await verifyStoredPortalObjectSize(r2Key, sizeBytes);
       if (!okSize) {
         throw new Error('Uploaded payment proof object could not be verified in private storage.');
       }
       if (sizeBytes <= 10 * 1024 * 1024) {
-        const { getPrivateObjectBytes } = await import('@/lib/r2');
         const proofBytes = await getPrivateObjectBytes(r2Key);
         if (!validateMagicBytes(proofBytes, resolvedProofMime)) {
           throw new Error('Uploaded payment proof file signature does not match its declared MIME type.');
@@ -2458,6 +2558,7 @@ const ALLOWED_TICKET_CATEGORIES = new Set([
 
 export async function createClientTicketAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const subject = String(formData.get('subject') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
   const rawPriority = String(formData.get('priority') ?? 'medium').trim();
@@ -2560,6 +2661,7 @@ export async function createClientTicketAction(formData: FormData): Promise<void
 
 export async function submitClientReviewAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const orderId = String(formData.get('order_id') ?? '').trim();
   const rawRating = Number(formData.get('rating_overall') ?? 5);
   if (!Number.isFinite(rawRating)) {
@@ -2628,6 +2730,7 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
 
 export async function updateClientProfileAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const fullName = String(formData.get('full_name') ?? '').trim();
   const phoneE164 = String(formData.get('phone_e164') ?? '').trim() || null;
   const timezone = String(formData.get('timezone') ?? 'UTC').trim() || 'UTC';
@@ -2716,12 +2819,14 @@ export async function sendDraftProposalAction(formData: FormData): Promise<void>
     throw new Error(`Only draft proposals can be sent (current status: ${proposal.status}).`);
   }
 
-  const { error: updErr } = await admin
-    .from('proposals')
-    .update({ status: 'sent' })
-    .eq('id', proposalId)
-    .eq('status', 'draft');
-  if (updErr) throw new Error(updErr.message);
+  await awaitMutationWithRowCheck(
+    admin
+      .from('proposals')
+      .update({ status: 'sent' })
+      .eq('id', proposalId)
+      .eq('status', 'draft'),
+    'Proposal is no longer in draft state and cannot be sent.'
+  );
 
   if (proposal.client_id) {
     await createInAppNotification({
@@ -3212,6 +3317,7 @@ export async function createPaidRevisionInvoiceAction(formData: FormData): Promi
 
 export async function declineProposalClientAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
   const reason = String(formData.get('decline_reason') ?? formData.get('reason') ?? '').trim() || null;
   if (!proposalId) return;
@@ -3251,6 +3357,7 @@ export async function declineProposalClientAction(formData: FormData): Promise<v
 
 export async function acceptOrderNdaAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const orderId = String(formData.get('order_id') ?? '').trim();
   if (!orderId) return;
 
@@ -3282,6 +3389,7 @@ export async function acceptOrderNdaAction(formData: FormData): Promise<void> {
 
 export async function submitCancellationRequestAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const orderId = String(formData.get('order_id') ?? '').trim();
   const reason = String(formData.get('reason') ?? '').trim();
   if (!orderId || reason.length < 5) {
@@ -3312,7 +3420,12 @@ export async function submitCancellationRequestAction(formData: FormData): Promi
     })
     .select('id')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      throw new Error('A pending cancellation request already exists for this order.');
+    }
+    throw new Error(error.message);
+  }
 
   await notifyAllAdmins({
     category: 'order',
@@ -3710,13 +3823,16 @@ export async function toggleOrderRequirementsLockAction(formData: FormData): Pro
 
 export async function attachOrderRequirementFileAction(formData: FormData): Promise<void> {
   const session = await requireAuthenticatedSession();
+  if (session.role !== 'admin') {
+    await enforceClientMutationRateLimit(session.userId);
+  }
   const orderId = String(formData.get('order_id') ?? '').trim();
   if (!orderId) return;
 
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
     .from('orders')
-    .select('client_id, code')
+    .select('client_id, code, status')
     .eq('id', orderId)
     .maybeSingle();
   if (!order) throw new Error('Order not found.');
@@ -3725,6 +3841,9 @@ export async function attachOrderRequirementFileAction(formData: FormData): Prom
   }
 
   if (session.role !== 'admin') {
+    if (order.status === 'cancelled' || order.status === 'completed') {
+      throw new Error(`Order is ${order.status} and cannot receive new requirement uploads.`);
+    }
     const { data: req } = await admin
       .from('order_requirements')
       .select('verified_by_admin_at')
@@ -3925,16 +4044,22 @@ export async function updateDraftProposalAction(formData: FormData): Promise<voi
   const estimatedDays = Math.max(1, Math.round(Number(formData.get('estimated_days') ?? 7)));
   const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
   const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
+  const rawFxInput = formData.get('fx_rate_to_usd');
   const requiresRoe = parseFormBoolean(formData, 'requires_roe');
 
   if (!proposalId || !title || !scopeSummary || !Number.isFinite(totalMajor) || totalMajor <= 0) {
     throw new Error('Title, executive scope summary, and a positive total are required.');
   }
 
+  const totalCents = Math.round(totalMajor * 100);
+  if (totalCents <= 0 || totalCents > MAX_PG_INT_CENTS) {
+    throw new Error('Proposal total is out of supported currency range.');
+  }
+
   const admin = getSupabaseAdmin();
   const { data: existing } = await admin
     .from('proposals')
-    .select('id, code, status, client_id')
+    .select('id, code, status, client_id, pillar, fx_rate_to_usd')
     .eq('id', proposalId)
     .maybeSingle();
 
@@ -3943,23 +4068,36 @@ export async function updateDraftProposalAction(formData: FormData): Promise<voi
     throw new Error(`Only draft proposals can be edited (current status: ${existing.status}).`);
   }
 
-  const totalCents = Math.round(totalMajor * 100);
-  const { error } = await admin
-    .from('proposals')
-    .update({
-      title,
-      scope_summary: scopeSummary,
-      deliverables_summary: deliverablesSummary || scopeSummary,
-      currency,
-      subtotal_cents: totalCents,
-      total_cents: totalCents,
-      deposit_percent: depositPercent,
-      estimated_days: estimatedDays,
-      requires_roe: requiresRoe,
-    })
-    .eq('id', proposalId)
-    .eq('status', 'draft');
-  if (error) throw new Error(error.message);
+  let fxRate = currency === 'USD' ? 1 : Number(existing.fx_rate_to_usd ?? 1);
+  if (currency !== 'USD' && rawFxInput !== null && String(rawFxInput).trim() !== '') {
+    const parsedFx = positiveFiniteFxRateSchema.safeParse(Number(rawFxInput));
+    if (!parsedFx.success) {
+      throw new Error('FX rate to USD must be a positive finite number.');
+    }
+    fxRate = parsedFx.data;
+  }
+
+  const effectiveRequiresRoe = requiresRoe || existing.pillar === 'cybersecurity';
+
+  await awaitMutationWithRowCheck(
+    admin
+      .from('proposals')
+      .update({
+        title,
+        scope_summary: scopeSummary,
+        deliverables_summary: deliverablesSummary || scopeSummary,
+        currency,
+        fx_rate_to_usd: fxRate,
+        subtotal_cents: totalCents,
+        total_cents: totalCents,
+        deposit_percent: depositPercent,
+        estimated_days: estimatedDays,
+        requires_roe: effectiveRequiresRoe,
+      })
+      .eq('id', proposalId)
+      .eq('status', 'draft'),
+    'Proposal is no longer in draft state and could not be updated.'
+  );
 
   await recordAuditLog({
     actorId: session.userId,
@@ -3969,7 +4107,7 @@ export async function updateDraftProposalAction(formData: FormData): Promise<voi
     entityType: 'proposal',
     entityId: proposalId,
     summary: `Updated draft proposal ${existing.code ?? proposalId}`,
-    metadata: { totalCents, currency, depositPercent, estimatedDays },
+    metadata: { totalCents, currency, fxRate, depositPercent, estimatedDays, requiresRoe: effectiveRequiresRoe },
   });
 
   revalidateHub([
@@ -3997,11 +4135,15 @@ export async function voidProposalAction(formData: FormData): Promise<void> {
     throw new Error('Accepted proposals cannot be voided.');
   }
 
-  const { error } = await admin
-    .from('proposals')
-    .update({ status: 'expired' })
-    .eq('id', proposalId);
-  if (error) throw new Error(error.message);
+  const updateChain: unknown = admin.from('proposals').update({ status: 'expired' }).eq('id', proposalId);
+  const narrowedChain =
+    updateChain && typeof (updateChain as { neq?: unknown }).neq === 'function'
+      ? (updateChain as { neq: (c: string, v: string) => unknown }).neq('status', 'accepted')
+      : updateChain;
+  await awaitMutationWithRowCheck(
+    narrowedChain,
+    'Proposal could not be voided because it was already accepted.'
+  );
 
   await recordAuditLog({
     actorId: session.userId,
@@ -4108,6 +4250,9 @@ export async function editOrderMilestoneDetailsAction(formData: FormData): Promi
   if (!milestoneId || !orderId || !title) {
     throw new Error('Milestone ID, order ID, and title are required.');
   }
+  if (dueDate && !ISO_DATE_RE.test(dueDate)) {
+    throw new Error('Due date must be formatted as YYYY-MM-DD.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: linkedInv } = await admin
@@ -4127,20 +4272,22 @@ export async function editOrderMilestoneDetailsAction(formData: FormData): Promi
   }
   if (amountMajorRaw !== '') {
     const parsedAmt = Math.round(Number(amountMajorRaw) * 100);
-    if (!Number.isFinite(parsedAmt) || parsedAmt < 0) {
-      throw new Error('Milestone amount must be zero or greater.');
+    if (!Number.isFinite(parsedAmt) || parsedAmt < 0 || parsedAmt > MAX_PG_INT_CENTS) {
+      throw new Error('Milestone amount must be between zero and the supported currency limit.');
     }
     if (!linkedInv || linkedInv.length === 0) {
       updates.amount_cents = parsedAmt;
     }
   }
 
-  const { error } = await admin
-    .from('order_milestones')
-    .update(updates)
-    .eq('id', milestoneId)
-    .eq('order_id', orderId);
-  if (error) throw new Error(error.message);
+  await awaitMutationWithRowCheck(
+    admin
+      .from('order_milestones')
+      .update(updates)
+      .eq('id', milestoneId)
+      .eq('order_id', orderId),
+    'Order milestone could not be updated.'
+  );
 
   await recordAuditLog({
     actorId: session.userId,
@@ -4167,17 +4314,92 @@ export async function revokeClientInvitationAction(formData: FormData): Promise<
     .update({ status: 'revoked' })
     .eq('id', invitationId)
     .eq('status', 'pending')
-    .select('email')
+    .select('email, accepted_user_id')
     .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!inv) {
+    throw new Error('Invitation is no longer pending and cannot be revoked.');
+  }
+
+  let deactivatedUserId: string | null = null;
+  const candidateEmail = inv.email?.trim().toLowerCase() ?? '';
+  let targetProfileId = inv.accepted_user_id ?? null;
+
+  if (!targetProfileId && candidateEmail) {
+    const profilesTbl = admin.from('profiles');
+    if (typeof profilesTbl?.select === 'function') {
+      const { data: matchedProfile } = await profilesTbl
+        .select('id, role')
+        .eq('email', candidateEmail)
+        .eq('role', 'client')
+        .maybeSingle();
+      targetProfileId = matchedProfile?.id ?? null;
+    }
+  }
+
+  if (targetProfileId) {
+    const ordersTbl = admin.from('orders');
+    const invoicesTbl = admin.from('invoices');
+    if (typeof ordersTbl?.select === 'function' && typeof invoicesTbl?.select === 'function') {
+      const [{ count: orderCount }, { count: invoiceCount }] = await Promise.all([
+        ordersTbl
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', targetProfileId),
+        invoicesTbl
+          .select('id', { count: 'exact', head: true })
+          .eq('client_id', targetProfileId),
+      ]);
+
+      let hasSignedIn = false;
+      try {
+        const authAdmin = admin.auth?.admin as
+          | {
+              getUserById?: (
+                id: string
+              ) => Promise<{ data?: { user?: { last_sign_in_at?: string | null } } }>;
+              updateUserById?: (
+                id: string,
+                attributes: { ban_duration?: string }
+              ) => Promise<unknown>;
+            }
+          | undefined;
+        if (typeof authAdmin?.getUserById === 'function') {
+          const userRes = await authAdmin.getUserById(targetProfileId);
+          hasSignedIn = Boolean(userRes?.data?.user?.last_sign_in_at);
+        }
+
+        if (!hasSignedIn && (orderCount ?? 0) === 0 && (invoiceCount ?? 0) === 0) {
+          const nowIso = new Date().toISOString();
+          await admin
+            .from('profiles')
+            .update({ is_active: false, tokens_valid_after: nowIso })
+            .eq('id', targetProfileId)
+            .eq('role', 'client');
+          if (typeof authAdmin?.updateUserById === 'function') {
+            await authAdmin
+              .updateUserById(targetProfileId, { ban_duration: '876000h' })
+              .catch(() => undefined);
+          }
+          if (typeof admin.rpc === 'function') {
+            await admin.rpc('revoke_auth_user_sessions', { p_user_id: targetProfileId });
+          }
+          deactivatedUserId = targetProfileId;
+        }
+      } catch {
+        // Non-fatal if auth admin API is unavailable in unit mocks
+      }
+    }
+  }
 
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'admin',
+    clientId: deactivatedUserId,
     action: 'client.invitation_revoked',
     entityType: 'client_invitation',
     entityId: invitationId,
-    summary: `Revoked pending invitation for ${inv?.email ?? invitationId}`,
+    summary: `Revoked pending invitation for ${inv.email ?? invitationId}`,
+    metadata: { deactivatedUnactivatedUser: Boolean(deactivatedUserId) },
   });
 
   revalidateHub(['/admin/clients', '/admin']);
@@ -4238,6 +4460,9 @@ export async function updateDraftInvoiceAction(formData: FormData): Promise<void
   const notes = String(formData.get('notes') ?? '').trim() || null;
 
   if (!invoiceId) return;
+  if (dueAt && !ISO_DATE_RE.test(dueAt)) {
+    throw new Error('Due date must be formatted as YYYY-MM-DD.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: invoice } = await admin
@@ -4257,21 +4482,26 @@ export async function updateDraftInvoiceAction(formData: FormData): Promise<void
     discountCents,
     taxRateBps,
   });
+  if (totals.totalCents <= 0 || totals.totalCents > MAX_PG_INT_CENTS) {
+    throw new Error('Draft invoice total must be positive and within supported currency limits.');
+  }
 
-  const { error } = await admin
-    .from('invoices')
-    .update({
-      due_at: dueAt,
-      discount_cents: totals.discountCents,
-      tax_rate_bps: totals.taxRateBps,
-      tax_cents: totals.taxCents,
-      total_cents: totals.totalCents,
-      payment_instructions: paymentInstructions,
-      notes,
-    })
-    .eq('id', invoiceId)
-    .eq('status', 'draft');
-  if (error) throw new Error(error.message);
+  await awaitMutationWithRowCheck(
+    admin
+      .from('invoices')
+      .update({
+        due_at: dueAt,
+        discount_cents: totals.discountCents,
+        tax_rate_bps: totals.taxRateBps,
+        tax_cents: totals.taxCents,
+        total_cents: totals.totalCents,
+        payment_instructions: paymentInstructions,
+        notes,
+      })
+      .eq('id', invoiceId)
+      .eq('status', 'draft'),
+    'Invoice is no longer in draft state and could not be updated.'
+  );
 
   await recordAuditLog({
     actorId: session.userId,

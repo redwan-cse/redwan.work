@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
@@ -14,6 +15,7 @@ import {
   validateMagicBytes,
 } from '@/lib/mime';
 import {
+  getPrivateObjectBytes,
   getPrivateObjectHeadBytes,
   isR2Configured,
   verifyStoredPortalObjectSize,
@@ -49,11 +51,14 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const authorSelect =
+    session.role === 'admin'
+      ? 'author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      : 'author:profiles!order_messages_author_id_fkey(full_name, role)';
+
   let query = admin
     .from('order_messages')
-    .select(
-      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
-    )
+    .select(`id, body, created_at, is_internal_note, author_id, attachment_file_ids, ${authorSelect}`)
     .eq('order_id', id)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -188,6 +193,7 @@ export async function POST(
         { status: 400 }
       );
     }
+    let verifiedSha256: string | null = null;
     if (isR2Configured()) {
       const okSize = await verifyStoredPortalObjectSize(att.r2_key, att.size_bytes);
       if (!okSize) {
@@ -196,12 +202,23 @@ export async function POST(
           { status: 400 }
         );
       }
-      const headBytes = await getPrivateObjectHeadBytes(att.r2_key, 64);
-      if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
-        return NextResponse.json(
-          { error: 'Uploaded attachment signature does not match its declared file type.' },
-          { status: 400 }
-        );
+      if (att.size_bytes <= 10 * 1024 * 1024) {
+        const objectBytes = await getPrivateObjectBytes(att.r2_key);
+        if (!validateMagicBytes(objectBytes, resolvedMime)) {
+          return NextResponse.json(
+            { error: 'Uploaded attachment signature does not match its declared file type.' },
+            { status: 400 }
+          );
+        }
+        verifiedSha256 = createHash('sha256').update(objectBytes).digest('hex');
+      } else {
+        const headBytes = await getPrivateObjectHeadBytes(att.r2_key, 64);
+        if (!headBytes || !validateMagicBytes(headBytes, resolvedMime)) {
+          return NextResponse.json(
+            { error: 'Uploaded attachment signature does not match its declared file type.' },
+            { status: 400 }
+          );
+        }
       }
     }
     const retentionUntil = new Date(Date.now() + 365 * 86400 * 1000).toISOString();
@@ -215,7 +232,7 @@ export async function POST(
         filename: att.filename,
         mime_type: resolvedMime,
         size_bytes: Math.round(att.size_bytes),
-        sha256_checksum: att.sha256_checksum ? att.sha256_checksum.toLowerCase() : null,
+        sha256_checksum: verifiedSha256,
         retention_until: retentionUntil,
         uploaded_by: session.userId,
       })
@@ -248,6 +265,11 @@ export async function POST(
     }
   }
 
+  const postAuthorSelect =
+    session.role === 'admin'
+      ? 'author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      : 'author:profiles!order_messages_author_id_fkey(full_name, role)';
+
   const { data: inserted, error } = await admin
     .from('order_messages')
     .insert({
@@ -258,7 +280,7 @@ export async function POST(
       ...(attachmentIds.length > 0 ? { attachment_file_ids: attachmentIds } : {}),
     })
     .select(
-      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      `id, body, created_at, is_internal_note, author_id, attachment_file_ids, ${postAuthorSelect}`
     )
     .single();
 
