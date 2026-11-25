@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
@@ -68,45 +69,76 @@ export default async function AdminOrderDetailPage({
   const session = await requireAdminSession();
   const admin = getSupabaseAdmin();
 
+  const needVaultFiles = activeTab === 'delivery' || activeTab === 'scope';
+  const needLinkedInvoices = activeTab === 'delivery' || activeTab === 'milestones';
+
   const [
     { data: order },
     { data: roe },
     { data: requirements },
-    { data: milestones },
-    { data: tasks },
-    { data: deliverables },
-    { data: vaultFiles },
-    { data: cancellations },
-    { data: linkedInvoices },
+    milestonesRes,
+    tasksRes,
+    deliverablesRes,
+    vaultFilesRes,
+    cancellationsRes,
+    linkedInvoicesRes,
   ] = await Promise.all([
     admin.from('orders').select('*').eq('id', id).maybeSingle(),
     admin.from('engagement_authorizations').select('*').eq('order_id', id).maybeSingle(),
     admin.from('order_requirements').select('*').eq('order_id', id).maybeSingle(),
-    admin.from('order_milestones').select('*').eq('order_id', id).order('position'),
-    admin.from('order_tasks').select('*').eq('order_id', id).order('created_at'),
-    admin
-      .from('deliverables')
-      .select('*')
-      .eq('order_id', id)
-      .order('submitted_at', { ascending: false }),
-    admin
-      .from('vault_files')
-      .select('*')
-      .eq('order_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('cancellation_requests')
-      .select('*')
-      .eq('order_id', id)
-      .order('created_at', { ascending: false }),
-    admin
-      .from('invoices')
-      .select('id, code, milestone_id, status, total_cents, currency')
-      .eq('order_id', id)
-      .neq('status', 'void'),
+    activeTab === 'milestones'
+      ? admin.from('order_milestones').select('*').eq('order_id', id).order('position')
+      : admin.from('order_milestones').select('id', { count: 'exact', head: true }).eq('order_id', id),
+    activeTab === 'milestones'
+      ? admin.from('order_tasks').select('*').eq('order_id', id).order('created_at')
+      : Promise.resolve({ data: null }),
+    activeTab === 'delivery'
+      ? admin
+          .from('deliverables')
+          .select('*')
+          .eq('order_id', id)
+          .order('submitted_at', { ascending: false })
+      : admin.from('deliverables').select('id', { count: 'exact', head: true }).eq('order_id', id),
+    needVaultFiles
+      ? admin
+          .from('vault_files')
+          .select('*')
+          .eq('order_id', id)
+          .order('created_at', { ascending: false })
+      : admin
+          .from('vault_files')
+          .select('id', { count: 'exact', head: true })
+          .eq('order_id', id)
+          .in('category', ['requirement_attachment', 'order_attachment']),
+    activeTab === 'revisions'
+      ? admin
+          .from('cancellation_requests')
+          .select('*')
+          .eq('order_id', id)
+          .order('created_at', { ascending: false })
+      : admin
+          .from('cancellation_requests')
+          .select('id, status, reason, resolution_notes, created_at')
+          .eq('order_id', id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
+    needLinkedInvoices
+      ? admin
+          .from('invoices')
+          .select('id, code, milestone_id, status, total_cents, currency')
+          .eq('order_id', id)
+          .neq('status', 'void')
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!order) notFound();
+
+  const milestones = activeTab === 'milestones' ? (milestonesRes.data ?? []) : [];
+  const tasks = activeTab === 'milestones' ? (tasksRes.data ?? []) : [];
+  const deliverables = activeTab === 'delivery' ? (deliverablesRes.data ?? []) : [];
+  const vaultFiles = needVaultFiles ? (vaultFilesRes.data ?? []) : [];
+  const cancellations = cancellationsRes.data ?? [];
+  const linkedInvoices = needLinkedInvoices ? (linkedInvoicesRes.data ?? []) : [];
 
   const { data: clientProfile } = await admin
     .from('profiles')
@@ -115,7 +147,7 @@ export default async function AdminOrderDetailPage({
     .maybeSingle();
 
   const milestoneInvoiceMap = new Map<string, { id: string; code: string | null; status: string }>();
-  for (const inv of linkedInvoices ?? []) {
+  for (const inv of linkedInvoices) {
     if (inv.milestone_id) {
       milestoneInvoiceMap.set(inv.milestone_id, {
         id: inv.id,
@@ -125,15 +157,23 @@ export default async function AdminOrderDetailPage({
     }
   }
 
-  const requirementFiles = (vaultFiles ?? []).filter(
+  const requirementFiles = vaultFiles.filter(
     (vf) => vf.category === 'requirement_attachment' || vf.category === 'order_attachment'
   );
-  const pendingCancels = (cancellations ?? []).filter((c) => c.status === 'pending');
+  const pendingCancels = cancellations.filter((c) => c.status === 'pending');
+
+  const deliverablesCount =
+    activeTab === 'delivery' ? deliverables.length : (deliverablesRes.count ?? 0);
+  const requirementFilesCount = needVaultFiles
+    ? requirementFiles.length
+    : (vaultFilesRes.count ?? 0);
+  const milestonesCount =
+    activeTab === 'milestones' ? milestones.length : (milestonesRes.count ?? 0);
 
   const tabs = [
-    { id: 'delivery', label: 'Delivery & Vault', href: `/admin/orders/${order.id}?tab=delivery`, count: deliverables?.length ?? 0 },
-    { id: 'scope', label: 'Requirements & RoE', href: `/admin/orders/${order.id}?tab=scope`, count: requirementFiles.length },
-    { id: 'milestones', label: 'Milestones & Tasks', href: `/admin/orders/${order.id}?tab=milestones`, count: milestones?.length ?? 0 },
+    { id: 'delivery', label: 'Delivery & Vault', href: `/admin/orders/${order.id}?tab=delivery`, count: deliverablesCount },
+    { id: 'scope', label: 'Requirements & RoE', href: `/admin/orders/${order.id}?tab=scope`, count: requirementFilesCount },
+    { id: 'milestones', label: 'Milestones & Tasks', href: `/admin/orders/${order.id}?tab=milestones`, count: milestonesCount },
     { id: 'revisions', label: 'Revisions & Cancel', href: `/admin/orders/${order.id}?tab=revisions`, count: pendingCancels.length },
     { id: 'thread', label: 'Thread & Notes', href: `/admin/orders/${order.id}?tab=thread` },
   ];
@@ -1009,14 +1049,20 @@ export default async function AdminOrderDetailPage({
 
       {/* TAB 5: CONTEXTUAL THREAD & INTERNAL NOTES */}
       {activeTab === 'thread' && (
-        <OrderLiveChatServer
-          orderId={order.id}
-          orderCode={order.code}
-          orderTitle={order.title}
-          orderStatus={order.status}
-          viewerId={session.userId}
-          viewerRole="admin"
-        />
+        <Suspense
+          fallback={
+            <div className="h-72 animate-pulse rounded-2xl border border-border/70 bg-muted/30" />
+          }
+        >
+          <OrderLiveChatServer
+            orderId={order.id}
+            orderCode={order.code}
+            orderTitle={order.title}
+            orderStatus={order.status}
+            viewerId={session.userId}
+            viewerRole="admin"
+          />
+        </Suspense>
       )}
     </div>
   );

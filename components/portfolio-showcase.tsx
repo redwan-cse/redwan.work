@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { m, useReducedMotion } from 'motion/react';
 import {
   ArrowRight,
   Bot,
@@ -26,14 +25,10 @@ import {
 } from '@/components/ui/dialog';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { InteractiveCard, ScrollReveal } from '@/components/motion/reveal';
-import {
-  PORTFOLIO_ITEMS,
-  type PortfolioCaseStudy,
-  type ServicePillarKey,
-} from '@/lib/content/site';
+import type { PortfolioCaseStudy, ServicePillarKey } from '@/lib/content/site';
 import { cn } from '@/lib/utils';
 
-export { PORTFOLIO_ITEMS, type PortfolioCaseStudy };
+export type { PortfolioCaseStudy };
 
 const FILTER_TABS: Array<{
   key: 'all' | ServicePillarKey;
@@ -49,12 +44,11 @@ const FILTER_TABS: Array<{
 ];
 
 export function PortfolioShowcase({
-  initialItems,
+  initialItems = [],
 }: {
   initialItems?: PortfolioCaseStudy[];
 }) {
   const searchParams = useSearchParams();
-  const prefersReducedMotion = useReducedMotion();
   const initialCategory = (searchParams?.get('pillar') ||
     searchParams?.get('category')) as ServicePillarKey | null;
 
@@ -65,10 +59,7 @@ export function PortfolioShowcase({
   );
   const [activeStudy, setActiveStudy] = useState<PortfolioCaseStudy | null>(null);
 
-  const items = useMemo(
-    () => (initialItems && initialItems.length > 0 ? initialItems : PORTFOLIO_ITEMS),
-    [initialItems]
-  );
+  const items = initialItems;
 
   const filteredItems = useMemo(() => {
     if (selectedCategory === 'all') return items;
@@ -89,22 +80,12 @@ export function PortfolioShowcase({
               className={cn(
                 'relative inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium transition-colors sm:text-sm',
                 isActive
-                  ? 'border-primary text-primary-foreground'
+                  ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                   : 'border-border/80 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
               )}
             >
-              {isActive &&
-                (prefersReducedMotion ? (
-                  <span className="absolute inset-0 rounded-full bg-primary" />
-                ) : (
-                  <m.span
-                    layoutId="portfolio-filter-pill"
-                    transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-                    className="absolute inset-0 rounded-full bg-primary"
-                  />
-                ))}
-              <Icon className="relative z-10 h-4 w-4" />
-              <span className="relative z-10">{label}</span>
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
             </button>
           );
         })}

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
 import {
@@ -56,7 +57,7 @@ export async function serveStoredResumePdf(
   request: NextRequest,
   options?: { robotsTag?: string }
 ): Promise<Response> {
-  const { settings } = await getSiteSettingsAndResume();
+  const { settings } = await getSiteSettingsAndResume({ skipResumeItems: true });
   const configuredUrl = (settings.resume_pdf_url || '').trim();
   const assetKey = extractPublicAssetKeyFromUrl(configuredUrl) ?? RESUME_ASSET_KEY;
 
@@ -138,11 +139,27 @@ export async function serveStoredResumePdf(
     .replace(/^_+|_+$/g, '');
   const filename = `${safeBaseName || 'Md_Redwan_Ahmed'}_Resume.pdf`;
 
+  const etag = `W/"${createHash('sha256').update(pdfBytes).digest('hex').slice(0, 16)}"`;
+  const cacheControl = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
+
+  if (request.headers.get('if-none-match') === etag) {
+    const notModifiedHeaders = new Headers({
+      ETag: etag,
+      'Cache-Control': cacheControl,
+      'X-Resume-Storage': 'r2-public',
+    });
+    if (options?.robotsTag) {
+      notModifiedHeaders.set('X-Robots-Tag', options.robotsTag);
+    }
+    return new Response(null, { status: 304, headers: notModifiedHeaders });
+  }
+
   const headers = new Headers({
     'Content-Type': 'application/pdf',
     'Content-Disposition': `${forceDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
     'Content-Length': String(pdfBytes.byteLength),
-    'Cache-Control': 'public, max-age=300, must-revalidate',
+    ETag: etag,
+    'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff',
     'X-Resume-Storage': 'r2-public',
   });

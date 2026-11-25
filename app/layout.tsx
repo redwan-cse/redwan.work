@@ -2,7 +2,6 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
 import { SITE } from "@/lib/content/site";
 import {
   resolveSiteVerificationMetadata,
@@ -12,12 +11,14 @@ import { buildRootSiteGraphJsonLd } from "@/lib/seo/structured-data";
 
 const fontSans = Inter({
   subsets: ["latin"],
-  variable: "--font-sans",
+  variable: "--font-inter",
+  display: "swap",
 });
 
 const fontMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-jetbrains-mono",
+  display: "swap",
 });
 
 const verification = resolveSiteVerificationMetadata();
@@ -67,10 +68,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${fontSans.variable} ${fontMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <meta name="apple-mobile-web-app-title" content="Redwan" />
-        <link rel="preconnect" href="https://challenges.cloudflare.com" />
         <link
           rel="alternate"
           type="text/markdown"
@@ -82,12 +86,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteGraphJsonLd) }}
         />
       </head>
-      <body
-        className={`${fontSans.variable} ${fontMono.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
-          <Toaster richColors position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>

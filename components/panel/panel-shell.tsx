@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { m, useReducedMotion } from 'motion/react';
 import {
   Activity,
   Bell,
@@ -111,7 +110,6 @@ export function PanelShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const prefersReducedMotion = useReducedMotion();
 
   const isNavItemActive = (item: PanelNavItem) => {
     if (item.href === '/admin' || item.href === '/portal') {
@@ -141,20 +139,10 @@ export function PanelShell({
             className={cn(
               'group relative flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               active
-                ? 'text-primary-foreground'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
                 : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
             )}
           >
-            {active &&
-              (prefersReducedMotion ? (
-                <span className="absolute inset-0 rounded-lg bg-primary shadow-2xs" />
-              ) : (
-                <m.span
-                  layoutId="panel-sidebar-active"
-                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  className="absolute inset-0 rounded-lg bg-primary shadow-2xs"
-                />
-              ))}
             <span className="relative z-10 flex items-center gap-2.5">
               <Icon className="h-4 w-4 shrink-0" />
               <span>{item.label}</span>

@@ -25,7 +25,7 @@ import { isSameOriginRequest } from '@/lib/security/safe-redirect';
 import { orderMessageBodySchema, uuidSchema } from '@/lib/validation/schemas';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const session = await getCurrentSession();
@@ -51,6 +51,10 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const rawAfter = request.nextUrl.searchParams.get('after')?.trim() ?? '';
+  const parsedAfterMs = rawAfter ? Date.parse(rawAfter) : Number.NaN;
+  const afterIso = Number.isFinite(parsedAfterMs) ? new Date(parsedAfterMs).toISOString() : null;
+
   const authorSelect =
     session.role === 'admin'
       ? 'author:profiles!order_messages_author_id_fkey(full_name, email, role)'
@@ -60,15 +64,31 @@ export async function GET(
     .from('order_messages')
     .select(`id, body, created_at, is_internal_note, author_id, attachment_file_ids, ${authorSelect}`)
     .eq('order_id', id)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: Boolean(afterIso) })
     .limit(100);
+
+  if (afterIso && typeof query.gt === 'function') {
+    query = query.gt('created_at', afterIso);
+  }
 
   if (session.role !== 'admin') {
     query = query.eq('is_internal_note', false);
   }
 
   const { data: messages } = await query;
-  const ordered = [...(messages ?? [])].reverse();
+  const ordered = afterIso ? [...(messages ?? [])] : [...(messages ?? [])].reverse();
+
+  const lastMessage = ordered[ordered.length - 1];
+  const etag = `W/"${ordered.length}-${lastMessage?.id ?? 'empty'}-${lastMessage?.created_at ?? '0'}-${afterIso ?? 'full'}"`;
+  const responseHeaders = {
+    ETag: etag,
+    'Cache-Control': 'private, no-store, max-age=0',
+    'X-Robots-Tag': 'noindex, nofollow',
+  };
+
+  if (request.headers.get('if-none-match') === etag) {
+    return new NextResponse(null, { status: 304, headers: responseHeaders });
+  }
 
   const allFileIds = Array.from(
     new Set(
@@ -99,8 +119,8 @@ export async function GET(
   }));
 
   return NextResponse.json(
-    { messages: enriched },
-    { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Robots-Tag': 'noindex, nofollow' } }
+    { messages: enriched, delta: Boolean(afterIso) },
+    { headers: responseHeaders }
   );
 }
 

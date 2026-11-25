@@ -139,13 +139,25 @@ export async function POST(request: NextRequest) {
       if (unused === null) { console.error('Contact replay control unavailable.'); return unavailable(); }
       if (!unused) return NextResponse.json({ error: 'Verification token already used. Please reload the form.' }, { status: 400 });
     }
-    for (const attachment of parsed.lead.attachments) {
-      if (!await verifyStoredObjectSize(attachment.key, attachment.size_bytes)) {
-        return NextResponse.json({ error: 'Attachment data is invalid. Please re-upload your files.' }, { status: 400 });
-      }
-      const headBytes = await getPrivateObjectHeadBytes(attachment.key, 64);
-      if (!headBytes || !validateMagicBytes(headBytes, attachment.mime)) {
-        return NextResponse.json({ error: 'Attachment file signature does not match its declared file type.' }, { status: 400 });
+    if (parsed.lead.attachments.length > 0) {
+      const checks = await Promise.all(
+        parsed.lead.attachments.map(async (attachment) => {
+          const [sizeOk, headBytes] = await Promise.all([
+            verifyStoredObjectSize(attachment.key, attachment.size_bytes),
+            getPrivateObjectHeadBytes(attachment.key, 64),
+          ]);
+          if (!sizeOk) {
+            return 'Attachment data is invalid. Please re-upload your files.';
+          }
+          if (!headBytes || !validateMagicBytes(headBytes, attachment.mime)) {
+            return 'Attachment file signature does not match its declared file type.';
+          }
+          return null;
+        })
+      );
+      const firstError = checks.find((err) => err !== null);
+      if (firstError) {
+        return NextResponse.json({ error: firstError }, { status: 400 });
       }
     }
     const stored = await insertLead(parsed.lead);

@@ -45,13 +45,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Send, Loader2, CheckCircle, User, Mail, Globe, Phone, Briefcase, DollarSign, Clock, Info, CalendarIcon, Check, ChevronsUpDown, Copy, X } from "lucide-react";
 import Link from "next/link";
 import { countries, getCountryByCode, getTimezonesByCountry, allTimezones, Country } from "@/lib/countries-data";
-import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { formatBytes } from '@/lib/format';
 import { parseBudgetRange } from '@/lib/contact/intake-contract';
 import { useContactConsentPolicy } from '@/hooks/use-contact-consent-policy';
 import { CONSENT_STALE_MESSAGE, CONSENT_UNAVAILABLE_MESSAGE } from '@/lib/contact/consent-client';
-import { SERVICE_CATALOG, type ServiceCatalogItem } from '@/lib/content/site';
+import type { ServiceCatalogItem } from '@/lib/content/site';
+
+const SORTED_COUNTRIES: Country[] = [...countries].sort((a, b) => a.name.localeCompare(b.name));
+
+function formatUsDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${month}/${day}/${date.getFullYear()}`;
+}
 const RichTextEditor = dynamic(
   () => import('@/components/ui/rich-text-editor').then((m) => m.RichTextEditor),
   {
@@ -276,7 +283,7 @@ interface HiddenFields {
 }
 
 export default function EnhancedContactForm({
-  initialServices = SERVICE_CATALOG,
+  initialServices = [],
   initialConsentPolicy = null,
 }: {
   initialServices?: ServiceCatalogItem[];
@@ -1184,7 +1191,7 @@ export default function EnhancedContactForm({
                     <CommandList>
                       <CommandEmpty>No country found.</CommandEmpty>
                       <CommandGroup>
-                        {[...countries].sort((a, b) => a.name.localeCompare(b.name)).map((country: Country) => (
+                        {SORTED_COUNTRIES.map((country: Country) => (
                           <CommandItem
                             key={country.code}
                             value={country.name}
@@ -1233,7 +1240,7 @@ export default function EnhancedContactForm({
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
-                    {[...countries].sort((a, b) => a.name.localeCompare(b.name)).map((country: Country) => (
+                    {SORTED_COUNTRIES.map((country: Country) => (
                       <SelectItem key={country.code} value={country.code}>
                         <span className="flex items-center gap-2">
                           <span>{country.flag}</span>
@@ -1506,7 +1513,7 @@ export default function EnhancedContactForm({
                     }
                     onSelect={(date) => {
                       if (date) {
-                        const formattedContactDate = format(date, "MM/dd/yyyy");
+                        const formattedContactDate = formatUsDate(date);
                         handleInputChange("preferredContactDate", formattedContactDate);
                         setIsPreferredDateOpen(false);
                       } else {

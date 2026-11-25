@@ -67,12 +67,11 @@ export function HeroRevealItem({
   return (
     <m.div
       variants={{
-        hidden: { opacity: 0, y: 16, filter: 'blur(4px)' },
+        hidden: { opacity: 1, y: 10 },
         visible: {
           opacity: 1,
           y: 0,
-          filter: 'blur(0px)',
-          transition: { duration: 0.56, ease: EASE_OUT_EXPO },
+          transition: { duration: 0.36, ease: EASE_OUT_EXPO },
         },
       }}
       className={className}
@@ -93,15 +92,8 @@ export function HeroPortrait({
   caption?: string;
   badgeText?: string;
 }) {
-  const prefersReducedMotion = useReducedMotion();
-
   return (
-    <m.div
-      initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: prefersReducedMotion ? 0 : 0.68, delay: prefersReducedMotion ? 0 : 0.14, ease: EASE_OUT_EXPO }}
-      className="group relative mx-auto flex flex-col items-center"
-    >
+    <div className="group relative mx-auto flex flex-col items-center">
       <div className="relative flex items-center justify-center">
         {/* Outer reactive blue outline halo — responds to hover while image stays unchanged */}
         <div
@@ -135,7 +127,7 @@ export function HeroPortrait({
       {caption ? (
         <p className="mt-5 text-center text-xs text-muted-foreground">{caption}</p>
       ) : null}
-    </m.div>
+    </div>
   );
 }
 
@@ -151,6 +143,7 @@ export function InteractiveCard({
   id?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const rotateX = useMotionValue(0);
@@ -163,9 +156,16 @@ export function InteractiveCard({
 
   const borderHighlight = useMotionTemplate`radial-gradient(320px circle at ${glowX}% ${glowY}%, oklch(from var(--primary) l c h / 0.16), transparent 75%)`;
 
+  const handleMouseEnter = () => {
+    if (prefersReducedMotion || !ref.current) return;
+    rectRef.current = ref.current.getBoundingClientRect();
+  };
+
   const handleMouseMove = (event: MouseEvent<HTMLDivElement>) => {
     if (prefersReducedMotion || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
+    const rect = rectRef.current ?? ref.current.getBoundingClientRect();
+    rectRef.current = rect;
+    if (rect.width <= 0 || rect.height <= 0) return;
     const px = (event.clientX - rect.left) / rect.width;
     const py = (event.clientY - rect.top) / rect.height;
 
@@ -180,6 +180,7 @@ export function InteractiveCard({
   };
 
   const handleMouseLeave = () => {
+    rectRef.current = null;
     rotateX.set(0);
     rotateY.set(0);
   };
@@ -188,6 +189,7 @@ export function InteractiveCard({
     <m.div
       id={id}
       ref={ref}
+      onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       whileHover={prefersReducedMotion ? undefined : { y: -4 }}

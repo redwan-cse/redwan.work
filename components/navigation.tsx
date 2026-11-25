@@ -4,7 +4,6 @@ import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { m, useReducedMotion } from 'motion/react';
 import {
   Briefcase,
   ClipboardList,
@@ -40,7 +39,6 @@ const navigation = [
 export function Navigation() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = React.useState(false);
-  const prefersReducedMotion = useReducedMotion();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
@@ -54,7 +52,6 @@ export function Navigation() {
               fill
               sizes="44px"
               className="object-cover object-top"
-              priority
             />
           </div>
           <div className="flex min-w-0 flex-col">
@@ -67,10 +64,10 @@ export function Navigation() {
           </div>
         </Link>
 
-        {/* Desktop Navigation with Antigravity Shared-Layout Pill */}
+        {/* Desktop Navigation */}
         <nav
           aria-label="Main navigation"
-          className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/40 p-1.5 backdrop-blur-md lg:flex"
+          className="hidden items-center gap-1 rounded-full border border-border/80 bg-muted/40 p-1.5 lg:flex"
         >
           {navigation.map(({ name, href }) => {
             const isActive =
@@ -82,20 +79,12 @@ export function Navigation() {
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'relative rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 xl:px-3.5',
-                  isActive ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {isActive &&
-                  (prefersReducedMotion ? (
-                    <span className="absolute inset-0 rounded-full bg-primary shadow-xs" />
-                  ) : (
-                    <m.span
-                      layoutId="active-nav-pill"
-                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                      className="absolute inset-0 rounded-full bg-primary shadow-xs"
-                    />
-                  ))}
-                <span className="relative z-10">{name}</span>
+                {name}
               </Link>
             );
           })}

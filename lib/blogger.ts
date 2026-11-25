@@ -1,5 +1,6 @@
 // lib/blogger.ts
 import crypto from "node:crypto";
+import * as nextCache from "next/cache";
 
 export interface BlogPost {
   id: string;
@@ -353,12 +354,117 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
   return { items: allItems, totalItems, isCapped };
 }
 
+let cachedAllBloggerPosts:
+  | (() => Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }>)
+  | null = null;
+
+function getCachedAllBloggerPostsRunner() {
+  if (!cachedAllBloggerPosts && typeof nextCache.unstable_cache === "function") {
+    cachedAllBloggerPosts = nextCache.unstable_cache(
+      fetchAllBloggerPosts,
+      ["blogger-all-posts-v1"],
+      { revalidate: 300, tags: ["blogs"] }
+    );
+  }
+  return cachedAllBloggerPosts;
+}
+
+async function runWithNextCache<T>(
+  getCachedRunner: () => (() => Promise<T>) | null,
+  directRunner: () => Promise<T>
+): Promise<T> {
+  const cachedRunner = getCachedRunner();
+  if (!cachedRunner) {
+    return directRunner();
+  }
+  try {
+    return await cachedRunner();
+  } catch (err) {
+    // Outside Next.js request context (e.g., Vitest unit runs), unstable_cache throws an invariant error.
+    if (
+      err instanceof Error &&
+      /incrementalCache|unstable_cache|headers/i.test(err.message)
+    ) {
+      return directRunner();
+    }
+    throw err;
+  }
+}
+
+async function fetchLatestBloggerPostTimestampUncached(): Promise<string | null> {
+  const fixtureRaw = process.env.BLOGGER_FIXTURE_POSTS_JSON;
+  if (fixtureRaw) {
+    try {
+      const parsed = JSON.parse(fixtureRaw) as BloggerPostItem[];
+      const first = Array.isArray(parsed) ? parsed[0] : undefined;
+      return typeof first?.published === "string" ? first.published : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const client = createBloggerClient();
+  if (!client) {
+    return null;
+  }
+
+  const accessToken = await client.auth.getAccessToken();
+  const baseUrl = `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(client.blogId)}`;
+  const query = new URLSearchParams({
+    maxResults: "1",
+    fetchBodies: "false",
+    fetchImages: "false",
+    status: "live",
+  });
+  const data = await fetchBloggerJson<BloggerPostsListResponse>(
+    `${baseUrl}/posts?${query.toString()}`,
+    accessToken
+  );
+  const first = data.items?.[0];
+  return typeof first?.published === "string" ? first.published : null;
+}
+
+let cachedLatestBloggerPostTimestamp: (() => Promise<string | null>) | null = null;
+
+function getCachedLatestBloggerPostTimestampRunner() {
+  if (!cachedLatestBloggerPostTimestamp && typeof nextCache.unstable_cache === "function") {
+    cachedLatestBloggerPostTimestamp = nextCache.unstable_cache(
+      fetchLatestBloggerPostTimestampUncached,
+      ["blogger-latest-ts-v1"],
+      { revalidate: 300, tags: ["blogs"] }
+    );
+  }
+  return cachedLatestBloggerPostTimestamp;
+}
+
+/**
+ * Lightweight latest-post timestamp lookup for sitemap.xml.
+ * Avoids fetching up to 300 full HTML post bodies when only the latest publish timestamp is needed.
+ */
+export async function getLatestBlogPostTimestamp(): Promise<string | null> {
+  if (process.env.BLOGGER_FIXTURE_POSTS_JSON) {
+    return fetchLatestBloggerPostTimestampUncached();
+  }
+  const now = Date.now();
+  if (rawPostsSnapshot && rawPostsSnapshot.freshUntil > now) {
+    return rawPostsSnapshot.items[0]?.published ?? null;
+  }
+  try {
+    return await runWithNextCache(
+      getCachedLatestBloggerPostTimestampRunner,
+      fetchLatestBloggerPostTimestampUncached
+    );
+  } catch {
+    return null;
+  }
+}
+
 function startRawPostsRefresh(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
   if (rawPostsInFlight) {
     return rawPostsInFlight;
   }
   const generation = cacheGeneration;
-  const request = fetchAllBloggerPosts()
+  const request = runWithNextCache(getCachedAllBloggerPostsRunner, fetchAllBloggerPosts)
     .then(result => {
       if (generation === cacheGeneration) {
         const completedAt = Date.now();

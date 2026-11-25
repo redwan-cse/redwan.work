@@ -2,7 +2,7 @@ import React from "react"
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL } from "@/lib/content/site"
 import { trySanitizeHttpUrl } from "@/lib/security/safe-redirect"
 
-interface PrintableResumeProps {
+export interface PrintableResumeProps {
   personalInfo: {
     name: string
     title: string
@@ -99,8 +99,6 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
     return (
       <div ref={ref} className="print-resume">
         <style jsx global>{`
-          @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
-          
           @page {
             size: A4;
             margin: 0.6in 0.7in;
@@ -119,7 +117,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             }
             
             .print-resume {
-              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
               font-size: 9.5pt;
               line-height: 1.5;
               color: #1a1a1a;
@@ -131,7 +129,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             
             /* Typography Hierarchy */
             .print-resume .resume-name {
-              font-family: 'Crimson Pro', Georgia, serif;
+              font-family: Georgia, 'Times New Roman', serif;
               font-size: 28pt;
               font-weight: 700;
               letter-spacing: -0.3pt;
@@ -141,7 +139,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             }
             
             .print-resume .resume-title {
-              font-family: 'Inter', sans-serif;
+              font-family: var(--font-inter), 'Inter', sans-serif;
               font-size: 12pt;
               font-weight: 600;
               color: #2563eb;
@@ -184,7 +182,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             
             /* Section Headers */
             .print-resume .section-header {
-              font-family: 'Crimson Pro', Georgia, serif;
+              font-family: Georgia, 'Times New Roman', serif;
               font-size: 12pt;
               font-weight: 700;
               color: #0f172a;
@@ -445,7 +443,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
           /* Screen preview styles */
           @media screen {
             .print-resume {
-              font-family: 'Inter', sans-serif;
+              font-family: var(--font-inter), 'Inter', sans-serif;
               max-width: 210mm;
               min-height: 297mm;
               margin: 0 auto;

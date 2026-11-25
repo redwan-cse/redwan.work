@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { m } from 'motion/react';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import {
   ArrowRight,
@@ -115,18 +114,11 @@ export function BlogBrowser({
                   className={cn(
                     'relative rounded-full border px-3.5 py-1 text-xs font-medium transition-colors',
                     active
-                      ? 'border-primary text-primary-foreground'
+                      ? 'border-primary bg-primary text-primary-foreground shadow-xs'
                       : 'border-border/70 bg-background/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'
                   )}
                 >
-                  {active && (
-                    <m.span
-                      layoutId="blog-tag-pill"
-                      transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-                      className="absolute inset-0 rounded-full bg-primary"
-                    />
-                  )}
-                  <span className="relative z-10">{label}</span>
+                  {label}
                 </button>
               );
             })}
@@ -134,10 +126,9 @@ export function BlogBrowser({
         )}
       </div>
 
-      {/* Featured Article Hero Card on Page 1 */}
+      {/* Featured Article Hero Card on Page 1 — rendered immediately visible for zero LCP delay */}
       {featuredItem && (
-        <ScrollReveal>
-          <InteractiveCard enableTilt={false} className="overflow-hidden p-0">
+        <InteractiveCard enableTilt={false} className="overflow-hidden p-0">
             <div className="grid gap-0 lg:grid-cols-12">
               <button
                 type="button"
@@ -149,6 +140,7 @@ export function BlogBrowser({
                   alt={featuredItem.post.title}
                   fill
                   priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
                   unoptimized={isDirectBlogImage(featuredItem.imageUrl)}
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
@@ -232,7 +224,6 @@ export function BlogBrowser({
               </div>
             </div>
           </InteractiveCard>
-        </ScrollReveal>
       )}
 
       {/* Articles Grid */}
@@ -253,9 +244,9 @@ export function BlogBrowser({
                       src={imageUrl}
                       alt={post.title}
                       fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       unoptimized={isDirectBlogImage(imageUrl)}
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      loading={index < 3 ? 'eager' : 'lazy'}
                     />
                     {post.labels && post.labels.length > 0 && (
                       <div className="absolute top-3 right-3">

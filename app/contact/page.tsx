@@ -100,9 +100,6 @@ export default async function Contact() {
       {/* Main Content */}
       <section className="py-14">
         <div className="container max-w-5xl space-y-12">
-          {/* Active Contract Live Chat (Client-hydrated so /contact stays Edge ISR-cached) */}
-          <ContactActiveChat />
-
           {/* 3 Interactive Quick Channels */}
           <div className="grid gap-6 md:grid-cols-3">
             <ScrollReveal className="h-full">
@@ -179,6 +176,9 @@ export default async function Contact() {
               </InteractiveCard>
             </ScrollReveal>
           </div>
+
+          {/* Active Contract Live Chat (placed below fold-stable channels to avoid top-of-page CLS) */}
+          <ContactActiveChat />
 
           {/* Comprehensive Project Inquiry Form */}
           <ScrollReveal>
