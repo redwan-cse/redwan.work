@@ -242,6 +242,9 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
       try {
         for (const route of WCAG_ROUTES) {
           await page.goto(route, { waitUntil: 'networkidle' });
+          if (theme === 'dark') {
+            await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+          }
           if (route === '/privacy') {
             await page.getByRole('button', { name: 'Privacy & Cookie Controls' }).first().click();
             await expect(
