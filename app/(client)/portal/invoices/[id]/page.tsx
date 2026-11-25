@@ -71,7 +71,7 @@ export default async function ClientInvoiceDetailPage({
         <div>
           <Link
             href="/portal/invoices"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground print:hidden"
+            className="inline-flex min-h-6 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground print:hidden"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Invoices
@@ -153,7 +153,7 @@ export default async function ClientInvoiceDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-12 print:block">
         {/* Left: Line Items & Payment History */}
-        <div className="space-y-6 lg:col-span-7 print:space-y-4">
+        <div className="min-w-0 space-y-6 lg:col-span-7 print:space-y-4">
           <Card className="border-border/80 bg-card/85 print:border-slate-300 print:shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-bold">Invoice Line Items</CardTitle>
@@ -345,7 +345,7 @@ export default async function ClientInvoiceDetailPage({
         </div>
 
         {/* Right: Submit Payment Proof Form (hidden cleanly when printing A4) */}
-        <div className="lg:col-span-5 print:hidden">
+        <div className="min-w-0 lg:col-span-5 print:hidden">
           <Card className="border-primary/30 bg-card/90">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base font-bold">
@@ -380,7 +380,7 @@ export default async function ClientInvoiceDetailPage({
                       name="method"
                       aria-label="Payment proof method"
                       defaultValue="bank_transfer"
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
                     >
                       <option value="bank_transfer">Bank Wire / SWIFT / Local Transfer</option>
                       <option value="wise">Wise (USD / EUR / GBP)</option>
@@ -403,7 +403,7 @@ export default async function ClientInvoiceDetailPage({
                       step="0.01"
                       defaultValue={balanceDueMajor}
                       required
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono text-base md:h-9 md:text-xs"
                     />
                   </div>
 
@@ -414,7 +414,7 @@ export default async function ClientInvoiceDetailPage({
                       name="reference"
                       required
                       placeholder="TXN-98412093 / SWIFT Ref"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono text-base md:h-9 md:text-xs"
                     />
                   </div>
 

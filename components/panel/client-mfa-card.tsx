@@ -201,7 +201,7 @@ export function ClientMfaCard() {
                   maxLength={8}
                   required
                   placeholder="123456"
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono text-base md:h-9 md:text-xs"
                 />
               </div>
               <Button type="submit" size="sm" disabled={busy}>

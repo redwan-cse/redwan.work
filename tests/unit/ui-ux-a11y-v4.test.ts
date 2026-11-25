@@ -181,4 +181,53 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
     expect(adminInvSrc).toContain('hidden border-slate-300 bg-white shadow-none print:block');
     expect(adminInvSrc).toContain('grid gap-6 lg:grid-cols-12 print:block');
   });
+
+  it('[PORTAL-V4-10] renders unread notification badge as aria-hidden sibling (WCAG 2.5.3) and uses shortLabel in mobile bottom nav', () => {
+    const shellSrc = readSrc('components/panel/panel-shell.tsx');
+    expect(shellSrc).toContain('shortLabel?: string;');
+    expect(shellSrc).toContain('item.shortLabel ?? item.label.split');
+    expect(shellSrc).toMatch(/<\/PopoverTrigger>\s*\{unreadNotifications > 0 && \(/);
+    expect(shellSrc).toContain('pointer-events-none absolute -top-1 -right-1');
+
+    const portalLayoutSrc = readSrc('app/(client)/portal/layout.tsx');
+    expect(portalLayoutSrc).toContain("shortLabel: 'Orders'");
+    expect(portalLayoutSrc).toContain("shortLabel: 'New Order'");
+  });
+
+  it('[PORTAL-V4-11] guards Client Portal grid columns with min-w-0 and associates decline textarea labels', () => {
+    const storeSrc = readSrc('components/panel/portal-order-store-form.tsx');
+    expect(storeSrc).toContain('min-w-0 border-primary/30 bg-card/90 lg:col-span-5');
+    expect(storeSrc).toContain('min-w-0 space-y-4 lg:col-span-7');
+    expect(storeSrc).toContain('min-w-0 max-w-full');
+    expect(storeSrc).toContain('text-base md:h-9 md:text-xs');
+
+    const proposalsSrc = readSrc('app/(client)/portal/proposals/page.tsx');
+    expect(proposalsSrc).toContain('htmlFor={`proposal-decline-${prp.id}`}');
+    expect(proposalsSrc).toContain('id={`proposal-decline-${prp.id}`}');
+  });
+
+  it('[PORTAL-V4-12] enforces 16px mobile inputs and 24px+ standalone back links across Client Portal', () => {
+    for (const rel of [
+      'app/(client)/portal/orders/[id]/page.tsx',
+      'app/(client)/portal/invoices/[id]/page.tsx',
+      'app/(client)/portal/proposals/[id]/page.tsx',
+      'app/(client)/portal/tickets/[id]/page.tsx',
+    ]) {
+      expect(readSrc(rel), `${rel} back link should meet 24px target height`).toContain(
+        'inline-flex min-h-6 items-center gap-1.5'
+      );
+    }
+
+    for (const rel of [
+      'app/(client)/portal/profile/page.tsx',
+      'app/(client)/portal/files/page.tsx',
+      'app/(client)/portal/tickets/page.tsx',
+      'components/panel/password-change-card.tsx',
+      'components/panel/client-mfa-card.tsx',
+      'components/panel/contract-live-chat.tsx',
+      'components/panel/r2-file-uploader.tsx',
+    ]) {
+      expect(readSrc(rel), `${rel} should use 16px mobile form typography`).toContain('text-base');
+    }
+  });
 });

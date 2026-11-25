@@ -51,7 +51,7 @@ export default async function ClientTicketDetailPage({
         <div>
           <Link
             href="/portal/tickets"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-6 items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Support Helpdesk
@@ -142,7 +142,7 @@ export default async function ClientTicketDetailPage({
               rows={3}
               required
               placeholder="Write a reply..."
-              className="text-xs"
+              className="text-base md:text-xs"
             />
             <R2FileUploader
               category="ticket_attachment"

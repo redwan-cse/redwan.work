@@ -94,7 +94,10 @@ export const BLOGGER_FIXTURE_POSTS = Array.from({ length: 12 }, (_, idx) => {
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Authorization, apikey, Content-Type, X-Client-Info, X-Supabase-Api-Version, Prefer, Range, x-upsert'
+  );
   res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Type, Content-Length, ETag, Location');
 }
 

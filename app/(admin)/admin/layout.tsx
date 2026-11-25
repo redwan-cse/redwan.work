@@ -39,9 +39,10 @@ export default async function AdminLayout({
   ]);
 
   const navItems: PanelNavItem[] = [
-    { label: 'Overview', href: '/admin', icon: 'dashboard' },
+    { label: 'Overview', shortLabel: 'Overview', href: '/admin', icon: 'dashboard' },
     {
       label: 'Pipeline & Proposals',
+      shortLabel: 'Pipeline',
       href: '/admin/pipeline',
       icon: 'pipeline',
       badge: metrics.new_inquiries ?? 0,
@@ -49,11 +50,12 @@ export default async function AdminLayout({
     },
     {
       label: 'Orders & Delivery',
+      shortLabel: 'Orders',
       href: '/admin/orders',
       icon: 'orders',
       badge: metrics.active_orders ?? 0,
     },
-    { label: 'Clients 360°', href: '/admin/clients', icon: 'clients' },
+    { label: 'Clients 360°', shortLabel: 'Clients', href: '/admin/clients', icon: 'clients' },
     {
       label: 'Billing & Retainers',
       href: '/admin/billing',

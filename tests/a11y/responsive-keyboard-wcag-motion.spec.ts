@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { SEEDED_USERS } from '../harness/loopback-services.mjs';
 
 const RESPONSIVE_VIEWPORTS = [
   { width: 320, height: 640 },
@@ -241,6 +242,9 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
       try {
         for (const route of WCAG_ROUTES) {
           await page.goto(route, { waitUntil: 'networkidle' });
+          if (theme === 'dark') {
+            await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+          }
           if (route === '/privacy') {
             await page.getByRole('button', { name: 'Privacy & Cookie Controls' }).first().click();
             await expect(
@@ -291,6 +295,117 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
       expect(animDurationMs).toBeLessThanOrEqual(1);
     } finally {
       await context.close();
+    }
+  });
+
+  test('[PORTAL-A11Y-4DEVICE] renders authenticated Client Portal routes cleanly across Phone, Tablet, Desktop & 4K TV with zero WCAG AA Axe violations', async ({
+    browser,
+  }) => {
+    const portalRoutes = [
+      '/portal',
+      '/portal/orders/new',
+      '/portal/orders',
+      '/portal/proposals',
+      '/portal/files',
+      '/portal/invoices',
+      '/portal/tickets',
+      '/portal/retainers',
+      '/portal/profile',
+    ];
+
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+
+    try {
+      // Sign in as synthetic loopback client
+      await page.goto('/login');
+      await page.locator('input[name="email"]').first().fill(SEEDED_USERS.client.email);
+      await page.locator('input[name="password"]').fill(SEEDED_USERS.client.password);
+      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await page.waitForURL('**/portal**');
+
+      // 1. Phone (390x844): zero overflow, zero clipped controls, >=16px inputs, and zero Axe WCAG AA violations
+      for (const route of portalRoutes) {
+        await page.setViewportSize({ width: 390, height: 844 });
+        const resp = await page.goto(route, { waitUntil: 'networkidle' });
+        expect(resp?.status(), `HTTP status on ${route}`).toBe(200);
+
+        const mobileMetrics = await page.evaluate(() => {
+          const vw = window.innerWidth;
+          const clipped: string[] = [];
+          const smallInputs: string[] = [];
+          for (const el of document.querySelectorAll('main a, main button, main input, main select, main textarea')) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) continue;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            if (Math.ceil(rect.right) > vw + 1) {
+              clipped.push(`${el.tagName}:${el.getAttribute('name') || el.textContent?.trim().slice(0, 20)}@${Math.round(rect.right)}`);
+            }
+            if (
+              ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) &&
+              (el as HTMLInputElement).type !== 'hidden' &&
+              (el as HTMLInputElement).type !== 'checkbox' &&
+              (el as HTMLInputElement).type !== 'radio'
+            ) {
+              const fs = parseFloat(style.fontSize);
+              if (fs < 16) {
+                smallInputs.push(`${el.tagName}:${el.getAttribute('name') || 'unnamed'}@${fs}px`);
+              }
+            }
+          }
+          return {
+            scrollWidth: document.documentElement.scrollWidth,
+            innerWidth: vw,
+            clipped,
+            smallInputs,
+          };
+        });
+
+        expect(mobileMetrics.scrollWidth, `Overflow on ${route} @ 390px`).toBeLessThanOrEqual(
+          mobileMetrics.innerWidth
+        );
+        expect(mobileMetrics.clipped, `Clipped controls on ${route} @ 390px`).toEqual([]);
+        expect(mobileMetrics.smallInputs, `Sub-16px inputs on ${route} @ 390px`).toEqual([]);
+
+        const axeResults = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const violations = axeResults.violations.map(
+          (v) => `${v.id} (${v.impact}): ${v.help} -> ${v.nodes.map((n) => n.html).join(' | ')}`
+        );
+        expect(violations, `Axe WCAG AA violations on ${route}`).toEqual([]);
+      }
+
+      // 2. Tablet (1024x1366), Desktop (1440x900) & 4K TV (3840x2160)
+      for (const vp of [
+        { width: 1024, height: 1366 },
+        { width: 1440, height: 900 },
+        { width: 3840, height: 2160 },
+      ]) {
+        await page.setViewportSize(vp);
+        for (const route of ['/portal', '/portal/orders/new', '/portal/profile']) {
+          await page.goto(route, { waitUntil: 'domcontentloaded' });
+          const metrics = await page.evaluate(() => ({
+            scrollWidth: document.documentElement.scrollWidth,
+            innerWidth: window.innerWidth,
+            mainInnerWidth: Math.round(
+              document.querySelector('main > div')?.getBoundingClientRect().width || 0
+            ),
+          }));
+          expect(metrics.scrollWidth, `Overflow on ${route} @ ${vp.width}px`).toBeLessThanOrEqual(
+            metrics.innerWidth
+          );
+          if (vp.width >= 2400) {
+            expect(
+              metrics.mainInnerWidth,
+              `4K TV main content width capped at 1600px on ${route}`
+            ).toBeLessThanOrEqual(1600);
+          }
+        }
+      }
+    } finally {
+      await ctx.close();
     }
   });
 });

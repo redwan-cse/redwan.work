@@ -532,7 +532,7 @@ export function ContractLiveChat({
               ? 'Write a live contract update to the client or record an internal note... (Ctrl+Enter to send)'
               : 'Send a direct message regarding your active contract, scope, or deliverables... (Ctrl+Enter to send)'
           }
-          className="bg-background text-xs"
+          className="bg-background text-base md:text-xs"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-3">
