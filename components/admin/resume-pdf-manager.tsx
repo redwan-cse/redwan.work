@@ -214,7 +214,7 @@ export function ResumePdfManager({
                 setError(null);
                 setSuccessInfo(null);
               }}
-              className="h-9 cursor-pointer bg-background text-xs"
+              className="h-10 cursor-pointer bg-background md:h-9"
             />
             {selectedFile && (
               <p className="font-mono text-[11px] text-muted-foreground">

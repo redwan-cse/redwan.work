@@ -195,8 +195,8 @@ export async function BillingHubView({
                   >
                     <input type="hidden" name="payment_id" value={pay.id} />
                     <input type="hidden" name="decision" value="confirmed" />
-                    <div className="flex items-center gap-1">
-                      <Label htmlFor={`pay-fx-${pay.id}`} className="text-[11px] text-muted-foreground">FX→USD:</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label htmlFor={`pay-fx-${pay.id}`} className="text-xs font-medium text-muted-foreground">FX→USD:</Label>
                       <Input
                         id={`pay-fx-${pay.id}`}
                         name="fx_rate"
@@ -208,10 +208,10 @@ export async function BillingHubView({
                             pay.fx_rate_to_usd ??
                             '1.0'
                         )}
-                        className="h-8 w-20 font-mono text-xs"
+                        className="h-9 w-24 font-mono"
                       />
                     </div>
-                    <Button type="submit" size="sm" className="h-8 gap-1 rounded-full">
+                    <Button type="submit" size="sm" className="h-9 gap-1 rounded-full">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Confirm Payment
                     </Button>
@@ -228,9 +228,9 @@ export async function BillingHubView({
                       name="reason"
                       aria-label="Rejection reason"
                       placeholder="Rejection reason..."
-                      className="h-8 w-36 text-xs"
+                      className="h-9 w-40"
                     />
-                    <Button type="submit" size="sm" variant="destructive" className="h-8 gap-1 rounded-full">
+                    <Button type="submit" size="sm" variant="destructive" className="h-9 gap-1 rounded-full">
                       <XCircle className="h-3.5 w-3.5" />
                       Reject
                     </Button>
@@ -261,16 +261,16 @@ export async function BillingHubView({
                 action={createAndIssueInvoiceAction}
                 successMessage="Invoice issued to client."
                 resetOnSuccess
-                className="space-y-3"
+                className="space-y-4"
               >
-                <div className="space-y-1">
-                  <Label htmlFor="quick-inv-client" className="text-xs">Client *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="quick-inv-client" className="text-xs font-medium">Client *</Label>
                   <select
                     id="quick-inv-client"
                     name="client_id"
                     aria-label="Invoice client"
                     required
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="">— Select Client —</option>
                     {(clients ?? []).map((c) => (
@@ -281,13 +281,13 @@ export async function BillingHubView({
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="quick-inv-order" className="text-xs">Link to Order (Optional)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="quick-inv-order" className="text-xs font-medium">Link to Order (Optional)</Label>
                   <select
                     id="quick-inv-order"
                     name="order_id"
                     aria-label="Linked order"
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="">— Standalone Invoice —</option>
                     {(orders ?? []).map((o) => (
@@ -298,25 +298,25 @@ export async function BillingHubView({
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="quick-inv-desc" className="text-xs">Description *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="quick-inv-desc" className="text-xs font-medium">Description *</Label>
                   <Input
                     id="quick-inv-desc"
                     name="description"
                     required
                     placeholder="Milestone 2 Payment or Retainer Billing"
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
 
-                <div className="grid gap-2.5 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-currency" className="text-xs">Currency</Label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-currency" className="text-xs font-medium">Currency</Label>
                     <select
                       id="quick-inv-currency"
                       name="currency"
                       aria-label="Invoice currency"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-2.5 text-base md:h-9 md:text-sm"
                     >
                       <option value="USD">USD</option>
                       <option value="BDT">BDT</option>
@@ -324,8 +324,8 @@ export async function BillingHubView({
                       <option value="GBP">GBP</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-amount" className="text-xs">Amount *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-amount" className="text-xs font-medium">Amount *</Label>
                     <Input
                       id="quick-inv-amount"
                       name="amount_major"
@@ -334,11 +334,11 @@ export async function BillingHubView({
                       required
                       min="1"
                       defaultValue="500"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-fx" className="text-xs">FX→USD</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-fx" className="text-xs font-medium">FX→USD</Label>
                     <Input
                       id="quick-inv-fx"
                       name="fx_rate_to_usd"
@@ -346,14 +346,14 @@ export async function BillingHubView({
                       type="number"
                       step="0.0001"
                       defaultValue="1.0"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
                 </div>
 
-                <div className="grid gap-2.5 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-discount" className="text-xs">Discount</Label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-discount" className="text-xs font-medium">Discount</Label>
                     <Input
                       id="quick-inv-discount"
                       name="discount_major"
@@ -361,36 +361,36 @@ export async function BillingHubView({
                       type="number"
                       min="0"
                       defaultValue="0"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-tax" className="text-xs">Tax bps</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-tax" className="text-xs font-medium">Tax bps</Label>
                     <Input
                       id="quick-inv-tax"
                       name="tax_rate_bps"
                       aria-label="Tax rate in basis points"
                       type="number"
                       defaultValue="0"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="quick-inv-due" className="text-xs">Due Days</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quick-inv-due" className="text-xs font-medium">Due Days</Label>
                     <Input
                       id="quick-inv-due"
                       name="due_days"
                       aria-label="Due days"
                       type="number"
                       defaultValue="7"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="quick-inv-notes" className="text-xs">Invoice Notes</Label>
-                  <Textarea id="quick-inv-notes" name="notes" rows={2} placeholder="Bank wire memo or Net-7 terms" className="text-xs" />
+                <div className="space-y-1.5">
+                  <Label htmlFor="quick-inv-notes" className="text-xs font-medium">Invoice Notes</Label>
+                  <Textarea id="quick-inv-notes" name="notes" rows={2} placeholder="Bank wire memo or Net-7 terms" />
                 </div>
 
                 <Button type="submit" className="w-full gap-1.5 rounded-full">
@@ -414,7 +414,7 @@ export async function BillingHubView({
                   name="status"
                   aria-label="Filter invoices by status"
                   defaultValue={statusFilter}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
                 >
                   <option value="">All Statuses</option>
                   <option value="draft">draft</option>
@@ -534,16 +534,16 @@ export async function BillingHubView({
                 action={createRetainerPlanAction}
                 successMessage="Retainer plan activated."
                 resetOnSuccess
-                className="space-y-3"
+                className="space-y-4"
               >
-                <div className="space-y-1">
-                  <Label htmlFor="ret-client" className="text-xs">Client *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ret-client" className="text-xs font-medium">Client *</Label>
                   <select
                     id="ret-client"
                     name="client_id"
                     aria-label="Retainer client"
                     required
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="">— Select Client —</option>
                     {(clients ?? []).map((c) => (
@@ -553,25 +553,25 @@ export async function BillingHubView({
                     ))}
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="ret-title" className="text-xs">Retainer Plan Title *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ret-title" className="text-xs font-medium">Retainer Plan Title *</Label>
                   <Input
                     id="ret-title"
                     name="title"
                     aria-label="Retainer plan title"
                     required
                     defaultValue="Dedicated Security & Engineering Retainer"
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="ret-usd" className="text-xs">Monthly Rate (USD)</Label>
-                    <Input id="ret-usd" name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-9 font-mono text-xs" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ret-usd" className="text-xs font-medium">Monthly Rate (USD)</Label>
+                    <Input id="ret-usd" name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="ret-hours" className="text-xs">Hours / Month</Label>
-                    <Input id="ret-hours" name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ret-hours" className="text-xs font-medium">Hours / Month</Label>
+                    <Input id="ret-hours" name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-10 font-mono md:h-9" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full gap-1.5 rounded-full">
@@ -589,7 +589,7 @@ export async function BillingHubView({
             <CardContent className="space-y-3">
               {retainers && retainers.length > 0 ? (
                 retainers.map((ret) => (
-                  <div key={ret.id} className="space-y-3 rounded-xl border border-border/80 bg-card p-3.5 text-xs">
+                  <div key={ret.id} className="space-y-3 rounded-xl border border-border/80 bg-card p-4 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
@@ -615,15 +615,15 @@ export async function BillingHubView({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border/60 pt-2.5">
+                    <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border/60 pt-3">
                       <ActionFeedbackForm
                         action={updateRetainerPlanAction}
                         successMessage="Retainer usage updated."
-                        className="flex flex-wrap items-end gap-2"
+                        className="flex flex-wrap items-end gap-3"
                       >
                         <input type="hidden" name="retainer_id" value={ret.id} />
-                        <div className="space-y-1">
-                          <Label htmlFor={`ret-used-${ret.id}`} className="text-[11px]">
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor={`ret-used-${ret.id}`} className="text-xs font-medium">
                             Hours Used ({ret.hours_per_month}h incl.)
                           </Label>
                           <Input
@@ -633,24 +633,24 @@ export async function BillingHubView({
                             type="number"
                             step="0.5"
                             defaultValue={ret.hours_used_current_period}
-                            className="h-8 w-24 font-mono text-xs"
+                            className="h-9 w-28 font-mono"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`ret-status-${ret.id}`} className="text-[11px]">Status</Label>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor={`ret-status-${ret.id}`} className="text-xs font-medium">Status</Label>
                           <select
                             id={`ret-status-${ret.id}`}
                             name="status"
                             aria-label="Retainer status"
                             defaultValue={ret.status}
-                            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+                            className="block h-9 min-w-[7.5rem] rounded-md border border-input bg-background px-3 text-base md:text-sm"
                           >
                             <option value="active">active</option>
                             <option value="paused">paused</option>
                             <option value="cancelled">cancelled</option>
                           </select>
                         </div>
-                        <Button type="submit" size="sm" variant="outline" className="h-8 gap-1 rounded-full text-xs">
+                        <Button type="submit" size="sm" variant="outline" className="h-9 gap-1.5 rounded-full px-3.5 text-xs">
                           <Save className="h-3.5 w-3.5" />
                           Update
                         </Button>
@@ -662,7 +662,7 @@ export async function BillingHubView({
                           successMessage="Retainer cycle rolled forward and renewal invoice issued."
                         >
                           <input type="hidden" name="retainer_id" value={ret.id} />
-                          <Button type="submit" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
+                          <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4 text-xs">
                             <RefreshCw className="h-3.5 w-3.5" />
                             Renew Cycle &amp; Issue Invoice
                           </Button>

@@ -122,41 +122,41 @@ export default async function AdminClientsPage({
               action={inviteOrProvisionClientAction}
               successMessage="Invitation issued and CRM profile initialized."
               resetOnSuccess
-              className="space-y-3"
+              className="space-y-4"
             >
-              <div className="space-y-1">
-                <Label htmlFor="invite-client-email" className="text-xs">Client Email *</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-client-email" className="text-xs font-medium">Client Email *</Label>
                 <Input
                   id="invite-client-email"
                   name="email"
                   type="email"
                   required
                   placeholder="founder@company.com"
-                  className="h-9 text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="invite-client-name" className="text-xs">Full Name *</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-client-name" className="text-xs font-medium">Full Name *</Label>
                 <Input
                   id="invite-client-name"
                   name="full_name"
                   required
                   placeholder="Sarah Jenkins"
-                  className="h-9 text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
-              <div className="grid gap-2.5 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="invite-client-company" className="text-xs">Company / Org</Label>
-                  <Input id="invite-client-company" name="company" placeholder="Acme Security Inc." className="h-9 text-xs" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-client-company" className="text-xs font-medium">Company / Org</Label>
+                  <Input id="invite-client-company" name="company" placeholder="Acme Security Inc." className="h-10 md:h-9" />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="invite-client-tier" className="text-xs">Relationship Tier</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-client-tier" className="text-xs font-medium">Relationship Tier</Label>
                   <select
                     id="invite-client-tier"
                     name="tier"
                     aria-label="Client invite tier"
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="standard">standard</option>
                     <option value="vip">vip</option>
@@ -184,20 +184,20 @@ export default async function AdminClientsPage({
             </div>
             <form method="get" className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                <Search className="pointer-events-none absolute top-2.5 left-2.5 h-3.5 w-3.5 text-muted-foreground md:top-2" aria-hidden="true" />
                 <Input
                   name="q"
                   aria-label="Search clients"
                   defaultValue={params.q ?? ''}
                   placeholder="Search clients..."
-                  className="h-8 w-44 pl-8 text-xs"
+                  className="h-9 w-44 pl-8 md:h-8 md:text-xs"
                 />
               </div>
               <select
                 name="tier"
                 aria-label="Filter clients by tier"
                 defaultValue={tierFilter}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
               >
                 <option value="">All Tiers</option>
                 <option value="standard">standard</option>
@@ -209,7 +209,7 @@ export default async function AdminClientsPage({
                 name="sort"
                 aria-label="Sort clients"
                 defaultValue={sortMode}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
               >
                 <option value="">Newest First</option>
                 <option value="ltv_desc">Highest LTV</option>
@@ -218,7 +218,7 @@ export default async function AdminClientsPage({
                 name="followup"
                 aria-label="Filter by follow-up status"
                 defaultValue={followupFilter}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
               >
                 <option value="">All Follow-Ups</option>
                 <option value="due">Follow-Up Due</option>

@@ -90,7 +90,7 @@ export default async function ClientProfilePage() {
                   name="full_name"
                   aria-label="Full Name"
                   defaultValue={profile?.full_name ?? session.fullName ?? ''}
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
               <div className="space-y-1.5">
@@ -100,7 +100,7 @@ export default async function ClientProfilePage() {
                   aria-label="Account Email"
                   value={session.email}
                   disabled
-                  className="h-10 font-mono text-base opacity-70 md:h-9 md:text-xs"
+                  className="h-10 font-mono opacity-70 md:h-9"
                 />
               </div>
             </div>
@@ -113,7 +113,7 @@ export default async function ClientProfilePage() {
                   name="phone_e164"
                   defaultValue={profile?.phone ?? ''}
                   placeholder="+14155550199"
-                  className="h-10 font-mono text-base md:h-9 md:text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
               <div className="space-y-1.5">
@@ -124,7 +124,7 @@ export default async function ClientProfilePage() {
                   list="iana-timezones"
                   defaultValue={profile?.timezone ?? 'UTC'}
                   placeholder="UTC / Asia/Dhaka / America/New_York"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
                 <datalist id="iana-timezones">
                   {supportedTimezones.map((tz) => (
@@ -142,7 +142,7 @@ export default async function ClientProfilePage() {
                   name="company_name"
                   defaultValue={clientProfile?.company_name ?? ''}
                   placeholder="Acme Security Inc."
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
               <div className="space-y-1.5">
@@ -152,7 +152,7 @@ export default async function ClientProfilePage() {
                   name="company_role"
                   defaultValue={clientProfile?.company_role ?? ''}
                   placeholder="CTO / Engineering Lead"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
             </div>
@@ -165,7 +165,7 @@ export default async function ClientProfilePage() {
                   name="website_url"
                   defaultValue={clientProfile?.website_url ?? ''}
                   placeholder="https://example.com"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
@@ -175,7 +175,7 @@ export default async function ClientProfilePage() {
                   name="tax_id"
                   defaultValue={clientProfile?.tax_id ?? ''}
                   placeholder="Optional for invoices"
-                  className="h-10 font-mono text-base md:h-9 md:text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
@@ -185,7 +185,7 @@ export default async function ClientProfilePage() {
                   name="preferred_currency"
                   aria-label="Preferred billing currency"
                   defaultValue={clientProfile?.preferred_currency ?? 'USD'}
-                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
+                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="BDT">BDT (৳)</option>
@@ -204,14 +204,14 @@ export default async function ClientProfilePage() {
                   aria-label="Billing street address line 1"
                   defaultValue={billingAddr.line1 ?? ''}
                   placeholder="Street Address Line 1"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
                 <Input
                   name="billing_line2"
                   aria-label="Billing suite or unit"
                   defaultValue={billingAddr.line2 ?? ''}
                   placeholder="Suite / Unit (Optional)"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-4">
@@ -220,28 +220,28 @@ export default async function ClientProfilePage() {
                   aria-label="Billing city"
                   defaultValue={billingAddr.city ?? ''}
                   placeholder="City"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
                 <Input
                   name="billing_state"
                   aria-label="Billing state or region"
                   defaultValue={billingAddr.state ?? ''}
                   placeholder="State / Region"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
                 <Input
                   name="billing_postal_code"
                   aria-label="Billing postal code"
                   defaultValue={billingAddr.postal_code ?? ''}
                   placeholder="Postal Code"
-                  className="h-10 font-mono text-base md:h-9 md:text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
                 <Input
                   name="billing_country"
                   aria-label="Billing country"
                   defaultValue={billingAddr.country ?? ''}
                   placeholder="Country"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
             </div>

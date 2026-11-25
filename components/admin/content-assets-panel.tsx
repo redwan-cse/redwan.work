@@ -70,7 +70,7 @@ export async function ContentAssetsPanel() {
                   name="asset_file"
                   required
                   accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"
-                  className="h-9 cursor-pointer text-xs"
+                  className="h-10 cursor-pointer md:h-9"
                 />
               </div>
               <Button type="submit" size="sm" className="w-full rounded-full">

@@ -142,7 +142,6 @@ export default async function ClientTicketDetailPage({
               rows={3}
               required
               placeholder="Write a reply..."
-              className="text-base md:text-xs"
             />
             <R2FileUploader
               category="ticket_attachment"

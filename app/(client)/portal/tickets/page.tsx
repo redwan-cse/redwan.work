@@ -66,7 +66,7 @@ export default async function ClientTicketsPage() {
                   name="subject"
                   required
                   placeholder="Need re-verification of patched API endpoint"
-                  className="h-10 text-base md:h-9 md:text-xs"
+                  className="h-10 md:h-9"
                 />
               </div>
 
@@ -78,7 +78,7 @@ export default async function ClientTicketsPage() {
                     name="priority"
                     aria-label="Ticket priority"
                     defaultValue="medium"
-                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="low">Low (48h SLA)</option>
                     <option value="medium">Medium (24h SLA)</option>
@@ -94,7 +94,7 @@ export default async function ClientTicketsPage() {
                     name="category"
                     aria-label="Ticket category"
                     defaultValue="general"
-                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="general">General Support</option>
                     <option value="technical_support">Technical Support / Outage</option>
@@ -113,7 +113,7 @@ export default async function ClientTicketsPage() {
                   name="order_id"
                   aria-label="Related order"
                   defaultValue=""
-                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
+                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                 >
                   <option value="">General Account / Retainer</option>
                   {(orders ?? []).map((ord) => (
@@ -132,7 +132,6 @@ export default async function ClientTicketsPage() {
                   rows={4}
                   required
                   placeholder="Describe the issue, logs, or reproduction steps..."
-                  className="text-base md:text-xs"
                 />
               </div>
 

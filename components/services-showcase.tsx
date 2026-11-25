@@ -400,7 +400,7 @@ export function ServicesShowcase({
                             ? `Default $${(selectedPkg.priceCents / 100).toLocaleString()} (or enter offer)`
                             : 'Enter your budget offer (USD)'
                         }
-                        className="h-9 text-xs"
+                        className="h-10 md:h-9"
                       />
                     </div>
 
@@ -420,7 +420,7 @@ export function ServicesShowcase({
                           updateDraft(service, { requirements: e.target.value })
                         }
                         placeholder="Add specific features, target URLs, timeline, or custom requirements..."
-                        className="min-h-[36px] py-1.5 text-xs"
+                        className="min-h-[40px] py-2 md:min-h-[36px] md:py-1.5"
                       />
                     </div>
 

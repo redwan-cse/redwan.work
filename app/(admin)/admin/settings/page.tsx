@@ -69,10 +69,10 @@ export default async function AdminSettingsPage() {
               <ActionFeedbackForm
                 action={publishConsentPolicyAction}
                 successMessage="Consent policy published and activated."
-                className="space-y-3"
+                className="space-y-4"
               >
-                <div className="space-y-1">
-                  <Label htmlFor="consent-version" className="text-xs">Version Identifier * (lowercase alphanumeric + hyphens)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="consent-version" className="text-xs font-medium">Version Identifier * (lowercase alphanumeric + hyphens)</Label>
                   <Input
                     id="consent-version"
                     name="version"
@@ -80,11 +80,11 @@ export default async function AdminSettingsPage() {
                     pattern="^[a-z][a-z0-9-]{0,63}$"
                     defaultValue={activePolicy ? `${activePolicy.version}-rev` : 'v2-2026'}
                     placeholder="v2-2026-11"
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono md:h-9"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="consent-checkbox" className="text-xs">Consent Checkbox Label *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="consent-checkbox" className="text-xs font-medium">Consent Checkbox Label *</Label>
                   <Input
                     id="consent-checkbox"
                     name="checkbox"
@@ -93,59 +93,58 @@ export default async function AdminSettingsPage() {
                       activeBundle?.checkbox ??
                       'I have read and agree to the Data & Privacy Policy and Terms of Service.'
                     }
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="consent-privacy-notice" className="text-xs">Privacy Notice *</Label>
+                <div className="grid gap-3.5 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="consent-privacy-notice" className="text-xs font-medium">Privacy Notice *</Label>
                     <Textarea
                       id="consent-privacy-notice"
                       name="privacy_notice"
                       aria-label="Privacy notice summary"
-                      rows={3}
+                      rows={4}
                       required
                       defaultValue={
                         activeBundle?.privacyNotice ??
                         'Inquiry details are processed strictly for security & engineering scope evaluation.'
                       }
-                      className="text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="consent-attachment-notice" className="text-xs">Attachment Notice *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="consent-attachment-notice" className="text-xs font-medium">Attachment Notice *</Label>
                     <Textarea
                       id="consent-attachment-notice"
                       name="attachment_notice"
                       aria-label="Attachment handling notice"
-                      rows={3}
+                      rows={4}
                       required
                       defaultValue={
                         activeBundle?.attachmentNotice ??
                         'Uploaded scope files are stored privately in encrypted R2 storage and purged after retention expiry.'
                       }
-                      className="text-xs"
                     />
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="consent-policy-text" className="text-xs">Full Consent Policy Text *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="consent-policy-text" className="text-xs font-medium">Full Consent Policy Text *</Label>
                   <Textarea
                     id="consent-policy-text"
                     name="policy_text"
                     aria-label="Full consent policy text"
-                    rows={4}
+                    rows={5}
                     required
                     defaultValue={
                       activeBundle?.policyText ??
                       'I consent to redwan.work processing my inquiry details and attached scope files strictly for security & engineering project evaluation in accordance with the Privacy Policy.'
                     }
-                    className="text-xs"
                   />
                 </div>
-                <Button type="submit" size="sm" className="rounded-full">
-                  Publish &amp; Activate Policy Version
-                </Button>
+                <div className="pt-1">
+                  <Button type="submit" size="sm" className="h-9 rounded-full px-4">
+                    Publish &amp; Activate Policy Version
+                  </Button>
+                </div>
               </ActionFeedbackForm>
             </CardContent>
           </Card>

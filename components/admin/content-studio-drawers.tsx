@@ -15,6 +15,7 @@ import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -218,7 +219,7 @@ export function ServicesStudioTable({
       </Card>
 
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl lg:max-w-3xl">
           <SheetHeader className="border-b border-border pb-4 text-left">
             <SheetTitle>
               {editing ? `Edit Service: ${editing.title}` : 'Create New Service Offering'}
@@ -233,44 +234,44 @@ export function ServicesStudioTable({
               key={editing?.id ?? 'new-service'}
               action={upsertServiceAction}
               successMessage="Service saved to catalog."
-              className="space-y-3.5"
+              className="space-y-4"
             >
               {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="svc-title" className="text-xs">Service Title *</Label>
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-title" className="text-xs font-medium">Service Title *</Label>
                   <Input
                     id="svc-title"
                     name="title"
                     required
                     defaultValue={editing?.title ?? ''}
                     placeholder="Cloud Security Posture Audit"
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="svc-slug" className="text-xs">URL Slug *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-slug" className="text-xs font-medium">URL Slug *</Label>
                   <Input
                     id="svc-slug"
                     name="slug"
                     required
                     defaultValue={editing?.slug ?? ''}
                     placeholder="cloud-security-posture-audit"
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono md:h-9"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-4">
-                <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor="svc-pillar" className="text-xs">Pillar *</Label>
+              <div className="grid gap-3.5 sm:grid-cols-4">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="svc-pillar" className="text-xs font-medium">Pillar *</Label>
                   <select
                     id="svc-pillar"
                     name="pillar"
                     aria-label="Service or study pillar"
                     defaultValue={editing?.pillar ?? 'cybersecurity'}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="cybersecurity">cybersecurity</option>
                     <option value="development">development</option>
@@ -279,8 +280,8 @@ export function ServicesStudioTable({
                     <option value="tech_support">tech_support</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="svc-starting-usd" className="text-xs">Starting USD</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-starting-usd" className="text-xs font-medium">Starting USD</Label>
                   <Input
                     id="svc-starting-usd"
                     name="starting_price_usd"
@@ -288,121 +289,114 @@ export function ServicesStudioTable({
                     min="10"
                     required
                     defaultValue={editing ? Math.round((editing.startingPriceCents ?? 15000) / 100) : 250}
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono md:h-9"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="svc-sort-order" className="text-xs">Sort Order</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-sort-order" className="text-xs font-medium">Sort Order</Label>
                   <Input
                     id="svc-sort-order"
                     name="sort_order"
                     type="number"
                     defaultValue={editing?.sortOrder ?? (services.length + 1) * 10}
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono md:h-9"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor="svc-tagline" className="text-xs">Short Tagline *</Label>
+              <div className="grid gap-3.5 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="svc-tagline" className="text-xs font-medium">Short Tagline *</Label>
                   <Input
                     id="svc-tagline"
                     name="tagline"
                     required
                     defaultValue={editing?.tagline ?? ''}
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="space-y-1">
-                    <Label htmlFor="svc-min-days" className="text-xs">Min Days</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="svc-min-days" className="text-xs font-medium">Min Days</Label>
                     <Input
                       id="svc-min-days"
                       name="delivery_days_min"
                       type="number"
                       defaultValue={editing?.deliveryDaysMin ?? 3}
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="svc-max-days" className="text-xs">Max Days</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="svc-max-days" className="text-xs font-medium">Max Days</Label>
                     <Input
                       id="svc-max-days"
                       name="delivery_days_max"
                       type="number"
                       defaultValue={editing?.deliveryDaysMax ?? 14}
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="svc-tools-tags" className="text-xs">Tools Tags (Comma separated)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="svc-tools-tags" className="text-xs font-medium">Tools Tags (Comma separated)</Label>
                 <Input
                   id="svc-tools-tags"
                   name="tools_tags"
                   defaultValue={(editing?.toolsTags ?? []).join(', ')}
                   placeholder="OWASP ASVS, Burp Suite Pro, Nuclei, Terraform"
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="svc-description" className="text-xs">Detailed Description</Label>
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-description" className="text-xs font-medium">Detailed Description</Label>
                   <Textarea
                     id="svc-description"
                     name="description"
                     rows={3}
                     defaultValue={editing?.description ?? ''}
-                    className="text-xs"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="svc-highlights" className="text-xs">Highlights (One per line)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="svc-highlights" className="text-xs font-medium">Highlights (One per line)</Label>
                   <Textarea
                     id="svc-highlights"
                     name="highlights"
                     rows={3}
                     defaultValue={(editing?.highlights ?? []).join('\n')}
-                    className="font-mono text-xs"
+                    className="font-mono"
                   />
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="flex flex-wrap items-center gap-4 text-xs">
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
+                <div className="flex flex-wrap items-center gap-4 text-xs font-medium">
+                  <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                    <FormCheckbox
                       name="requires_roe"
                       defaultChecked={editing?.requiresRoe ?? false}
-                      className="h-6 w-6 rounded accent-primary"
                     />
                     Requires RoE
                   </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
+                  <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                    <FormCheckbox
                       name="is_featured"
                       defaultChecked={editing ? editing.isFeatured : true}
-                      className="h-6 w-6 rounded accent-primary"
                     />
                     Featured
                   </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
+                  <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                    <FormCheckbox
                       name="is_public"
                       defaultChecked={editing ? editing.isPublic : true}
-                      className="h-6 w-6 rounded accent-primary"
                     />
                     Public
                   </label>
                 </div>
-                <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+                <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                   <Save className="h-3.5 w-3.5" />
                   Save Service
                 </Button>
@@ -411,7 +405,7 @@ export function ServicesStudioTable({
 
             {/* Package Tiers inside Drawer for existing DB services */}
             {editing && (
-              <div className="space-y-4 border-t border-border pt-4">
+              <div className="space-y-4 border-t border-border pt-5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Package Tiers ({editing.rawPackages.length})
                 </h3>
@@ -419,7 +413,7 @@ export function ServicesStudioTable({
                 {editing.rawPackages.map((pkg) => (
                   <div
                     key={pkg.id}
-                    className="space-y-2.5 rounded-xl border border-border/80 bg-muted/20 p-3"
+                    className="space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4"
                   >
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="font-mono text-[10px] uppercase text-primary">
@@ -433,118 +427,110 @@ export function ServicesStudioTable({
                         confirmDescription="Deletes this package tier from the service store."
                         destructive
                         variant="ghost"
-                        className="h-7 px-2 text-[11px] text-destructive"
+                        className="h-7 px-2 text-xs text-destructive"
                       />
                     </div>
 
                     <ActionFeedbackForm
                       action={upsertServicePackageAction}
                       successMessage={`${pkg.tier_name} tier updated.`}
-                      className="space-y-2.5"
+                      className="space-y-3"
                     >
                       <input type="hidden" name="id" value={pkg.id} />
                       <input type="hidden" name="service_id" value={editing.id} />
                       <input type="hidden" name="tier_name" value={pkg.tier_name} />
 
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`pkg-name-${pkg.id}`} className="text-[11px]">Package Name</Label>
-                          <Input
-                            id={`pkg-name-${pkg.id}`}
-                            name="package_name"
-                            defaultValue={pkg.package_name}
-                            required
-                            className="h-8 text-xs"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          <div className="space-y-1">
-                            <Label htmlFor={`pkg-price-${pkg.id}`} className="text-[11px]">Price (USD)</Label>
-                            <Input
-                              id={`pkg-price-${pkg.id}`}
-                              name="price_usd"
-                              type="number"
-                              defaultValue={Math.round(pkg.price_cents / 100)}
-                              required
-                              className="h-8 font-mono text-xs"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor={`pkg-dep-${pkg.id}`} className="text-[11px]">Deposit %</Label>
-                            <Input
-                              id={`pkg-dep-${pkg.id}`}
-                              name="deposit_percent"
-                              type="number"
-                              min="0"
-                              max="100"
-                              defaultValue={pkg.deposit_percent ?? 50}
-                              className="h-8 font-mono text-xs"
-                            />
-                          </div>
-                        </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`pkg-name-${pkg.id}`} className="text-xs font-medium">Package Name</Label>
+                        <Input
+                          id={`pkg-name-${pkg.id}`}
+                          name="package_name"
+                          defaultValue={pkg.package_name}
+                          required
+                          className="h-10 md:h-9"
+                        />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`pkg-days-${pkg.id}`} className="text-[11px]">Delivery Days</Label>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`pkg-price-${pkg.id}`} className="text-xs font-medium">Price (USD)</Label>
+                          <Input
+                            id={`pkg-price-${pkg.id}`}
+                            name="price_usd"
+                            type="number"
+                            defaultValue={Math.round(pkg.price_cents / 100)}
+                            required
+                            className="h-10 font-mono md:h-9"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`pkg-dep-${pkg.id}`} className="text-xs font-medium">Deposit %</Label>
+                          <Input
+                            id={`pkg-dep-${pkg.id}`}
+                            name="deposit_percent"
+                            type="number"
+                            min="0"
+                            max="100"
+                            defaultValue={pkg.deposit_percent ?? 50}
+                            className="h-10 font-mono md:h-9"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`pkg-days-${pkg.id}`} className="text-xs font-medium">Delivery Days</Label>
                           <Input
                             id={`pkg-days-${pkg.id}`}
                             name="delivery_days"
                             type="number"
                             defaultValue={pkg.delivery_days}
-                            className="h-8 font-mono text-xs"
+                            className="h-10 font-mono md:h-9"
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`pkg-rev-${pkg.id}`} className="text-[11px]">Revisions Included</Label>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`pkg-rev-${pkg.id}`} className="text-xs font-medium">Revisions</Label>
                           <Input
                             id={`pkg-rev-${pkg.id}`}
                             name="revisions_included"
                             type="number"
                             defaultValue={pkg.revisions_included}
-                            className="h-8 font-mono text-xs"
+                            className="h-10 font-mono md:h-9"
                           />
                         </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <Label htmlFor={`pkg-sum-${pkg.id}`} className="text-[11px]">Summary</Label>
-                        <Input id={`pkg-sum-${pkg.id}`} name="summary" defaultValue={pkg.summary} required className="h-8 text-xs" />
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`pkg-sum-${pkg.id}`} className="text-xs font-medium">Summary</Label>
+                        <Input id={`pkg-sum-${pkg.id}`} name="summary" defaultValue={pkg.summary} required className="h-10 md:h-9" />
                       </div>
 
-                      <div className="space-y-1">
-                        <Label htmlFor={`pkg-feat-${pkg.id}`} className="text-[11px]">Features (One per line)</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`pkg-feat-${pkg.id}`} className="text-xs font-medium">Features (One per line)</Label>
                         <Textarea
                           id={`pkg-feat-${pkg.id}`}
                           name="features"
-                          rows={2}
+                          rows={3}
                           defaultValue={(pkg.features ?? []).join('\n')}
-                          className="font-mono text-[11px]"
+                          className="font-mono"
                         />
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                        <div className="flex items-center gap-3 text-[11px]">
+                        <div className="flex items-center gap-4 text-xs font-medium">
                           <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
-                            <input
-                              type="checkbox"
+                            <FormCheckbox
                               name="is_popular"
                               defaultChecked={pkg.is_popular}
-                              className="h-6 w-6 rounded accent-primary"
                             />
                             Popular
                           </label>
                           <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
-                            <input
-                              type="checkbox"
+                            <FormCheckbox
                               name="is_active"
                               defaultChecked={pkg.is_active}
-                              className="h-6 w-6 rounded accent-primary"
                             />
                             Active
                           </label>
                         </div>
-                        <Button type="submit" size="sm" variant="secondary" className="h-7 text-[11px]">
+                        <Button type="submit" size="sm" variant="secondary" className="h-8 px-3.5 text-xs">
                           Update Tier
                         </Button>
                       </div>
@@ -557,38 +543,117 @@ export function ServicesStudioTable({
                   action={upsertServicePackageAction}
                   successMessage="Package tier saved."
                   resetOnSuccess
-                  className="space-y-2.5 rounded-xl border border-dashed border-border/80 bg-muted/15 p-3 text-xs"
+                  className="space-y-3.5 rounded-xl border border-dashed border-border/80 bg-muted/15 p-4 text-xs"
                 >
-                  <div className="font-semibold text-primary">+ Add or Replace Tier</div>
+                  <div className="text-sm font-semibold text-primary">+ Add or Replace Tier</div>
                   <input type="hidden" name="service_id" value={editing.id} />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <select
-                      name="tier_name"
-                      aria-label="Package tier name"
-                      defaultValue="Standard"
-                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                    >
-                      <option value="Starter">Starter</option>
-                      <option value="Standard">Standard</option>
-                      <option value="Enterprise">Enterprise</option>
-                      <option value="Custom">Custom</option>
-                    </select>
-                    <Input name="package_name" aria-label="New package name" placeholder="Package Name *" required className="h-8 sm:col-span-2 text-xs" />
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-tier-name" className="text-xs font-medium">Tier *</Label>
+                      <select
+                        id="new-tier-name"
+                        name="tier_name"
+                        aria-label="Package tier name"
+                        defaultValue="Standard"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                      >
+                        <option value="Starter">Starter</option>
+                        <option value="Standard">Standard</option>
+                        <option value="Enterprise">Enterprise</option>
+                        <option value="Custom">Custom</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="new-tier-pkg-name" className="text-xs font-medium">Package Name *</Label>
+                      <Input
+                        id="new-tier-pkg-name"
+                        name="package_name"
+                        aria-label="New package name"
+                        placeholder="e.g. Full Production Audit"
+                        required
+                        className="h-10 md:h-9"
+                      />
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <Input name="price_usd" aria-label="New tier price in USD" type="number" defaultValue={500} required placeholder="USD" className="h-8 font-mono text-xs" />
-                    <Input name="deposit_percent" aria-label="New tier deposit percent" type="number" defaultValue={50} placeholder="Dep %" className="h-8 font-mono text-xs" />
-                    <Input name="delivery_days" aria-label="New tier delivery days" type="number" defaultValue={7} placeholder="Days" className="h-8 font-mono text-xs" />
-                    <Input name="revisions_included" aria-label="New tier revisions included" type="number" defaultValue={2} placeholder="Rev" className="h-8 font-mono text-xs" />
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-tier-price" className="text-xs font-medium">Price (USD) *</Label>
+                      <Input
+                        id="new-tier-price"
+                        name="price_usd"
+                        aria-label="New tier price in USD"
+                        type="number"
+                        defaultValue={500}
+                        required
+                        placeholder="USD"
+                        className="h-10 font-mono md:h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-tier-dep" className="text-xs font-medium">Deposit %</Label>
+                      <Input
+                        id="new-tier-dep"
+                        name="deposit_percent"
+                        aria-label="New tier deposit percent"
+                        type="number"
+                        defaultValue={50}
+                        placeholder="Dep %"
+                        className="h-10 font-mono md:h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-tier-days" className="text-xs font-medium">Delivery Days</Label>
+                      <Input
+                        id="new-tier-days"
+                        name="delivery_days"
+                        aria-label="New tier delivery days"
+                        type="number"
+                        defaultValue={7}
+                        placeholder="Days"
+                        className="h-10 font-mono md:h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-tier-rev" className="text-xs font-medium">Revisions</Label>
+                      <Input
+                        id="new-tier-rev"
+                        name="revisions_included"
+                        aria-label="New tier revisions included"
+                        type="number"
+                        defaultValue={2}
+                        placeholder="Rev"
+                        className="h-10 font-mono md:h-9"
+                      />
+                    </div>
                   </div>
-                  <Input name="summary" aria-label="New tier short summary" placeholder="Short tier summary *" required className="h-8 text-xs" />
-                  <Textarea name="features" aria-label="New tier features" rows={2} placeholder="Features (one per line)" className="font-mono text-xs" />
-                  <div className="flex items-center justify-between">
-                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs">
-                      <input type="checkbox" name="is_active" defaultChecked className="h-6 w-6 rounded accent-primary" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-tier-summary" className="text-xs font-medium">Short Summary *</Label>
+                    <Input
+                      id="new-tier-summary"
+                      name="summary"
+                      aria-label="New tier short summary"
+                      placeholder="Concise scope summary shown on package card..."
+                      required
+                      className="h-10 md:h-9"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-tier-features" className="text-xs font-medium">Features (One per line)</Label>
+                    <Textarea
+                      id="new-tier-features"
+                      name="features"
+                      aria-label="New tier features"
+                      rows={3}
+                      placeholder="OWASP manual testing&#10;Executive PDF report&#10;1x retest verification"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs font-medium">
+                      <FormCheckbox name="is_active" defaultChecked />
                       Active tier
                     </label>
-                    <Button type="submit" size="sm" className="h-8 rounded-full text-xs">
+                    <Button type="submit" size="sm" className="h-9 rounded-full px-4 text-xs">
                       Save Package Tier
                     </Button>
                   </div>
@@ -723,33 +788,33 @@ export function PortfolioStudioTable({
             key={editing?.dbId ?? 'new-portfolio'}
             action={upsertPortfolioItemAction}
             successMessage="Portfolio case study saved."
-            className="space-y-3.5 py-4"
+            className="space-y-4 py-4"
           >
             {editing ? <input type="hidden" name="id" value={editing.dbId} /> : null}
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label htmlFor="cs-code" className="text-xs">Code *</Label>
+            <div className="grid gap-3.5 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-code" className="text-xs font-medium">Code *</Label>
                 <Input
                   id="cs-code"
                   name="code"
                   required
                   defaultValue={editing?.code ?? `CS-${101 + studies.length}`}
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-year" className="text-xs">Year *</Label>
-                <Input id="cs-year" name="year" required defaultValue={editing?.year ?? '2026'} className="h-9 font-mono text-xs" />
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-year" className="text-xs font-medium">Year *</Label>
+                <Input id="cs-year" name="year" required defaultValue={editing?.year ?? '2026'} className="h-10 font-mono md:h-9" />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-pillar" className="text-xs">Pillar *</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-pillar" className="text-xs font-medium">Pillar *</Label>
                 <select
                   id="cs-pillar"
                   name="pillar"
                   aria-label="Case study pillar"
                   defaultValue={editing?.pillar ?? 'cybersecurity'}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                 >
                   <option value="cybersecurity">cybersecurity</option>
                   <option value="development">development</option>
@@ -760,125 +825,121 @@ export function PortfolioStudioTable({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cs-title" className="text-xs">Title *</Label>
-                <Input id="cs-title" name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-title" className="text-xs font-medium">Title *</Label>
+                <Input id="cs-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10 md:h-9" />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-slug" className="text-xs">URL Slug *</Label>
-                <Input id="cs-slug" name="slug" required defaultValue={editing?.slug ?? ''} className="h-9 font-mono text-xs" />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cs-sector" className="text-xs">Client Sector *</Label>
-                <Input id="cs-sector" name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-9 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-metric" className="text-xs">Headline Metric *</Label>
-                <Input id="cs-metric" name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-9 font-mono text-xs" />
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-slug" className="text-xs font-medium">URL Slug *</Label>
+                <Input id="cs-slug" name="slug" required defaultValue={editing?.slug ?? ''} className="h-10 font-mono md:h-9" />
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cs-related-svc" className="text-xs">Related Service Slug *</Label>
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-sector" className="text-xs font-medium">Client Sector *</Label>
+                <Input id="cs-sector" name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-10 md:h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-metric" className="text-xs font-medium">Headline Metric *</Label>
+                <Input id="cs-metric" name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-10 font-mono md:h-9" />
+              </div>
+            </div>
+
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-related-svc" className="text-xs font-medium">Related Service Slug *</Label>
                 <Input
                   id="cs-related-svc"
                   name="related_service_slug"
                   required
                   defaultValue={editing?.relatedServiceSlug ?? 'vapt-penetration-testing'}
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-external-url" className="text-xs">External Reference / Repo URL</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-external-url" className="text-xs font-medium">External Reference / Repo URL</Label>
                 <Input
                   id="cs-external-url"
                   name="external_url"
                   defaultValue={editing?.externalUrl ?? ''}
                   placeholder="https://github.com/..."
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cs-summary" className="text-xs">Executive Summary *</Label>
-              <Textarea id="cs-summary" name="summary" rows={2} required defaultValue={editing?.summary ?? ''} className="text-xs" />
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-summary" className="text-xs font-medium">Executive Summary *</Label>
+              <Textarea id="cs-summary" name="summary" rows={3} required defaultValue={editing?.summary ?? ''} />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cs-challenge" className="text-xs">Challenge / Problem *</Label>
-                <Textarea id="cs-challenge" name="challenge" rows={3} required defaultValue={editing?.challenge ?? ''} className="text-xs" />
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-challenge" className="text-xs font-medium">Challenge / Problem *</Label>
+                <Textarea id="cs-challenge" name="challenge" rows={3} required defaultValue={editing?.challenge ?? ''} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-approach" className="text-xs">Approach (One step per line)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-approach" className="text-xs font-medium">Approach (One step per line)</Label>
                 <Textarea
                   id="cs-approach"
                   name="approach"
                   rows={3}
                   defaultValue={(editing?.approach ?? []).join('\n')}
-                  className="font-mono text-xs"
+                  className="font-mono"
                 />
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cs-outcomes" className="text-xs">Verified Outcomes (One per line)</Label>
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-outcomes" className="text-xs font-medium">Verified Outcomes (One per line)</Label>
                 <Textarea
                   id="cs-outcomes"
                   name="outcomes"
                   rows={3}
                   defaultValue={(editing?.outcomes ?? []).join('\n')}
-                  className="font-mono text-xs"
+                  className="font-mono"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cs-stack" className="text-xs">Tech Stack (Comma separated)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-stack" className="text-xs font-medium">Tech Stack (Comma separated)</Label>
                 <Textarea
                   id="cs-stack"
                   name="stack"
                   rows={3}
                   defaultValue={(editing?.stack ?? []).join(', ')}
-                  className="font-mono text-xs"
+                  className="font-mono"
                 />
               </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex flex-wrap items-center gap-4 text-xs">
+              <div className="flex flex-wrap items-center gap-4 text-xs font-medium">
                 <Input
                   name="sort_order"
                   aria-label="Case study sort order"
                   type="number"
                   defaultValue={editing?.sortOrder ?? (studies.length + 1) * 10}
-                  className="h-8 w-20 font-mono text-xs"
+                  className="h-9 w-24 font-mono"
                 />
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
+                <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                  <FormCheckbox
                     name="is_featured"
                     defaultChecked={editing ? editing.isFeatured : true}
-                    className="h-6 w-6 rounded accent-primary"
                   />
                   Featured
                 </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
+                <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                  <FormCheckbox
                     name="is_published"
                     defaultChecked={editing ? editing.isPublished : true}
-                    className="h-6 w-6 rounded accent-primary"
                   />
                   Published
                 </label>
               </div>
-              <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+              <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                 <Save className="h-3.5 w-3.5" />
                 Save Case Study
               </Button>
@@ -1011,19 +1072,19 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
             key={editing?.id ?? 'new-resume'}
             action={upsertResumeItemAction}
             successMessage="Resume entry saved."
-            className="space-y-3.5 py-4"
+            className="space-y-4 py-4"
           >
             {editing ? <input type="hidden" name="id" value={editing.id} /> : null}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cv-section" className="text-xs">Section *</Label>
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-section" className="text-xs font-medium">Section *</Label>
                 <select
                   id="cv-section"
                   name="section"
                   aria-label="Resume section category"
                   defaultValue={editing?.section ?? 'experience'}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 text-xs"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                 >
                   <option value="experience">Work Experience</option>
                   <option value="vendor_certification">Vendor Certification</option>
@@ -1033,86 +1094,84 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                   <option value="education">Academic Education</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cv-period" className="text-xs">Period / Year Label</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-period" className="text-xs font-medium">Period / Year Label</Label>
                 <Input
                   id="cv-period"
                   name="period"
                   defaultValue={editing?.period ?? ''}
                   placeholder="2025 – Present"
-                  className="h-9 font-mono text-xs"
+                  className="h-10 font-mono md:h-9"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cv-title" className="text-xs">Title / Role / Degree / Paper *</Label>
-              <Input id="cv-title" name="title" required defaultValue={editing?.title ?? ''} className="h-9 text-xs" />
+            <div className="space-y-1.5">
+              <Label htmlFor="cv-title" className="text-xs font-medium">Title / Role / Degree / Paper *</Label>
+              <Input id="cv-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10 md:h-9" />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cv-org" className="text-xs">Organization / Issuer</Label>
-                <Input id="cv-org" name="organization" defaultValue={editing?.organization ?? ''} className="h-9 text-xs" />
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-org" className="text-xs font-medium">Organization / Issuer</Label>
+                <Input id="cv-org" name="organization" defaultValue={editing?.organization ?? ''} className="h-10 md:h-9" />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="cv-role-type" className="text-xs">Role Type</Label>
-                <Input id="cv-role-type" name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-9 text-xs" />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="cv-location" className="text-xs">Location</Label>
-                <Input id="cv-location" name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-9 text-xs" />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="cv-badge" className="text-xs">Badge Label</Label>
-                <Input id="cv-badge" name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-9 font-mono text-xs" />
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-role-type" className="text-xs font-medium">Role Type</Label>
+                <Input id="cv-role-type" name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-10 md:h-9" />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cv-verify-url" className="text-xs">Verification / DOI Link</Label>
-              <Input id="cv-verify-url" name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-9 font-mono text-xs" />
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-location" className="text-xs font-medium">Location</Label>
+                <Input id="cv-location" name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-10 md:h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cv-badge" className="text-xs font-medium">Badge Label</Label>
+                <Input id="cv-badge" name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-10 font-mono md:h-9" />
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cv-desc" className="text-xs">Summary / Abstract Description</Label>
-              <Textarea id="cv-desc" name="description" rows={2} defaultValue={editing?.description ?? ''} className="text-xs" />
+            <div className="space-y-1.5">
+              <Label htmlFor="cv-verify-url" className="text-xs font-medium">Verification / DOI Link</Label>
+              <Input id="cv-verify-url" name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-10 font-mono md:h-9" />
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cv-highlights" className="text-xs">Highlights / Bullets (One per line)</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="cv-desc" className="text-xs font-medium">Summary / Abstract Description</Label>
+              <Textarea id="cv-desc" name="description" rows={3} defaultValue={editing?.description ?? ''} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="cv-highlights" className="text-xs font-medium">Highlights / Bullets (One per line)</Label>
               <Textarea
                 id="cv-highlights"
                 name="highlights"
                 rows={3}
                 defaultValue={(editing?.highlights ?? []).join('\n')}
-                className="font-mono text-xs"
+                className="font-mono"
               />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-xs font-medium">
                 <Input
                   name="sort_order"
                   aria-label="Resume entry sort order"
                   type="number"
                   defaultValue={editing?.sort_order ?? 10}
-                  className="h-8 w-20 font-mono text-xs"
+                  className="h-9 w-24 font-mono"
                 />
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
+                <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                  <FormCheckbox
                     name="is_visible"
                     defaultChecked={editing ? editing.is_visible : true}
-                    className="h-6 w-6 rounded accent-primary"
                   />
                   Visible on /resume
                 </label>
               </div>
-              <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+              <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                 <Save className="h-3.5 w-3.5" />
                 Save Entry
               </Button>

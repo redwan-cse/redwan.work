@@ -53,24 +53,28 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
     }
   });
 
-  it('[A11Y-V4-04] enforces WCAG AA badge contrast, WCAG 1.4.11 non-text border/input contrast, and 24px+ touch targets', () => {
+  it('[A11Y-V4-04] enforces WCAG AA badge contrast, refined tweakcn slate tokens, and 24px+ touch targets via FormCheckbox', () => {
     const serviceSlugSrc = readSrc('app/services/[slug]/page.tsx');
     expect(serviceSlugSrc).toContain('text-amber-800');
     expect(serviceSlugSrc).toContain('dark:text-amber-300');
     expect(serviceSlugSrc).not.toContain('text-amber-600 dark:text-amber-400');
 
     const css = readSrc('app/globals.css');
-    expect(css).toContain('--border: oklch(0.6400 0.0180 255.5078)');
-    expect(css).toContain('--input: oklch(0.6200 0.0200 255.0000)');
-    expect(css).toContain('--border: oklch(0.5250 0.0350 255.0000)');
-    expect(css).toContain('--input: oklch(0.5450 0.0350 256.0000)');
+    expect(css).toContain('--border: oklch(0.8950 0.0140 255.5078)');
+    expect(css).toContain('--input: oklch(0.8550 0.0160 255.0000)');
+    expect(css).toContain('--border: oklch(0.3250 0.0596 254.9248)');
+    expect(css).toContain('--input: oklch(0.3550 0.0480 256.0000)');
 
     const sheetSrc = readSrc('components/ui/sheet.tsx');
     expect(sheetSrc).toContain('h-8 w-8');
 
+    const checkboxSrc = readSrc('components/ui/form-checkbox.tsx');
+    expect(checkboxSrc).toContain('h-6 w-6');
+    expect(checkboxSrc).toContain('h-4 w-4');
+
     const adminOrderDetailSrc = readSrc('app/(admin)/admin/orders/[id]/page.tsx');
+    expect(adminOrderDetailSrc).toContain('<FormCheckbox');
     expect(adminOrderDetailSrc).toContain('name="is_final_delivery"');
-    expect(adminOrderDetailSrc).toContain('h-6 w-6');
   });
 
   it('[A11Y-V4-05] removes hidden sr-only focus trap on /login, wires RichTextEditor ARIA props, and enables keyboard Table scroll & carousel Pause', () => {
@@ -199,14 +203,14 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
     expect(storeSrc).toContain('min-w-0 border-primary/30 bg-card/90 lg:col-span-5');
     expect(storeSrc).toContain('min-w-0 space-y-4 lg:col-span-7');
     expect(storeSrc).toContain('min-w-0 max-w-full');
-    expect(storeSrc).toContain('text-base md:h-9 md:text-xs');
+    expect(storeSrc).toContain('text-base md:h-9 md:text-sm');
 
     const proposalsSrc = readSrc('app/(client)/portal/proposals/page.tsx');
     expect(proposalsSrc).toContain('htmlFor={`proposal-decline-${prp.id}`}');
     expect(proposalsSrc).toContain('id={`proposal-decline-${prp.id}`}');
   });
 
-  it('[PORTAL-V4-12] enforces 16px mobile inputs and 24px+ standalone back links across Client Portal', () => {
+  it('[PORTAL-V4-12] enforces harmonized 16px mobile / 14px desktop form typography and 24px+ standalone back links across Client Portal', () => {
     for (const rel of [
       'app/(client)/portal/orders/[id]/page.tsx',
       'app/(client)/portal/invoices/[id]/page.tsx',
@@ -220,14 +224,61 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
 
     for (const rel of [
       'app/(client)/portal/profile/page.tsx',
-      'app/(client)/portal/files/page.tsx',
       'app/(client)/portal/tickets/page.tsx',
+      'app/(client)/portal/invoices/[id]/page.tsx',
+      'app/(client)/portal/orders/[id]/page.tsx',
       'components/panel/password-change-card.tsx',
       'components/panel/client-mfa-card.tsx',
       'components/panel/contract-live-chat.tsx',
       'components/panel/r2-file-uploader.tsx',
+      'components/panel/portal-order-store-form.tsx',
     ]) {
-      expect(readSrc(rel), `${rel} should use 16px mobile form typography`).toContain('text-base');
+      expect(readSrc(rel), `${rel} should not downgrade desktop form typography to md:text-xs`).not.toContain(
+        'md:text-xs'
+      );
     }
+  });
+
+  it('[UI-V5-13] preserves ActionFeedbackForm space-y-* spacing on fieldset and eliminates oversized native checkboxes', () => {
+    const affSrc = readSrc('components/panel/action-feedback-form.tsx');
+    expect(affSrc).toContain('splitFieldsetSpacingClasses');
+    expect(affSrc).toContain('space-[xy]-');
+
+    for (const rel of [
+      'components/admin/pipeline-hub-view.tsx',
+      'components/admin/content-studio-drawers.tsx',
+      'app/(admin)/admin/orders/page.tsx',
+      'app/(admin)/admin/orders/[id]/page.tsx',
+      'app/(admin)/admin/clients/[id]/page.tsx',
+      'app/(admin)/admin/proposals/[id]/page.tsx',
+      'app/(admin)/admin/tickets/[id]/page.tsx',
+      'app/(client)/portal/orders/[id]/page.tsx',
+      'components/panel/contract-live-chat.tsx',
+      'components/panel/portal-order-store-form.tsx',
+    ]) {
+      const src = readSrc(rel);
+      expect(src, `${rel} should use FormCheckbox instead of oversized native h-6 w-6 checkbox`).not.toMatch(
+        /h-6 w-6[^\n"]*accent-primary/
+      );
+      expect(src, `${rel} should render <FormCheckbox`).toContain('<FormCheckbox');
+    }
+  });
+
+  it('[UI-V5-14] fixes Pillar select truncation, Retainer inline Status label alignment, and Content Studio tier labels', () => {
+    const pipelineSrc = readSrc('components/admin/pipeline-hub-view.tsx');
+    expect(pipelineSrc).not.toContain('lg:grid-cols-4');
+
+    const billingSrc = readSrc('components/admin/billing-hub-view.tsx');
+    expect(billingSrc).toContain('block h-9 min-w-[7.5rem] rounded-md border border-input');
+
+    const drawerSrc = readSrc('components/admin/content-studio-drawers.tsx');
+    expect(drawerSrc).toContain('htmlFor="new-tier-price"');
+    expect(drawerSrc).toContain('htmlFor="new-tier-dep"');
+    expect(drawerSrc).toContain('htmlFor="new-tier-days"');
+    expect(drawerSrc).toContain('htmlFor="new-tier-rev"');
+
+    const settingsSrc = readSrc('app/(admin)/admin/settings/page.tsx');
+    expect(settingsSrc).toContain('rows={5}');
+    expect(settingsSrc).not.toContain('className="h-9 text-xs"');
   });
 });

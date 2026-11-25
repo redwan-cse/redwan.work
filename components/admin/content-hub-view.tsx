@@ -91,129 +91,129 @@ export async function ContentHubView({
               <ActionFeedbackForm
                 action={updateSiteSettingsAction}
                 successMessage="Site profile & skills matrix saved."
-                className="space-y-3.5"
+                className="space-y-4"
               >
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Full Name *</Label>
-                    <Input name="full_name" aria-label="Full Name" defaultValue={resumeData.settings.full_name} required className="h-9 text-xs" />
+                <div className="grid gap-3.5 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Full Name *</Label>
+                    <Input name="full_name" aria-label="Full Name" defaultValue={resumeData.settings.full_name} required className="h-10 md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Role Title *</Label>
-                    <Input name="role_title" aria-label="Role Title" defaultValue={resumeData.settings.role_title} required className="h-9 text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Role Title *</Label>
+                    <Input name="role_title" aria-label="Role Title" defaultValue={resumeData.settings.role_title} required className="h-10 md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Short Role</Label>
-                    <Input name="short_role" aria-label="Short Role" defaultValue={resumeData.settings.short_role} className="h-9 text-xs" />
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Subtitle</Label>
-                    <Input name="subtitle" aria-label="Subtitle" defaultValue={resumeData.settings.subtitle} className="h-9 text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tagline</Label>
-                    <Input name="tagline" aria-label="Tagline" defaultValue={resumeData.settings.tagline} className="h-9 text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Short Role</Label>
+                    <Input name="short_role" aria-label="Short Role" defaultValue={resumeData.settings.short_role} className="h-10 md:h-9" />
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Email *</Label>
-                    <Input name="email" aria-label="Public Email" defaultValue={resumeData.settings.email} required className="h-9 font-mono text-xs" />
+                <div className="grid gap-3.5 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Subtitle</Label>
+                    <Input name="subtitle" aria-label="Subtitle" defaultValue={resumeData.settings.subtitle} className="h-10 md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Phone *</Label>
-                    <Input name="phone" aria-label="Phone Number" defaultValue={resumeData.settings.phone} required className="h-9 font-mono text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">WhatsApp</Label>
-                    <Input name="whatsapp_number" aria-label="WhatsApp Number" defaultValue={resumeData.settings.whatsapp_number} className="h-9 font-mono text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Location *</Label>
-                    <Input name="location" aria-label="Location" defaultValue={resumeData.settings.location} required className="h-9 text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Tagline</Label>
+                    <Input name="tagline" aria-label="Tagline" defaultValue={resumeData.settings.tagline} className="h-10 md:h-9" />
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Cal.com URL</Label>
-                    <Input name="cal_com_url" aria-label="Cal.com URL" defaultValue={resumeData.settings.cal_com_url} className="h-9 font-mono text-xs" />
+                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Email *</Label>
+                    <Input name="email" aria-label="Public Email" defaultValue={resumeData.settings.email} required className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">LinkedIn URL</Label>
-                    <Input name="linkedin_url" aria-label="LinkedIn URL" defaultValue={resumeData.settings.linkedin_url} className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Phone *</Label>
+                    <Input name="phone" aria-label="Phone Number" defaultValue={resumeData.settings.phone} required className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">GitHub URL</Label>
-                    <Input name="github_url" aria-label="GitHub URL" defaultValue={resumeData.settings.github_url} className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">WhatsApp</Label>
+                    <Input name="whatsapp_number" aria-label="WhatsApp Number" defaultValue={resumeData.settings.whatsapp_number} className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Company Name</Label>
-                    <Input name="company_name" aria-label="Company Name" defaultValue={resumeData.settings.company_name} className="h-9 text-xs" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Company URL</Label>
-                    <Input name="company_url" aria-label="Company URL" defaultValue={resumeData.settings.company_url} className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Location *</Label>
+                    <Input name="location" aria-label="Location" defaultValue={resumeData.settings.location} required className="h-10 md:h-9" />
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Website URL</Label>
-                    <Input name="website_url" aria-label="Website URL" defaultValue={resumeData.settings.website_url} className="h-9 font-mono text-xs" />
+                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Cal.com URL</Label>
+                    <Input name="cal_com_url" aria-label="Cal.com URL" defaultValue={resumeData.settings.cal_com_url} className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Resume PDF URL</Label>
-                    <Input name="resume_pdf_url" aria-label="Resume PDF URL" defaultValue={resumeData.settings.resume_pdf_url} className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">LinkedIn URL</Label>
+                    <Input name="linkedin_url" aria-label="LinkedIn URL" defaultValue={resumeData.settings.linkedin_url} className="h-10 font-mono md:h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">GitHub URL</Label>
+                    <Input name="github_url" aria-label="GitHub URL" defaultValue={resumeData.settings.github_url} className="h-10 font-mono md:h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Company Name</Label>
+                    <Input name="company_name" aria-label="Company Name" defaultValue={resumeData.settings.company_name} className="h-10 md:h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Company URL</Label>
+                    <Input name="company_url" aria-label="Company URL" defaultValue={resumeData.settings.company_url} className="h-10 font-mono md:h-9" />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs">Executive Bio *</Label>
-                  <Textarea name="executive_summary" aria-label="Executive Bio" rows={3} defaultValue={resumeData.settings.executive_summary} required className="text-xs" />
+                <div className="grid gap-3.5 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Website URL</Label>
+                    <Input name="website_url" aria-label="Website URL" defaultValue={resumeData.settings.website_url} className="h-10 font-mono md:h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Resume PDF URL</Label>
+                    <Input name="resume_pdf_url" aria-label="Resume PDF URL" defaultValue={resumeData.settings.resume_pdf_url} className="h-10 font-mono md:h-9" />
+                  </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Research Interests</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Executive Bio *</Label>
+                  <Textarea name="executive_summary" aria-label="Executive Bio" rows={4} defaultValue={resumeData.settings.executive_summary} required />
+                </div>
+
+                <div className="grid gap-3.5 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Research Interests</Label>
                     <Textarea
                       name="research_interests"
                       aria-label="Research Interests"
-                      rows={3}
+                      rows={4}
                       defaultValue={(resumeData.settings.research_interests ?? []).join('\n')}
-                      className="font-mono text-xs"
+                      className="font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Soft Skills</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Soft Skills</Label>
                     <Textarea
                       name="soft_skills"
                       aria-label="Soft Skills"
-                      rows={3}
+                      rows={4}
                       defaultValue={(resumeData.settings.soft_skills ?? []).join('\n')}
-                      className="font-mono text-xs"
+                      className="font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Other Skills</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Other Skills</Label>
                     <Textarea
                       name="other_skills"
                       aria-label="Other Skills"
-                      rows={3}
+                      rows={4}
                       defaultValue={(resumeData.settings.other_skills ?? []).join('\n')}
-                      className="font-mono text-xs"
+                      className="font-mono"
                     />
                   </div>
                 </div>
 
                 <SkillsMatrixEditor initialSkills={resumeData.settings.technical_skills ?? {}} />
 
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+                <div className="flex justify-end pt-1">
+                  <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                     <Save className="h-4 w-4" />
                     Save Profile &amp; Skills Matrix
                   </Button>

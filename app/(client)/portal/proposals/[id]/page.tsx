@@ -186,7 +186,6 @@ export default async function ClientProposalDetailPage({
                         name="decline_reason"
                         rows={3}
                         placeholder="Budget constraints, scope shift, or timeline adjustment..."
-                        className="text-base md:text-xs"
                       />
                     </div>
                   }

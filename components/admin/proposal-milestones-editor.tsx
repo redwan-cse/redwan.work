@@ -63,7 +63,7 @@ export function ProposalMilestonesEditor() {
                   )
                 }
                 placeholder={`Milestone ${idx + 1}`}
-                className="col-span-12 h-8 text-xs sm:col-span-6"
+                className="col-span-12 h-9 sm:col-span-6"
               />
               <Input
                 aria-label={`Milestone ${idx + 1} amount in USD`}
@@ -75,7 +75,7 @@ export function ProposalMilestonesEditor() {
                   )
                 }
                 placeholder="USD"
-                className="col-span-5 h-8 font-mono text-xs sm:col-span-3"
+                className="col-span-5 h-9 font-mono sm:col-span-3"
               />
               <Input
                 aria-label={`Milestone ${idx + 1} due days offset`}
@@ -89,13 +89,13 @@ export function ProposalMilestonesEditor() {
                   )
                 }
                 placeholder="Days"
-                className="col-span-5 h-8 font-mono text-xs sm:col-span-2"
+                className="col-span-5 h-9 font-mono sm:col-span-2"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="col-span-2 h-8 w-8 justify-self-end text-destructive sm:col-span-1"
+                className="col-span-2 h-9 w-9 justify-self-end text-destructive sm:col-span-1"
                 disabled={rows.length <= 1}
                 onClick={() => setRows((prev) => prev.filter((_, i) => i !== idx))}
                 aria-label="Remove milestone"

@@ -16,6 +16,7 @@ import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -214,13 +215,13 @@ export default async function AdminOrdersPage({
           aria-label="Search orders by code, title, client, or pillar"
           defaultValue={params.q ?? ''}
           placeholder="Filter by ORD code, title, client, or pillar..."
-          className="h-8 min-w-[200px] flex-1 text-xs"
+          className="h-9 min-w-[200px] flex-1 md:h-8 md:text-xs"
         />
         <select
           name="status"
           aria-label="Filter orders by status"
           defaultValue={statusFilter}
-          className="h-8 rounded-md border border-input bg-background px-2.5 text-xs"
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
         >
           <option value="">All Statuses</option>
           <option value="awaiting_payment">awaiting_payment</option>
@@ -255,16 +256,16 @@ export default async function AdminOrdersPage({
                 action={createOrderFromAdminAction}
                 successMessage="Order created and deposit invoice issued."
                 resetOnSuccess
-                className="space-y-3"
+                className="space-y-4"
               >
-                <div className="space-y-1">
-                  <Label htmlFor="direct-order-client" className="text-xs">Client *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="direct-order-client" className="text-xs font-medium">Client *</Label>
                   <select
                     id="direct-order-client"
                     name="client_id"
                     aria-label="Order client"
                     required
-                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="">— Select Client —</option>
                     {(clients ?? []).map((c) => (
@@ -275,25 +276,25 @@ export default async function AdminOrdersPage({
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="direct-order-title" className="text-xs">Order Title *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="direct-order-title" className="text-xs font-medium">Order Title *</Label>
                   <Input
                     id="direct-order-title"
                     name="title"
                     required
                     placeholder="Web & API Penetration Test (VAPT)"
-                    className="h-9 text-xs"
+                    className="h-10 md:h-9"
                   />
                 </div>
 
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="direct-order-pillar" className="text-xs">Service Pillar</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-pillar" className="text-xs font-medium">Service Pillar</Label>
                     <select
                       id="direct-order-pillar"
                       name="pillar"
                       aria-label="Order service pillar"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                     >
                       <option value="cybersecurity">Cybersecurity &amp; VAPT</option>
                       <option value="development">Full-Stack Dev</option>
@@ -302,13 +303,13 @@ export default async function AdminOrdersPage({
                       <option value="tech_support">Executive Advisory</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="direct-order-currency" className="text-xs">Currency</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-currency" className="text-xs font-medium">Currency</Label>
                     <select
                       id="direct-order-currency"
                       name="currency"
                       aria-label="Order currency"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                     >
                       <option value="USD">USD</option>
                       <option value="BDT">BDT</option>
@@ -318,34 +319,33 @@ export default async function AdminOrdersPage({
                   </div>
                 </div>
 
-                <div className="grid gap-2.5 sm:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="direct-order-total" className="text-xs">Total *</Label>
-                    <Input id="direct-order-total" name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-9 font-mono text-xs" />
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-total" className="text-xs font-medium">Total *</Label>
+                    <Input id="direct-order-total" name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="direct-order-deposit" className="text-xs">Deposit %</Label>
-                    <Input id="direct-order-deposit" name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-deposit" className="text-xs font-medium">Deposit %</Label>
+                    <Input id="direct-order-deposit" name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-10 font-mono md:h-9" />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="direct-order-due" className="text-xs">Due Days</Label>
-                    <Input id="direct-order-due" name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-due" className="text-xs font-medium">Due Days</Label>
+                    <Input id="direct-order-due" name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-10 font-mono md:h-9" />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="direct-order-desc" className="text-xs">Scope Summary</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="direct-order-desc" className="text-xs font-medium">Scope Summary</Label>
                   <Textarea
                     id="direct-order-desc"
                     name="description"
-                    rows={2}
+                    rows={3}
                     placeholder="Key target environments, milestones, or SLA deliverables..."
-                    className="text-xs"
                   />
                 </div>
 
-                <label className="flex items-center gap-2.5 text-xs font-medium">
-                  <input type="checkbox" name="requires_roe" className="h-6 w-6 rounded border-border accent-primary" />
+                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
+                  <FormCheckbox name="requires_roe" />
                   Require Rules of Engagement Signature
                 </label>
 

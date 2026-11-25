@@ -294,22 +294,22 @@ export default async function AdminInvoiceDetailPage({
                 <ActionFeedbackForm
                   action={updateDraftInvoiceAction}
                   successMessage="Draft invoice updated."
-                  className="space-y-3"
+                  className="space-y-4"
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
-                  <div className="grid gap-2.5 sm:grid-cols-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="draft-inv-due" className="text-xs">Due Date</Label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="draft-inv-due" className="text-xs font-medium">Due Date</Label>
                       <Input
                         id="draft-inv-due"
                         name="due_at"
                         type="date"
                         defaultValue={invoice.due_at ? invoice.due_at.slice(0, 10) : ''}
-                        className="h-8 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="draft-inv-discount" className="text-xs">Discount ({invoice.currency})</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="draft-inv-discount" className="text-xs font-medium">Discount ({invoice.currency})</Label>
                       <Input
                         id="draft-inv-discount"
                         name="discount_major"
@@ -317,11 +317,11 @@ export default async function AdminInvoiceDetailPage({
                         step="0.01"
                         min="0"
                         defaultValue={((invoice.discount_cents ?? 0) / 100).toFixed(2)}
-                        className="h-8 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="draft-inv-tax" className="text-xs">Tax (bps)</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="draft-inv-tax" className="text-xs font-medium">Tax (bps)</Label>
                       <Input
                         id="draft-inv-tax"
                         name="tax_rate_bps"
@@ -329,28 +329,28 @@ export default async function AdminInvoiceDetailPage({
                         min="0"
                         max="5000"
                         defaultValue={invoice.tax_rate_bps ?? 0}
-                        className="h-8 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="draft-inv-instructions" className="text-xs">Payment Instructions</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="draft-inv-instructions" className="text-xs font-medium">Payment Instructions</Label>
                     <Input
                       id="draft-inv-instructions"
                       name="payment_instructions"
                       defaultValue={invoice.payment_instructions ?? ''}
                       placeholder="Wire / Wise / bKash details..."
-                      className="h-8 text-xs"
+                      className="h-10 md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="draft-inv-notes" className="text-xs">Notes</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="draft-inv-notes" className="text-xs font-medium">Notes</Label>
                     <Input
                       id="draft-inv-notes"
                       name="notes"
                       defaultValue={invoice.notes ?? ''}
                       placeholder="Invoice memo or scope reference..."
-                      className="h-8 text-xs"
+                      className="h-10 md:h-9"
                     />
                   </div>
                   <Button type="submit" size="sm" variant="secondary" className="w-full rounded-full text-xs">
@@ -407,9 +407,9 @@ export default async function AdminInvoiceDetailPage({
                             defaultValue={String(
                               invoice.fx_rate_to_usd ?? pay.fx_rate_to_usd ?? '1.0'
                             )}
-                            className="h-8 w-20 font-mono text-xs"
+                            className="h-9 w-24 font-mono"
                           />
-                          <Button type="submit" size="sm" className="h-8 gap-1 rounded-full">
+                          <Button type="submit" size="sm" className="h-9 gap-1 rounded-full">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Approve
                           </Button>
@@ -420,7 +420,7 @@ export default async function AdminInvoiceDetailPage({
                         >
                           <input type="hidden" name="payment_id" value={pay.id} />
                           <input type="hidden" name="decision" value="rejected" />
-                          <Button type="submit" size="sm" variant="destructive" className="h-8 gap-1 rounded-full">
+                          <Button type="submit" size="sm" variant="destructive" className="h-9 gap-1 rounded-full">
                             <XCircle className="h-3.5 w-3.5" />
                             Reject
                           </Button>
@@ -451,18 +451,18 @@ export default async function AdminInvoiceDetailPage({
                   action={recordManualPaymentAction}
                   successMessage="Manual payment verified and applied."
                   resetOnSuccess
-                  className="space-y-3"
+                  className="space-y-4"
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="manual-pay-method" className="text-xs">Method</Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="manual-pay-method" className="text-xs font-medium">Method</Label>
                       <select
                         id="manual-pay-method"
                         name="method"
                         aria-label="Payment method"
                         defaultValue="manual"
-                        className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                       >
                         <option value="manual">Manual / Cash</option>
                         <option value="bank_transfer">Bank Wire / SWIFT</option>
@@ -473,8 +473,8 @@ export default async function AdminInvoiceDetailPage({
                         <option value="paypal">PayPal</option>
                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="manual-pay-amount" className="text-xs">Amount ({invoice.currency}) *</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="manual-pay-amount" className="text-xs font-medium">Amount ({invoice.currency}) *</Label>
                       <Input
                         id="manual-pay-amount"
                         name="amount_major"
@@ -484,23 +484,23 @@ export default async function AdminInvoiceDetailPage({
                         min="0.01"
                         defaultValue={(outstandingCents / 100).toFixed(2)}
                         required
-                        className="h-9 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
                   </div>
-                  <div className="grid gap-2.5 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="manual-pay-ref" className="text-xs">Reference *</Label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="manual-pay-ref" className="text-xs font-medium">Reference *</Label>
                       <Input
                         id="manual-pay-ref"
                         name="reference"
                         required
                         placeholder="WIRE-REF-001"
-                        className="h-9 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="manual-pay-fx" className="text-xs">FX → USD</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="manual-pay-fx" className="text-xs font-medium">FX → USD</Label>
                       <Input
                         id="manual-pay-fx"
                         name="fx_rate"
@@ -508,11 +508,11 @@ export default async function AdminInvoiceDetailPage({
                         type="number"
                         step="0.0001"
                         defaultValue={invoice.fx_rate_to_usd}
-                        className="h-9 font-mono text-xs"
+                        className="h-10 font-mono md:h-9"
                       />
                     </div>
                   </div>
-                  <Button type="submit" size="sm" className="w-full rounded-full">
+                  <Button type="submit" size="sm" className="h-9 w-full rounded-full">
                     Record Verified Payment
                   </Button>
                 </ActionFeedbackForm>
@@ -534,11 +534,11 @@ export default async function AdminInvoiceDetailPage({
                   action={issueCreditNoteAction}
                   successMessage="Credit note issued and balance adjusted."
                   resetOnSuccess
-                  className="space-y-3"
+                  className="space-y-4"
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
-                  <div className="space-y-1">
-                    <Label htmlFor="credit-note-amount" className="text-xs">Credit Amount ({invoice.currency}) *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="credit-note-amount" className="text-xs font-medium">Credit Amount ({invoice.currency}) *</Label>
                     <Input
                       id="credit-note-amount"
                       name="amount_major"
@@ -548,20 +548,20 @@ export default async function AdminInvoiceDetailPage({
                       max={(outstandingCents / 100).toFixed(2)}
                       required
                       placeholder="50.00"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="credit-note-reason" className="text-xs">Adjustment Reason *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="credit-note-reason" className="text-xs font-medium">Adjustment Reason *</Label>
                     <Input
                       id="credit-note-reason"
                       name="reason"
                       required
                       placeholder="Scope adjustment or courtesy credit"
-                      className="h-9 text-xs"
+                      className="h-10 md:h-9"
                     />
                   </div>
-                  <Button type="submit" size="sm" variant="outline" className="w-full rounded-full">
+                  <Button type="submit" size="sm" variant="outline" className="h-9 w-full rounded-full">
                     Apply Credit Note
                   </Button>
                 </ActionFeedbackForm>

@@ -14,6 +14,7 @@ import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -128,22 +129,22 @@ export default async function AdminProposalDetailPage({
             <ActionFeedbackForm
               action={updateDraftProposalAction}
               successMessage="Draft proposal updated."
-              className="space-y-3"
+              className="space-y-4"
             >
               <input type="hidden" name="proposal_id" value={proposal.id} />
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="space-y-1 sm:col-span-2">
-                  <Label htmlFor="draft-prop-title" className="text-xs">Title *</Label>
-                  <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-9 text-xs" />
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="draft-prop-title" className="text-xs font-medium">Title *</Label>
+                  <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-10 md:h-9" />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="draft-prop-currency" className="text-xs">Currency</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="draft-prop-currency" className="text-xs font-medium">Currency</Label>
                   <select
                     id="draft-prop-currency"
                     name="currency"
                     aria-label="Draft proposal currency"
                     defaultValue={proposal.currency}
-                    className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
                   >
                     <option value="USD">USD</option>
                     <option value="BDT">BDT</option>
@@ -151,8 +152,8 @@ export default async function AdminProposalDetailPage({
                     <option value="GBP">GBP</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="draft-prop-total" className="text-xs">Total *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="draft-prop-total" className="text-xs font-medium">Total *</Label>
                   <Input
                     id="draft-prop-total"
                     name="total_major"
@@ -161,12 +162,12 @@ export default async function AdminProposalDetailPage({
                     step="0.01"
                     required
                     defaultValue={(proposal.total_cents / 100).toFixed(2)}
-                    className="h-9 font-mono text-xs"
+                    className="h-10 font-mono md:h-9"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="draft-prop-deposit" className="text-xs">Dep %</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="draft-prop-deposit" className="text-xs font-medium">Dep %</Label>
                     <Input
                       id="draft-prop-deposit"
                       name="deposit_percent"
@@ -174,56 +175,52 @@ export default async function AdminProposalDetailPage({
                       min="0"
                       max="100"
                       defaultValue={proposal.deposit_percent}
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="draft-prop-days" className="text-xs">Days</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="draft-prop-days" className="text-xs font-medium">Days</Label>
                     <Input
                       id="draft-prop-days"
                       name="estimated_days"
                       type="number"
                       min="1"
                       defaultValue={proposal.estimated_days}
-                      className="h-9 font-mono text-xs"
+                      className="h-10 font-mono md:h-9"
                     />
                   </div>
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="draft-prop-scope" className="text-xs">Executive Scope Summary *</Label>
+              <div className="grid gap-3.5 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="draft-prop-scope" className="text-xs font-medium">Executive Scope Summary *</Label>
                   <Textarea
                     id="draft-prop-scope"
                     name="scope_summary"
                     rows={3}
                     required
                     defaultValue={proposal.scope_summary}
-                    className="text-xs"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="draft-prop-deliv" className="text-xs">Deliverables Summary</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="draft-prop-deliv" className="text-xs font-medium">Deliverables Summary</Label>
                   <Textarea
                     id="draft-prop-deliv"
                     name="deliverables_summary"
                     rows={3}
                     defaultValue={proposal.deliverables_summary}
-                    className="text-xs"
                   />
                 </div>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
-                  <input
-                    type="checkbox"
+                  <FormCheckbox
                     name="requires_roe"
                     defaultChecked={proposal.requires_roe}
-                    className="h-6 w-6 rounded accent-primary"
                   />
                   Requires Signed Rules of Engagement (RoE)
                 </label>
-                <Button type="submit" size="sm" className="gap-1.5 rounded-full text-xs">
+                <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4 text-xs">
                   <Save className="h-3.5 w-3.5" />
                   Save Draft Changes
                 </Button>
