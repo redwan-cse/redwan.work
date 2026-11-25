@@ -52,11 +52,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const allowed = await consumeRateLimit('portal-presign', session.userId, 30, 3600);
-  if (!allowed) {
+  try {
+    const allowed = await consumeRateLimit('portal-presign', session.userId, 30, 3600);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Upload rate limit exceeded. Please wait before requesting more upload links.' },
+        { status: 429 }
+      );
+    }
+  } catch {
     return NextResponse.json(
-      { error: 'Upload rate limit exceeded. Please wait before requesting more upload links.' },
-      { status: 429 }
+      { error: 'Upload rate control is temporarily unavailable. Please retry shortly.' },
+      { status: 503 }
     );
   }
 

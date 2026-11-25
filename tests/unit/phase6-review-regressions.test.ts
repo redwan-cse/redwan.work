@@ -81,6 +81,7 @@ import { checkPasswordLeakedHibp } from '@/lib/auth/hibp';
 describe('PR #15 Adversarial Review Regression Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockConsumeRateLimit.mockResolvedValue(true);
   });
 
   it('[P6-CONSENT-PUBLISH] publishConsentPolicyAction stores structured canonical JSON compatible with /contact & archivePolicy', async () => {

@@ -8,6 +8,7 @@ import { recordAuditLog } from '@/lib/crm/audit';
 import { drainEmailOutbox } from '@/lib/email/outbox';
 import { extFromFilename, isAllowedAssetMime, resolveMimeType, validateMagicBytes } from '@/lib/mime';
 import {
+  RESUME_ASSET_KEY,
   deletePrivateObjects,
   deletePublicObject,
   isPortalKey,
@@ -46,16 +47,49 @@ export async function retryOutboxEmailAction(formData: FormData): Promise<void> 
   const outboxId = parsedId.data;
 
   const admin = getSupabaseAdmin();
+  const outboxTbl = admin.from('email_outbox');
+  let nextPayload: Record<string, unknown> | undefined;
+
+  if (typeof outboxTbl.select === 'function') {
+    const { data: existing } = await outboxTbl
+      .select('id, status, locked_at, payload')
+      .eq('id', outboxId)
+      .maybeSingle();
+
+    if (!existing) return;
+    if (existing.status === 'sent') return;
+    const staleCutoffMs = Date.now() - 5 * 60_000;
+    const isStaleProcessing =
+      existing.status === 'processing' &&
+      (!existing.locked_at || new Date(existing.locked_at).getTime() < staleCutoffMs);
+
+    if (existing.status !== 'failed' && existing.status !== 'pending' && !isStaleProcessing) {
+      throw new Error('This email is currently processing and cannot be retried yet.');
+    }
+
+    const basePayload =
+      existing.payload && typeof existing.payload === 'object' && !Array.isArray(existing.payload)
+        ? (existing.payload as Record<string, unknown>)
+        : {};
+    const nextRetryNonce = Number(basePayload._retryNonce ?? 0) + 1;
+    nextPayload = { ...basePayload, _retryNonce: nextRetryNonce };
+  }
+
   const nowIso = new Date().toISOString();
+  const updateBody: Record<string, unknown> = {
+    status: 'pending',
+    attempts: 0,
+    locked_at: null,
+    last_error: null,
+    next_attempt_at: nowIso,
+  };
+  if (nextPayload) {
+    updateBody.payload = nextPayload;
+  }
+
   const { error } = await admin
     .from('email_outbox')
-    .update({
-      status: 'pending',
-      attempts: 0,
-      locked_at: null,
-      last_error: null,
-      next_attempt_at: nowIso,
-    })
+    .update(updateBody)
     .eq('id', outboxId)
     .neq('status', 'sent');
   if (error) throw new Error(error.message);
@@ -92,7 +126,7 @@ export async function retryAllFailedOutboxEmailsAction(): Promise<void> {
       last_error: null,
       next_attempt_at: nowIso,
     })
-    .in('status', ['failed', 'dead_letter'])
+    .in('status', ['failed'])
     .select('id');
   if (error) throw new Error(error.message);
 
@@ -106,7 +140,7 @@ export async function retryAllFailedOutboxEmailsAction(): Promise<void> {
     actorRole: 'admin',
     action: 'email_outbox.bulk_retried',
     entityType: 'email_outbox',
-    summary: `Reset ${retriedCount} failed/dead-letter email(s) for immediate retry`,
+    summary: `Reset ${retriedCount} failed email(s) for immediate retry`,
     metadata: { retriedCount },
   });
 
@@ -249,6 +283,20 @@ export async function deletePublicAssetAction(formData: FormData): Promise<void>
   if (!key) return;
   if (!isPublicR2Configured()) {
     throw new Error('Public R2 storage is not configured.');
+  }
+
+  // Prevent accidentally deleting the active canonical resume PDF referenced by site_settings
+  if (key === RESUME_ASSET_KEY) {
+    throw new Error('Cannot delete the active canonical resume PDF asset. Replace it via Resume PDF upload instead.');
+  }
+  const admin = getSupabaseAdmin();
+  const { data: settings } = await admin
+    .from('site_settings')
+    .select('resume_pdf_url')
+    .eq('id', 'default')
+    .maybeSingle();
+  if (settings?.resume_pdf_url && settings.resume_pdf_url.includes(key)) {
+    throw new Error('Cannot delete a public asset actively referenced in site settings.');
   }
 
   await deletePublicObject(key);

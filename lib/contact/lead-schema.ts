@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { BUDGET_ERROR, parseBudgetRange, parseNdaValues } from '@/lib/contact/intake-contract';
+import { CONTACT_ALLOWED, extFromFilename, isAllowedMime } from '@/lib/mime';
 import {
   CONTACT_MAX_FILES,
   CONTACT_MAX_SIZE_BYTES,
@@ -53,7 +54,7 @@ function str(formData: FormData, key: string): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[] } | { ok: false } {
+export function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[] } | { ok: false } {
   if (!raw) return { ok: true, attachments: [] };
 
   let parsed: unknown;
@@ -76,7 +77,18 @@ function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[
     if (typeof filename !== 'string' || filename.length < 1 || filename.length > MAX_FILENAME) {
       return { ok: false };
     }
+    const cleanFilename = filename
+      .replace(/[\u0000-\u001f\u007f]/g, '')
+      .split(/[/\\]/)
+      .pop()
+      ?.trim() ?? '';
+    if (!cleanFilename) return { ok: false };
     if (typeof mime !== 'string' || mime.length > MAX_MIME) return { ok: false };
+    const keyExt = extFromFilename(key);
+    const fileExt = extFromFilename(cleanFilename);
+    if (!keyExt || fileExt !== keyExt || !isAllowedMime(fileExt, mime, CONTACT_ALLOWED)) {
+      return { ok: false };
+    }
     if (
       typeof size_bytes !== 'number' ||
       !Number.isInteger(size_bytes) ||
@@ -89,7 +101,7 @@ function parseAttachments(raw: string): { ok: true; attachments: LeadAttachment[
     // Store only the validated shape; extra wire fields are dropped — notably
     // `retained`, which is admin-settable (SQL runbook) and never honored from
     // a submission
-    attachments.push({ key, filename, mime, size_bytes });
+    attachments.push({ key, filename: cleanFilename, mime, size_bytes });
   }
 
   return { ok: true, attachments };

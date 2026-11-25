@@ -19,6 +19,8 @@ const EXPECTED_RATE_LIMIT_KINDS = [
   'otp-ip',
   'otp-email',
   'auth',
+  'auth-callback',
+  'mfa-reset',
   'retry-recovery',
   'retry-invite',
   'portal-presign',
@@ -29,6 +31,7 @@ const EXPECTED_RATE_LIMIT_KINDS = [
   'blogs-preload',
   'file-download',
   'admin-search',
+  'recovery-export',
   'client-mutation',
 ] as const;
 

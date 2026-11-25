@@ -3,10 +3,11 @@
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-function sanitizeCsvCell(value: unknown): string {
+export function sanitizeCsvCell(value: unknown): string {
   const raw = value === null || value === undefined ? '' : String(value);
-  // Neutralize spreadsheet formula injection (=, +, -, @, tab, CR)
-  const neutralized = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  // Neutralize spreadsheet formula injection including leading whitespace/control prefixes
+  const neutralized =
+    /^[\s\u0000-\u001f]*[=+\-@]|^[\t\r\n]/.test(raw) ? `'${raw}` : raw;
   if (/[",\n\r]/.test(neutralized)) {
     return `"${neutralized.replace(/"/g, '""')}"`;
   }

@@ -29,6 +29,10 @@ vi.mock('@/lib/crm/audit', () => ({
   recordAuditLog: vi.fn(),
 }));
 
+vi.mock('@/lib/security/rate-limit', () => ({
+  consumeRateLimit: vi.fn(async () => true),
+}));
+
 import {
   computeCappedLtvDeltaUsdCents,
   computeDepositSplit,

@@ -163,24 +163,33 @@ async function revokeOtherSessionsAfterRecovery(
   if (typeof supabase.auth.signOut === 'function') {
    await supabase.auth.signOut({ scope: 'others' }).catch(() => undefined);
   }
+  let refreshFailed = false;
   if (typeof supabase.auth.refreshSession === 'function') {
-   await supabase.auth.refreshSession().catch(() => undefined);
+   const refreshed = await supabase.auth.refreshSession().catch(() => ({
+    data: { session: null },
+    error: new Error('refresh_failed'),
+   }));
+   if (refreshed?.error) {
+    refreshFailed = true;
+   }
   }
   const claimsRes = await supabase.auth.getClaims().catch(() => ({ data: null }));
   const claims = claimsRes?.data?.claims as { iat?: number } | undefined;
   const nowSec = Math.floor(Date.now() / 1000);
   const iatSec = typeof claims?.iat === 'number' && Number.isFinite(claims.iat) ? Math.floor(claims.iat) : nowSec;
-  const cutoffSec = Math.min(nowSec, iatSec);
+  const cutoffSec = refreshFailed ? nowSec : Math.min(nowSec, iatSec);
   const admin = getSupabaseAdmin();
+  const { data: prof } = await admin.from('profiles').select('role').eq('id', userId).maybeSingle();
+  const actorRole: 'admin' | 'client' = prof?.role === 'admin' ? 'admin' : 'client';
   await admin.from('profiles').update({ tokens_valid_after: cutoffSec }).eq('id', userId);
   await recordAuditLog({
    actorId: userId,
-   actorRole: 'client',
-   clientId: userId,
+   actorRole,
+   clientId: actorRole === 'client' ? userId : null,
    action: 'auth.password_reset_completed',
    entityType: 'profile',
    entityId: userId,
-   summary: 'Password reset completed via recovery flow and prior access tokens revoked',
+   summary: 'Password reset completed and prior access tokens revoked',
   });
  } catch {
   // Non-fatal in isolated unit tests without full admin mocks
@@ -193,6 +202,9 @@ async function credentialEmailOrigin():Promise<string|null> {
   const url=new URL(raw);
   if(url.username||url.password||url.search||url.hash||url.pathname!=='/')return null;
   if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))return null;
+  if(process.env.NODE_ENV==='production'&&process.env.TEST_ENVIRONMENT!=='isolated-ci'){
+   return url.origin;
+  }
   try {
    const h=await headers();
    return resolveCallbackOrigin({
@@ -686,35 +698,44 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     if(sessionClaimsErr||!sub||!emailClaim)return {error:INVALID_LINK};
 
     const admin=getSupabaseAdmin();
-    const [{data:profile},{data:pendingInvite}]=await Promise.all([
-      admin.from('profiles').select('role, is_active').eq('id',sub).maybeSingle(),
+    const [{data:profile,error:profileErr},{data:pendingInvite,error:inviteErr}]=await Promise.all([
+      admin.from('profiles').select('role, is_active, tokens_valid_after').eq('id',sub).maybeSingle(),
       admin
         .from('client_invitations')
         .select('id')
         .eq('email',emailClaim)
+        .eq('status','pending')
         .is('accepted_at',null)
-        .is('revoked_at',null)
         .gt('expires_at',new Date().toISOString())
         .limit(1)
         .maybeSingle(),
     ]);
 
-    if(!profile||profile.is_active!==true||profile.role!=='client'){
+    if(profileErr||inviteErr||!profile||profile.is_active!==true||profile.role!=='client'){
+      await supabase.auth.signOut({scope:'local'}).catch(()=>{});
       return {error:INVALID_LINK};
     }
 
-    const amrEntries=Array.isArray(claims?.amr)?claims.amr:[];
-    const hasInviteAmr=amrEntries.some((entry)=>{
-      if(typeof entry==='string')return entry==='invite'||entry==='otp';
-      if(entry&&typeof entry==='object'){
-        const method=(entry as {method?:unknown}).method;
-        return method==='invite'||method==='otp';
-      }
-      return false;
-    });
+    const validAfter=Number(profile.tokens_valid_after??0);
+    const claimIat=typeof claims?.iat==='number'&&Number.isFinite(claims.iat)?claims.iat:0;
+    if(validAfter>0&&claimIat<validAfter){
+      await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+      return {error:INVALID_LINK};
+    }
 
-    if(!pendingInvite&&!hasInviteAmr){
+    // Require an active, unrevoked pending invitation row (never accept generic magic-link 'otp' sessions)
+    if(!pendingInvite){
       return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
+    }
+
+    // Enforce MFA/AAL2 before mutating account credentials
+    const preDestination=await resolveCurrentPanelDestination();
+    if(!preDestination.ok){
+      await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+      return {error:preDestination.error};
+    }
+    if(preDestination.home==='/mfa'){
+      return {error:'Complete two-factor verification before updating your password.',linkHref:'/mfa?next=%2Finvite%2Faccept%3Fsession%3D1',linkText:'Verify 2FA'};
     }
 
     const updated=await supabase.auth.updateUser({password:checked.password});
@@ -722,12 +743,8 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
       return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
     }
     await markInvitationAccepted(sub,emailClaim);
-    const destination=await resolveCurrentPanelDestination();
-    if(!destination.ok){
-      await supabase.auth.signOut().catch(()=>{});
-      return {error:destination.error};
-    }
-    redirect(destination.home);
+    await revokeOtherSessionsAfterRecovery(supabase,sub);
+    redirect(preDestination.home);
   }
 
   const cookieStore=await cookies();
@@ -736,6 +753,28 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
 
   const {data:otpData,error:otpError}=await supabase.auth.verifyOtp({type:'invite',token_hash:tokenHash});
   if(!otpError&&otpData?.user?.id){
+    const inviteEmail=(otpData.user.email??'').trim().toLowerCase();
+    const admin=getSupabaseAdmin();
+    const [{data:prof},{data:pendingInvite,error:invErr}]=await Promise.all([
+      admin.from('profiles').select('role, is_active').eq('id',otpData.user.id).maybeSingle(),
+      inviteEmail
+        ? admin
+            .from('client_invitations')
+            .select('id')
+            .eq('email',inviteEmail)
+            .eq('status','pending')
+            .is('accepted_at',null)
+            .gt('expires_at',new Date().toISOString())
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({data:null,error:null}),
+    ]);
+
+    if(invErr||!prof||prof.is_active!==true||prof.role!=='client'||!pendingInvite){
+      await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+      return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
+    }
+
     const {data:claimsData}=await supabase.auth.getClaims();
     const sessionId=extractSessionId(otpData.session,claimsData?.claims);
     const updated=await supabase.auth.updateUser({password:checked.password});
@@ -756,6 +795,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     }
     cookieStore.delete(retryCookieName);
     await markInvitationAccepted(otpData.user.id, otpData.user.email);
+    await revokeOtherSessionsAfterRecovery(supabase, otpData.user.id);
     const destination=await resolveCurrentPanelDestination();
     if(!destination.ok)return {error:destination.error};
     redirect(destination.home);
@@ -815,10 +855,28 @@ export async function resetUnverifiedMfaFactorsAction(): Promise<{ ok: boolean }
     const admin = getSupabaseAdmin();
     const { data: profile } = await admin
       .from('profiles')
-      .select('is_active, role')
+      .select('is_active, role, tokens_valid_after')
       .eq('id', sub)
       .maybeSingle();
     if (!profile?.is_active) return { ok: false };
+
+    const validAfter = Number(profile.tokens_valid_after ?? 0);
+    const claimIat = typeof claims?.iat === 'number' && Number.isFinite(claims.iat) ? claims.iat : 0;
+    if (validAfter > 0 && claimIat < validAfter) return { ok: false };
+
+    try {
+      const salt = process.env.LEAD_IP_HASH_SALT ?? '';
+      const keyHash = await sha256Hex(`${salt}:mfa-reset:${sub}`);
+      const { data: allowed } = await admin.rpc('consume_rate_limit', {
+        p_kind: 'mfa-reset',
+        p_key_hash: keyHash,
+        p_window_seconds: 600,
+        p_max_count: 10,
+      });
+      if (allowed === false) return { ok: false };
+    } catch {
+      if (process.env.NODE_ENV === 'production') return { ok: false };
+    }
 
     const { data: factorsData, error: listErr } = await admin.auth.admin.mfa.listFactors({
       userId: sub,

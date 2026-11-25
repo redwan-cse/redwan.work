@@ -1,6 +1,6 @@
 import React from "react"
 import { CEH_CERT_NUMBER, CEH_VERIFICATION_URL } from "@/lib/content/site"
-import { sanitizeHttpUrl } from "@/lib/security/safe-redirect"
+import { trySanitizeHttpUrl } from "@/lib/security/safe-redirect"
 
 interface PrintableResumeProps {
   personalInfo: {
@@ -610,11 +610,13 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
         <div className="section">
           <h2 className="section-header">Certifications</h2>
           <div className="cert-grid">
-            {vendorCertifications.map((cert, index) => (
+            {vendorCertifications.map((cert, index) => {
+              const safeUrl = trySanitizeHttpUrl(cert.verificationUrl)
+              return (
               <div key={index} className="cert-item avoid-break">
                 <div className="cert-name">
-                  {cert.verificationUrl ? (
-                    <a href={cert.verificationUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {safeUrl ? (
+                    <a href={safeUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
                       {cert.name}
                     </a>
                   ) : (
@@ -624,7 +626,8 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
                 <div className="cert-issuer">{cert.issuer}</div>
                 <div className="cert-date">{cert.date}</div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -632,11 +635,13 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
         <div className="section">
           <h2 className="section-header">Professional Certificates & Course Completions</h2>
           <div className="cert-grid">
-            {professionalCertificates.map((cert, index) => (
+            {professionalCertificates.map((cert, index) => {
+              const safeUrl = trySanitizeHttpUrl(cert.verificationUrl)
+              return (
               <div key={index} className="cert-item avoid-break">
                 <div className="cert-name">
-                  {cert.verificationUrl ? (
-                    <a href={cert.verificationUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {safeUrl ? (
+                    <a href={safeUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
                       {cert.name}
                     </a>
                   ) : (
@@ -646,7 +651,8 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
                 <div className="cert-issuer">{cert.issuer}</div>
                 <div className="cert-date">{cert.date}</div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -660,9 +666,13 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
               <span className="research-badge" style={{ background: '#7c3aed' }}>Scopus</span>
             </div>
             <div className="research-title">
-              <a href={research.journal.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                {research.journal.title}
-              </a>
+              {trySanitizeHttpUrl(research.journal.url) ? (
+                <a href={trySanitizeHttpUrl(research.journal.url)!} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {research.journal.title}
+                </a>
+              ) : (
+                research.journal.title
+              )}
             </div>
             <ul style={{ marginTop: '4pt' }}>
               {research.journal.details.map((detail, index) => (
@@ -677,9 +687,13 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
               <span className="research-badge" style={{ background: '#dc2626' }}>IEEE</span>
             </div>
             <div className="research-title">
-              <a href={research.conference.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
-                {research.conference.title}
-              </a>
+              {trySanitizeHttpUrl(research.conference.url) ? (
+                <a href={trySanitizeHttpUrl(research.conference.url)!} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {research.conference.title}
+                </a>
+              ) : (
+                research.conference.title
+              )}
             </div>
             <ul style={{ marginTop: '4pt' }}>
               {research.conference.details.map((detail, index) => (
@@ -792,7 +806,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             <h2 className="section-header">References</h2>
             <div className="two-col" style={{ gap: '8pt' }}>
               {references.map((ref, index) => {
-                const scholarHref = ref.scholarUrl ? sanitizeHttpUrl(ref.scholarUrl) : null
+                const scholarHref = trySanitizeHttpUrl(ref.scholarUrl)
                 return (
                 <div key={index} className="avoid-break" style={{
                   padding: '6pt',

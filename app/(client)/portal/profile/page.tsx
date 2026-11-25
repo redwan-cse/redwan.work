@@ -3,6 +3,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Activity, UserCheck } from 'lucide-react';
 import { getCurrentSession } from '@/lib/auth/session';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { updateClientProfileAction } from '@/lib/crm/actions';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ClientMfaCard } from '@/components/panel/client-mfa-card';
@@ -20,19 +21,14 @@ export default async function ClientProfilePage() {
   if (!session) redirect('/login?next=/portal/profile');
 
   const admin = getSupabaseAdmin();
+  const userClient = await createSupabaseServerClient();
   const [{ data: profile }, { data: clientProfile }, { data: securityLogs }] = await Promise.all([
-    admin.from('profiles').select('*').eq('id', session.userId).maybeSingle(),
-    admin.from('client_profiles').select('*').eq('user_id', session.userId).maybeSingle(),
-    admin
+    admin.from('profiles').select('id, email, full_name, phone, timezone, company, role, mfa_enforced').eq('id', session.userId).maybeSingle(),
+    admin.from('client_profiles').select('user_id, company_name, company_role, website_url, industry, billing_address, tax_id, preferred_currency').eq('user_id', session.userId).maybeSingle(),
+    userClient
       .from('audit_logs')
       .select('id, action, summary, created_at')
       .eq('client_id', session.userId)
-      .not('action', 'like', 'crm.%')
-      .not(
-        'action',
-        'in',
-        '("client.crm_updated","client.note_added","client.note_deleted","client.tier_updated","client.followup_updated","order.internal_note_added","admin.internal_note")'
-      )
       .order('created_at', { ascending: false })
       .limit(12),
   ]);

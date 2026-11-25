@@ -505,7 +505,8 @@ export async function uploadResumePdfAction(formData: FormData): Promise<{
       .eq('id', 'default');
 
     if (dbError) {
-      return { ok: false, error: `Uploaded to R2, but failed to update site_settings: ${dbError.message}` };
+      console.error('[cms] resume_pdf_url update failed:', dbError.message);
+      return { ok: false, error: 'Uploaded to storage, but failed to update site settings. Please retry.' };
     }
 
     await recordAuditLog({
@@ -523,7 +524,7 @@ export async function uploadResumePdfAction(formData: FormData): Promise<{
     revalidatePath('/llms.txt');
     revalidatePath('/llms-full.txt');
     revalidatePath('/admin/resume');
-  revalidatePath('/admin/content');
+    revalidatePath('/admin/content');
 
     return {
       ok: true,
@@ -532,9 +533,13 @@ export async function uploadResumePdfAction(formData: FormData): Promise<{
       uploadedAt,
     };
   } catch (err) {
+    if (err instanceof Error && /unauthorized|admin role required/i.test(err.message)) {
+      return { ok: false, error: err.message };
+    }
+    console.error('[cms] uploadResumePdfAction failed:', err instanceof Error ? err.message : err);
     return {
       ok: false,
-      error: err instanceof Error ? err.message : 'Failed to upload resume PDF to R2.',
+      error: 'Failed to upload resume PDF to storage.',
     };
   }
 }
