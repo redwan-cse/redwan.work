@@ -90,7 +90,7 @@ export function BlogBrowser({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search articles by title, security topic, or tag..."
-            className="h-11 rounded-xl border-border/80 bg-background pl-10 pr-10 text-sm"
+            className="h-11 rounded-xl border-border/80 bg-background pl-10 pr-10 text-base"
           />
           {query && (
             <button
@@ -142,7 +142,8 @@ export function BlogBrowser({
                   src={featuredItem.imageUrl}
                   alt={featuredItem.post.title}
                   fill
-                  priority
+                  preload
+                  loading="eager"
                   sizes="(max-width: 1024px) 100vw, 50vw"
                   unoptimized={isDirectBlogImage(featuredItem.imageUrl)}
                   className="object-cover transition-transform duration-500 group-hover:scale-105"

@@ -77,20 +77,20 @@ export default async function ClientVaultFilesPage({
 
         <form method="get" className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <div className="relative min-w-0 flex-1 sm:flex-initial">
-            <Search className="pointer-events-none absolute top-3 left-2.5 h-3.5 w-3.5 text-muted-foreground md:top-2" aria-hidden="true" />
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               name="q"
               aria-label="Search vault files by filename or SHA-256"
               defaultValue={params.q ?? ''}
               placeholder="Search filename or SHA-256..."
-              className="h-10 w-full pl-8 text-base sm:w-56 md:h-8 md:text-xs"
+              className="h-10 w-full pl-8 text-base sm:w-56"
             />
           </div>
           <select
             name="category"
             aria-label="Filter vault files by category"
             defaultValue={categoryFilter}
-            className="h-10 min-w-0 max-w-full rounded-md border border-input bg-background px-2 text-base md:h-8 md:text-xs"
+            className="h-10 min-w-0 max-w-full rounded-md border border-input bg-background px-2 text-base font-sans transition-colors hover:border-muted-foreground/45"
           >
             <option value="">All Categories</option>
             <option value="deliverable">Deliverables</option>
@@ -98,7 +98,7 @@ export default async function ClientVaultFilesPage({
             <option value="ticket_attachment">Ticket Attachments</option>
             <option value="payment_proof">Payment Receipts</option>
           </select>
-          <Button type="submit" size="sm" variant="outline" className="h-10 text-xs md:h-8">
+          <Button type="submit" size="sm" variant="outline" className="h-10 px-4 text-sm">
             Filter
           </Button>
         </form>

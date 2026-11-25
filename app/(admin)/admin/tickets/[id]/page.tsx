@@ -91,7 +91,7 @@ export default async function AdminTicketDetailPage({
             name="status"
             aria-label="Ticket status"
             defaultValue={ticket.status}
-            className="h-9 rounded-md border border-input bg-background px-3 text-base md:text-sm"
+            className="h-9 rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
           >
             <option value="open">open</option>
             <option value="in_progress">in_progress</option>

@@ -299,17 +299,17 @@ export default async function AdminInvoiceDetailPage({
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="draft-inv-due" className="text-xs font-medium">Due Date</Label>
+                      <Label htmlFor="draft-inv-due" className="text-sm font-medium">Due Date</Label>
                       <Input
                         id="draft-inv-due"
                         name="due_at"
                         type="date"
                         defaultValue={invoice.due_at ? invoice.due_at.slice(0, 10) : ''}
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="draft-inv-discount" className="text-xs font-medium">Discount ({invoice.currency})</Label>
+                      <Label htmlFor="draft-inv-discount" className="text-sm font-medium">Discount ({invoice.currency})</Label>
                       <Input
                         id="draft-inv-discount"
                         name="discount_major"
@@ -317,11 +317,11 @@ export default async function AdminInvoiceDetailPage({
                         step="0.01"
                         min="0"
                         defaultValue={((invoice.discount_cents ?? 0) / 100).toFixed(2)}
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="draft-inv-tax" className="text-xs font-medium">Tax (bps)</Label>
+                      <Label htmlFor="draft-inv-tax" className="text-sm font-medium">Tax (bps)</Label>
                       <Input
                         id="draft-inv-tax"
                         name="tax_rate_bps"
@@ -329,28 +329,28 @@ export default async function AdminInvoiceDetailPage({
                         min="0"
                         max="5000"
                         defaultValue={invoice.tax_rate_bps ?? 0}
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="draft-inv-instructions" className="text-xs font-medium">Payment Instructions</Label>
+                    <Label htmlFor="draft-inv-instructions" className="text-sm font-medium">Payment Instructions</Label>
                     <Input
                       id="draft-inv-instructions"
                       name="payment_instructions"
                       defaultValue={invoice.payment_instructions ?? ''}
                       placeholder="Wire / Wise / bKash details..."
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="draft-inv-notes" className="text-xs font-medium">Notes</Label>
+                    <Label htmlFor="draft-inv-notes" className="text-sm font-medium">Notes</Label>
                     <Input
                       id="draft-inv-notes"
                       name="notes"
                       defaultValue={invoice.notes ?? ''}
                       placeholder="Invoice memo or scope reference..."
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <Button type="submit" size="sm" variant="secondary" className="w-full rounded-full text-xs">
@@ -407,7 +407,7 @@ export default async function AdminInvoiceDetailPage({
                             defaultValue={String(
                               invoice.fx_rate_to_usd ?? pay.fx_rate_to_usd ?? '1.0'
                             )}
-                            className="h-9 w-24 font-mono"
+                            className="h-9 w-24 tabular-nums"
                           />
                           <Button type="submit" size="sm" className="h-9 gap-1 rounded-full">
                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -456,13 +456,13 @@ export default async function AdminInvoiceDetailPage({
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="manual-pay-method" className="text-xs font-medium">Method</Label>
+                      <Label htmlFor="manual-pay-method" className="text-sm font-medium">Method</Label>
                       <select
                         id="manual-pay-method"
                         name="method"
                         aria-label="Payment method"
                         defaultValue="manual"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                       >
                         <option value="manual">Manual / Cash</option>
                         <option value="bank_transfer">Bank Wire / SWIFT</option>
@@ -474,7 +474,7 @@ export default async function AdminInvoiceDetailPage({
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="manual-pay-amount" className="text-xs font-medium">Amount ({invoice.currency}) *</Label>
+                      <Label htmlFor="manual-pay-amount" className="text-sm font-medium">Amount ({invoice.currency}) *</Label>
                       <Input
                         id="manual-pay-amount"
                         name="amount_major"
@@ -484,23 +484,23 @@ export default async function AdminInvoiceDetailPage({
                         min="0.01"
                         defaultValue={(outstandingCents / 100).toFixed(2)}
                         required
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="manual-pay-ref" className="text-xs font-medium">Reference *</Label>
+                      <Label htmlFor="manual-pay-ref" className="text-sm font-medium">Reference *</Label>
                       <Input
                         id="manual-pay-ref"
                         name="reference"
                         required
                         placeholder="WIRE-REF-001"
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="manual-pay-fx" className="text-xs font-medium">FX → USD</Label>
+                      <Label htmlFor="manual-pay-fx" className="text-sm font-medium">FX → USD</Label>
                       <Input
                         id="manual-pay-fx"
                         name="fx_rate"
@@ -508,7 +508,7 @@ export default async function AdminInvoiceDetailPage({
                         type="number"
                         step="0.0001"
                         defaultValue={invoice.fx_rate_to_usd}
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
@@ -538,7 +538,7 @@ export default async function AdminInvoiceDetailPage({
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="space-y-1.5">
-                    <Label htmlFor="credit-note-amount" className="text-xs font-medium">Credit Amount ({invoice.currency}) *</Label>
+                    <Label htmlFor="credit-note-amount" className="text-sm font-medium">Credit Amount ({invoice.currency}) *</Label>
                     <Input
                       id="credit-note-amount"
                       name="amount_major"
@@ -548,17 +548,17 @@ export default async function AdminInvoiceDetailPage({
                       max={(outstandingCents / 100).toFixed(2)}
                       required
                       placeholder="50.00"
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="credit-note-reason" className="text-xs font-medium">Adjustment Reason *</Label>
+                    <Label htmlFor="credit-note-reason" className="text-sm font-medium">Adjustment Reason *</Label>
                     <Input
                       id="credit-note-reason"
                       name="reason"
                       required
                       placeholder="Scope adjustment or courtesy credit"
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <Button type="submit" size="sm" variant="outline" className="h-9 w-full rounded-full">

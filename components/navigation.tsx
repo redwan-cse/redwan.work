@@ -50,6 +50,7 @@ export function Navigation() {
               src="/profile.jpg"
               alt="Md. Redwan Ahmed"
               fill
+              loading="eager"
               sizes="44px"
               className="object-cover object-top"
             />

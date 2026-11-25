@@ -260,13 +260,13 @@ export default async function AdminOrderDetailPage({
             <input type="hidden" name="order_id" value={order.id} />
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="admin-order-status" className="text-xs font-medium">Order Status</Label>
+                <Label htmlFor="admin-order-status" className="text-sm font-medium">Order Status</Label>
                 <select
                   id="admin-order-status"
                   name="status"
                   aria-label="Order lifecycle status"
                   defaultValue={order.status}
-                  className="block h-9 rounded-md border border-input bg-background px-3 text-base md:text-sm"
+                  className="block h-9 rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="awaiting_payment">awaiting_payment</option>
                   <option value="pending_requirements">pending_requirements</option>
@@ -281,7 +281,7 @@ export default async function AdminOrderDetailPage({
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="admin-order-progress" className="text-xs font-medium">Progress %</Label>
+                <Label htmlFor="admin-order-progress" className="text-sm font-medium">Progress %</Label>
                 <Input
                   id="admin-order-progress"
                   name="progress_percent"
@@ -289,7 +289,7 @@ export default async function AdminOrderDetailPage({
                   min="0"
                   max="100"
                   defaultValue={order.progress_percent}
-                  className="h-9 w-24 font-mono"
+                  className="h-9 w-24 tabular-nums"
                 />
               </div>
               <Button type="submit" size="sm" className="h-9 rounded-full px-4 text-xs">
@@ -364,28 +364,28 @@ export default async function AdminOrderDetailPage({
 
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="dlv-title" className="text-xs font-medium">Deliverable Title *</Label>
+                      <Label htmlFor="dlv-title" className="text-sm font-medium">Deliverable Title *</Label>
                       <Input
                         id="dlv-title"
                         name="title"
                         required
                         placeholder="VAPT Final Technical & Executive Report"
-                        className="h-10 md:h-9"
+                        className="h-10"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="dlv-version" className="text-xs font-medium">Version</Label>
+                      <Label htmlFor="dlv-version" className="text-sm font-medium">Version</Label>
                       <Input
                         id="dlv-version"
                         name="version_label"
                         defaultValue={`v1.${deliverables?.length ?? 0}`}
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="dlv-release-notes" className="text-xs font-medium">Release Notes / Remediation Summary</Label>
+                    <Label htmlFor="dlv-release-notes" className="text-sm font-medium">Release Notes / Remediation Summary</Label>
                     <Textarea
                       id="dlv-release-notes"
                       name="release_notes"
@@ -749,7 +749,7 @@ export default async function AdminOrderDetailPage({
                           name="status"
                           aria-label="Milestone status"
                           defaultValue={ms.status}
-                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                          className="h-9 rounded-md border border-input bg-background px-2 text-base font-sans transition-colors hover:border-muted-foreground/45"
                         >
                           <option value="pending">pending</option>
                           <option value="in_progress">in_progress</option>
@@ -791,7 +791,7 @@ export default async function AdminOrderDetailPage({
                           defaultValue={ms.title}
                           required
                           aria-label="Milestone title"
-                          className="h-8 sm:col-span-2"
+                          className="h-9 sm:col-span-2"
                         />
                         <Input
                           name="amount_major"
@@ -801,14 +801,14 @@ export default async function AdminOrderDetailPage({
                           defaultValue={(ms.amount_cents / 100).toFixed(2)}
                           disabled={Boolean(linkedInv)}
                           aria-label="Milestone amount"
-                          className="h-8 font-mono"
+                          className="h-9 tabular-nums"
                         />
                         <Input
                           name="due_date"
                           type="date"
                           defaultValue={ms.due_date ?? ''}
                           aria-label="Milestone due date"
-                          className="h-8 font-mono"
+                          className="h-9 tabular-nums"
                         />
                         <div className="flex items-center justify-between gap-2 sm:col-span-4">
                           <span className="text-[10px] text-muted-foreground">
@@ -846,7 +846,7 @@ export default async function AdminOrderDetailPage({
                     min="0"
                     defaultValue="250"
                     placeholder="Amount"
-                    className="h-9 font-mono"
+                    className="h-9 tabular-nums"
                   />
                 </div>
                 <Button type="submit" size="sm" variant="outline" className="h-9 gap-1 text-xs">
@@ -974,7 +974,7 @@ export default async function AdminOrderDetailPage({
                 <input type="hidden" name="order_id" value={order.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="rev-extra-rounds" className="text-xs font-medium">Extra Revision Rounds *</Label>
+                    <Label htmlFor="rev-extra-rounds" className="text-sm font-medium">Extra Revision Rounds *</Label>
                     <Input
                       id="rev-extra-rounds"
                       name="extra_revisions"
@@ -983,11 +983,11 @@ export default async function AdminOrderDetailPage({
                       max="20"
                       defaultValue="2"
                       required
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="rev-fee-major" className="text-xs font-medium">Addendum Fee ({order.currency}) *</Label>
+                    <Label htmlFor="rev-fee-major" className="text-sm font-medium">Addendum Fee ({order.currency}) *</Label>
                     <Input
                       id="rev-fee-major"
                       name="fee_major"
@@ -996,12 +996,12 @@ export default async function AdminOrderDetailPage({
                       min="1"
                       defaultValue="150"
                       required
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="rev-summary" className="text-xs font-medium">Revision Scope Description *</Label>
+                  <Label htmlFor="rev-summary" className="text-sm font-medium">Revision Scope Description *</Label>
                   <Textarea
                     id="rev-summary"
                     name="summary"

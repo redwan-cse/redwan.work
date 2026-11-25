@@ -240,38 +240,38 @@ export function ServicesStudioTable({
 
               <div className="grid gap-3.5 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-title" className="text-xs font-medium">Service Title *</Label>
+                  <Label htmlFor="svc-title" className="text-sm font-medium">Service Title *</Label>
                   <Input
                     id="svc-title"
                     name="title"
                     required
                     defaultValue={editing?.title ?? ''}
                     placeholder="Cloud Security Posture Audit"
-                    className="h-10 md:h-9"
+                    className="h-10"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-slug" className="text-xs font-medium">URL Slug *</Label>
+                  <Label htmlFor="svc-slug" className="text-sm font-medium">URL Slug *</Label>
                   <Input
                     id="svc-slug"
                     name="slug"
                     required
                     defaultValue={editing?.slug ?? ''}
                     placeholder="cloud-security-posture-audit"
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
               </div>
 
               <div className="grid gap-3.5 sm:grid-cols-4">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="svc-pillar" className="text-xs font-medium">Pillar *</Label>
+                  <Label htmlFor="svc-pillar" className="text-sm font-medium">Pillar *</Label>
                   <select
                     id="svc-pillar"
                     name="pillar"
                     aria-label="Service or study pillar"
                     defaultValue={editing?.pillar ?? 'cybersecurity'}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="cybersecurity">cybersecurity</option>
                     <option value="development">development</option>
@@ -281,7 +281,7 @@ export function ServicesStudioTable({
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-starting-usd" className="text-xs font-medium">Starting USD</Label>
+                  <Label htmlFor="svc-starting-usd" className="text-sm font-medium">Starting USD</Label>
                   <Input
                     id="svc-starting-usd"
                     name="starting_price_usd"
@@ -289,70 +289,70 @@ export function ServicesStudioTable({
                     min="10"
                     required
                     defaultValue={editing ? Math.round((editing.startingPriceCents ?? 15000) / 100) : 250}
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-sort-order" className="text-xs font-medium">Sort Order</Label>
+                  <Label htmlFor="svc-sort-order" className="text-sm font-medium">Sort Order</Label>
                   <Input
                     id="svc-sort-order"
                     name="sort_order"
                     type="number"
                     defaultValue={editing?.sortOrder ?? (services.length + 1) * 10}
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
               </div>
 
               <div className="grid gap-3.5 sm:grid-cols-3">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="svc-tagline" className="text-xs font-medium">Short Tagline *</Label>
+                  <Label htmlFor="svc-tagline" className="text-sm font-medium">Short Tagline *</Label>
                   <Input
                     id="svc-tagline"
                     name="tagline"
                     required
                     defaultValue={editing?.tagline ?? ''}
-                    className="h-10 md:h-9"
+                    className="h-10"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="svc-min-days" className="text-xs font-medium">Min Days</Label>
+                    <Label htmlFor="svc-min-days" className="text-sm font-medium">Min Days</Label>
                     <Input
                       id="svc-min-days"
                       name="delivery_days_min"
                       type="number"
                       defaultValue={editing?.deliveryDaysMin ?? 3}
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="svc-max-days" className="text-xs font-medium">Max Days</Label>
+                    <Label htmlFor="svc-max-days" className="text-sm font-medium">Max Days</Label>
                     <Input
                       id="svc-max-days"
                       name="delivery_days_max"
                       type="number"
                       defaultValue={editing?.deliveryDaysMax ?? 14}
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="svc-tools-tags" className="text-xs font-medium">Tools Tags (Comma separated)</Label>
+                <Label htmlFor="svc-tools-tags" className="text-sm font-medium">Tools Tags (Comma separated)</Label>
                 <Input
                   id="svc-tools-tags"
                   name="tools_tags"
                   defaultValue={(editing?.toolsTags ?? []).join(', ')}
                   placeholder="OWASP ASVS, Burp Suite Pro, Nuclei, Terraform"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
 
               <div className="grid gap-3.5 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-description" className="text-xs font-medium">Detailed Description</Label>
+                  <Label htmlFor="svc-description" className="text-sm font-medium">Detailed Description</Label>
                   <Textarea
                     id="svc-description"
                     name="description"
@@ -361,13 +361,12 @@ export function ServicesStudioTable({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="svc-highlights" className="text-xs font-medium">Highlights (One per line)</Label>
+                  <Label htmlFor="svc-highlights" className="text-sm font-medium">Highlights (One per line)</Label>
                   <Textarea
                     id="svc-highlights"
                     name="highlights"
                     rows={3}
                     defaultValue={(editing?.highlights ?? []).join('\n')}
-                    className="font-mono"
                   />
                 </div>
               </div>
@@ -441,30 +440,30 @@ export function ServicesStudioTable({
                       <input type="hidden" name="tier_name" value={pkg.tier_name} />
 
                       <div className="space-y-1.5">
-                        <Label htmlFor={`pkg-name-${pkg.id}`} className="text-xs font-medium">Package Name</Label>
+                        <Label htmlFor={`pkg-name-${pkg.id}`} className="text-sm font-medium">Package Name</Label>
                         <Input
                           id={`pkg-name-${pkg.id}`}
                           name="package_name"
                           defaultValue={pkg.package_name}
                           required
-                          className="h-10 md:h-9"
+                          className="h-10"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <div className="space-y-1.5">
-                          <Label htmlFor={`pkg-price-${pkg.id}`} className="text-xs font-medium">Price (USD)</Label>
+                          <Label htmlFor={`pkg-price-${pkg.id}`} className="text-sm font-medium">Price (USD)</Label>
                           <Input
                             id={`pkg-price-${pkg.id}`}
                             name="price_usd"
                             type="number"
                             defaultValue={Math.round(pkg.price_cents / 100)}
                             required
-                            className="h-10 font-mono md:h-9"
+                            className="h-10 tabular-nums"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor={`pkg-dep-${pkg.id}`} className="text-xs font-medium">Deposit %</Label>
+                          <Label htmlFor={`pkg-dep-${pkg.id}`} className="text-sm font-medium">Deposit %</Label>
                           <Input
                             id={`pkg-dep-${pkg.id}`}
                             name="deposit_percent"
@@ -472,44 +471,43 @@ export function ServicesStudioTable({
                             min="0"
                             max="100"
                             defaultValue={pkg.deposit_percent ?? 50}
-                            className="h-10 font-mono md:h-9"
+                            className="h-10 tabular-nums"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor={`pkg-days-${pkg.id}`} className="text-xs font-medium">Delivery Days</Label>
+                          <Label htmlFor={`pkg-days-${pkg.id}`} className="text-sm font-medium">Delivery Days</Label>
                           <Input
                             id={`pkg-days-${pkg.id}`}
                             name="delivery_days"
                             type="number"
                             defaultValue={pkg.delivery_days}
-                            className="h-10 font-mono md:h-9"
+                            className="h-10 tabular-nums"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor={`pkg-rev-${pkg.id}`} className="text-xs font-medium">Revisions</Label>
+                          <Label htmlFor={`pkg-rev-${pkg.id}`} className="text-sm font-medium">Revisions</Label>
                           <Input
                             id={`pkg-rev-${pkg.id}`}
                             name="revisions_included"
                             type="number"
                             defaultValue={pkg.revisions_included}
-                            className="h-10 font-mono md:h-9"
+                            className="h-10 tabular-nums"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label htmlFor={`pkg-sum-${pkg.id}`} className="text-xs font-medium">Summary</Label>
-                        <Input id={`pkg-sum-${pkg.id}`} name="summary" defaultValue={pkg.summary} required className="h-10 md:h-9" />
+                        <Label htmlFor={`pkg-sum-${pkg.id}`} className="text-sm font-medium">Summary</Label>
+                        <Input id={`pkg-sum-${pkg.id}`} name="summary" defaultValue={pkg.summary} required className="h-10" />
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label htmlFor={`pkg-feat-${pkg.id}`} className="text-xs font-medium">Features (One per line)</Label>
+                        <Label htmlFor={`pkg-feat-${pkg.id}`} className="text-sm font-medium">Features (One per line)</Label>
                         <Textarea
                           id={`pkg-feat-${pkg.id}`}
                           name="features"
                           rows={3}
                           defaultValue={(pkg.features ?? []).join('\n')}
-                          className="font-mono"
                         />
                       </div>
 
@@ -549,13 +547,13 @@ export function ServicesStudioTable({
                   <input type="hidden" name="service_id" value={editing.id} />
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="new-tier-name" className="text-xs font-medium">Tier *</Label>
+                      <Label htmlFor="new-tier-name" className="text-sm font-medium">Tier *</Label>
                       <select
                         id="new-tier-name"
                         name="tier_name"
                         aria-label="Package tier name"
                         defaultValue="Standard"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                       >
                         <option value="Starter">Starter</option>
                         <option value="Standard">Standard</option>
@@ -564,20 +562,20 @@ export function ServicesStudioTable({
                       </select>
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="new-tier-pkg-name" className="text-xs font-medium">Package Name *</Label>
+                      <Label htmlFor="new-tier-pkg-name" className="text-sm font-medium">Package Name *</Label>
                       <Input
                         id="new-tier-pkg-name"
                         name="package_name"
                         aria-label="New package name"
                         placeholder="e.g. Full Production Audit"
                         required
-                        className="h-10 md:h-9"
+                        className="h-10"
                       />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="new-tier-price" className="text-xs font-medium">Price (USD) *</Label>
+                      <Label htmlFor="new-tier-price" className="text-sm font-medium">Price (USD) *</Label>
                       <Input
                         id="new-tier-price"
                         name="price_usd"
@@ -586,11 +584,11 @@ export function ServicesStudioTable({
                         defaultValue={500}
                         required
                         placeholder="USD"
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="new-tier-dep" className="text-xs font-medium">Deposit %</Label>
+                      <Label htmlFor="new-tier-dep" className="text-sm font-medium">Deposit %</Label>
                       <Input
                         id="new-tier-dep"
                         name="deposit_percent"
@@ -598,11 +596,11 @@ export function ServicesStudioTable({
                         type="number"
                         defaultValue={50}
                         placeholder="Dep %"
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="new-tier-days" className="text-xs font-medium">Delivery Days</Label>
+                      <Label htmlFor="new-tier-days" className="text-sm font-medium">Delivery Days</Label>
                       <Input
                         id="new-tier-days"
                         name="delivery_days"
@@ -610,11 +608,11 @@ export function ServicesStudioTable({
                         type="number"
                         defaultValue={7}
                         placeholder="Days"
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="new-tier-rev" className="text-xs font-medium">Revisions</Label>
+                      <Label htmlFor="new-tier-rev" className="text-sm font-medium">Revisions</Label>
                       <Input
                         id="new-tier-rev"
                         name="revisions_included"
@@ -622,30 +620,29 @@ export function ServicesStudioTable({
                         type="number"
                         defaultValue={2}
                         placeholder="Rev"
-                        className="h-10 font-mono md:h-9"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="new-tier-summary" className="text-xs font-medium">Short Summary *</Label>
+                    <Label htmlFor="new-tier-summary" className="text-sm font-medium">Short Summary *</Label>
                     <Input
                       id="new-tier-summary"
                       name="summary"
                       aria-label="New tier short summary"
                       placeholder="Concise scope summary shown on package card..."
                       required
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="new-tier-features" className="text-xs font-medium">Features (One per line)</Label>
+                    <Label htmlFor="new-tier-features" className="text-sm font-medium">Features (One per line)</Label>
                     <Textarea
                       id="new-tier-features"
                       name="features"
                       aria-label="New tier features"
                       rows={3}
                       placeholder="OWASP manual testing&#10;Executive PDF report&#10;1x retest verification"
-                      className="font-mono"
                     />
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -794,27 +791,27 @@ export function PortfolioStudioTable({
 
             <div className="grid gap-3.5 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-code" className="text-xs font-medium">Code *</Label>
+                <Label htmlFor="cs-code" className="text-sm font-medium">Code *</Label>
                 <Input
                   id="cs-code"
                   name="code"
                   required
                   defaultValue={editing?.code ?? `CS-${101 + studies.length}`}
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-year" className="text-xs font-medium">Year *</Label>
-                <Input id="cs-year" name="year" required defaultValue={editing?.year ?? '2026'} className="h-10 font-mono md:h-9" />
+                <Label htmlFor="cs-year" className="text-sm font-medium">Year *</Label>
+                <Input id="cs-year" name="year" required defaultValue={editing?.year ?? '2026'} className="h-10 tabular-nums" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-pillar" className="text-xs font-medium">Pillar *</Label>
+                <Label htmlFor="cs-pillar" className="text-sm font-medium">Pillar *</Label>
                 <select
                   id="cs-pillar"
                   name="pillar"
                   aria-label="Case study pillar"
                   defaultValue={editing?.pillar ?? 'cybersecurity'}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="cybersecurity">cybersecurity</option>
                   <option value="development">development</option>
@@ -827,90 +824,87 @@ export function PortfolioStudioTable({
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-title" className="text-xs font-medium">Title *</Label>
-                <Input id="cs-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10 md:h-9" />
+                <Label htmlFor="cs-title" className="text-sm font-medium">Title *</Label>
+                <Input id="cs-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-slug" className="text-xs font-medium">URL Slug *</Label>
-                <Input id="cs-slug" name="slug" required defaultValue={editing?.slug ?? ''} className="h-10 font-mono md:h-9" />
-              </div>
-            </div>
-
-            <div className="grid gap-3.5 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="cs-sector" className="text-xs font-medium">Client Sector *</Label>
-                <Input id="cs-sector" name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-10 md:h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cs-metric" className="text-xs font-medium">Headline Metric *</Label>
-                <Input id="cs-metric" name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-10 font-mono md:h-9" />
+                <Label htmlFor="cs-slug" className="text-sm font-medium">URL Slug *</Label>
+                <Input id="cs-slug" name="slug" required defaultValue={editing?.slug ?? ''} className="h-10 tabular-nums" />
               </div>
             </div>
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-related-svc" className="text-xs font-medium">Related Service Slug *</Label>
+                <Label htmlFor="cs-sector" className="text-sm font-medium">Client Sector *</Label>
+                <Input id="cs-sector" name="client_sector" required defaultValue={editing?.clientSector ?? ''} className="h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-metric" className="text-sm font-medium">Headline Metric *</Label>
+                <Input id="cs-metric" name="headline_metric" required defaultValue={editing?.headlineMetric ?? ''} className="h-10 tabular-nums" />
+              </div>
+            </div>
+
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-related-svc" className="text-sm font-medium">Related Service Slug *</Label>
                 <Input
                   id="cs-related-svc"
                   name="related_service_slug"
                   required
                   defaultValue={editing?.relatedServiceSlug ?? 'vapt-penetration-testing'}
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-external-url" className="text-xs font-medium">External Reference / Repo URL</Label>
+                <Label htmlFor="cs-external-url" className="text-sm font-medium">External Reference / Repo URL</Label>
                 <Input
                   id="cs-external-url"
                   name="external_url"
                   defaultValue={editing?.externalUrl ?? ''}
                   placeholder="https://github.com/..."
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="cs-summary" className="text-xs font-medium">Executive Summary *</Label>
+              <Label htmlFor="cs-summary" className="text-sm font-medium">Executive Summary *</Label>
               <Textarea id="cs-summary" name="summary" rows={3} required defaultValue={editing?.summary ?? ''} />
             </div>
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-challenge" className="text-xs font-medium">Challenge / Problem *</Label>
+                <Label htmlFor="cs-challenge" className="text-sm font-medium">Challenge / Problem *</Label>
                 <Textarea id="cs-challenge" name="challenge" rows={3} required defaultValue={editing?.challenge ?? ''} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-approach" className="text-xs font-medium">Approach (One step per line)</Label>
+                <Label htmlFor="cs-approach" className="text-sm font-medium">Approach (One step per line)</Label>
                 <Textarea
                   id="cs-approach"
                   name="approach"
                   rows={3}
                   defaultValue={(editing?.approach ?? []).join('\n')}
-                  className="font-mono"
                 />
               </div>
             </div>
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cs-outcomes" className="text-xs font-medium">Verified Outcomes (One per line)</Label>
+                <Label htmlFor="cs-outcomes" className="text-sm font-medium">Verified Outcomes (One per line)</Label>
                 <Textarea
                   id="cs-outcomes"
                   name="outcomes"
                   rows={3}
                   defaultValue={(editing?.outcomes ?? []).join('\n')}
-                  className="font-mono"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cs-stack" className="text-xs font-medium">Tech Stack (Comma separated)</Label>
+                <Label htmlFor="cs-stack" className="text-sm font-medium">Tech Stack (Comma separated)</Label>
                 <Textarea
                   id="cs-stack"
                   name="stack"
                   rows={3}
                   defaultValue={(editing?.stack ?? []).join(', ')}
-                  className="font-mono"
                 />
               </div>
             </div>
@@ -922,7 +916,7 @@ export function PortfolioStudioTable({
                   aria-label="Case study sort order"
                   type="number"
                   defaultValue={editing?.sortOrder ?? (studies.length + 1) * 10}
-                  className="h-9 w-24 font-mono"
+                  className="h-9 w-24 tabular-nums"
                 />
                 <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
                   <FormCheckbox
@@ -1078,13 +1072,13 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cv-section" className="text-xs font-medium">Section *</Label>
+                <Label htmlFor="cv-section" className="text-sm font-medium">Section *</Label>
                 <select
                   id="cv-section"
                   name="section"
                   aria-label="Resume section category"
                   defaultValue={editing?.section ?? 'experience'}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="experience">Work Experience</option>
                   <option value="vendor_certification">Vendor Certification</option>
@@ -1095,62 +1089,61 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cv-period" className="text-xs font-medium">Period / Year Label</Label>
+                <Label htmlFor="cv-period" className="text-sm font-medium">Period / Year Label</Label>
                 <Input
                   id="cv-period"
                   name="period"
                   defaultValue={editing?.period ?? ''}
                   placeholder="2025 – Present"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="cv-title" className="text-xs font-medium">Title / Role / Degree / Paper *</Label>
-              <Input id="cv-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10 md:h-9" />
+              <Label htmlFor="cv-title" className="text-sm font-medium">Title / Role / Degree / Paper *</Label>
+              <Input id="cv-title" name="title" required defaultValue={editing?.title ?? ''} className="h-10" />
             </div>
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cv-org" className="text-xs font-medium">Organization / Issuer</Label>
-                <Input id="cv-org" name="organization" defaultValue={editing?.organization ?? ''} className="h-10 md:h-9" />
+                <Label htmlFor="cv-org" className="text-sm font-medium">Organization / Issuer</Label>
+                <Input id="cv-org" name="organization" defaultValue={editing?.organization ?? ''} className="h-10" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cv-role-type" className="text-xs font-medium">Role Type</Label>
-                <Input id="cv-role-type" name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-10 md:h-9" />
+                <Label htmlFor="cv-role-type" className="text-sm font-medium">Role Type</Label>
+                <Input id="cv-role-type" name="role_type" defaultValue={editing?.role_type ?? ''} placeholder="Full-Time / Remote" className="h-10" />
               </div>
             </div>
 
             <div className="grid gap-3.5 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="cv-location" className="text-xs font-medium">Location</Label>
-                <Input id="cv-location" name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-10 md:h-9" />
+                <Label htmlFor="cv-location" className="text-sm font-medium">Location</Label>
+                <Input id="cv-location" name="location" defaultValue={editing?.location ?? ''} placeholder="Dhaka / Remote" className="h-10" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cv-badge" className="text-xs font-medium">Badge Label</Label>
-                <Input id="cv-badge" name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-10 font-mono md:h-9" />
+                <Label htmlFor="cv-badge" className="text-sm font-medium">Badge Label</Label>
+                <Input id="cv-badge" name="badge_label" defaultValue={editing?.badge_label ?? ''} placeholder="Q1 Scopus / Verified" className="h-10 tabular-nums" />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="cv-verify-url" className="text-xs font-medium">Verification / DOI Link</Label>
-              <Input id="cv-verify-url" name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-10 font-mono md:h-9" />
+              <Label htmlFor="cv-verify-url" className="text-sm font-medium">Verification / DOI Link</Label>
+              <Input id="cv-verify-url" name="verification_url" defaultValue={editing?.verification_url ?? ''} placeholder="https://..." className="h-10 tabular-nums" />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="cv-desc" className="text-xs font-medium">Summary / Abstract Description</Label>
+              <Label htmlFor="cv-desc" className="text-sm font-medium">Summary / Abstract Description</Label>
               <Textarea id="cv-desc" name="description" rows={3} defaultValue={editing?.description ?? ''} />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="cv-highlights" className="text-xs font-medium">Highlights / Bullets (One per line)</Label>
+              <Label htmlFor="cv-highlights" className="text-sm font-medium">Highlights / Bullets (One per line)</Label>
               <Textarea
                 id="cv-highlights"
                 name="highlights"
                 rows={3}
                 defaultValue={(editing?.highlights ?? []).join('\n')}
-                className="font-mono"
               />
             </div>
 
@@ -1161,7 +1154,7 @@ export function ResumeItemsStudioTable({ items }: { items: ResumeItemRecord[] })
                   aria-label="Resume entry sort order"
                   type="number"
                   defaultValue={editing?.sort_order ?? 10}
-                  className="h-9 w-24 font-mono"
+                  className="h-9 w-24 tabular-nums"
                 />
                 <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
                   <FormCheckbox

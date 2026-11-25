@@ -134,17 +134,17 @@ export default async function AdminProposalDetailPage({
               <input type="hidden" name="proposal_id" value={proposal.id} />
               <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="draft-prop-title" className="text-xs font-medium">Title *</Label>
-                  <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-10 md:h-9" />
+                  <Label htmlFor="draft-prop-title" className="text-sm font-medium">Title *</Label>
+                  <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-10" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="draft-prop-currency" className="text-xs font-medium">Currency</Label>
+                  <Label htmlFor="draft-prop-currency" className="text-sm font-medium">Currency</Label>
                   <select
                     id="draft-prop-currency"
                     name="currency"
                     aria-label="Draft proposal currency"
                     defaultValue={proposal.currency}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="USD">USD</option>
                     <option value="BDT">BDT</option>
@@ -153,7 +153,7 @@ export default async function AdminProposalDetailPage({
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="draft-prop-total" className="text-xs font-medium">Total *</Label>
+                  <Label htmlFor="draft-prop-total" className="text-sm font-medium">Total *</Label>
                   <Input
                     id="draft-prop-total"
                     name="total_major"
@@ -162,12 +162,12 @@ export default async function AdminProposalDetailPage({
                     step="0.01"
                     required
                     defaultValue={(proposal.total_cents / 100).toFixed(2)}
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="draft-prop-deposit" className="text-xs font-medium">Dep %</Label>
+                    <Label htmlFor="draft-prop-deposit" className="text-sm font-medium">Dep %</Label>
                     <Input
                       id="draft-prop-deposit"
                       name="deposit_percent"
@@ -175,25 +175,25 @@ export default async function AdminProposalDetailPage({
                       min="0"
                       max="100"
                       defaultValue={proposal.deposit_percent}
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="draft-prop-days" className="text-xs font-medium">Days</Label>
+                    <Label htmlFor="draft-prop-days" className="text-sm font-medium">Days</Label>
                     <Input
                       id="draft-prop-days"
                       name="estimated_days"
                       type="number"
                       min="1"
                       defaultValue={proposal.estimated_days}
-                      className="h-10 font-mono md:h-9"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                 </div>
               </div>
               <div className="grid gap-3.5 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="draft-prop-scope" className="text-xs font-medium">Executive Scope Summary *</Label>
+                  <Label htmlFor="draft-prop-scope" className="text-sm font-medium">Executive Scope Summary *</Label>
                   <Textarea
                     id="draft-prop-scope"
                     name="scope_summary"
@@ -203,7 +203,7 @@ export default async function AdminProposalDetailPage({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="draft-prop-deliv" className="text-xs font-medium">Deliverables Summary</Label>
+                  <Label htmlFor="draft-prop-deliv" className="text-sm font-medium">Deliverables Summary</Label>
                   <Textarea
                     id="draft-prop-deliv"
                     name="deliverables_summary"

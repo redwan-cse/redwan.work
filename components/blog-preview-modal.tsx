@@ -72,7 +72,7 @@ export function BlogPreviewModal({
             fill
             unoptimized={isDirectBlogImage(imageUrl)}
             className="object-cover"
-            priority
+            loading="eager"
           />
         </div>
 

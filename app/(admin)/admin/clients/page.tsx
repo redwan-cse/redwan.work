@@ -125,38 +125,38 @@ export default async function AdminClientsPage({
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="invite-client-email" className="text-xs font-medium">Client Email *</Label>
+                <Label htmlFor="invite-client-email" className="text-sm font-medium">Client Email *</Label>
                 <Input
                   id="invite-client-email"
                   name="email"
                   type="email"
                   required
                   placeholder="founder@company.com"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="invite-client-name" className="text-xs font-medium">Full Name *</Label>
+                <Label htmlFor="invite-client-name" className="text-sm font-medium">Full Name *</Label>
                 <Input
                   id="invite-client-name"
                   name="full_name"
                   required
                   placeholder="Sarah Jenkins"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="invite-client-company" className="text-xs font-medium">Company / Org</Label>
-                  <Input id="invite-client-company" name="company" placeholder="Acme Security Inc." className="h-10 md:h-9" />
+                  <Label htmlFor="invite-client-company" className="text-sm font-medium">Company / Org</Label>
+                  <Input id="invite-client-company" name="company" placeholder="Acme Security Inc." className="h-10" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="invite-client-tier" className="text-xs font-medium">Relationship Tier</Label>
+                  <Label htmlFor="invite-client-tier" className="text-sm font-medium">Relationship Tier</Label>
                   <select
                     id="invite-client-tier"
                     name="tier"
                     aria-label="Client invite tier"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="standard">standard</option>
                     <option value="vip">vip</option>
@@ -190,14 +190,14 @@ export default async function AdminClientsPage({
                   aria-label="Search clients"
                   defaultValue={params.q ?? ''}
                   placeholder="Search clients..."
-                  className="h-9 w-44 pl-8 md:h-8 md:text-xs"
+                  className="h-9 w-52 pl-8"
                 />
               </div>
               <select
                 name="tier"
                 aria-label="Filter clients by tier"
                 defaultValue={tierFilter}
-                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">All Tiers</option>
                 <option value="standard">standard</option>
@@ -209,7 +209,7 @@ export default async function AdminClientsPage({
                 name="sort"
                 aria-label="Sort clients"
                 defaultValue={sortMode}
-                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">Newest First</option>
                 <option value="ltv_desc">Highest LTV</option>
@@ -218,7 +218,7 @@ export default async function AdminClientsPage({
                 name="followup"
                 aria-label="Filter by follow-up status"
                 defaultValue={followupFilter}
-                className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">All Follow-Ups</option>
                 <option value="due">Follow-Up Due</option>

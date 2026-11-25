@@ -346,6 +346,9 @@ export default function EnhancedContactForm({
   // freshest execution even if the issued token string were ever reused.
   const turnstileTokenRef = React.useRef<string | null>(null);
   const turnstileGenerationRef = React.useRef(0);
+  const turnstileContainerRef = React.useRef<HTMLDivElement>(null);
+  const turnstileWidgetIdRef = React.useRef<string | null>(null);
+  const [turnstileScriptReady, setTurnstileScriptReady] = useState(false);
   
   // Refs for form fields to enable scrolling and focusing
   const nameRef = React.useRef<HTMLInputElement>(null);
@@ -433,42 +436,80 @@ export default function EnhancedContactForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Turnstile callback functions
-  // These are called by the Turnstile widget via data-callback attributes
+  // Explicit Cloudflare Turnstile widget lifecycle with clean turnstile.remove() on unmount
+  // so SPA route changes away from /contact never leave orphaned widgets behind.
   useEffect(() => {
-    // Define global callback functions for Turnstile
-    (window as any).onTurnstileSuccess = (token: string) => {
-      console.log('✅ Turnstile verification successful');
-      turnstileGenerationRef.current += 1;
-      turnstileTokenRef.current = token;
-      setTurnstileToken(token);
-      setIsTurnstileVerified(true);
-      setTurnstileError(null);
+    if (!TURNSTILE_SITE_KEY) return;
+
+    let cancelled = false;
+    let retryTimer: number | undefined;
+
+    const mountWidget = () => {
+      if (cancelled || turnstileWidgetIdRef.current) return;
+      const container = turnstileContainerRef.current;
+      const turnstile = (window as any).turnstile;
+      if (!container || !turnstile || typeof turnstile.render !== 'function') {
+        retryTimer = window.setTimeout(mountWidget, 150);
+        return;
+      }
+
+      try {
+        const widgetId = turnstile.render(container, {
+          sitekey: TURNSTILE_SITE_KEY,
+          theme: 'auto',
+          size: 'flexible',
+          action: 'contact-form',
+          retry: 'auto',
+          'retry-interval': 8000,
+          'refresh-expired': 'auto',
+          callback: (token: string) => {
+            if (cancelled) return;
+            turnstileGenerationRef.current += 1;
+            turnstileTokenRef.current = token;
+            setTurnstileToken(token);
+            setIsTurnstileVerified(true);
+            setTurnstileError(null);
+          },
+          'error-callback': () => {
+            if (cancelled) return;
+            turnstileTokenRef.current = null;
+            setTurnstileToken(null);
+            setIsTurnstileVerified(false);
+            setTurnstileError('Security verification failed. Please refresh the page and try again.');
+          },
+          'expired-callback': () => {
+            if (cancelled) return;
+            turnstileTokenRef.current = null;
+            setTurnstileToken(null);
+            setIsTurnstileVerified(false);
+            setTurnstileError('Security verification expired. The widget will automatically refresh.');
+          },
+        });
+        turnstileWidgetIdRef.current = typeof widgetId === 'string' ? widgetId : null;
+      } catch {
+        // Ignore transient mount failures during fast route switches
+      }
     };
 
-    (window as any).onTurnstileError = () => {
-      console.error('❌ Turnstile verification error');
-      turnstileTokenRef.current = null;
-      setTurnstileToken(null);
-      setIsTurnstileVerified(false);
-      setTurnstileError('Security verification failed. Please refresh the page and try again.');
-    };
+    mountWidget();
 
-    (window as any).onTurnstileExpired = () => {
-      console.warn('⚠️ Turnstile token expired');
-      turnstileTokenRef.current = null;
-      setTurnstileToken(null);
-      setIsTurnstileVerified(false);
-      setTurnstileError('Security verification expired. The widget will automatically refresh.');
-    };
-
-    // Cleanup
     return () => {
-      delete (window as any).onTurnstileSuccess;
-      delete (window as any).onTurnstileError;
-      delete (window as any).onTurnstileExpired;
+      cancelled = true;
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+      const widgetId = turnstileWidgetIdRef.current;
+      turnstileWidgetIdRef.current = null;
+      const turnstile = (window as any).turnstile;
+      if (widgetId && turnstile && typeof turnstile.remove === 'function') {
+        try {
+          turnstile.remove(widgetId);
+        } catch {
+          // Widget may already have been detached by Cloudflare script
+        }
+      }
     };
-  }, []);
+  }, [turnstileScriptReady]);
 
   /**
    * Resets the managed Turnstile widget and resolves with a token from the NEW
@@ -479,6 +520,7 @@ export default function EnhancedContactForm({
   const getFreshTurnstileToken = (): Promise<string> =>
     new Promise<string>((resolve, reject) => {
       const turnstile = (window as any).turnstile;
+      const widgetId = turnstileWidgetIdRef.current;
       if (!TURNSTILE_SITE_KEY || typeof turnstile === 'undefined') {
         reject(new Error('Security verification failed. Please refresh the page and try again.'));
         return;
@@ -487,7 +529,11 @@ export default function EnhancedContactForm({
       turnstileTokenRef.current = null;
       setTurnstileToken(null);
       setIsTurnstileVerified(false);
-      turnstile.reset();
+      if (widgetId) {
+        turnstile.reset(widgetId);
+      } else {
+        turnstile.reset();
+      }
       const startedAt = Date.now();
       const pollForToken = () => {
         if (turnstileGenerationRef.current > startGeneration) {
@@ -1065,7 +1111,11 @@ export default function EnhancedContactForm({
       setTurnstileError(null);
       // Trigger Turnstile widget reset if available
       if (typeof (window as any).turnstile !== 'undefined') {
-        (window as any).turnstile.reset();
+        if (turnstileWidgetIdRef.current) {
+          (window as any).turnstile.reset(turnstileWidgetIdRef.current);
+        } else {
+          (window as any).turnstile.reset();
+        }
       }
 
       setCopiedTicket(false);
@@ -1090,14 +1140,17 @@ export default function EnhancedContactForm({
 
   return (
     <div className="w-full">
-      {/* Load Cloudflare Turnstile script - MUST use exact URL (no proxying/caching) */}
+      {/* Load Cloudflare Turnstile script in explicit render mode for clean SPA unmount cleanup */}
       {/* https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/ */}
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        async
-        defer
-        strategy="afterInteractive"
-      />
+      {TURNSTILE_SITE_KEY ? (
+        <Script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+          async
+          defer
+          strategy="afterInteractive"
+          onLoad={() => setTurnstileScriptReady(true)}
+        />
+      ) : null}
       
       <form onSubmit={handleSubmit} className="space-y-8" noValidate>
         {/* Contact Details Section */}
@@ -1169,7 +1222,7 @@ export default function EnhancedContactForm({
                     aria-invalid={!!errors.country}
                     aria-describedby={errors.country ? "country-error" : undefined}
                     className={cn(
-                      "w-full justify-between font-normal",
+                      "h-10 w-full justify-between font-sans text-base font-normal",
                       errors.country ? "border-destructive focus:ring-destructive" : "",
                       !selectedCountryCode && "text-muted-foreground"
                     )}
@@ -1632,7 +1685,7 @@ export default function EnhancedContactForm({
                 value={formData.serviceTypeOther}
                 onChange={(e) => handleInputChange('serviceTypeOther', e.target.value)}
                 placeholder="Describe the custom service, technical support, or consulting you need..."
-                className="text-sm"
+                className="text-base"
               />
             </div>
           )}
@@ -1886,7 +1939,7 @@ export default function EnhancedContactForm({
                   value={formData.howDidYouFindMeReferral}
                   onChange={(e) => handleInputChange('howDidYouFindMeReferral', e.target.value)}
                   placeholder="Who referred you? (optional but appreciated)"
-                  className="text-sm"
+                  className="text-base"
                 />
               </div>
             )}
@@ -1901,7 +1954,7 @@ export default function EnhancedContactForm({
                   value={formData.howDidYouFindMeOther}
                   onChange={(e) => handleInputChange('howDidYouFindMeOther', e.target.value)}
                   placeholder="Please specify (e.g., Twitter, Conference, etc.)"
-                  className="text-sm"
+                  className="text-base"
                 />
               </div>
             )}
@@ -2047,19 +2100,11 @@ export default function EnhancedContactForm({
 
           {/* Center: Cloudflare Turnstile Widget */}
           {TURNSTILE_SITE_KEY ? (
-            <div className="flex items-center justify-center min-h-[65px]">
+            <div className="flex items-center justify-center min-h-[65px] w-full sm:w-auto">
               <div
-                className="cf-turnstile"
-                data-sitekey={TURNSTILE_SITE_KEY}
-                data-theme="auto"
+                ref={turnstileContainerRef}
                 data-size="flexible"
-                data-action="contact-form"
-                data-retry="auto"
-                data-retry-interval="8000"
-                data-refresh-expired="auto"
-                data-callback="onTurnstileSuccess"
-                data-error-callback="onTurnstileError"
-                data-expired-callback="onTurnstileExpired"
+                className="w-full max-w-full"
               />
             </div>
           ) : (

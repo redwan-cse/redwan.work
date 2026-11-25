@@ -376,7 +376,7 @@ export function ContractLiveChat({
               aria-label="Select active contract thread"
               value={selectedOrderId}
               onChange={(e) => handleSelectContract(e.target.value)}
-              className="h-8 rounded-full border border-border bg-background px-3 font-mono text-xs"
+              className="h-9 rounded-full border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
             >
               {contracts.map((c) => (
                 <option key={c.id} value={c.id}>

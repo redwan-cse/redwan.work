@@ -71,14 +71,14 @@ export function PortalOrderStoreClient({
             className="space-y-4"
           >
             <div className="space-y-1.5">
-              <Label htmlFor="store-service-slug" className="text-xs">Service Offering *</Label>
+              <Label htmlFor="store-service-slug" className="text-sm">Service Offering *</Label>
               <select
                 id="store-service-slug"
                 name="service_slug"
                 aria-label="Service category selection"
                 value={serviceSlug}
                 onChange={(e) => setServiceSlug(e.target.value)}
-                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 {catalog.map((service) => {
                   const pillar = SERVICE_PILLARS[service.pillar];
@@ -95,14 +95,14 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="store-tier" className="text-xs">Package Selection (or Unselect for Custom Scope) *</Label>
+              <Label htmlFor="store-tier" className="text-sm">Package Selection (or Unselect for Custom Scope) *</Label>
               <select
                 id="store-tier"
                 name="tier"
                 aria-label="Package selection tier"
                 value={tier}
                 onChange={(e) => setTier(e.target.value)}
-                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="starter">Starter Tier — Essential Scope</option>
                 <option value="standard">Standard Tier (Most Popular)</option>
@@ -147,7 +147,7 @@ export function PortalOrderStoreClient({
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="store-custom-budget" className="text-xs font-medium">Custom Budget Offer (USD)</Label>
+                  <Label htmlFor="store-custom-budget" className="text-sm font-medium">Custom Budget Offer (USD)</Label>
                   <Input
                     id="store-custom-budget"
                     name="custom_budget_usd"
@@ -157,11 +157,11 @@ export function PortalOrderStoreClient({
                     value={customBudget}
                     onChange={(e) => setCustomBudget(e.target.value)}
                     placeholder="e.g. 850 (optional)"
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="store-custom-days" className="text-xs font-medium">Desired Delivery (Days)</Label>
+                  <Label htmlFor="store-custom-days" className="text-sm font-medium">Desired Delivery (Days)</Label>
                   <Input
                     id="store-custom-days"
                     name="custom_delivery_days"
@@ -169,14 +169,14 @@ export function PortalOrderStoreClient({
                     min={1}
                     max={365}
                     placeholder="e.g. 7"
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="store-custom-title" className="text-xs font-medium">Custom Project Title (Optional)</Label>
+              <Label htmlFor="store-custom-title" className="text-sm font-medium">Custom Project Title (Optional)</Label>
               <Input
                 id="store-custom-title"
                 name="title"
@@ -185,12 +185,12 @@ export function PortalOrderStoreClient({
                     ? `${selectedService.title} — ${selectedPkg.name}`
                     : 'Custom Engagement Title'
                 }
-                className="h-10 md:h-9"
+                className="h-10"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="store-description" className="text-xs font-medium">Project Requirements, Scope &amp; Deal Terms</Label>
+              <Label htmlFor="store-description" className="text-sm font-medium">Project Requirements, Scope &amp; Deal Terms</Label>
               <Textarea
                 id="store-description"
                 name="description"
@@ -201,13 +201,12 @@ export function PortalOrderStoreClient({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="store-scope-notes" className="text-xs font-medium">Target Domains / Repos / Scope Notes</Label>
+              <Label htmlFor="store-scope-notes" className="text-sm font-medium">Target Domains / Repos / Scope Notes</Label>
               <Textarea
                 id="store-scope-notes"
                 name="target_scope_notes"
                 rows={3}
                 placeholder="List target URLs, APIs, cloud accounts, or repository links..."
-                className="font-mono"
               />
             </div>
 

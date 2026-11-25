@@ -117,7 +117,7 @@ export function R2FileUploader({
 
   return (
     <div ref={containerRef} className="space-y-2">
-      <Label htmlFor={inputId} className="text-xs font-medium">{label}</Label>
+      <Label htmlFor={inputId} className="text-sm font-medium">{label}</Label>
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 p-3">
         <UploadCloud className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <Input
@@ -126,7 +126,7 @@ export function R2FileUploader({
           aria-label={label}
           onChange={handleFileChange}
           disabled={status === 'uploading'}
-          className="h-10 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer md:h-9"
+          className="h-10 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer"
         />
       </div>
 

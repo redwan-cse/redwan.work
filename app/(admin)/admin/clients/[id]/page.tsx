@@ -278,13 +278,13 @@ export default async function AdminClientDetailPage({
 
                 <div className="grid gap-3.5 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="crm-tier" className="text-xs font-medium">Client Tier</Label>
+                    <Label htmlFor="crm-tier" className="text-sm font-medium">Client Tier</Label>
                     <select
                       id="crm-tier"
                       name="tier"
                       aria-label="Client CRM tier"
                       defaultValue={crm?.tier ?? 'standard'}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="standard">standard</option>
                       <option value="vip">vip</option>
@@ -293,18 +293,18 @@ export default async function AdminClientDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="crm-company" className="text-xs font-medium">Company Name</Label>
+                    <Label htmlFor="crm-company" className="text-sm font-medium">Company Name</Label>
                     <Input
                       id="crm-company"
                       name="company_name"
                       defaultValue={crm?.company_name ?? ''}
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="crm-followup" className="flex items-center gap-1.5 text-xs font-medium">
+                  <Label htmlFor="crm-followup" className="flex items-center gap-1.5 text-sm font-medium">
                     <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     Next Follow-Up Date
                   </Label>
@@ -313,12 +313,12 @@ export default async function AdminClientDetailPage({
                     name="next_followup_at"
                     type="date"
                     defaultValue={crm?.next_followup_at ? crm.next_followup_at.slice(0, 10) : ''}
-                    className="h-10 font-mono md:h-9"
+                    className="h-10 tabular-nums"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="crm-summary" className="text-xs font-medium">Executive Relationship Summary</Label>
+                  <Label htmlFor="crm-summary" className="text-sm font-medium">Executive Relationship Summary</Label>
                   <Textarea
                     id="crm-summary"
                     name="relationship_summary"
@@ -329,7 +329,7 @@ export default async function AdminClientDetailPage({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="crm-quick-note" className="text-xs font-medium">Quick Note (Optional)</Label>
+                  <Label htmlFor="crm-quick-note" className="text-sm font-medium">Quick Note (Optional)</Label>
                   <Textarea
                     id="crm-quick-note"
                     name="note_body"
@@ -605,13 +605,13 @@ export default async function AdminClientDetailPage({
                 <input type="hidden" name="client_id" value={profile.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="typed-note-type" className="text-xs font-medium">Note Type</Label>
+                    <Label htmlFor="typed-note-type" className="text-sm font-medium">Note Type</Label>
                     <select
                       id="typed-note-type"
                       name="note_type"
                       aria-label="Client CRM note type"
                       defaultValue="general"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="general">general</option>
                       <option value="call_log">call_log</option>
@@ -620,8 +620,8 @@ export default async function AdminClientDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="typed-note-followup" className="text-xs font-medium">Follow-Up Date</Label>
-                    <Input id="typed-note-followup" name="followup_date" type="date" className="h-10 font-mono md:h-9" />
+                    <Label htmlFor="typed-note-followup" className="text-sm font-medium">Follow-Up Date</Label>
+                    <Input id="typed-note-followup" name="followup_date" type="date" className="h-10 tabular-nums" />
                   </div>
                 </div>
                 <Textarea

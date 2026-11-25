@@ -75,7 +75,7 @@ export function ProposalMilestonesEditor() {
                   )
                 }
                 placeholder="USD"
-                className="col-span-5 h-9 font-mono sm:col-span-3"
+                className="col-span-5 h-9 tabular-nums sm:col-span-3"
               />
               <Input
                 aria-label={`Milestone ${idx + 1} due days offset`}
@@ -89,7 +89,7 @@ export function ProposalMilestonesEditor() {
                   )
                 }
                 placeholder="Days"
-                className="col-span-5 h-9 font-mono sm:col-span-2"
+                className="col-span-5 h-9 tabular-nums sm:col-span-2"
               />
               <Button
                 type="button"

@@ -111,7 +111,8 @@ export function HeroPortrait({
             src={src}
             alt={alt}
             fill
-            priority
+            preload
+            loading="eager"
             sizes="(max-width: 640px) 224px, (max-width: 1024px) 288px, (max-width: 1280px) 320px, 384px"
             className="object-cover object-top"
           />

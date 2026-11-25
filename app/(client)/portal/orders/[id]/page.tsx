@@ -326,59 +326,57 @@ export default async function ClientOrderDetailPage({
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label htmlFor="roe-targets" className="text-xs">Authorized Domains / IPs / Repos (one per line) *</Label>
+                    <Label htmlFor="roe-targets" className="text-sm">Authorized Domains / IPs / Repos (one per line) *</Label>
                     <Textarea
                       id="roe-targets"
                       name="authorized_targets"
                       rows={3}
                       required
                       placeholder="app.example.com&#10;api.example.com&#10;203.0.113.0/28"
-                      className="font-mono"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="roe-excluded" className="text-xs">Out-of-Scope / Excluded Systems</Label>
+                    <Label htmlFor="roe-excluded" className="text-sm">Out-of-Scope / Excluded Systems</Label>
                     <Textarea
                       id="roe-excluded"
                       name="excluded_systems"
                       rows={3}
                       placeholder="Third-party payment gateways, production ERP..."
-                      className="font-mono"
                     />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <Label htmlFor="roe-window-start" className="text-xs">Testing Window Start (Optional)</Label>
-                    <Input id="roe-window-start" name="testing_window_start" type="date" className="h-10 font-mono md:h-9" />
+                    <Label htmlFor="roe-window-start" className="text-sm">Testing Window Start (Optional)</Label>
+                    <Input id="roe-window-start" name="testing_window_start" type="date" className="h-10 tabular-nums" />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="roe-window-end" className="text-xs">Testing Window End (Optional)</Label>
-                    <Input id="roe-window-end" name="testing_window_end" type="date" className="h-10 font-mono md:h-9" />
+                    <Label htmlFor="roe-window-end" className="text-sm">Testing Window End (Optional)</Label>
+                    <Input id="roe-window-end" name="testing_window_end" type="date" className="h-10 tabular-nums" />
                   </div>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label htmlFor="roe-em-name" className="mb-auto text-xs">Emergency Contact Name *</Label>
-                    <Input id="roe-em-name" name="emergency_contact_name" required className="h-10 md:h-9" />
+                    <Label htmlFor="roe-em-name" className="mb-auto text-sm">Emergency Contact Name *</Label>
+                    <Input id="roe-em-name" name="emergency_contact_name" required className="h-10" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label htmlFor="roe-em-phone" className="mb-auto text-xs">Emergency Phone *</Label>
-                    <Input id="roe-em-phone" name="emergency_contact_phone" required className="h-10 md:h-9" />
+                    <Label htmlFor="roe-em-phone" className="mb-auto text-sm">Emergency Phone *</Label>
+                    <Input id="roe-em-phone" name="emergency_contact_phone" required className="h-10" />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label htmlFor="roe-signer-name" className="mb-auto text-xs">Your Full Legal Name *</Label>
+                    <Label htmlFor="roe-signer-name" className="mb-auto text-sm">Your Full Legal Name *</Label>
                     <Input
                       id="roe-signer-name"
                       name="signer_full_name"
                       defaultValue={session.fullName ?? ''}
                       required
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <div className="flex flex-col justify-end gap-1.5">
-                    <Label htmlFor="roe-signer-title" className="mb-auto text-xs">Your Role / Title</Label>
-                    <Input id="roe-signer-title" name="signer_title" placeholder="CTO / Founder" className="h-10 md:h-9" />
+                    <Label htmlFor="roe-signer-title" className="mb-auto text-sm">Your Role / Title</Label>
+                    <Input id="roe-signer-title" name="signer_title" placeholder="CTO / Founder" className="h-10" />
                   </div>
                 </div>
                 <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
@@ -501,7 +499,7 @@ export default async function ClientOrderDetailPage({
                             name="feedback"
                             aria-label="Deliverable review feedback"
                             placeholder="Optional sign-off note or specific revision feedback..."
-                            className="h-10 md:h-9"
+                            className="h-10"
                           />
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -628,7 +626,7 @@ export default async function ClientOrderDetailPage({
                 >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1">
-                    <Label htmlFor="req-scope-notes" className="text-xs">Target Scope, Architecture &amp; Endpoints</Label>
+                    <Label htmlFor="req-scope-notes" className="text-sm">Target Scope, Architecture &amp; Endpoints</Label>
                     <Textarea
                       id="req-scope-notes"
                       name="target_scope_notes"
@@ -638,7 +636,7 @@ export default async function ClientOrderDetailPage({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="req-access-notes" className="text-xs">Secure Access / Testing Instructions</Label>
+                    <Label htmlFor="req-access-notes" className="text-sm">Secure Access / Testing Instructions</Label>
                     <Textarea
                       id="req-access-notes"
                       name="access_instructions"
@@ -801,13 +799,13 @@ export default async function ClientOrderDetailPage({
                 >
                   <input type="hidden" name="order_id" value={order.id} />
                   <div className="space-y-1.5">
-                    <Label htmlFor="review-rating" className="text-xs">Overall Rating (1 to 5 Stars)</Label>
+                    <Label htmlFor="review-rating" className="text-sm">Overall Rating (1 to 5 Stars)</Label>
                     <select
                       id="review-rating"
                       name="rating_overall"
                       aria-label="Overall rating"
                       defaultValue={String(existingReview?.rating_overall ?? 5)}
-                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="5">★★★★★ (5/5 — Exceptional)</option>
                       <option value="4">★★★★☆ (4/5 — Very Good)</option>
@@ -817,17 +815,17 @@ export default async function ClientOrderDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="review-headline" className="text-xs">Headline</Label>
+                    <Label htmlFor="review-headline" className="text-sm">Headline</Label>
                     <Input
                       id="review-headline"
                       name="headline"
                       defaultValue={existingReview?.headline ?? ''}
                       placeholder="Thorough VAPT audit and fast remediation support"
-                      className="h-10 md:h-9"
+                      className="h-10"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="review-text" className="text-xs">Written Review *</Label>
+                    <Label htmlFor="review-text" className="text-sm">Written Review *</Label>
                     <Textarea
                       id="review-text"
                       name="review_text"

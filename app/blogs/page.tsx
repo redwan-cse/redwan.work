@@ -88,18 +88,25 @@ export default async function BlogsPage({
   const { totalPages, startIndex } = getBlogPaginationMeta(totalPosts, currentPage);
   const endIndex = startIndex + allPosts.length;
 
-  // Strip raw HTML bodies (`content`) before crossing the RSC -> Client boundary
-  // and compute plain text once per post for both excerpt and reading-time estimate.
+  // Strip content and precomputed metadata before crossing the RSC -> Client boundary,
+  // reusing the compact metadata computed before Next.js Data Cache storage.
   const enrichedPosts: EnrichedBlogPost[] = allPosts.map((post) => {
     const { content, ...postSummary } = post;
-    const plain = stripHtmlToPlainText(content);
-    const excerpt = plain.length > 240 ? `${plain.slice(0, 240)}...` : plain;
+    const { imageUrl, excerpt, readingMinutes, toc } = postSummary;
+    delete postSummary.imageUrl;
+    delete postSummary.excerpt;
+    delete postSummary.readingMinutes;
+    delete postSummary.toc;
+    const plain =
+      excerpt !== undefined && readingMinutes !== undefined ? null : stripHtmlToPlainText(content);
+    const resolvedExcerpt =
+      excerpt ?? (plain && plain.length > 240 ? `${plain.slice(0, 240)}...` : plain ?? '');
     return {
       post: postSummary,
-      imageUrl: extractFirstImage(content),
-      excerpt,
-      readingMinutes: estimateReadingMinutesFromPlainText(plain),
-      toc: extractBlogToc(content),
+      imageUrl: imageUrl ?? extractFirstImage(content),
+      excerpt: resolvedExcerpt,
+      readingMinutes: readingMinutes ?? estimateReadingMinutesFromPlainText(plain ?? ''),
+      toc: toc ?? extractBlogToc(content),
     };
   });
 

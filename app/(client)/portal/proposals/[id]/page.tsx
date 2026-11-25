@@ -180,7 +180,7 @@ export default async function ClientProposalDetailPage({
                   className="w-full rounded-full"
                   extraContent={
                     <div className="space-y-1">
-                      <Label htmlFor="proposal-decline-reason" className="text-xs">Feedback (Optional)</Label>
+                      <Label htmlFor="proposal-decline-reason" className="text-sm">Feedback (Optional)</Label>
                       <Textarea
                         id="proposal-decline-reason"
                         name="decline_reason"

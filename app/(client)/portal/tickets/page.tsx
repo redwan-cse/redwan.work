@@ -60,25 +60,25 @@ export default async function ClientTicketsPage() {
               className="space-y-3.5"
             >
               <div className="space-y-1">
-                <Label htmlFor="ticket-subject" className="text-xs">Subject *</Label>
+                <Label htmlFor="ticket-subject" className="text-sm">Subject *</Label>
                 <Input
                   id="ticket-subject"
                   name="subject"
                   required
                   placeholder="Need re-verification of patched API endpoint"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col justify-end gap-1">
-                  <Label htmlFor="ticket-priority" className="mb-auto text-xs">Priority</Label>
+                  <Label htmlFor="ticket-priority" className="mb-auto text-sm">Priority</Label>
                   <select
                     id="ticket-priority"
                     name="priority"
                     aria-label="Ticket priority"
                     defaultValue="medium"
-                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="low">Low (48h SLA)</option>
                     <option value="medium">Medium (24h SLA)</option>
@@ -88,13 +88,13 @@ export default async function ClientTicketsPage() {
                 </div>
 
                 <div className="flex flex-col justify-end gap-1">
-                  <Label htmlFor="ticket-category" className="mb-auto text-xs">Category</Label>
+                  <Label htmlFor="ticket-category" className="mb-auto text-sm">Category</Label>
                   <select
                     id="ticket-category"
                     name="category"
                     aria-label="Ticket category"
                     defaultValue="general"
-                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                    className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="general">General Support</option>
                     <option value="technical_support">Technical Support / Outage</option>
@@ -107,13 +107,13 @@ export default async function ClientTicketsPage() {
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="ticket-order" className="text-xs">Related Order (Optional)</Label>
+                <Label htmlFor="ticket-order" className="text-sm">Related Order (Optional)</Label>
                 <select
                   id="ticket-order"
                   name="order_id"
                   aria-label="Related order"
                   defaultValue=""
-                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="">General Account / Retainer</option>
                   {(orders ?? []).map((ord) => (
@@ -125,7 +125,7 @@ export default async function ClientTicketsPage() {
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="ticket-body" className="text-xs">Issue Details *</Label>
+                <Label htmlFor="ticket-body" className="text-sm">Issue Details *</Label>
                 <Textarea
                   id="ticket-body"
                   name="body"

@@ -61,7 +61,7 @@ export async function ContentAssetsPanel() {
               className="space-y-3.5"
             >
               <div className="space-y-1.5">
-                <Label htmlFor="public-asset-file" className="text-xs">
+                <Label htmlFor="public-asset-file" className="text-sm">
                   Select Asset File (PNG / JPG / WebP / PDF / ZIP) *
                 </Label>
                 <Input
@@ -70,7 +70,7 @@ export async function ContentAssetsPanel() {
                   name="asset_file"
                   required
                   accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"
-                  className="h-10 cursor-pointer md:h-9"
+                  className="h-10 cursor-pointer"
                 />
               </div>
               <Button type="submit" size="sm" className="w-full rounded-full">

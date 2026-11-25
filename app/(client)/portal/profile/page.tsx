@@ -84,47 +84,47 @@ export default async function ClientProfilePage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="prof-full-name" className="text-xs">Full Name</Label>
+                <Label htmlFor="prof-full-name" className="text-sm">Full Name</Label>
                 <Input
                   id="prof-full-name"
                   name="full_name"
                   aria-label="Full Name"
                   defaultValue={profile?.full_name ?? session.fullName ?? ''}
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="prof-email" className="text-xs">Account Email (Verified)</Label>
+                <Label htmlFor="prof-email" className="text-sm">Account Email (Verified)</Label>
                 <Input
                   id="prof-email"
                   aria-label="Account Email"
                   value={session.email}
                   disabled
-                  className="h-10 font-mono opacity-70 md:h-9"
+                  className="h-10 tabular-nums opacity-70"
                 />
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="prof-phone" className="text-xs">Phone / WhatsApp (E.164)</Label>
+                <Label htmlFor="prof-phone" className="text-sm">Phone / WhatsApp (E.164)</Label>
                 <Input
                   id="prof-phone"
                   name="phone_e164"
                   defaultValue={profile?.phone ?? ''}
                   placeholder="+14155550199"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="prof-timezone" className="text-xs">Timezone (IANA)</Label>
+                <Label htmlFor="prof-timezone" className="text-sm">Timezone (IANA)</Label>
                 <Input
                   id="prof-timezone"
                   name="timezone"
                   list="iana-timezones"
                   defaultValue={profile?.timezone ?? 'UTC'}
                   placeholder="UTC / Asia/Dhaka / America/New_York"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
                 <datalist id="iana-timezones">
                   {supportedTimezones.map((tz) => (
@@ -136,56 +136,56 @@ export default async function ClientProfilePage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="prof-company" className="text-xs">Company / Organization Name</Label>
+                <Label htmlFor="prof-company" className="text-sm">Company / Organization Name</Label>
                 <Input
                   id="prof-company"
                   name="company_name"
                   defaultValue={clientProfile?.company_name ?? ''}
                   placeholder="Acme Security Inc."
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="prof-role" className="text-xs">Your Role / Title</Label>
+                <Label htmlFor="prof-role" className="text-sm">Your Role / Title</Label>
                 <Input
                   id="prof-role"
                   name="company_role"
                   defaultValue={clientProfile?.company_role ?? ''}
                   placeholder="CTO / Engineering Lead"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="flex flex-col justify-end gap-1.5">
-                <Label htmlFor="prof-website" className="mb-auto text-xs">Company Website</Label>
+                <Label htmlFor="prof-website" className="mb-auto text-sm">Company Website</Label>
                 <Input
                   id="prof-website"
                   name="website_url"
                   defaultValue={clientProfile?.website_url ?? ''}
                   placeholder="https://example.com"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
-                <Label htmlFor="prof-tax-id" className="mb-auto text-xs">VAT / Tax ID</Label>
+                <Label htmlFor="prof-tax-id" className="mb-auto text-sm">VAT / Tax ID</Label>
                 <Input
                   id="prof-tax-id"
                   name="tax_id"
                   defaultValue={clientProfile?.tax_id ?? ''}
                   placeholder="Optional for invoices"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <div className="flex flex-col justify-end gap-1.5">
-                <Label htmlFor="prof-currency" className="mb-auto text-xs">Preferred Billing Currency</Label>
+                <Label htmlFor="prof-currency" className="mb-auto text-sm">Preferred Billing Currency</Label>
                 <select
                   id="prof-currency"
                   name="preferred_currency"
                   aria-label="Preferred billing currency"
                   defaultValue={clientProfile?.preferred_currency ?? 'USD'}
-                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                  className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="USD">USD ($)</option>
                   <option value="BDT">BDT (৳)</option>
@@ -204,14 +204,14 @@ export default async function ClientProfilePage() {
                   aria-label="Billing street address line 1"
                   defaultValue={billingAddr.line1 ?? ''}
                   placeholder="Street Address Line 1"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
                 <Input
                   name="billing_line2"
                   aria-label="Billing suite or unit"
                   defaultValue={billingAddr.line2 ?? ''}
                   placeholder="Suite / Unit (Optional)"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-4">
@@ -220,28 +220,28 @@ export default async function ClientProfilePage() {
                   aria-label="Billing city"
                   defaultValue={billingAddr.city ?? ''}
                   placeholder="City"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
                 <Input
                   name="billing_state"
                   aria-label="Billing state or region"
                   defaultValue={billingAddr.state ?? ''}
                   placeholder="State / Region"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
                 <Input
                   name="billing_postal_code"
                   aria-label="Billing postal code"
                   defaultValue={billingAddr.postal_code ?? ''}
                   placeholder="Postal Code"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
                 <Input
                   name="billing_country"
                   aria-label="Billing country"
                   defaultValue={billingAddr.country ?? ''}
                   placeholder="Country"
-                  className="h-10 md:h-9"
+                  className="h-10"
                 />
               </div>
             </div>

@@ -163,13 +163,13 @@ export async function OpsHubView({
               aria-label="Search audit log summary or action"
               defaultValue={qFilter}
               placeholder="Search summary/action..."
-              className="h-9 w-48 md:h-8 md:text-xs"
+              className="h-9 w-56"
             />
             <select
               name="action"
               aria-label="Filter by audit action"
               defaultValue={actionFilter}
-              className="h-9 rounded-md border border-input bg-background px-2.5 text-base md:h-8 md:text-xs"
+              className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
             >
               <option value="">All Actions</option>
               {uniqueActions.map((act) => (

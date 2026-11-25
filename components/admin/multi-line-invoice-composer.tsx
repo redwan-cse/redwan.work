@@ -86,7 +86,7 @@ export function MultiLineInvoiceComposer({
 
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-client" className="text-xs font-medium">Client *</Label>
+              <Label htmlFor="ml-inv-client" className="text-sm font-medium">Client *</Label>
               <select
                 id="ml-inv-client"
                 name="client_id"
@@ -94,7 +94,7 @@ export function MultiLineInvoiceComposer({
                 required
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">— Select Client —</option>
                 {clients.map((c) => (
@@ -106,13 +106,13 @@ export function MultiLineInvoiceComposer({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-order" className="text-xs font-medium">Linked Order (Optional)</Label>
+              <Label htmlFor="ml-inv-order" className="text-sm font-medium">Linked Order (Optional)</Label>
               <select
                 id="ml-inv-order"
                 name="order_id"
                 aria-label="Linked order"
                 defaultValue={defaultOrderId}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">— Standalone Invoice —</option>
                 {clientOrders.map((o) => (
@@ -124,7 +124,7 @@ export function MultiLineInvoiceComposer({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-currency" className="text-xs font-medium">Currency</Label>
+              <Label htmlFor="ml-inv-currency" className="text-sm font-medium">Currency</Label>
               <select
                 id="ml-inv-currency"
                 name="currency"
@@ -138,7 +138,7 @@ export function MultiLineInvoiceComposer({
                   if (next === 'EUR') setFxRate('1.08');
                   if (next === 'GBP') setFxRate('1.27');
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="USD">USD</option>
                 <option value="BDT">BDT</option>
@@ -149,7 +149,7 @@ export function MultiLineInvoiceComposer({
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <Label htmlFor="ml-inv-fx" className="text-xs font-medium">FX → USD</Label>
+                <Label htmlFor="ml-inv-fx" className="text-sm font-medium">FX → USD</Label>
                 <Input
                   id="ml-inv-fx"
                   name="fx_rate_to_usd"
@@ -157,18 +157,18 @@ export function MultiLineInvoiceComposer({
                   step="0.0001"
                   value={fxRate}
                   onChange={(e) => setFxRate(e.target.value)}
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ml-inv-due" className="text-xs font-medium">Due Days</Label>
+                <Label htmlFor="ml-inv-due" className="text-sm font-medium">Due Days</Label>
                 <Input
                   id="ml-inv-due"
                   name="due_days"
                   type="number"
                   min="1"
                   defaultValue="7"
-                  className="h-10 font-mono md:h-9"
+                  className="h-10 tabular-nums"
                 />
               </div>
             </div>
@@ -211,7 +211,7 @@ export function MultiLineInvoiceComposer({
                   }
                   placeholder="Line item description..."
                   required
-                  className="col-span-12 h-10 sm:col-span-6 md:h-9"
+                  className="col-span-12 h-10 sm:col-span-6"
                 />
                 <Input
                   aria-label={`Line item ${index + 1} quantity`}
@@ -228,7 +228,7 @@ export function MultiLineInvoiceComposer({
                     )
                   }
                   placeholder="Qty"
-                  className="col-span-4 h-10 font-mono sm:col-span-2 md:h-9"
+                  className="col-span-4 h-10 tabular-nums sm:col-span-2"
                 />
                 <Input
                   aria-label={`Line item ${index + 1} unit price`}
@@ -244,7 +244,7 @@ export function MultiLineInvoiceComposer({
                     )
                   }
                   placeholder="Unit Price"
-                  className="col-span-6 h-10 font-mono sm:col-span-3 md:h-9"
+                  className="col-span-6 h-10 tabular-nums sm:col-span-3"
                 />
                 <Button
                   type="button"
@@ -263,7 +263,7 @@ export function MultiLineInvoiceComposer({
 
           <div className="grid gap-3.5 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-discount" className="text-xs font-medium">Discount ({currency})</Label>
+              <Label htmlFor="ml-inv-discount" className="text-sm font-medium">Discount ({currency})</Label>
               <Input
                 id="ml-inv-discount"
                 name="discount_major"
@@ -272,11 +272,11 @@ export function MultiLineInvoiceComposer({
                 step="0.01"
                 value={discountMajor}
                 onChange={(e) => setDiscountMajor(e.target.value)}
-                className="h-10 font-mono md:h-9"
+                className="h-10 tabular-nums"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-tax" className="text-xs font-medium">Tax Rate (%)</Label>
+              <Label htmlFor="ml-inv-tax" className="text-sm font-medium">Tax Rate (%)</Label>
               <Input
                 id="ml-inv-tax"
                 type="number"
@@ -284,7 +284,7 @@ export function MultiLineInvoiceComposer({
                 step="0.1"
                 value={taxRatePct}
                 onChange={(e) => setTaxRatePct(e.target.value)}
-                className="h-10 font-mono md:h-9"
+                className="h-10 tabular-nums"
               />
             </div>
             <div className="rounded-xl border border-primary/30 bg-primary/5 px-3.5 py-2 font-mono text-xs">
@@ -297,7 +297,7 @@ export function MultiLineInvoiceComposer({
 
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-instructions" className="text-xs font-medium">Payment Instructions (Optional)</Label>
+              <Label htmlFor="ml-inv-instructions" className="text-sm font-medium">Payment Instructions (Optional)</Label>
               <Textarea
                 id="ml-inv-instructions"
                 name="payment_instructions"
@@ -306,7 +306,7 @@ export function MultiLineInvoiceComposer({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="ml-inv-notes" className="text-xs font-medium">Client Invoice Notes (Optional)</Label>
+              <Label htmlFor="ml-inv-notes" className="text-sm font-medium">Client Invoice Notes (Optional)</Label>
               <Textarea
                 id="ml-inv-notes"
                 name="notes"

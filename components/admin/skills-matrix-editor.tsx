@@ -81,7 +81,7 @@ export function SkillsMatrixEditor({
   return (
     <div className="space-y-3 rounded-xl border border-border/80 bg-muted/15 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label className="text-xs font-semibold">
+        <Label className="text-sm font-semibold">
           Visual Technical Skills Matrix ({categories.length} categories)
         </Label>
         <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
