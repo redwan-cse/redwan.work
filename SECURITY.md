@@ -53,7 +53,7 @@ Every push and pull request to `main` is gated by fail-closed GitHub Actions wor
 
 - **Security (`.github/workflows/security.yml`):**
   - Secret scanning across working tree and commit history
-  - Locked `npm audit --audit-level=moderate` dependency vulnerability gate
+  - Locked `npm audit --audit-level=low` dependency vulnerability gate
   - GitHub **CodeQL** (`security-extended` Javascript/TypeScript static analysis)
   - **Dependabot** automated security and weekly grouped dependency updates (`.github/dependabot.yml`)
 - **CI (`.github/workflows/ci.yml`):**
