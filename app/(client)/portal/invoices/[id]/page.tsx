@@ -374,13 +374,13 @@ export default async function ClientInvoiceDetailPage({
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
                   <div className="space-y-1.5">
-                    <Label htmlFor="payment-method" className="text-xs">Payment Method *</Label>
+                    <Label htmlFor="payment-method" className="text-sm">Payment Method *</Label>
                     <select
                       id="payment-method"
                       name="method"
                       aria-label="Payment proof method"
                       defaultValue="bank_transfer"
-                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base md:h-9 md:text-xs"
+                      className="flex h-10 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="bank_transfer">Bank Wire / SWIFT / Local Transfer</option>
                       <option value="wise">Wise (USD / EUR / GBP)</option>
@@ -393,7 +393,7 @@ export default async function ClientInvoiceDetailPage({
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="payment-amount" className="text-xs">
+                    <Label htmlFor="payment-amount" className="text-sm">
                       Amount Sent ({invoice.currency}) *
                     </Label>
                     <Input
@@ -403,18 +403,18 @@ export default async function ClientInvoiceDetailPage({
                       step="0.01"
                       defaultValue={balanceDueMajor}
                       required
-                      className="h-10 font-mono text-base md:h-9 md:text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <Label htmlFor="payment-reference" className="text-xs">Transaction ID / Reference *</Label>
+                    <Label htmlFor="payment-reference" className="text-sm">Transaction ID / Reference *</Label>
                     <Input
                       id="payment-reference"
                       name="reference"
                       required
                       placeholder="TXN-98412093 / SWIFT Ref"
-                      className="h-10 font-mono text-base md:h-9 md:text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
 

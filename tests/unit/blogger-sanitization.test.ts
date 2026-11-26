@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clearBlogCache,
+  compactBloggerPostItem,
   createBloggerAuthFromBase64,
   extractBlogToc,
   extractExcerpt,
   getBlogPaginationMeta,
+  getBlogPostsPage,
   stripHtmlToPlainText,
 } from '@/lib/blogger';
 
@@ -129,6 +132,63 @@ describe('blogger HTML-to-plaintext sanitization (CodeQL Alert #1)', () => {
       expect(warnings.some((w) => /credentials.*deprecated/i.test(w))).toBe(false);
     } finally {
       process.off('warning', onWarning);
+    }
+  });
+
+  it('compacts multi-megabyte raw Blogger HTML payloads safely below Next.js 2MB Data Cache limit while preserving metadata', async () => {
+    const hugeBody =
+      '<style>.code{color:red}</style><img src="https://cdn.example.com/hero.webp" alt="hero"/>' +
+      '<h2>Architecture Overview</h2><p>Deep security analysis of kernel hardening and network segmentation.</p>' +
+      '<h3>Threat Model</h3>' +
+      `<pre><code>${'A'.repeat(110_000)}</code></pre>`;
+
+    const compacted = compactBloggerPostItem({
+      id: 'big-1',
+      title: 'Large Research Post',
+      content: hugeBody,
+      url: 'https://blogs.redwan.work/2026/11/large-post.html',
+      published: '2026-11-20T00:00:00.000Z',
+      labels: ['Security', 'Linux'],
+    });
+
+    expect(compacted.imageUrl).toBe('https://cdn.example.com/hero.webp');
+    expect(compacted.excerpt).toContain('Deep security analysis of kernel hardening');
+    expect(compacted.readingMinutes).toBeGreaterThanOrEqual(2);
+    expect(compacted.toc).toEqual([
+      { level: 2, id: 'architecture-overview', text: 'Architecture Overview' },
+      { level: 3, id: 'threat-model', text: 'Threat Model' },
+    ]);
+    expect(compacted.content.length).toBeLessThanOrEqual(365);
+
+    const prevFixture = process.env.BLOGGER_FIXTURE_POSTS_JSON;
+    try {
+      // 30 posts x ~110 KB raw HTML = ~3.3 MB (> Next.js 2 MB Data Cache limit)
+      const rawFixture = Array.from({ length: 30 }, (_, idx) => ({
+        id: `heavy-${idx + 1}`,
+        title: `Heavy Post #${idx + 1}`,
+        content: hugeBody,
+        url: `https://blogs.redwan.work/2026/11/heavy-${idx + 1}.html`,
+        published: '2026-11-20T00:00:00.000Z',
+        labels: ['Security'],
+      }));
+      const rawBytes = Buffer.byteLength(JSON.stringify(rawFixture), 'utf8');
+      expect(rawBytes).toBeGreaterThan(3_000_000);
+
+      process.env.BLOGGER_FIXTURE_POSTS_JSON = JSON.stringify(rawFixture);
+      clearBlogCache();
+
+      const page = await getBlogPostsPage(1, 30, 30);
+      expect(page.totalItems).toBe(30);
+      expect(page.posts).toHaveLength(30);
+      const cachedBytes = Buffer.byteLength(JSON.stringify(page), 'utf8');
+      expect(cachedBytes).toBeLessThan(100_000);
+    } finally {
+      if (prevFixture === undefined) {
+        delete process.env.BLOGGER_FIXTURE_POSTS_JSON;
+      } else {
+        process.env.BLOGGER_FIXTURE_POSTS_JSON = prevFixture;
+      }
+      clearBlogCache();
     }
   });
 });

@@ -133,13 +133,13 @@ export async function EmailsConsoleView({
           aria-label="Search email outbox by recipient, subject, or template"
           defaultValue={qFilter}
           placeholder="Search recipient, subject, or template..."
-          className="h-8 min-w-[200px] flex-1 text-xs"
+          className="h-9 min-w-[200px] flex-1"
         />
         <select
           name="status"
           aria-label="Filter outbox by status"
           defaultValue={statusFilter}
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+          className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
         >
           <option value="">All Statuses</option>
           <option value="pending">pending</option>

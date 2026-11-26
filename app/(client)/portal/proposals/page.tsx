@@ -182,13 +182,12 @@ export default async function ClientProposalsPage() {
                           variant="outline"
                           extraContent={
                             <div className="space-y-1">
-                              <Label htmlFor={`proposal-decline-${prp.id}`} className="text-xs">Reason / Feedback (Optional)</Label>
+                              <Label htmlFor={`proposal-decline-${prp.id}`} className="text-sm">Reason / Feedback (Optional)</Label>
                               <Textarea
                                 id={`proposal-decline-${prp.id}`}
                                 name="decline_reason"
                                 rows={3}
                                 placeholder="Budget target, timing shift, or different scope needed..."
-                                className="text-base md:text-xs"
                               />
                             </div>
                           }

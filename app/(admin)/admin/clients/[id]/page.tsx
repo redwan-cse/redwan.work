@@ -16,6 +16,7 @@ import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -271,19 +272,19 @@ export default async function AdminClientDetailPage({
               <ActionFeedbackForm
                 action={updateClientCrmAndNoteAction}
                 successMessage="CRM settings updated."
-                className="space-y-3.5"
+                className="space-y-4"
               >
                 <input type="hidden" name="client_id" value={profile.id} />
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="crm-tier" className="text-xs">Client Tier</Label>
+                <div className="grid gap-3.5 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="crm-tier" className="text-sm font-medium">Client Tier</Label>
                     <select
                       id="crm-tier"
                       name="tier"
                       aria-label="Client CRM tier"
                       defaultValue={crm?.tier ?? 'standard'}
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="standard">standard</option>
                       <option value="vip">vip</option>
@@ -291,19 +292,19 @@ export default async function AdminClientDetailPage({
                       <option value="enterprise">enterprise</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="crm-company" className="text-xs">Company Name</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="crm-company" className="text-sm font-medium">Company Name</Label>
                     <Input
                       id="crm-company"
                       name="company_name"
                       defaultValue={crm?.company_name ?? ''}
-                      className="h-9 text-xs"
+                      className="h-10"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="crm-followup" className="flex items-center gap-1.5 text-xs">
+                <div className="space-y-1.5">
+                  <Label htmlFor="crm-followup" className="flex items-center gap-1.5 text-sm font-medium">
                     <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     Next Follow-Up Date
                   </Label>
@@ -312,30 +313,28 @@ export default async function AdminClientDetailPage({
                     name="next_followup_at"
                     type="date"
                     defaultValue={crm?.next_followup_at ? crm.next_followup_at.slice(0, 10) : ''}
-                    className="h-9 font-mono text-xs"
+                    className="h-10 tabular-nums"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="crm-summary" className="text-xs">Executive Relationship Summary</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crm-summary" className="text-sm font-medium">Executive Relationship Summary</Label>
                   <Textarea
                     id="crm-summary"
                     name="relationship_summary"
                     rows={3}
                     defaultValue={crm?.relationship_summary ?? ''}
                     placeholder="Key preferences, tech stack, renewal window..."
-                    className="text-xs"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="crm-quick-note" className="text-xs">Quick Note (Optional)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="crm-quick-note" className="text-sm font-medium">Quick Note (Optional)</Label>
                   <Textarea
                     id="crm-quick-note"
                     name="note_body"
-                    rows={2}
+                    rows={3}
                     placeholder="Optional quick log entry..."
-                    className="text-xs"
                   />
                 </div>
 
@@ -601,18 +600,18 @@ export default async function AdminClientDetailPage({
                 action={addTypedClientNoteAction}
                 successMessage="Client note saved."
                 resetOnSuccess
-                className="space-y-3"
+                className="space-y-4"
               >
                 <input type="hidden" name="client_id" value={profile.id} />
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="typed-note-type" className="text-xs">Note Type</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="typed-note-type" className="text-sm font-medium">Note Type</Label>
                     <select
                       id="typed-note-type"
                       name="note_type"
                       aria-label="Client CRM note type"
                       defaultValue="general"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="general">general</option>
                       <option value="call_log">call_log</option>
@@ -620,9 +619,9 @@ export default async function AdminClientDetailPage({
                       <option value="preference">preference</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="typed-note-followup" className="text-xs">Follow-Up Date</Label>
-                    <Input id="typed-note-followup" name="followup_date" type="date" className="h-9 font-mono text-xs" />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="typed-note-followup" className="text-sm font-medium">Follow-Up Date</Label>
+                    <Input id="typed-note-followup" name="followup_date" type="date" className="h-10 tabular-nums" />
                   </div>
                 </div>
                 <Textarea
@@ -631,13 +630,12 @@ export default async function AdminClientDetailPage({
                   required
                   rows={4}
                   placeholder="Call notes, expansion opportunity, SLA escalation..."
-                  className="text-xs"
                 />
-                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs">
-                  <input type="checkbox" name="is_pinned" className="h-6 w-6 rounded border-border accent-primary" />
+                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
+                  <FormCheckbox name="is_pinned" />
                   Pin note to top
                 </label>
-                <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+                <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                   <Plus className="h-3.5 w-3.5" />
                   Add Typed Note
                 </Button>

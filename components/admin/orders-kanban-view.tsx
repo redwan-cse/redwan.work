@@ -128,7 +128,7 @@ export function OrdersKanbanBoard({ orders }: { orders: OrderBoardItem[] }) {
                           name="status"
                           aria-label={`Change status for ${ord.code}`}
                           defaultValue={ord.status}
-                          className="h-6 min-w-0 flex-1 rounded border border-border bg-background px-1 font-mono text-[10px]"
+                          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-sans text-sm transition-colors hover:border-muted-foreground/45"
                         >
                           <option value="awaiting_payment">awaiting_payment</option>
                           <option value="pending_requirements">pending_requirements</option>

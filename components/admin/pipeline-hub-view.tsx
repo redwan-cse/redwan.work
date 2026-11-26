@@ -15,6 +15,7 @@ import { ProposalMilestonesEditor } from '@/components/admin/proposal-milestones
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -220,7 +221,7 @@ export async function PipelineHubView({
                         name="status"
                         aria-label="Update inquiry status"
                         defaultValue={inq.status}
-                        className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs"
+                        className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
                       >
                         <option value="new">new</option>
                         <option value="reviewing">reviewing</option>
@@ -294,18 +295,18 @@ export async function PipelineHubView({
                 action={createProposalAction}
                 successMessage="Proposal saved and processed."
                 resetOnSuccess
-                className="space-y-3.5"
+                className="space-y-4"
               >
                 {prefill ? <input type="hidden" name="inquiry_id" value={prefill.id} /> : null}
 
-                <div className="space-y-1">
-                  <Label htmlFor="prop-client-id" className="text-xs">Portal Client (or auto-match by email)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="prop-client-id" className="text-sm font-medium">Portal Client (or auto-match by email)</Label>
                   <select
                     id="prop-client-id"
                     name="client_id"
                     aria-label="Portal client"
                     defaultValue={prefill?.converted_client_id ?? ''}
-                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                   >
                     <option value="">— Auto-match by Recipient Email or select client —</option>
                     {(clients ?? []).map((c) => (
@@ -317,19 +318,19 @@ export async function PipelineHubView({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-recipient-name" className="text-xs">Recipient Name *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-recipient-name" className="text-sm font-medium">Recipient Name *</Label>
                     <Input
                       id="prop-recipient-name"
                       name="recipient_name"
                       required
                       defaultValue={prefill?.name ?? ''}
                       placeholder="Alex Morgan"
-                      className="h-9 text-xs"
+                      className="h-10"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-recipient-email" className="text-xs">Recipient Email *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-recipient-email" className="text-sm font-medium">Recipient Email *</Label>
                     <Input
                       id="prop-recipient-email"
                       name="recipient_email"
@@ -337,13 +338,13 @@ export async function PipelineHubView({
                       required
                       defaultValue={prefill?.email ?? ''}
                       placeholder="alex@company.com"
-                      className="h-9 text-xs"
+                      className="h-10"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="prop-title" className="text-xs">Proposal Title *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="prop-title" className="text-sm font-medium">Proposal Title *</Label>
                   <Input
                     id="prop-title"
                     name="title"
@@ -352,19 +353,19 @@ export async function PipelineHubView({
                       prefill?.company ? `${prefill.company} Security & Engineering Proposal` : ''
                     }
                     placeholder="Full-Scope Web & API Penetration Test (VAPT)"
-                    className="h-9 text-xs"
+                    className="h-10"
                   />
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-pillar" className="text-xs">Pillar</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-pillar" className="text-sm font-medium">Pillar</Label>
                     <select
                       id="prop-pillar"
                       name="pillar"
                       aria-label="Service pillar"
                       defaultValue={prefill?.service_pillar ?? 'cybersecurity'}
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="cybersecurity">Cybersecurity</option>
                       <option value="development">Full-Stack Dev</option>
@@ -373,14 +374,14 @@ export async function PipelineHubView({
                       <option value="tech_support">Advisory</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-currency" className="text-xs">Currency</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-currency" className="text-sm font-medium">Currency</Label>
                     <select
                       id="prop-currency"
                       name="currency"
                       aria-label="Proposal currency"
                       defaultValue="USD"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-2 text-xs"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                     >
                       <option value="USD">USD</option>
                       <option value="BDT">BDT</option>
@@ -388,8 +389,11 @@ export async function PipelineHubView({
                       <option value="GBP">GBP</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-total-usd" className="text-xs">Total *</Label>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-total-usd" className="text-sm font-medium">Total *</Label>
                     <Input
                       id="prop-total-usd"
                       name="total_usd"
@@ -398,47 +402,45 @@ export async function PipelineHubView({
                       required
                       min="1"
                       defaultValue={prefill?.budget_max ?? 1200}
-                      className="h-9 font-mono text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-deposit-pct" className="text-xs">Deposit %</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-deposit-pct" className="text-sm font-medium">Deposit %</Label>
                     <Input
                       id="prop-deposit-pct"
                       name="deposit_percent"
                       aria-label="Proposal deposit percentage"
                       type="number"
                       defaultValue="50"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="prop-delivery-days" className="text-xs">Est. Delivery Days</Label>
+                <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-delivery-days" className="text-sm font-medium">Est. Delivery Days</Label>
                     <Input
                       id="prop-delivery-days"
                       name="estimated_delivery_days"
                       aria-label="Estimated delivery days"
                       type="number"
                       defaultValue="10"
-                      className="h-9 font-mono text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
-                  <label className="mt-5 flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
-                    <input
-                      type="checkbox"
+                  <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs font-medium">
+                    <FormCheckbox
                       name="requires_roe"
                       defaultChecked={prefill?.nda_required ?? false}
-                      className="h-6 w-6 rounded border-border accent-primary"
                     />
                     Requires RoE Signature
                   </label>
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="prop-exec-summary" className="text-xs">Executive Summary *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="prop-exec-summary" className="text-sm font-medium">Executive Summary *</Label>
                   <Textarea
                     id="prop-exec-summary"
                     name="executive_summary"
@@ -446,18 +448,16 @@ export async function PipelineHubView({
                     rows={3}
                     defaultValue={prefill?.project_summary ?? ''}
                     placeholder="Scope boundaries, objectives, methodologies, and business outcomes..."
-                    className="text-xs"
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="prop-scope-items" className="text-xs">Deliverables / Scope Items (One per line)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="prop-scope-items" className="text-sm font-medium">Deliverables / Scope Items (One per line)</Label>
                   <Textarea
                     id="prop-scope-items"
                     name="scope_items"
                     rows={3}
                     placeholder="OWASP API Top 10 Manual Exploitation&#10;Executive PDF & CVSS v3.1 Matrix&#10;1x Retest Patch Verification"
-                    className="text-xs"
                   />
                 </div>
 
@@ -473,7 +473,7 @@ export async function PipelineHubView({
                     name="proposal_status"
                     value="draft"
                     variant="outline"
-                    className="rounded-full text-xs"
+                    className="rounded-full"
                   >
                     Save Draft
                   </Button>

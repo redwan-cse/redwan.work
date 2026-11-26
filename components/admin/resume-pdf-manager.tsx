@@ -197,7 +197,7 @@ export function ResumePdfManager({
           className="grid gap-3 rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4 sm:grid-cols-[1fr_auto] sm:items-end"
         >
           <div className="space-y-1.5">
-            <Label htmlFor="resume-pdf-upload" className="text-xs font-medium">
+            <Label htmlFor="resume-pdf-upload" className="text-sm font-medium">
               Replace Resume PDF in R2 Public Bucket (.pdf, max{' '}
               {formatBytes(MAX_RESUME_BYTES)})
             </Label>
@@ -214,7 +214,7 @@ export function ResumePdfManager({
                 setError(null);
                 setSuccessInfo(null);
               }}
-              className="h-9 cursor-pointer bg-background text-xs"
+              className="h-10 cursor-pointer bg-background"
             />
             {selectedFile && (
               <p className="font-mono text-[11px] text-muted-foreground">

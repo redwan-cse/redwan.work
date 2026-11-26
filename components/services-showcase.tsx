@@ -381,7 +381,7 @@ export function ServicesShowcase({
                     <div className="space-y-1.5 md:col-span-3">
                       <label
                         htmlFor={`budget-${service.slug}`}
-                        className="flex items-center gap-1 text-xs font-medium text-foreground"
+                        className="flex items-center gap-1 font-sans text-sm font-medium text-foreground"
                       >
                         <DollarSign className="h-3.5 w-3.5 text-primary" />
                         Custom Budget Offer (USD)
@@ -400,14 +400,14 @@ export function ServicesShowcase({
                             ? `Default $${(selectedPkg.priceCents / 100).toLocaleString()} (or enter offer)`
                             : 'Enter your budget offer (USD)'
                         }
-                        className="h-9 text-xs"
+                        className="h-10 tabular-nums"
                       />
                     </div>
 
                     <div className="space-y-1.5 md:col-span-6">
                       <label
                         htmlFor={`req-${service.slug}`}
-                        className="flex items-center gap-1 text-xs font-medium text-foreground"
+                        className="flex items-center gap-1 font-sans text-sm font-medium text-foreground"
                       >
                         <FileText className="h-3.5 w-3.5 text-primary" />
                         Additional Requirements / Scope Notes (Optional)
@@ -420,7 +420,7 @@ export function ServicesShowcase({
                           updateDraft(service, { requirements: e.target.value })
                         }
                         placeholder="Add specific features, target URLs, timeline, or custom requirements..."
-                        className="min-h-[36px] py-1.5 text-xs"
+                        className="min-h-[40px] py-2"
                       />
                     </div>
 

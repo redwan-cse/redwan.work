@@ -10,6 +10,10 @@ export interface BlogPost {
   published: string;
   author?: string;
   labels?: string[];
+  imageUrl?: string;
+  excerpt?: string;
+  readingMinutes?: number;
+  toc?: BlogTocItem[];
 }
 
 /** Client-safe summary passed across the RSC boundary without raw HTML bodies. */
@@ -52,7 +56,7 @@ interface CacheEntry {
 }
 
 interface RawSnapshot {
-  items: BloggerPostItem[];
+  items: BlogPost[];
   totalItems: number;
   isCapped: boolean;
   freshUntil: number;
@@ -78,7 +82,7 @@ let cacheGeneration = 0;
 let snapshotVersion = 0;
 
 let rawPostsSnapshot: RawSnapshot | null = null;
-let rawPostsInFlight: Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> | null = null;
+let rawPostsInFlight: Promise<{ items: BlogPost[]; totalItems: number; isCapped: boolean }> | null = null;
 
 function base64UrlEncode(input: Buffer | string): string {
   return Buffer.from(input)
@@ -232,6 +236,7 @@ interface BloggerPostItem {
   published?: string | null;
   author?: { displayName?: string | null } | null;
   labels?: string[] | null;
+  images?: Array<{ url?: string | null }> | null;
 }
 
 interface BloggerBlogMetaResponse {
@@ -243,16 +248,80 @@ interface BloggerPostsListResponse {
   nextPageToken?: string;
 }
 
-function mapPost(post: BloggerPostItem): BlogPost {
+// Keep Next.js Data Cache entries comfortably below its hard 2 MB limit (2,097,152 bytes).
+const MAX_NEXT_CACHE_BYTES = 1_500_000;
+const MAX_COMPACT_CONTENT_CHARS = 360;
+const MAX_COMPACT_EXCERPT_CHARS = 240;
+const MAX_COMPACT_TOC_ITEMS = 24;
+
+/**
+ * Compact a raw Blogger API post into a lightweight, cache-safe `BlogPost`.
+ * Precomputes `imageUrl`, `excerpt`, `readingMinutes`, and `toc` once per post
+ * and strips multi-megabyte raw HTML bodies before crossing `unstable_cache`.
+ */
+export function compactBloggerPostItem(post: BloggerPostItem): BlogPost {
+  const rawContent = post.content || "";
+  const imgFromHtml = /<img[^>]+src="([^">]+)"/.exec(rawContent)?.[1];
+  const imgFromMeta = post.images?.find(
+    (img) => typeof img?.url === "string" && img.url.trim().length > 0
+  )?.url ?? undefined;
+  const imageUrl = imgFromHtml || imgFromMeta || extractFirstImage(rawContent);
+
+  const plain = stripHtmlToPlainText(rawContent);
+  const words = plain ? plain.split(/\s+/).length : 0;
+  const readingMinutes = Math.max(2, Math.ceil(words / 200));
+  const excerpt =
+    plain.length > MAX_COMPACT_EXCERPT_CHARS
+      ? `${plain.slice(0, MAX_COMPACT_EXCERPT_CHARS)}...`
+      : plain;
+  const compactContent =
+    plain.length > MAX_COMPACT_CONTENT_CHARS
+      ? `${plain.slice(0, MAX_COMPACT_CONTENT_CHARS)}...`
+      : plain;
+  const toc = extractBlogToc(rawContent, MAX_COMPACT_TOC_ITEMS);
+
   return {
     id: post.id || "",
     title: post.title || "Untitled",
-    content: post.content || "",
+    content: compactContent,
     url: post.url || "#",
     published: post.published || new Date().toISOString(),
     author: post.author?.displayName ?? undefined,
     labels: post.labels ?? undefined,
+    imageUrl,
+    excerpt,
+    readingMinutes,
+    toc,
   };
+}
+
+function enforceCacheSizeBudget(
+  items: BlogPost[],
+  totalItems: number,
+  isCapped: boolean
+): { items: BlogPost[]; totalItems: number; isCapped: boolean } {
+  let payload = { items, totalItems, isCapped };
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") <= MAX_NEXT_CACHE_BYTES) {
+    return payload;
+  }
+
+  // First trim TOC arrays on older posts (beyond page 1) to free bytes while keeping all posts intact.
+  const trimmedToc = items.map((item, idx) =>
+    idx < BLOG_FIRST_PAGE_COUNT ? item : { ...item, toc: [] }
+  );
+  payload = { items: trimmedToc, totalItems, isCapped };
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") <= MAX_NEXT_CACHE_BYTES) {
+    return payload;
+  }
+
+  // Final safety cap: keep every entry's compact content/excerpt concise so Next.js 2 MB cache never rejects.
+  const leanItems = trimmedToc.map((item) => ({
+    ...item,
+    content: item.content.slice(0, 200),
+    excerpt: item.excerpt ? item.excerpt.slice(0, 200) : undefined,
+    toc: [],
+  }));
+  return { items: leanItems, totalItems, isCapped };
 }
 
 // Safety cap so a hand-crafted ?page=999999 cannot request huge result sets
@@ -276,17 +345,19 @@ async function fetchBloggerJson<T>(url: string, accessToken: string): Promise<T>
   return (await res.json()) as T;
 }
 
-async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
+async function fetchAllBloggerPosts(): Promise<{ items: BlogPost[]; totalItems: number; isCapped: boolean }> {
   const fixtureRaw = process.env.BLOGGER_FIXTURE_POSTS_JSON;
   if (fixtureRaw) {
     try {
       const parsed = JSON.parse(fixtureRaw) as BloggerPostItem[];
-      const items = Array.isArray(parsed) ? parsed.slice(0, MAX_POSTS_FETCH) : [];
-      return {
+      const items = Array.isArray(parsed)
+        ? parsed.slice(0, MAX_POSTS_FETCH).map(compactBloggerPostItem)
+        : [];
+      return enforceCacheSizeBudget(
         items,
-        totalItems: items.length,
-        isCapped: Array.isArray(parsed) && parsed.length > MAX_POSTS_FETCH,
-      };
+        items.length,
+        Array.isArray(parsed) && parsed.length > MAX_POSTS_FETCH
+      );
     } catch {
       return { items: [], totalItems: 0, isCapped: false };
     }
@@ -302,7 +373,7 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
   const accessToken = await client.auth.getAccessToken();
   const baseUrl = `https://www.googleapis.com/blogger/v3/blogs/${encodeURIComponent(client.blogId)}`;
 
-  const allItems: BloggerPostItem[] = [];
+  const allItems: BlogPost[] = [];
   let pageToken: string | undefined;
   let isCapped = false;
 
@@ -329,7 +400,7 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
       accessToken
     );
 
-    const items = (data.items ?? []) as BloggerPostItem[];
+    const items = ((data.items ?? []) as BloggerPostItem[]).map(compactBloggerPostItem);
     allItems.push(...items);
     if (allItems.length >= MAX_POSTS_FETCH && data.nextPageToken) {
       isCapped = true;
@@ -351,18 +422,18 @@ async function fetchAllBloggerPosts(): Promise<{ items: BloggerPostItem[]; total
     }
   }
 
-  return { items: allItems, totalItems, isCapped };
+  return enforceCacheSizeBudget(allItems, totalItems, isCapped);
 }
 
 let cachedAllBloggerPosts:
-  | (() => Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }>)
+  | (() => Promise<{ items: BlogPost[]; totalItems: number; isCapped: boolean }>)
   | null = null;
 
 function getCachedAllBloggerPostsRunner() {
   if (!cachedAllBloggerPosts && typeof nextCache.unstable_cache === "function") {
     cachedAllBloggerPosts = nextCache.unstable_cache(
       fetchAllBloggerPosts,
-      ["blogger-all-posts-v1"],
+      ["blogger-all-posts-v2"],
       { revalidate: 300, tags: ["blogs"] }
     );
   }
@@ -380,10 +451,11 @@ async function runWithNextCache<T>(
   try {
     return await cachedRunner();
   } catch (err) {
-    // Outside Next.js request context (e.g., Vitest unit runs), unstable_cache throws an invariant error.
+    // Outside Next.js request context (e.g., Vitest unit runs) or if Next.js Data Cache rejects,
+    // fall back cleanly to the direct runner instead of failing the request.
     if (
       err instanceof Error &&
-      /incrementalCache|unstable_cache|headers/i.test(err.message)
+      /incrementalCache|unstable_cache|headers|over 2MB|data cache/i.test(err.message)
     ) {
       return directRunner();
     }
@@ -459,7 +531,7 @@ export async function getLatestBlogPostTimestamp(): Promise<string | null> {
   }
 }
 
-function startRawPostsRefresh(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
+function startRawPostsRefresh(): Promise<{ items: BlogPost[]; totalItems: number; isCapped: boolean }> {
   if (rawPostsInFlight) {
     return rawPostsInFlight;
   }
@@ -485,7 +557,7 @@ function startRawPostsRefresh(): Promise<{ items: BloggerPostItem[]; totalItems:
   return request;
 }
 
-async function getRawPostsSnapshot(): Promise<{ items: BloggerPostItem[]; totalItems: number; isCapped: boolean }> {
+async function getRawPostsSnapshot(): Promise<{ items: BlogPost[]; totalItems: number; isCapped: boolean }> {
   // Deterministic offline fixtures always evaluate immediately without stale caching.
   if (process.env.BLOGGER_FIXTURE_POSTS_JSON) {
     return fetchAllBloggerPosts();
@@ -541,7 +613,7 @@ async function fetchBlogPostsPage(
     );
     const posts =
       startIndex < snapshot.items.length
-        ? snapshot.items.slice(startIndex, startIndex + pageSize).map(mapPost)
+        ? snapshot.items.slice(startIndex, startIndex + pageSize)
         : [];
 
     return {

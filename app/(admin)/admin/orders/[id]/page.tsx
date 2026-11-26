@@ -23,6 +23,7 @@ import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -258,14 +259,14 @@ export default async function AdminOrderDetailPage({
           >
             <input type="hidden" name="order_id" value={order.id} />
             <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="admin-order-status" className="text-[11px]">Order Status</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="admin-order-status" className="text-sm font-medium">Order Status</Label>
                 <select
                   id="admin-order-status"
                   name="status"
                   aria-label="Order lifecycle status"
                   defaultValue={order.status}
-                  className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs"
+                  className="block h-9 rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
                 >
                   <option value="awaiting_payment">awaiting_payment</option>
                   <option value="pending_requirements">pending_requirements</option>
@@ -279,8 +280,8 @@ export default async function AdminOrderDetailPage({
                   <option value="cancelled">cancelled</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="admin-order-progress" className="text-[11px]">Progress %</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="admin-order-progress" className="text-sm font-medium">Progress %</Label>
                 <Input
                   id="admin-order-progress"
                   name="progress_percent"
@@ -288,10 +289,10 @@ export default async function AdminOrderDetailPage({
                   min="0"
                   max="100"
                   defaultValue={order.progress_percent}
-                  className="h-8 w-20 font-mono text-xs"
+                  className="h-9 w-24 tabular-nums"
                 />
               </div>
-              <Button type="submit" size="sm" className="h-8 rounded-full text-xs">
+              <Button type="submit" size="sm" className="h-9 rounded-full px-4 text-xs">
                 Update Order
               </Button>
             </div>
@@ -356,41 +357,40 @@ export default async function AdminOrderDetailPage({
                   action={submitOrderDeliverableAction}
                   successMessage="Deliverable published to client portal."
                   resetOnSuccess
-                  className="space-y-3.5"
+                  className="space-y-4"
                 >
                   <input type="hidden" name="order_id" value={order.id} />
                   <input type="hidden" name="client_id" value={order.client_id} />
 
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="space-y-1 sm:col-span-2">
-                      <Label htmlFor="dlv-title" className="text-xs">Deliverable Title *</Label>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="dlv-title" className="text-sm font-medium">Deliverable Title *</Label>
                       <Input
                         id="dlv-title"
                         name="title"
                         required
                         placeholder="VAPT Final Technical & Executive Report"
-                        className="h-9 text-xs"
+                        className="h-10"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="dlv-version" className="text-xs">Version</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="dlv-version" className="text-sm font-medium">Version</Label>
                       <Input
                         id="dlv-version"
                         name="version_label"
                         defaultValue={`v1.${deliverables?.length ?? 0}`}
-                        className="h-9 font-mono text-xs"
+                        className="h-10 tabular-nums"
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="dlv-release-notes" className="text-xs">Release Notes / Remediation Summary</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dlv-release-notes" className="text-sm font-medium">Release Notes / Remediation Summary</Label>
                     <Textarea
                       id="dlv-release-notes"
                       name="release_notes"
                       rows={3}
                       placeholder="Summarize key findings, patches, or deployment instructions..."
-                      className="text-xs"
                     />
                   </div>
 
@@ -401,12 +401,10 @@ export default async function AdminOrderDetailPage({
                     label="Upload Deliverable File to Encrypted Deliverables Vault"
                   />
 
-                  <label className="flex min-h-7 cursor-pointer items-center gap-2.5 text-xs font-medium">
-                    <input
-                      type="checkbox"
+                  <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs font-medium">
+                    <FormCheckbox
                       name="is_final_delivery"
                       defaultChecked
-                      className="h-6 w-6 shrink-0 rounded border-border accent-primary"
                     />
                     Mark as Final Delivery (Starts {order.auto_accept_days}-day client review timer)
                   </label>
@@ -751,7 +749,7 @@ export default async function AdminOrderDetailPage({
                           name="status"
                           aria-label="Milestone status"
                           defaultValue={ms.status}
-                          className="h-7 rounded border border-border bg-background px-2 text-[11px]"
+                          className="h-9 rounded-md border border-input bg-background px-2 text-base font-sans transition-colors hover:border-muted-foreground/45"
                         >
                           <option value="pending">pending</option>
                           <option value="in_progress">in_progress</option>
@@ -793,7 +791,7 @@ export default async function AdminOrderDetailPage({
                           defaultValue={ms.title}
                           required
                           aria-label="Milestone title"
-                          className="h-7 text-[11px] sm:col-span-2"
+                          className="h-9 sm:col-span-2"
                         />
                         <Input
                           name="amount_major"
@@ -803,14 +801,14 @@ export default async function AdminOrderDetailPage({
                           defaultValue={(ms.amount_cents / 100).toFixed(2)}
                           disabled={Boolean(linkedInv)}
                           aria-label="Milestone amount"
-                          className="h-7 font-mono text-[11px]"
+                          className="h-9 tabular-nums"
                         />
                         <Input
                           name="due_date"
                           type="date"
                           defaultValue={ms.due_date ?? ''}
                           aria-label="Milestone due date"
-                          className="h-7 font-mono text-[11px]"
+                          className="h-9 tabular-nums"
                         />
                         <div className="flex items-center justify-between gap-2 sm:col-span-4">
                           <span className="text-[10px] text-muted-foreground">
@@ -830,16 +828,16 @@ export default async function AdminOrderDetailPage({
                 action={addOrderMilestoneAction}
                 successMessage="Milestone added."
                 resetOnSuccess
-                className="space-y-2.5 border-t border-border/60 pt-3"
+                className="space-y-3 border-t border-border/60 pt-3"
               >
                 <input type="hidden" name="order_id" value={order.id} />
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-2.5 sm:grid-cols-3">
                   <Input
                     name="title"
                     aria-label="New milestone title"
                     required
                     placeholder="New milestone title"
-                    className="h-8 sm:col-span-2 text-xs"
+                    className="h-9 sm:col-span-2"
                   />
                   <Input
                     name="amount_usd"
@@ -848,10 +846,10 @@ export default async function AdminOrderDetailPage({
                     min="0"
                     defaultValue="250"
                     placeholder="Amount"
-                    className="h-8 font-mono text-xs"
+                    className="h-9 tabular-nums"
                   />
                 </div>
-                <Button type="submit" size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                <Button type="submit" size="sm" variant="outline" className="h-9 gap-1 text-xs">
                   <Plus className="h-3.5 w-3.5" />
                   Add Milestone
                 </Button>
@@ -937,18 +935,16 @@ export default async function AdminOrderDetailPage({
                   aria-label="New execution task title"
                   required
                   placeholder="Add execution task..."
-                  className="h-8 min-w-[180px] flex-1 text-xs"
+                  className="h-9 min-w-[180px] flex-1"
                 />
-                <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
+                <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                  <FormCheckbox
                     name="is_client_visible"
                     defaultChecked
-                    className="h-6 w-6 rounded border-border accent-primary"
                   />
                   Client-visible
                 </label>
-                <Button type="submit" variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                <Button type="submit" variant="outline" size="sm" className="h-9 gap-1 text-xs">
                   <Plus className="h-3.5 w-3.5" />
                   Add Task
                 </Button>
@@ -973,12 +969,12 @@ export default async function AdminOrderDetailPage({
                 action={createPaidRevisionInvoiceAction}
                 successMessage="Paid revision invoice issued to client."
                 resetOnSuccess
-                className="space-y-3"
+                className="space-y-4"
               >
                 <input type="hidden" name="order_id" value={order.id} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="rev-extra-rounds" className="text-xs">Extra Revision Rounds *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rev-extra-rounds" className="text-sm font-medium">Extra Revision Rounds *</Label>
                     <Input
                       id="rev-extra-rounds"
                       name="extra_revisions"
@@ -987,11 +983,11 @@ export default async function AdminOrderDetailPage({
                       max="20"
                       defaultValue="2"
                       required
-                      className="h-9 font-mono text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="rev-fee-major" className="text-xs">Addendum Fee ({order.currency}) *</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rev-fee-major" className="text-sm font-medium">Addendum Fee ({order.currency}) *</Label>
                     <Input
                       id="rev-fee-major"
                       name="fee_major"
@@ -1000,22 +996,21 @@ export default async function AdminOrderDetailPage({
                       min="1"
                       defaultValue="150"
                       required
-                      className="h-9 font-mono text-xs"
+                      className="h-10 tabular-nums"
                     />
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="rev-summary" className="text-xs">Revision Scope Description *</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="rev-summary" className="text-sm font-medium">Revision Scope Description *</Label>
                   <Textarea
                     id="rev-summary"
                     name="summary"
                     rows={3}
                     required
                     placeholder="Additional 2 retest/redesign cycles beyond contract allowance..."
-                    className="text-xs"
                   />
                 </div>
-                <Button type="submit" size="sm" className="rounded-full">
+                <Button type="submit" size="sm" className="h-9 rounded-full px-4">
                   Issue Paid Revision Invoice
                 </Button>
               </ActionFeedbackForm>

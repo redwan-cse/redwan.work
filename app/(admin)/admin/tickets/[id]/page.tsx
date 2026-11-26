@@ -7,6 +7,7 @@ import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAdminSession } from '@/lib/auth/session';
@@ -90,7 +91,7 @@ export default async function AdminTicketDetailPage({
             name="status"
             aria-label="Ticket status"
             defaultValue={ticket.status}
-            className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
+            className="h-9 rounded-md border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
           >
             <option value="open">open</option>
             <option value="in_progress">in_progress</option>
@@ -178,7 +179,6 @@ export default async function AdminTicketDetailPage({
               required
               rows={4}
               placeholder="Write a reply to the client or an internal note..."
-              className="text-xs"
             />
             <R2FileUploader
               category="ticket_attachment"
@@ -187,14 +187,10 @@ export default async function AdminTicketDetailPage({
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  name="is_internal_note"
-                  className="h-6 w-6 rounded border-border accent-primary"
-                />
+                <FormCheckbox name="is_internal_note" />
                 Internal Admin Note (Hidden from Client)
               </label>
-              <Button type="submit" size="sm" className="gap-1.5 rounded-full">
+              <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
                 <Send className="h-3.5 w-3.5" />
                 Send Reply
               </Button>

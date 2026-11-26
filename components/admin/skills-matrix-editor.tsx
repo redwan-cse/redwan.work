@@ -81,7 +81,7 @@ export function SkillsMatrixEditor({
   return (
     <div className="space-y-3 rounded-xl border border-border/80 bg-muted/15 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label className="text-xs font-semibold">
+        <Label className="text-sm font-semibold">
           Visual Technical Skills Matrix ({categories.length} categories)
         </Label>
         <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
@@ -96,14 +96,14 @@ export function SkillsMatrixEditor({
             }}
             placeholder="New category (e.g. Cloud & DevSecOps)"
             aria-label="New technical skill category name"
-            className="h-8 min-w-0 flex-1 text-xs sm:w-56 sm:flex-initial"
+            className="h-9 min-w-0 flex-1 sm:w-60 sm:flex-initial"
           />
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={addCategory}
-            className="h-8 gap-1 text-xs"
+            className="h-9 gap-1 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Category
@@ -123,7 +123,7 @@ export function SkillsMatrixEditor({
                   )
                 }
                 aria-label="Skill category title"
-                className="h-7 text-xs font-semibold"
+                className="h-9 font-semibold"
               />
               <Button
                 type="button"
@@ -131,7 +131,7 @@ export function SkillsMatrixEditor({
                 size="icon"
                 onClick={() => removeCategory(cat.id)}
                 aria-label={`Remove category ${cat.name}`}
-                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
@@ -170,14 +170,14 @@ export function SkillsMatrixEditor({
                 }}
                 placeholder="Add skill(s), comma-separated..."
                 aria-label={`Add skills to ${cat.name}`}
-                className="h-7 text-xs"
+                className="h-9"
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => addSkill(cat.id)}
-                className="h-7 px-2 text-[11px]"
+                className="h-9 px-3 text-xs"
               >
                 Add
               </Button>

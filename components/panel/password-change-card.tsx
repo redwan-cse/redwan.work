@@ -27,7 +27,7 @@ export function PasswordChangeCard() {
       <CardContent>
         <form action={formAction} className="space-y-4">
           <div className="flex flex-col justify-end gap-1.5">
-            <Label htmlFor="current-password" className="text-xs">
+            <Label htmlFor="current-password" className="text-sm">
               Current Password *
             </Label>
             <Input
@@ -37,13 +37,13 @@ export function PasswordChangeCard() {
               required
               autoComplete="current-password"
               placeholder="Enter current password"
-              className="h-10 text-base md:h-9 md:text-xs"
+              className="h-10"
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col justify-end gap-1.5">
-              <Label htmlFor="new-password" className="mb-auto text-xs">
-                New Password (min 12 chars) *
+              <Label htmlFor="new-password" className="mb-auto text-sm">
+                New Password (12+ chars) *
               </Label>
               <Input
                 id="new-password"
@@ -53,11 +53,11 @@ export function PasswordChangeCard() {
                 required
                 autoComplete="new-password"
                 placeholder="••••••••••••"
-                className="h-10 text-base md:h-9 md:text-xs"
+                className="h-10"
               />
             </div>
             <div className="flex flex-col justify-end gap-1.5">
-              <Label htmlFor="confirm-password" className="mb-auto text-xs">
+              <Label htmlFor="confirm-password" className="mb-auto text-sm">
                 Confirm New Password *
               </Label>
               <Input
@@ -68,7 +68,7 @@ export function PasswordChangeCard() {
                 required
                 autoComplete="new-password"
                 placeholder="••••••••••••"
-                className="h-10 text-base md:h-9 md:text-xs"
+                className="h-10"
               />
             </div>
           </div>

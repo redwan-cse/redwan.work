@@ -193,7 +193,7 @@ export function ClientMfaCard() {
             )}
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 space-y-1">
-                <Label htmlFor="mfa-totp-code" className="text-xs">Enter 6-Digit Verification Code</Label>
+                <Label htmlFor="mfa-totp-code" className="text-sm">Enter 6-Digit Verification Code</Label>
                 <Input
                   id="mfa-totp-code"
                   value={otpCode}
@@ -201,7 +201,7 @@ export function ClientMfaCard() {
                   maxLength={8}
                   required
                   placeholder="123456"
-                  className="h-10 font-mono text-base md:h-9 md:text-xs"
+                  className="h-10 tabular-nums"
                 />
               </div>
               <Button type="submit" size="sm" disabled={busy}>

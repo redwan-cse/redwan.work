@@ -19,6 +19,39 @@ function isNextRedirectError(err: unknown): boolean {
   return typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT');
 }
 
+function splitFieldsetSpacingClasses(className?: string): {
+  formClassName: string;
+  fieldsetClassName: string;
+} {
+  if (!className) {
+    return { formClassName: '', fieldsetClassName: 'contents' };
+  }
+  const tokens = className.trim().split(/\s+/).filter(Boolean);
+  const hasFlexOrGrid = tokens.some((token) =>
+    /^(?:[a-z0-9-]+:)*(?:flex|inline-flex|grid|inline-grid)$/.test(token)
+  );
+  if (hasFlexOrGrid) {
+    return { formClassName: className, fieldsetClassName: 'contents' };
+  }
+
+  const spacingTokens: string[] = [];
+  const formTokens: string[] = [];
+  for (const token of tokens) {
+    if (/^(?:[a-z0-9-]+:)*(?:space-[xy]-|divide-[xy](?:-|$))/.test(token)) {
+      spacingTokens.push(token);
+    } else {
+      formTokens.push(token);
+    }
+  }
+  if (spacingTokens.length === 0) {
+    return { formClassName: className, fieldsetClassName: 'contents' };
+  }
+  return {
+    formClassName: formTokens.join(' '),
+    fieldsetClassName: cn('m-0 min-w-0 border-0 p-0', spacingTokens.join(' ')),
+  };
+}
+
 export function ActionFeedbackForm({
   action,
   className,
@@ -65,14 +98,16 @@ export function ActionFeedbackForm({
     });
   };
 
+  const { formClassName, fieldsetClassName } = splitFieldsetSpacingClasses(className);
+
   return (
     <form
       ref={formRef}
       onSubmit={handleSubmit}
       aria-busy={isPending}
-      className={cn(className)}
+      className={cn(formClassName)}
     >
-      <fieldset disabled={isPending} className="contents">
+      <fieldset disabled={isPending} className={fieldsetClassName}>
         {children}
       </fieldset>
 

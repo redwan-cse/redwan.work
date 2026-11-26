@@ -90,7 +90,7 @@ export async function SupportHubView({
                 name="status"
                 aria-label="Filter tickets by status"
                 defaultValue={statusFilter}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">All Statuses</option>
                 <option value="open">open</option>
@@ -104,7 +104,7 @@ export async function SupportHubView({
                 name="priority"
                 aria-label="Filter tickets by priority"
                 defaultValue={priorityFilter}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 rounded-md border border-input bg-background px-2 text-base font-sans transition-colors hover:border-muted-foreground/45"
               >
                 <option value="">All Priorities</option>
                 <option value="urgent">urgent</option>

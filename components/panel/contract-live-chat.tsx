@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FormCheckbox } from '@/components/ui/form-checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { resolveMimeType } from '@/lib/mime';
 import { cn } from '@/lib/utils';
@@ -375,7 +376,7 @@ export function ContractLiveChat({
               aria-label="Select active contract thread"
               value={selectedOrderId}
               onChange={(e) => handleSelectContract(e.target.value)}
-              className="h-8 rounded-full border border-border bg-background px-3 font-mono text-xs"
+              className="h-9 rounded-full border border-input bg-background px-3 text-base font-sans transition-colors hover:border-muted-foreground/45"
             >
               {contracts.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -532,7 +533,7 @@ export function ContractLiveChat({
               ? 'Write a live contract update to the client or record an internal note... (Ctrl+Enter to send)'
               : 'Send a direct message regarding your active contract, scope, or deliverables... (Ctrl+Enter to send)'
           }
-          className="bg-background text-base md:text-xs"
+          className="bg-background"
         />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -549,7 +550,7 @@ export function ContractLiveChat({
               size="sm"
               disabled={uploadingFile || sending}
               onClick={() => fileInputRef.current?.click()}
-              className="h-7 gap-1.5 rounded-full px-2.5 text-[11px]"
+              className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
               {uploadingFile ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -559,12 +560,10 @@ export function ContractLiveChat({
               {uploadingFile ? 'Uploading...' : 'Attach File'}
             </Button>
             {viewerRole === 'admin' ? (
-              <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
+              <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                <FormCheckbox
                   checked={isInternalNote}
                   onChange={(e) => setIsInternalNote(e.target.checked)}
-                  className="h-6 w-6 rounded border-border accent-primary"
                 />
                 Private Internal Note (Hidden from Client)
               </label>
