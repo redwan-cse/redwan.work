@@ -1458,10 +1458,16 @@ export async function toggleClientActiveStatusAction(formData: FormData): Promis
   }
 
   const admin = getSupabaseAdmin();
-  const validAfterSec = Math.floor(Date.now() / 1000);
+  // On deactivation, pass current epoch seconds (trigger upgrades to greatest(old, floor(now)+1)).
+  // On reactivation, omit tokens_valid_after so the monotonic DB cutoff can never move backward
+  // under sub-second toggle or server/DB clock skew while keeping prior revoked tokens invalid.
+  const profileUpdates: { is_active: boolean; tokens_valid_after?: number } = nextActive
+    ? { is_active: true }
+    : { is_active: false, tokens_valid_after: Math.floor(Date.now() / 1000) };
+
   const updateQuery = admin
     .from('profiles')
-    .update({ is_active: nextActive, tokens_valid_after: validAfterSec })
+    .update(profileUpdates)
     .eq('id', clientId)
     .eq('role', 'client');
 
@@ -4621,10 +4627,9 @@ export async function revokeClientInvitationAction(formData: FormData): Promise<
         }
 
         if (!hasSignedIn && (orderCount ?? 0) === 0 && (invoiceCount ?? 0) === 0) {
-          const validAfterSec = Math.floor(Date.now() / 1000);
           const { error: deactivateErr } = await admin
             .from('profiles')
-            .update({ is_active: false, tokens_valid_after: validAfterSec })
+            .update({ is_active: false })
             .eq('id', targetProfileId)
             .eq('role', 'client');
           if (deactivateErr) {

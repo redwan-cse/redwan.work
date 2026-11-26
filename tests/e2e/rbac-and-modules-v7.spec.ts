@@ -537,8 +537,8 @@ test.describe.serial('RBAC & Full-Module Functional Verification (Audit v7)', ()
       await adminPage.getByRole('button', { name: 'Reactivate Account', exact: true }).click();
       await expect(adminPage.getByText(/CLIENT 360°.*ACTIVE/)).toBeVisible();
 
-      // Wait 1.1s so newly issued JWT iat (in seconds) strictly exceeds tokens_valid_after cutoff
-      await new Promise((r) => setTimeout(r, 1100));
+      // Wait past the DB trigger's floor(epoch)+1 token cutoff before re-signing in
+      await new Promise((r) => setTimeout(r, 2100));
       await signInClient(
         otherPage,
         SEEDED_USERS.otherClient.email,

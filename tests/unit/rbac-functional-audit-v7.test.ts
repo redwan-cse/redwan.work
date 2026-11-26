@@ -181,6 +181,33 @@ describe('RBAC & Functional Audit v7 Regression Suite', () => {
     );
     expect(updateUserById).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
+
+    // 3. Reactivating a client must NOT write tokens_valid_after (preserves monotonic DB cutoff)
+    const capturedPayloads: Array<Record<string, unknown>> = [];
+    mockGetSupabaseAdmin.mockReturnValue({
+      from: () => ({
+        update: (payload: Record<string, unknown>) => {
+          capturedPayloads.push(payload);
+          return {
+            eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  maybeSingle: async () => ({ data: { id: CLIENT_ID }, error: null }),
+                }),
+              }),
+            }),
+          };
+        },
+      }),
+      rpc,
+      auth: { admin: { updateUserById } },
+    });
+    const reactivateFd = new FormData();
+    reactivateFd.set('client_id', CLIENT_ID);
+    reactivateFd.set('is_active', 'true');
+    await toggleClientActiveStatusAction(reactivateFd);
+    expect(capturedPayloads).toEqual([{ is_active: true }]);
+    expect(capturedPayloads[0]).not.toHaveProperty('tokens_valid_after');
   });
 
   it('[RBAC-H1] blocks file attachments on internal admin ticket replies and internal order chat notes', async () => {
