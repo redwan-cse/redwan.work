@@ -223,7 +223,11 @@ export function ServicesShowcase({
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2.5">
                     <Button asChild size="sm" className="gap-1.5 rounded-full">
-                      <Link href={buildPortalOrderHref(service)}>
+                      <Link
+                        href={buildPortalOrderHref(service)}
+                        rel="nofollow"
+                        prefetch={false}
+                      >
                         <Lock className="h-3.5 w-3.5" />
                         Order Service Now
                       </Link>
@@ -355,7 +359,11 @@ export function ServicesShowcase({
                             size="sm"
                             className="w-full gap-1.5 rounded-full text-xs"
                           >
-                            <Link href={buildPortalOrderHref(service, pkg.tier)}>
+                            <Link
+                              href={buildPortalOrderHref(service, pkg.tier)}
+                              rel="nofollow"
+                              prefetch={false}
+                            >
                               <Lock className="h-3.5 w-3.5" />
                               Order Package
                             </Link>
@@ -457,7 +465,11 @@ export function ServicesShowcase({
 
                     <div className="flex flex-col gap-2 sm:flex-row md:col-span-3">
                       <Button asChild size="sm" className="h-9 w-full gap-1.5 text-xs">
-                        <Link href={buildPortalOrderHref(service)}>
+                        <Link
+                          href={buildPortalOrderHref(service)}
+                          rel="nofollow"
+                          prefetch={false}
+                        >
                           <Lock className="h-3.5 w-3.5" />
                           Proceed to Order
                           <ArrowRight className="h-3.5 w-3.5" />

@@ -12,7 +12,9 @@ import {
   allowsAnalyticsStorage,
   allowsExperienceStorage,
 } from '@/components/cookie-preferences';
-import { clearBlogCache, getBlogPostsPage } from '@/lib/blogger';
+import { clearBlogCache, getBlogPostsPage, getRelatedBlogPosts } from '@/lib/blogger';
+import { SERVICE_CATALOG } from '@/lib/content/site';
+import { getServiceSeoPlaybook } from '@/lib/seo/service-playbooks';
 import {
   buildPublicMetadata,
   resolveVerificationToken,
@@ -425,5 +427,146 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     expect(manifest.start_url).toBe('/');
     expect(manifest.icons.some((i) => i.purpose === 'any')).toBe(true);
     expect(manifest.icons.some((i) => i.purpose === 'maskable')).toBe(true);
+  });
+
+  it('[SEO-V7] provides unique per-service SEO playbooks, non-duplicate service FAQs, and keyword-ranked related blog posts', async () => {
+    const publicServices = await getPublicServicesCatalog();
+    const allServices = new Map<string, (typeof SERVICE_CATALOG)[number]>();
+    for (const s of SERVICE_CATALOG) allServices.set(s.slug, s);
+    for (const s of publicServices) allServices.set(s.slug, s);
+
+    const globalFaqQuestions = new Set(PUBLIC_FAQS.map((f) => f.question.trim().toLowerCase()));
+    const seenServiceFaqQuestions = new Set<string>();
+
+    for (const service of allServices.values()) {
+      const playbook = getServiceSeoPlaybook(service);
+      expect(playbook.executiveOverview.length, `overview for ${service.slug}`).toBeGreaterThanOrEqual(120);
+      expect(playbook.idealFor.length, `idealFor for ${service.slug}`).toBeGreaterThanOrEqual(4);
+      expect(playbook.workflowSteps.length, `workflowSteps for ${service.slug}`).toBeGreaterThanOrEqual(4);
+      expect(playbook.governanceStandards.length, `governanceStandards for ${service.slug}`).toBeGreaterThanOrEqual(4);
+      expect(playbook.faqs.length, `faqs for ${service.slug}`).toBeGreaterThanOrEqual(3);
+
+      const faqSchema = buildFaqPageJsonLd(playbook.faqs);
+      expect(faqSchema['@type']).toBe('FAQPage');
+      expect(faqSchema.mainEntity).toHaveLength(playbook.faqs.length);
+
+      for (const faq of playbook.faqs) {
+        const normalized = faq.question.trim().toLowerCase();
+        expect(globalFaqQuestions.has(normalized), `Service FAQ overlaps PUBLIC_FAQS: ${faq.question}`).toBe(false);
+        expect(
+          seenServiceFaqQuestions.has(normalized),
+          `Duplicate FAQ question across services: ${faq.question}`
+        ).toBe(false);
+        seenServiceFaqQuestions.add(normalized);
+      }
+    }
+
+    // Fallback synthesis for custom admin-created CMS services
+    const customPlaybook = getServiceSeoPlaybook({
+      slug: 'custom-zero-trust-audit',
+      title: 'Zero Trust Network Architecture Audit',
+      pillar: 'cybersecurity',
+      pillarLabel: 'Cybersecurity & Offensive Security',
+      requiresRoe: true,
+      deliveryDaysMin: 7,
+      deliveryDaysMax: 14,
+    });
+    expect(customPlaybook.workflowSteps).toHaveLength(4);
+    expect(customPlaybook.faqs).toHaveLength(3);
+    expect(customPlaybook.executiveOverview).toContain('Zero Trust Network Architecture Audit');
+
+    // Keyword-ranked related Blogger posts in deterministic fixture mode
+    const previous = process.env.BLOGGER_FIXTURE_POSTS_JSON;
+    try {
+      process.env.BLOGGER_FIXTURE_POSTS_JSON = JSON.stringify([
+        {
+          id: 'p-react',
+          title: 'Next.js App Router Caching Patterns',
+          content: '<p>Full-stack React architecture notes.</p>',
+          url: 'https://blogs.redwan.work/2026/10/nextjs-caching.html',
+          published: '2026-10-20T00:00:00.000Z',
+          labels: ['Next.js', 'TypeScript'],
+        },
+        {
+          id: 'p-wazuh',
+          title: 'Deploying Hardened Wazuh SIEM Rules on Ubuntu',
+          content: '<p>SIEM detection tuning with MITRE ATT&CK.</p>',
+          url: 'https://blogs.redwan.work/2026/10/wazuh-siem-ubuntu.html',
+          published: '2026-10-15T00:00:00.000Z',
+          labels: ['SIEM', 'Wazuh', 'Linux'],
+        },
+        {
+          id: 'p-sysmon',
+          title: 'Sysmon Telemetry & Auditd Hardening Checklist',
+          content: '<p>Endpoint visibility for SOC teams.</p>',
+          url: 'https://blogs.redwan.work/2026/10/sysmon-auditd.html',
+          published: '2026-10-10T00:00:00.000Z',
+          labels: ['Monitoring', 'Security'],
+        },
+      ]);
+      clearBlogCache();
+
+      const siemPosts = await getRelatedBlogPosts(['wazuh', 'siem', 'sysmon', 'auditd'], 2);
+      expect(siemPosts).toHaveLength(2);
+      expect(siemPosts[0]?.id).toBe('p-wazuh');
+      expect(siemPosts[1]?.id).toBe('p-sysmon');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.BLOGGER_FIXTURE_POSTS_JSON;
+      } else {
+        process.env.BLOGGER_FIXTURE_POSTS_JSON = previous;
+      }
+      clearBlogCache();
+    }
+  });
+
+  it('[SEO-V7] enforces rel="nofollow" and prefetch={false} on public links to private /portal or /register routes and links all 8 core services in footer', () => {
+    const root = process.cwd();
+    const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+    const guardedFiles = [
+      'components/navigation.tsx',
+      'components/services-showcase.tsx',
+      'app/services/page.tsx',
+      'app/services/[slug]/page.tsx',
+      'app/contact/page.tsx',
+      'app/privacy/page.tsx',
+    ];
+
+    const linkRegex = /<Link\b[\s\S]*?>/g;
+    const missingGuards: string[] = [];
+
+    for (const rel of guardedFiles) {
+      const src = read(rel);
+      const links = src.match(linkRegex) ?? [];
+      for (const tag of links) {
+        const targetsPrivate =
+          /href=(?:["']\/(?:portal|register)|\{`\/(?:portal|register)|\{buildPortalOrderHref)/.test(
+            tag
+          );
+        if (!targetsPrivate) continue;
+        if (!/rel=["'][^"']*nofollow/.test(tag) || !/prefetch=\{false\}/.test(tag)) {
+          missingGuards.push(`${rel}: ${tag.replace(/\s+/g, ' ')}`);
+        }
+      }
+    }
+
+    expect(missingGuards).toEqual([]);
+
+    const footerSrc = read('components/footer.tsx');
+    for (const coreSlug of [
+      'vapt-penetration-testing',
+      'osint-threat-investigation',
+      'siem-security-monitoring',
+      'fullstack-web-development',
+      'api-backend-engineering',
+      'cloud-linux-devops',
+      'ai-ml-automation',
+      'executive-tech-support-recovery',
+    ]) {
+      expect(footerSrc, `Footer missing link to /services/${coreSlug}`).toContain(
+        `/services/${coreSlug}`
+      );
+    }
   });
 });
