@@ -10,9 +10,9 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body style={{ fontFamily: 'system-ui, sans-serif', padding: '4rem 1rem', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+        <h1 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
           Something went wrong
-        </h2>
+        </h1>
         <p style={{ color: '#666', marginBottom: '1.5rem' }}>
           A critical error occurred. Please try again.
         </p>

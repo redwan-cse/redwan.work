@@ -57,7 +57,16 @@ async function resolvePublicServicesForSitemap(): Promise<{
       .select('slug, updated_at')
       .eq('is_public', true)
       .order('sort_order', { ascending: true });
-    if (error || !data || data.length === 0) {
+    if (error) {
+      return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+    }
+    if (!data || data.length === 0) {
+      const countRes = await admin
+        .from('services')
+        .select('id', { count: 'exact', head: true });
+      if ((countRes.count ?? 0) > 0) {
+        return { slugs: [], latestUpdated: FALLBACK_LAST_MODIFIED };
+      }
       return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
     }
     const slugs = data.map((row) => ({
@@ -87,7 +96,16 @@ async function resolvePublicPortfolioForSitemap(): Promise<{
       .select('slug, updated_at')
       .eq('is_published', true)
       .order('sort_order', { ascending: true });
-    if (error || !data || data.length === 0) {
+    if (error) {
+      return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
+    }
+    if (!data || data.length === 0) {
+      const countRes = await admin
+        .from('portfolio_items')
+        .select('id', { count: 'exact', head: true });
+      if ((countRes.count ?? 0) > 0) {
+        return { slugs: [], latestUpdated: FALLBACK_LAST_MODIFIED };
+      }
       return { slugs: fallback, latestUpdated: FALLBACK_LAST_MODIFIED };
     }
     const slugs = data.map((row) => ({

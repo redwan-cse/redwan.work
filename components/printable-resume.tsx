@@ -930,6 +930,8 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
             <img
               src="/ceh-logo.jpg"
               alt="EC-Council Certified Ethical Hacker (C|EH)"
+              width={108}
+              height={81}
               style={{
                 width: '28mm',
                 height: 'auto',

@@ -61,6 +61,8 @@ const fetchPublicServicesCatalogCached = reactCache(async function fetchPublicSe
   includeHidden: boolean
 ): Promise<PublicServiceCatalogRecord[]> {
   try {
+    // Uses cookie-less service_role client with explicit is_public/is_active filters so
+    // static/ISR routes stay cacheable while respecting DB-016 and anon EXECUTE revocations on is_admin().
     const admin = getSupabaseAdmin();
     let query = admin
       .from('services')

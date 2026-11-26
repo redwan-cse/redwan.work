@@ -29,8 +29,15 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
 
       const title = (await page.title()).trim();
       expect(title.length, `Title length on ${route.path}`).toBeGreaterThan(10);
+      expect(
+        title,
+        `Duplicate brand suffix in title on ${route.path}`
+      ).not.toMatch(/Md\. Redwan Ahmed.*Md\. Redwan Ahmed/);
       expect(seenTitles.has(title), `Duplicate title "${title}" on ${route.path}`).toBe(false);
       seenTitles.add(title);
+
+      const twitterCard = await page.locator('meta[name="twitter:card"]').getAttribute('content');
+      expect(twitterCard, `twitter:card on ${route.path}`).toBe('summary_large_image');
 
       const description = await page
         .locator('meta[name="description"]')
@@ -78,9 +85,15 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     );
   });
 
-  test('[PAGINATION-CANONICAL] canonicalizes /blogs pagination and marks out-of-range or invalid pages as noindex', async ({
+  test('[PAGINATION-CANONICAL] canonicalizes /blogs pagination with 308 on ?page=1 and HTTP 404 + noindex on out-of-range or invalid pages', async ({
+    request,
     page,
   }) => {
+    // Explicit ?page=1 permanently redirects (308) to canonical /blogs
+    const page1Redirect = await request.get('/blogs?page=1', { maxRedirects: 0 });
+    expect(page1Redirect.status()).toBe(308);
+    expect(page1Redirect.headers()['location']).toBe('/blogs');
+
     // Page 1 default & explicit ?page=1 canonicalize to /blogs
     for (const url of ['/blogs', '/blogs?page=1']) {
       await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -97,9 +110,10 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     const page2Robots = (await page.locator('meta[name="robots"]').getAttribute('content')) ?? '';
     expect(page2Robots.toLowerCase()).not.toContain('noindex');
 
-    // Out-of-range (?page=99) and invalid (?page=0, ?page=abc) emit noindex
+    // Out-of-range (?page=99) and invalid (?page=0, ?page=abc) return HTTP 404 and emit noindex
     for (const invalidUrl of ['/blogs?page=99', '/blogs?page=0', '/blogs?page=abc']) {
-      await page.goto(invalidUrl, { waitUntil: 'domcontentloaded' });
+      const response = await page.goto(invalidUrl, { waitUntil: 'domcontentloaded' });
+      expect(response?.status(), `Expected HTTP 404 on ${invalidUrl}`).toBe(404);
       const robots = (await page.locator('meta[name="robots"]').getAttribute('content')) ?? '';
       expect(robots.toLowerCase(), `Expected noindex on ${invalidUrl}`).toContain('noindex');
     }
@@ -389,12 +403,13 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     ).join('\n');
     expect(portfolioSchemas).toContain('"CollectionPage"');
 
-    // 6. R2-backed /resume.pdf endpoint serves the stored PDF from R2 public bucket without runtime generation
+    // 6. R2-backed /resume.pdf endpoint serves the stored PDF with canonical Link header
     const pdfInlineRes = await request.get('/resume.pdf');
     expect(pdfInlineRes.status()).toBe(200);
     expect(pdfInlineRes.headers()['content-type'] ?? '').toContain('application/pdf');
     expect(pdfInlineRes.headers()['content-disposition'] ?? '').toContain('inline; filename="Md_Redwan_Ahmed_Resume.pdf"');
     expect(pdfInlineRes.headers()['x-robots-tag'] ?? '').toContain('index, follow');
+    expect(pdfInlineRes.headers()['link'] ?? '').toContain(`rel="canonical"`);
     expect(pdfInlineRes.headers()['x-resume-storage']).toBe('r2-public');
     const pdfBuf = await pdfInlineRes.body();
     expect(pdfBuf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
@@ -404,5 +419,54 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
     expect(pdfDownloadRes.headers()['content-disposition'] ?? '').toContain(
       'attachment; filename="Md_Redwan_Ahmed_Resume.pdf"'
     );
+
+    // 7. SSR initial HTML delivers real catalog & case-study links without Suspense skeleton bailout
+    const [homeHtml, servicesHtml, portfolioHtml] = await Promise.all([
+      request.get('/').then((r) => r.text()),
+      request.get('/services').then((r) => r.text()),
+      request.get('/portfolio').then((r) => r.text()),
+    ]);
+    expect(servicesHtml).not.toContain('Loading service catalog');
+    expect(servicesHtml).toContain('href="/services/vapt-penetration-testing"');
+    expect(portfolioHtml).not.toContain('Loading case studies');
+    expect(portfolioHtml).toContain('href="/portfolio/vapt-fintech-api"');
+    expect(homeHtml).toContain('href="/services/vapt-penetration-testing"');
+    expect(homeHtml).toContain('href="/portfolio/vapt-fintech-api"');
+
+    // 8. Dynamic detail routes and /contact emit structured JSON-LD & clean single-brand titles
+    await page.goto('/services/vapt-penetration-testing', { waitUntil: 'domcontentloaded' });
+    expect(await page.title()).not.toMatch(/Md\. Redwan Ahmed.*Md\. Redwan Ahmed/);
+    const svcDetailSchemas = (
+      await page.locator('script[type="application/ld+json"]').allTextContents()
+    ).join('\n');
+    expect(svcDetailSchemas).toContain('"OfferCatalog"');
+    expect(svcDetailSchemas).toContain('"@type":"Service"');
+
+    await page.goto('/portfolio/vapt-fintech-api', { waitUntil: 'domcontentloaded' });
+    expect(await page.title()).not.toMatch(/Md\. Redwan Ahmed.*Md\. Redwan Ahmed/);
+    const caseStudySchemas = (
+      await page.locator('script[type="application/ld+json"]').allTextContents()
+    ).join('\n');
+    expect(caseStudySchemas).toContain('"@type":"CreativeWork"');
+    expect(caseStudySchemas).toContain('"datePublished"');
+
+    await page.goto('/contact', { waitUntil: 'domcontentloaded' });
+    const contactSchemas = (
+      await page.locator('script[type="application/ld+json"]').allTextContents()
+    ).join('\n');
+    expect(contactSchemas).toContain('"@type":"ContactPage"');
+
+    // 9. Dynamic 1200x630 Open Graph PNG routes respond with 200 image/png
+    for (const ogPath of [
+      '/opengraph-image',
+      '/services/vapt-penetration-testing/opengraph-image',
+      '/portfolio/vapt-fintech-api/opengraph-image',
+    ]) {
+      const ogRes = await request.get(ogPath);
+      expect(ogRes.status(), `OG image status for ${ogPath}`).toBe(200);
+      expect(ogRes.headers()['content-type'] ?? '', `OG content-type for ${ogPath}`).toContain(
+        'image/png'
+      );
+    }
   });
 });

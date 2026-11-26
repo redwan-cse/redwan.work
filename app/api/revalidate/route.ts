@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
 
   try {
     revalidatePath(path);
+    revalidatePath('/sitemap.xml');
+    revalidatePath('/llms-full.txt');
     if (typeof nextCache.revalidateTag === 'function') {
       nextCache.revalidateTag('blogs', 'max');
     }

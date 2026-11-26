@@ -17,6 +17,12 @@ const PRIVATE_DISALLOW_PATHS = [
 const PUBLIC_ALLOW_PATHS = ['/', '/resume.pdf', '/llms.txt', '/llms-full.txt'];
 
 export default function robots(): MetadataRoute.Robots {
+  if (process.env.VERCEL_ENV === 'preview') {
+    return {
+      rules: [{ userAgent: '*', disallow: '/' }],
+    };
+  }
+
   return {
     rules: [
       {

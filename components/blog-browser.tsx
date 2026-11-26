@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import {
@@ -215,14 +214,14 @@ export function BlogBrowser({
                   </Button>
 
                   <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
-                    <Link
+                    <a
                       href={trySanitizeHttpUrl(featuredItem.post.url) ?? 'https://blogs.redwan.work'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       Read Full Article
                       <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
+                    </a>
                   </Button>
                 </div>
               </div>
@@ -307,14 +306,14 @@ export function BlogBrowser({
                     Quick Read
                   </Button>
                   <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
-                    <Link
+                    <a
                       href={trySanitizeHttpUrl(post.url) ?? 'https://blogs.redwan.work'}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       Full Post
                       <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    </a>
                   </Button>
                 </div>
               </InteractiveCard>

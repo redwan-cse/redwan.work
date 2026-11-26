@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -52,17 +52,29 @@ interface ServiceDraftConfig {
   requirements: string;
 }
 
+function PillarQuerySync({
+  onSelect,
+}: {
+  onSelect: (pillar: 'all' | ServicePillarKey) => void;
+}) {
+  const searchParams = useSearchParams();
+  const urlPillar = searchParams?.get('pillar') as ServicePillarKey | null;
+
+  useEffect(() => {
+    if (urlPillar && urlPillar in SERVICE_PILLARS) {
+      onSelect(urlPillar);
+    }
+  }, [urlPillar, onSelect]);
+
+  return null;
+}
+
 export function ServicesShowcase({
   initialServices = [],
 }: {
   initialServices?: ServiceCatalogItem[];
 }) {
-  const searchParams = useSearchParams();
-  const urlPillar = searchParams?.get('pillar') as ServicePillarKey | null;
-
-  const [selectedPillar, setSelectedPillar] = useState<'all' | ServicePillarKey>(
-    urlPillar && urlPillar in SERVICE_PILLARS ? urlPillar : 'all'
-  );
+  const [selectedPillar, setSelectedPillar] = useState<'all' | ServicePillarKey>('all');
 
   // Per-service interactive package selection, custom budget offer & requirements state
   const [drafts, setDrafts] = useState<Record<string, ServiceDraftConfig>>({});
@@ -125,6 +137,9 @@ export function ServicesShowcase({
 
   return (
     <div id="packages" className="space-y-12">
+      <Suspense fallback={null}>
+        <PillarQuerySync onSelect={setSelectedPillar} />
+      </Suspense>
       {/* Pillar Filter Bar with Antigravity Shared-Layout Indicator */}
       <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Filter services by pillar">
         {PILLAR_TABS.map(({ key, label, icon: Icon }) => {

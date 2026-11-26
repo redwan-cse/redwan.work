@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ShieldAlert, ShieldCheck } from 'l
 import { getPublicPortfolioItems, getPublicServicesCatalog } from '@/lib/cms/queries';
 import { SERVICE_CATALOG, SERVICE_PILLARS, SITE } from '@/lib/content/site';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
-import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
+import { buildBreadcrumbJsonLd, buildServiceDetailJsonLd } from '@/lib/seo/structured-data';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,17 +33,23 @@ export async function generateMetadata({
   const services = await getPublicServicesCatalog();
   const service = services.find((s) => s.slug === slug);
   if (!service) {
-    return buildPublicMetadata({
-      title: 'Service Not Found',
-      description: 'Requested security engineering or development service is unavailable.',
-      path: `/services/${slug}`,
-      noindex: true,
-    });
+    notFound();
   }
+  const startUsd = Math.round(service.startingPriceCents / 100).toLocaleString('en-US');
+  const rawDescription = `${service.tagline}. Fixed-scope packages from $${startUsd} USD (${service.deliveryDaysMin}–${service.deliveryDaysMax}d delivery) by ${SITE.name}.`;
+  const description =
+    rawDescription.length > 160 ? `${rawDescription.slice(0, 157).trimEnd()}...` : rawDescription;
+
   return buildPublicMetadata({
     title: service.title,
-    description: service.tagline,
+    description,
     path: `/services/${service.slug}`,
+    image: {
+      url: `/services/${service.slug}/opengraph-image`,
+      width: 1200,
+      height: 630,
+      alt: `${service.title} — ${SITE.name}`,
+    },
   });
 }
 
@@ -71,19 +77,7 @@ export default async function ServiceDetailPage({
       { name: 'Services', path: '/services' },
       { name: service.title, path: `/services/${service.slug}` },
     ]),
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Service',
-      name: service.title,
-      description: service.description || service.tagline,
-      provider: {
-        '@type': 'Person',
-        name: SITE.name,
-        url: SITE.url,
-      },
-      areaServed: 'Worldwide',
-      serviceType: pillarMeta?.label ?? service.pillarLabel,
-    },
+    buildServiceDetailJsonLd(service),
   ];
 
   return (

@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,7 @@ import {
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
-  title: 'Services & Tiered Packages — Cybersecurity, Full-Stack, Cloud & AI',
+  title: 'Cybersecurity, Full-Stack & Cloud Services',
   description:
     'Order Penetration Testing (VAPT), Full-Stack Web & Portal Engineering, Cloud/Linux Hardening, AI/ML Pipelines, and Emergency Incident Recovery.',
   path: '/services',
@@ -87,12 +86,10 @@ export default async function ServicesPage() {
           </div>
         </section>
 
-        {/* Interactive 5-Pillar Catalog & Packages */}
+        {/* Interactive 5-Pillar Catalog & Packages (server-rendered directly into ISR HTML) */}
         <section className="py-16">
           <div className="container">
-            <Suspense fallback={<div className="py-12 text-center text-sm text-muted-foreground">Loading service catalog...</div>}>
-              <ServicesShowcase initialServices={services} />
-            </Suspense>
+            <ServicesShowcase initialServices={services} />
           </div>
         </section>
 

@@ -170,12 +170,12 @@ export default function TermsOfServicePage() {
         <>
           <p>
             For questions regarding these Terms of Service, Rules of Engagement, or custom enterprise agreements, please contact{' '}
-            <Link
+            <a
               href="mailto:contact@redwan.work"
               className="font-medium text-primary underline underline-offset-4"
             >
               contact@redwan.work
-            </Link>{' '}
+            </a>{' '}
             or submit an inquiry via{' '}
             <Link
               href="/contact"

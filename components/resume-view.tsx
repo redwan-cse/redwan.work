@@ -1,5 +1,4 @@
 import Image from 'next/image';
-import Link from 'next/link';
 import {
   Award,
   BookOpen,
@@ -508,7 +507,7 @@ export function ResumeView({
                               Cert #{CEH_CERT_NUMBER}
                             </Badge>
                           </div>
-                          <Link
+                          <a
                             href={cert.verificationUrl || CEH_VERIFICATION_URL}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -518,13 +517,13 @@ export function ResumeView({
                               <span>{cert.name}</span>
                               <ExternalLink className="h-4 w-4 shrink-0 opacity-70 transition-opacity group-hover:opacity-100" />
                             </h3>
-                          </Link>
+                          </a>
                           <p className="text-sm text-muted-foreground">{cert.issuer}</p>
                           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
                             <span className="font-mono font-semibold text-primary">
                               Issued: 10 Nov 2026 · Valid through: 01 Dec 2027
                             </span>
-                            <Link
+                            <a
                               href={cert.verificationUrl || CEH_VERIFICATION_URL}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -532,7 +531,7 @@ export function ResumeView({
                             >
                               Verify on EC-Council ASPEN
                               <ExternalLink className="h-3.5 w-3.5" />
-                            </Link>
+                            </a>
                           </div>
                         </div>
 
@@ -541,7 +540,7 @@ export function ResumeView({
                             - White background container with >= 0.3cm (14px) clear spacing
                             - Smaller than candidate name) */}
                         <div className="flex shrink-0 flex-wrap items-center gap-4">
-                          <Link
+                          <a
                             href={cert.verificationUrl || CEH_VERIFICATION_URL}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -553,10 +552,11 @@ export function ResumeView({
                               alt="EC-Council Certified Ethical Hacker (C|EH) Official Logo"
                               width={128}
                               height={96}
+                              sizes="116px"
                               className="h-auto w-[116px] object-contain"
                             />
-                          </Link>
-                          <Link
+                          </a>
+                          <a
                             href={cert.verificationUrl || CEH_VERIFICATION_URL}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -568,9 +568,10 @@ export function ResumeView({
                               alt="EC-Council Certified Ethical Hacker (C|EH) Official Digital Badge"
                               width={88}
                               height={88}
+                              sizes="80px"
                               className="h-[80px] w-[80px] object-contain"
                             />
-                          </Link>
+                          </a>
                         </div>
                       </div>
                     );
@@ -582,7 +583,7 @@ export function ResumeView({
                       className="rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/50"
                     >
                       {cert.verificationUrl ? (
-                        <Link
+                        <a
                           href={cert.verificationUrl}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -592,7 +593,7 @@ export function ResumeView({
                             <span>{cert.name}</span>
                             <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
                           </h3>
-                        </Link>
+                        </a>
                       ) : (
                         <h3 className="mb-1 font-semibold">{cert.name}</h3>
                       )}
@@ -621,7 +622,7 @@ export function ResumeView({
                     className="rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/50"
                   >
                     {cert.verificationUrl ? (
-                      <Link
+                      <a
                         href={cert.verificationUrl}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -631,7 +632,7 @@ export function ResumeView({
                           <span>{cert.name}</span>
                           <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
                         </h3>
-                      </Link>
+                      </a>
                     ) : (
                       <h3 className="mb-1 font-semibold">{cert.name}</h3>
                     )}
@@ -640,7 +641,7 @@ export function ResumeView({
                   </div>
                 ))}
                 <div className="col-span-full rounded-xl border border-primary/25 bg-primary/5 p-4 transition-colors hover:bg-primary/10">
-                  <Link
+                  <a
                     href="https://drive.google.com/drive/folders/1JZvV08biy77fcW0_R9BJQEvBZuPH4ZVj?usp=sharing"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -648,7 +649,7 @@ export function ResumeView({
                   >
                     <ExternalLink className="h-4 w-4" />
                     <span>View full list of course certificates</span>
-                  </Link>
+                  </a>
                 </div>
               </CardContent>
             </Card>
@@ -680,7 +681,7 @@ export function ResumeView({
                     {(() => {
                       const pubHref = trySanitizeHttpUrl(pub.verification_url);
                       return pubHref ? (
-                        <Link
+                        <a
                           href={pubHref}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -690,7 +691,7 @@ export function ResumeView({
                             <span>{pub.title}</span>
                             <ExternalLink className="h-4 w-4 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
                           </h3>
-                        </Link>
+                        </a>
                       ) : (
                         <h3 className="mb-3 text-base font-semibold sm:text-lg">{pub.title}</h3>
                       );
@@ -924,7 +925,7 @@ export function ResumeView({
                 <div className="text-right text-xs text-muted-foreground">
                   <p className="font-semibold text-foreground">EC-Council Certified Member</p>
                   <p className="font-mono text-[11px]">Cert #{CEH_CERT_NUMBER}</p>
-                  <Link
+                  <a
                     href={CEH_VERIFICATION_URL}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -932,9 +933,9 @@ export function ResumeView({
                   >
                     Verify on ASPEN
                     <ExternalLink className="h-3 w-3" />
-                  </Link>
+                  </a>
                 </div>
-                <Link
+                <a
                   href={CEH_VERIFICATION_URL}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -946,9 +947,10 @@ export function ResumeView({
                     alt="Certified Ethical Hacker (C|EH) Logo"
                     width={110}
                     height={82}
+                    sizes="100px"
                     className="h-auto w-[100px] object-contain"
                   />
-                </Link>
+                </a>
               </div>
             </div>
           </ScrollReveal>

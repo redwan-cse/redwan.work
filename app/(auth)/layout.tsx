@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ModeToggle } from '@/components/mode-toggle';
 
 export const metadata: Metadata = {
-  title: 'Sign in · redwan.work',
+  title: 'Portal Access',
   robots: { index: false, follow: false },
 };
 

@@ -6,6 +6,12 @@ export interface BuildPublicMetadataInput {
   description: string;
   path: string;
   noindex?: boolean;
+  image?: {
+    url: string;
+    width?: number;
+    height?: number;
+    alt?: string;
+  };
 }
 
 export function buildPublicMetadata({
@@ -13,12 +19,22 @@ export function buildPublicMetadata({
   description,
   path,
   noindex = false,
+  image,
 }: BuildPublicMetadataInput): Metadata {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const fullUrl = normalizedPath === '/' ? SITE.url : `${SITE.url}${normalizedPath}`;
+  const isPreviewDeployment = process.env.VERCEL_ENV === 'preview';
+  const hasBrand = title.includes(SITE.name);
+  const socialTitle = hasBrand ? title : `${title} — ${SITE.name}`;
+  const ogImage = image ?? {
+    url: '/opengraph-image',
+    width: 1200,
+    height: 630,
+    alt: socialTitle,
+  };
 
   return {
-    title,
+    title: hasBrand ? { absolute: title } : title,
     description,
     alternates: {
       canonical: normalizedPath,
@@ -28,26 +44,21 @@ export function buildPublicMetadata({
       locale: 'en_US',
       siteName: SITE.name,
       url: fullUrl,
-      title,
+      title: socialTitle,
       description,
-      images: [
-        {
-          url: SITE.profileImage,
-          width: 584,
-          height: 584,
-          alt: SITE.name,
-        },
-      ],
+      images: [ogImage],
     },
     twitter: {
-      card: 'summary',
-      title,
+      card: 'summary_large_image',
+      title: socialTitle,
       description,
-      images: [SITE.profileImage],
+      images: [ogImage.url],
     },
-    robots: noindex
-      ? { index: false, follow: true }
-      : { index: true, follow: true },
+    robots: isPreviewDeployment
+      ? { index: false, follow: false }
+      : noindex
+        ? { index: false, follow: true }
+        : { index: true, follow: true },
   };
 }
 

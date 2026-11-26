@@ -1,6 +1,14 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { MarketingFrame } from '@/components/marketing-frame';
+
+// Next.js's built-in 404 boundary automatically emits a single `<meta name="robots" content="noindex" />`.
+// Omitting `robots` here (and on RootLayout) avoids duplicate or conflicting robots meta tags on 404 responses.
+export const metadata: Metadata = {
+  title: 'Page Not Found',
+  description: 'The requested page could not be found on redwan.work.',
+};
 
 export default function NotFound() {
   return (

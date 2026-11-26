@@ -45,7 +45,8 @@ export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
   title: `${SITE.name} — ${SITE.shortRole}`,
-  description: SITE.tagline,
+  description:
+    'Certified Ethical Hacker (C|EH, CCEP, CNSP, CAP) & Full-Stack Engineer delivering VAPT, Next.js platforms, cloud hardening, AI pipelines, and incident recovery.',
   path: '/',
 });
 
@@ -306,7 +307,12 @@ export default async function Home() {
                           {pillarServices.map((service) => (
                             <li key={service.slug} className="flex items-start gap-2">
                               <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                              <span>{service.title}</span>
+                              <Link
+                                href={`/services/${service.slug}`}
+                                className="transition-colors hover:text-primary hover:underline"
+                              >
+                                {service.title}
+                              </Link>
                             </li>
                           ))}
                         </ul>
@@ -455,7 +461,14 @@ export default async function Home() {
                         </span>
                         <span className="text-xs text-muted-foreground">{study.clientSector}</span>
                       </div>
-                      <h3 className="text-xl font-bold tracking-tight">{study.title}</h3>
+                      <h3 className="text-xl font-bold tracking-tight">
+                        <Link
+                          href={`/portfolio/${study.slug}`}
+                          className="transition-colors hover:text-primary"
+                        >
+                          {study.title}
+                        </Link>
+                      </h3>
                       <p className="mt-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 font-mono text-xs font-medium text-primary">
                         {study.headlineMetric}
                       </p>
@@ -476,7 +489,7 @@ export default async function Home() {
                         ))}
                       </div>
                       <Link
-                        href={`/portfolio?pillar=${study.pillar}`}
+                        href={`/portfolio/${study.slug}`}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                       >
                         Inspect Case Study

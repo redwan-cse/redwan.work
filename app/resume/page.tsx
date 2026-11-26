@@ -10,9 +10,9 @@ import {
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
-  title: 'Curriculum Vitae & Credentials — Md. Redwan Ahmed',
+  title: 'Curriculum Vitae & Credentials',
   description:
-    'Interactive curriculum vitae and A4 printable resume for Md. Redwan Ahmed — Certified Ethical Hacker (C|EH, CCEP, CNSP, CAP), Full-Stack Engineer & Q1 Scopus Researcher.',
+    'Curriculum vitae and A4 printable resume for Md. Redwan Ahmed — Certified Ethical Hacker (C|EH, CCEP, CNSP, CAP), Full-Stack Engineer & Q1 Scopus Researcher.',
   path: '/resume',
 });
 

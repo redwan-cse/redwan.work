@@ -41,22 +41,18 @@ export const metadata: Metadata = {
     description: SITE.tagline,
     images: [
       {
-        url: SITE.profileImage,
-        width: 584,
-        height: 584,
-        alt: SITE.name,
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `${SITE.name} — ${SITE.shortRole}`,
       },
     ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: `${SITE.name} — ${SITE.shortRole}`,
     description: SITE.tagline,
-    images: [SITE.profileImage],
-  },
-  robots: {
-    index: true,
-    follow: true,
+    images: ["/opengraph-image"],
   },
 };
 

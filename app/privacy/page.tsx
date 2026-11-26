@@ -252,12 +252,12 @@ export default function Privacy() {
       content: (
         <p>
           You have the right to request <strong className="text-foreground">access</strong>, <strong className="text-foreground">rectification</strong>, <strong className="text-foreground">erasure</strong>, <strong className="text-foreground">restriction</strong>, or <strong className="text-foreground">portability</strong> of your personal data, or to withdraw consent at any time. To exercise any right, email{' '}
-          <Link
+          <a
             href="mailto:contact@redwan.work"
             className="font-medium text-primary underline underline-offset-4"
           >
             contact@redwan.work
-          </Link>{' '}
+          </a>{' '}
           from the address associated with your inquiry or portal account.
         </p>
       ),
@@ -269,12 +269,12 @@ export default function Privacy() {
       content: (
         <p>
           For all data protection inquiries, GDPR/privacy requests, or security disclosures, contact <strong className="text-foreground">{SITE.name}</strong> at{' '}
-          <Link
+          <a
             href="mailto:contact@redwan.work"
             className="font-medium text-primary underline underline-offset-4"
           >
             contact@redwan.work
-          </Link>{' '}
+          </a>{' '}
           or via{' '}
           <Link
             href="/contact"

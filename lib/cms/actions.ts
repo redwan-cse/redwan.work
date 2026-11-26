@@ -106,6 +106,9 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
   revalidatePath('/services');
   revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
   revalidatePath('/admin/content');
@@ -133,6 +136,9 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
   revalidatePath('/services');
   revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
   revalidatePath('/admin/content');
@@ -201,6 +207,9 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
   revalidatePath('/services');
   revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
   revalidatePath('/admin/content');
@@ -228,6 +237,9 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
   revalidatePath('/services');
   revalidatePath('/services/[slug]', 'page');
   revalidatePath('/contact');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/portal/orders/new');
   revalidatePath('/admin/services');
   revalidatePath('/admin/content');
@@ -317,6 +329,9 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
   revalidatePath('/');
   revalidatePath('/portfolio');
   revalidatePath('/portfolio/[slug]', 'page');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/admin/portfolio');
   revalidatePath('/admin/content');
 }
@@ -342,6 +357,9 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
   revalidatePath('/');
   revalidatePath('/portfolio');
   revalidatePath('/portfolio/[slug]', 'page');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/llms.txt');
+  revalidatePath('/llms-full.txt');
   revalidatePath('/admin/portfolio');
   revalidatePath('/admin/content');
 }
@@ -453,6 +471,7 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
   revalidatePath('/');
   revalidatePath('/resume');
   revalidatePath('/resume.pdf');
+  revalidatePath('/sitemap.xml');
   revalidatePath('/llms.txt');
   revalidatePath('/llms-full.txt');
   revalidatePath('/contact');
@@ -601,6 +620,7 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   revalidatePath('/');
   revalidatePath('/resume');
   revalidatePath('/resume.pdf');
+  revalidatePath('/sitemap.xml');
   revalidatePath('/llms.txt');
   revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');
@@ -628,6 +648,7 @@ export async function deleteResumeItemAction(formData: FormData): Promise<void> 
   revalidatePath('/');
   revalidatePath('/resume');
   revalidatePath('/resume.pdf');
+  revalidatePath('/sitemap.xml');
   revalidatePath('/llms.txt');
   revalidatePath('/llms-full.txt');
   revalidatePath('/admin/resume');

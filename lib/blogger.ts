@@ -1,6 +1,10 @@
 // lib/blogger.ts
 import crypto from "node:crypto";
+import { cache } from "react";
 import * as nextCache from "next/cache";
+
+const reactCache: <T extends (...args: never[]) => unknown>(fn: T) => T =
+  typeof cache === "function" ? cache : (fn) => fn;
 
 export interface BlogPost {
   id: string;
@@ -633,7 +637,7 @@ async function fetchBlogPostsPage(
  * Each (page, perPage, firstPageCount) combination is cached for BLOGGER_CACHE_TTL_MS,
  * bounded by MAX_CACHE_ENTRIES with insertion-order eviction and in-flight request coalescing.
  */
-export async function getBlogPostsPage(
+async function getBlogPostsPageUncached(
   page: number,
   perPage: number,
   firstPageCount?: number
@@ -680,6 +684,8 @@ export async function getBlogPostsPage(
     if (inFlightRequests.get(key) === promise) inFlightRequests.delete(key);
   }
 }
+
+export const getBlogPostsPage = reactCache(getBlogPostsPageUncached);
 
 /**
  * Fetch the most recent blog posts from Google Blogger API (cached).
