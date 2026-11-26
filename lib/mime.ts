@@ -76,7 +76,8 @@ export function validateMagicBytes(bytes: Uint8Array, mime: string): boolean {
 export function extFromFilename(filename: string): string {
   const base = filename.split('/').pop() ?? filename;
   const dot = base.lastIndexOf('.');
-  return dot === -1 ? '' : base.slice(dot + 1).toLowerCase();
+  const ext = dot === -1 ? '' : base.slice(dot + 1).toLowerCase();
+  return ext === 'jpeg' ? 'jpg' : ext;
 }
 export function resolveMimeType(filename: string, providedMime?: string | null): string {
   const normalized = (providedMime ?? '').trim().toLowerCase().split(';')[0].trim();
@@ -84,7 +85,7 @@ export function resolveMimeType(filename: string, providedMime?: string | null):
     return normalized;
   }
   const ext = extFromFilename(filename);
-  return PORTAL_ALLOWED[ext]?.[0] ?? 'application/octet-stream';
+  return PORTAL_ALLOWED[ext]?.[0] ?? ASSET_ALLOWED[ext]?.[0] ?? 'application/octet-stream';
 }
 export function isAllowedMime(
   ext: string,
@@ -92,7 +93,8 @@ export function isAllowedMime(
   allowlist: Record<string, readonly string[]> = CONTACT_ALLOWED
 ): boolean {
   const normalized = mime.trim().toLowerCase().split(';')[0].trim();
-  return (allowlist[ext] ?? []).includes(normalized);
+  const normalizedExt = ext.trim().toLowerCase() === 'jpeg' ? 'jpg' : ext.trim().toLowerCase();
+  return (allowlist[normalizedExt] ?? []).includes(normalized);
 }
 export function isAllowedAssetMime(ext: string, mime: string): boolean {
   return isAllowedMime(ext, mime, ASSET_ALLOWED);

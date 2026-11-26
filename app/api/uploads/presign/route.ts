@@ -202,8 +202,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Token presence checks (mirrors the contact route wording)
-    const turnstileToken =
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    const developmentBypass = !turnstileSecret && process.env.NODE_ENV === 'development';
+    if (!turnstileSecret && !developmentBypass) {
+      console.error('TURNSTILE_SECRET_KEY is not configured');
+      return jsonError('Server configuration error. Please contact support.', 500);
+    }
+
+    const rawTurnstileToken =
       typeof body.turnstileToken === 'string' ? body.turnstileToken : '';
+    const turnstileToken = developmentBypass && !rawTurnstileToken ? 'dev-bypass' : rawTurnstileToken;
     if (!turnstileToken) {
       return jsonError('Verification failed. Please complete the security check.', 400);
     }
@@ -250,13 +258,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ---- 5. Turnstile siteverify + single-use replay guard ----
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
-    const developmentBypass = !turnstileSecret && process.env.NODE_ENV === 'development';
-    if (!turnstileSecret && !developmentBypass) {
-      console.error('TURNSTILE_SECRET_KEY is not configured');
-      return jsonError('Server configuration error. Please contact support.', 500);
-    }
-
     if (!developmentBypass && turnstileSecret) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT);
@@ -303,23 +304,23 @@ export async function POST(request: NextRequest) {
         console.error('Contact presign verification unavailable.');
         return jsonError('Verification service unavailable. Please try again.', 503);
       }
-    }
 
-    const tokenHash = await sha256Hex(turnstileToken);
-    const unused = await consumeDbRateLimit(
-      'turnstile',
-      tokenHash,
-      TURNSTILE_REUSE_WINDOW_SECONDS,
-      1
-    );
-    if (unused === null) {
-      return jsonError(
-        'Attachments are temporarily unavailable. You can still submit the form without files.',
-        503
+      const tokenHash = await sha256Hex(turnstileToken);
+      const unused = await consumeDbRateLimit(
+        'turnstile',
+        tokenHash,
+        TURNSTILE_REUSE_WINDOW_SECONDS,
+        1
       );
-    }
-    if (unused === false) {
-      return jsonError('Verification token already used. Please reload the form.', 400);
+      if (unused === null) {
+        return jsonError(
+          'Attachments are temporarily unavailable. You can still submit the form without files.',
+          503
+        );
+      }
+      if (unused === false) {
+        return jsonError('Verification token already used. Please reload the form.', 400);
+      }
     }
 
     // ---- 6. Presign every accepted file ----

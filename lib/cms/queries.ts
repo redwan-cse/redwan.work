@@ -147,23 +147,24 @@ const fetchPublicServicesCatalogCached = reactCache(async function fetchPublicSe
           deliveryDays: pkg.delivery_days ?? 7,
           revisions: pkg.revisions_included ?? 2,
           depositPercent: pkg.deposit_percent ?? 50,
-          popular: Boolean(pkg.is_popular || pkg.tier_name === 'Standard'),
+          popular: Boolean(pkg.is_popular),
           summary: pkg.summary ?? '',
           features,
         };
       });
 
+      const activeRawPkgs = rawPkgs.filter((p) => p.is_active !== false);
       const minPrice =
-        packages.length > 0
-          ? Math.min(...packages.map((p) => p.priceCents))
+        activeRawPkgs.length > 0
+          ? Math.min(...activeRawPkgs.map((p) => p.price_cents ?? 0))
           : row.starting_price_cents || 8000;
       const minDays =
-        packages.length > 0
-          ? Math.min(...packages.map((p) => p.deliveryDays))
+        activeRawPkgs.length > 0
+          ? Math.min(...activeRawPkgs.map((p) => p.delivery_days ?? 7))
           : row.delivery_days_min || 3;
       const maxDays =
-        packages.length > 0
-          ? Math.max(...packages.map((p) => p.deliveryDays))
+        activeRawPkgs.length > 0
+          ? Math.max(...activeRawPkgs.map((p) => p.delivery_days ?? 7))
           : row.delivery_days_max || 14;
 
       return {
@@ -175,7 +176,7 @@ const fetchPublicServicesCatalogCached = reactCache(async function fetchPublicSe
         tagline: row.tagline,
         description: row.description,
         requiresRoe: Boolean(row.requires_roe),
-        startingPriceCents: minPrice,
+        startingPriceCents: includeHidden ? (row.starting_price_cents || minPrice) : minPrice,
         deliveryDaysMin: row.delivery_days_min || minDays,
         deliveryDaysMax: row.delivery_days_max || maxDays,
         highlights:
@@ -351,10 +352,7 @@ const fetchSiteSettingsAndResumeCached = reactCache(async function fetchSiteSett
           id: settingsRow.id,
           full_name: settingsRow.full_name || defaultSettings.full_name,
           short_role: settingsRow.short_role || defaultSettings.short_role,
-          tagline:
-            settingsRow.tagline && /C\|EH/i.test(settingsRow.tagline)
-              ? settingsRow.tagline
-              : defaultSettings.tagline,
+          tagline: settingsRow.tagline?.trim() || defaultSettings.tagline,
           executive_summary: settingsRow.executive_summary || defaultSettings.executive_summary,
           email: settingsRow.email || defaultSettings.email,
           phone: settingsRow.phone || defaultSettings.phone,

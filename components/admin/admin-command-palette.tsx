@@ -63,6 +63,7 @@ export function AdminCommandPalette() {
   const [query, setQuery] = React.useState('');
   const [results, setResults] = React.useState<SearchResultItem[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [searchError, setSearchError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let chordPending = false;
@@ -135,6 +136,7 @@ export function AdminCommandPalette() {
 
   const handleQueryChange = (val: string) => {
     setQuery(val);
+    setSearchError(null);
     if (val.trim().length < 2) {
       setResults([]);
       setLoading(false);
@@ -149,6 +151,7 @@ export function AdminCommandPalette() {
       setQuery('');
       setResults([]);
       setLoading(false);
+      setSearchError(null);
     }
   };
 
@@ -167,9 +170,16 @@ export function AdminCommandPalette() {
         if (res.ok) {
           const data = (await res.json()) as { results?: SearchResultItem[] };
           setResults(Array.isArray(data.results) ? data.results : []);
+          setSearchError(null);
+        } else {
+          const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
+          setResults([]);
+          setSearchError(errBody?.error || 'Search temporarily unavailable.');
         }
-      } catch {
-        // aborted or network transient
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setResults([]);
+        setSearchError('Search request failed. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -225,7 +235,11 @@ export function AdminCommandPalette() {
         />
         <CommandList>
           <CommandEmpty>
-            {loading ? 'Searching encrypted workspace...' : 'No matching workspace records.'}
+            {loading
+              ? 'Searching encrypted workspace...'
+              : searchError
+                ? searchError
+                : 'No matching workspace records.'}
           </CommandEmpty>
 
           {Object.entries(grouped).map(([groupName, groupItems]) => (
@@ -233,7 +247,8 @@ export function AdminCommandPalette() {
               {groupItems.map((item) => (
                 <CommandItem
                   key={item.id}
-                  value={`${item.label} ${item.meta}`}
+                  value={`${item.label} ${item.meta} ${query}`}
+                  keywords={[item.label, item.meta, query]}
                   onSelect={() => navigate(item.href)}
                 >
                   <span className="flex-1 truncate font-medium">{item.label}</span>

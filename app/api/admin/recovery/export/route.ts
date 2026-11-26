@@ -53,23 +53,27 @@ export async function GET(request: NextRequest) {
   }
   const orderId = parsedOrder.data.order_id;
 
+  const MAX_EXPORT_FILES = 200;
   const admin = getSupabaseAdmin();
-  const [{ data: order }, { data: files }] = await Promise.all([
+  const [{ data: order }, { data: rawFiles }] = await Promise.all([
     admin.from('orders').select('id, code, title, client_id').eq('id', orderId).maybeSingle(),
     admin
       .from('vault_files')
       .select('id, filename, r2_key, category, size_bytes')
       .eq('order_id', orderId)
       .is('archived_at', null)
-      .limit(200),
+      .order('created_at', { ascending: true })
+      .limit(MAX_EXPORT_FILES + 1),
   ]);
 
   if (!order) {
     return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
   }
-  if (!files || files.length === 0) {
+  if (!rawFiles || rawFiles.length === 0) {
     return NextResponse.json({ error: 'No active vault objects stored for this order.' }, { status: 404 });
   }
+  const truncatedByCount = rawFiles.length > MAX_EXPORT_FILES;
+  const files = truncatedByCount ? rawFiles.slice(0, MAX_EXPORT_FILES) : rawFiles;
 
   const declaredTotalBytes = files.reduce((sum, f) => sum + Math.max(0, Number(f.size_bytes ?? 0)), 0);
   if (declaredTotalBytes > MAX_ARCHIVE_BYTES) {
@@ -87,13 +91,14 @@ export async function GET(request: NextRequest) {
     action: 'vault.recovery_zip_exported',
     entityType: 'order',
     entityId: order.id,
-    summary: `Exported recovery ZIP archive (${files.length} files) for ${order.code}`,
+    summary: `Exported recovery ZIP archive (${files.length} files${truncatedByCount ? ', truncated at 200' : ''}) for ${order.code}`,
   });
 
   const pass = new PassThrough();
   const archive = new ZipArchive({ zlib: { level: 6 } });
+  let cancelled = false;
   archive.on('error', (err: Error) => {
-    pass.destroy(err);
+    if (!cancelled) pass.destroy(err);
   });
   archive.pipe(pass);
 
@@ -102,7 +107,7 @@ export async function GET(request: NextRequest) {
     start(controller) {
       let closed = false;
       pass.on('data', (chunk: Buffer) => {
-        if (!closed) controller.enqueue(new Uint8Array(chunk));
+        if (!closed && !cancelled) controller.enqueue(new Uint8Array(chunk));
       });
       pass.on('end', () => {
         if (!closed) {
@@ -113,14 +118,16 @@ export async function GET(request: NextRequest) {
       pass.on('error', (err) => {
         if (!closed) {
           closed = true;
-          controller.error(err);
+          if (!cancelled) controller.error(err);
         }
       });
 
       void (async () => {
         const usedPaths = new Map<string, number>();
         let streamedBytes = 0;
+        let truncatedByBytes = false;
         for (const file of files) {
+          if (cancelled) break;
           const safeCat = safeArchiveFilename(file.category || 'files');
           const safeName = safeArchiveFilename(file.filename);
           const basePath = `${safeCat}/${safeName}`;
@@ -130,27 +137,42 @@ export async function GET(request: NextRequest) {
 
           try {
             const bytes = await getPrivateObjectBytes(file.r2_key);
+            if (cancelled) break;
             streamedBytes += bytes.byteLength;
             if (streamedBytes > MAX_ARCHIVE_BYTES) {
-              archive.append(Buffer.from('Archive byte ceiling reached; remaining files omitted.\n'), {
-                name: 'EXPORT_TRUNCATED.txt',
-              });
+              truncatedByBytes = true;
               break;
             }
             archive.append(bytes, { name: entryName });
           } catch {
+            if (cancelled) break;
             archive.append(Buffer.from(`Failed to read object ${file.r2_key}\n`), {
               name: `${entryName}.missing.txt`,
             });
           }
         }
-        await archive.finalize();
+        if (!cancelled) {
+          if (truncatedByCount || truncatedByBytes) {
+            const reason = truncatedByBytes
+              ? 'Archive 250 MiB byte ceiling reached; remaining files omitted.\n'
+              : `Archive file limit (${MAX_EXPORT_FILES}) reached; additional files omitted. Download remaining files individually.\n`;
+            archive.append(Buffer.from(reason), { name: 'EXPORT_TRUNCATED.txt' });
+          }
+          await archive.finalize();
+        }
       })().catch((err) => {
-        pass.destroy(err instanceof Error ? err : new Error('Archive streaming failed'));
+        if (!cancelled) {
+          pass.destroy(err instanceof Error ? err : new Error('Archive streaming failed'));
+        }
       });
     },
     cancel() {
-      archive.abort();
+      cancelled = true;
+      try {
+        archive.abort();
+      } catch {
+        // Ignore already-closed archive errors on client abort
+      }
       pass.destroy();
     },
   });
@@ -163,6 +185,7 @@ export async function GET(request: NextRequest) {
       'Content-Disposition': `attachment; filename="${zipName}"`,
       'Cache-Control': 'private, no-store, max-age=0',
       'X-Robots-Tag': 'noindex, nofollow',
+      ...(truncatedByCount ? { 'X-Archive-Truncated': 'true' } : {}),
     },
   });
 }

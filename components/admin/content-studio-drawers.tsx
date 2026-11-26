@@ -646,10 +646,16 @@ export function ServicesStudioTable({
                     />
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs font-medium">
-                      <FormCheckbox name="is_active" defaultChecked />
-                      Active tier
-                    </label>
+                    <div className="flex items-center gap-4 text-xs font-medium">
+                      <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                        <FormCheckbox name="is_popular" />
+                        Popular
+                      </label>
+                      <label className="flex min-h-7 cursor-pointer items-center gap-1.5">
+                        <FormCheckbox name="is_active" defaultChecked />
+                        Active tier
+                      </label>
+                    </div>
                     <Button type="submit" size="sm" className="h-9 rounded-full px-4 text-xs">
                       Save Package Tier
                     </Button>

@@ -391,7 +391,7 @@ export async function requestMagicLinkAction(_prev:ActionState,formData:FormData
  const next=safeRelativePath(formData.get('next'));
  if(!await checkOtpRateLimit(email))return {error:OTP_RATE_MESSAGE};
  const origin=await credentialEmailOrigin();if(!origin)return {error:'Sign-in links are temporarily unavailable. Please try again later.'};
- const redirectTarget=next?`${origin}/login?next=${encodeURIComponent(next)}`:`${origin}/login`;
+ const redirectTarget=next?`${origin}/auth/callback?type=magiclink&next=${encodeURIComponent(next)}`:`${origin}/auth/callback?type=magiclink`;
  const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirectTarget}});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
  return {notice:'If an account matches that email, a one-time sign-in link has been sent.'};
@@ -400,7 +400,7 @@ export async function requestPasswordResetAction(_prev:ActionState,formData:Form
  const email=String(formData.get('email')??'').trim().toLowerCase();if(!email)return {error:'Email is required.'};
  if(!await checkOtpRateLimit(email))return {error:OTP_RATE_MESSAGE};
  const origin=await credentialEmailOrigin();if(!origin)return {error:'Password recovery is temporarily unavailable. Please try again later.'};
- const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:origin+'/reset-password'});
+ const supabase=await createSupabaseServerClient();const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:`${origin}/auth/callback?type=recovery`});
  if(error?.status===429)return {error:'Too many requests. Please wait a minute and try again.'};
  return {notice:'If that address has an account, a reset link is on its way.'};
 }
@@ -775,6 +775,16 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
       return {error:SPENT_INVITE_LINK,linkHref:'/login',linkText:'Return to sign in'};
     }
 
+    // Enforce MFA/AAL2 before mutating credentials on the token_hash path as well
+    const preDestination=await resolveCurrentPanelDestination();
+    if(!preDestination.ok){
+      await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+      return {error:preDestination.error};
+    }
+    if(preDestination.home==='/mfa'){
+      return {error:'Complete two-factor verification before updating your password.',linkHref:'/mfa?next=%2Finvite%2Faccept%3Fsession%3D1',linkText:'Verify 2FA'};
+    }
+
     const {data:claimsData}=await supabase.auth.getClaims();
     const sessionId=extractSessionId(otpData.session,claimsData?.claims);
     const updated=await supabase.auth.updateUser({password:checked.password});
@@ -796,9 +806,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
     cookieStore.delete(retryCookieName);
     await markInvitationAccepted(otpData.user.id, otpData.user.email);
     await revokeOtherSessionsAfterRecovery(supabase, otpData.user.id);
-    const destination=await resolveCurrentPanelDestination();
-    if(!destination.ok)return {error:destination.error};
-    redirect(destination.home);
+    redirect(preDestination.home);
   }
 
   const {data:claimsData,error:claimsErr}=await supabase.auth.getClaims();
@@ -821,6 +829,7 @@ export async function acceptInviteAction(_prev:ActionState,formData:FormData):Pr
   }
 
   await markInvitationAccepted(sub, emailClaim);
+  await revokeOtherSessionsAfterRecovery(supabase, sub);
   const destination=await resolveCurrentPanelDestination();
   if(!destination.ok)return {error:destination.error};
   redirect(destination.home);
@@ -914,7 +923,10 @@ export async function resolvePostMfaDestinationAction(rawNext?: string | null): 
     try {
       const parsed = new URL(safeNext, 'https://return-path.invalid');
       const pathname = decodeURIComponent(parsed.pathname);
-      if (pathname === '/reset-password' && parsed.searchParams.get('session') === '1') {
+      if (
+        (pathname === '/reset-password' || pathname === '/invite/accept') &&
+        parsed.searchParams.get('session') === '1'
+      ) {
         return `${pathname}${parsed.search}`;
       }
       if (

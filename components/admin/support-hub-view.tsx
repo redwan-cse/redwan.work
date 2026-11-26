@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowRight } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { ConfirmActionButton } from '@/components/panel/confirm-action-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,31 +23,44 @@ export async function SupportHubView({
   statusFilter = '',
   priorityFilter = '',
   basePath = '/admin/support',
+  pageParam,
 }: {
   activeTab: 'tickets' | 'reviews';
   statusFilter?: string;
   priorityFilter?: string;
   basePath?: string;
+  pageParam?: string;
 }) {
   const admin = getSupabaseAdmin();
-  const [{ data: tickets }, { data: reviews }] = await Promise.all([
-    admin
-      .from('tickets')
-      .select('*')
-      .order('last_message_at', { ascending: false })
-      .limit(80),
-    admin.from('client_reviews').select('*').order('created_at', { ascending: false }),
-  ]);
+  let ticketsQuery = admin
+    .from('tickets')
+    .select('*')
+    .order('last_message_at', { ascending: false })
+    .limit(250);
+  if (statusFilter) {
+    ticketsQuery = ticketsQuery.eq('status', statusFilter);
+  }
+  if (priorityFilter) {
+    ticketsQuery = ticketsQuery.eq('priority', priorityFilter);
+  }
 
-  const filteredTickets = (tickets ?? []).filter((t) => {
-    if (statusFilter && t.status !== statusFilter) return false;
-    if (priorityFilter && t.priority !== priorityFilter) return false;
-    return true;
-  });
+  const [{ data: tickets }, { count: openTicketExactCount }, { data: reviews, count: totalReviewsCount }] =
+    await Promise.all([
+      ticketsQuery,
+      admin
+        .from('tickets')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['open', 'in_progress']),
+      admin
+        .from('client_reviews')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false }),
+    ]);
 
-  const openTicketCount = (tickets ?? []).filter(
-    (t) => t.status === 'open' || t.status === 'in_progress'
-  ).length;
+  const filteredTickets = tickets ?? [];
+  const pagedTickets = paginateItems(filteredTickets, pageParam);
+
+  const openTicketCount = openTicketExactCount ?? 0;
 
   const tabs = [
     {
@@ -59,7 +73,7 @@ export async function SupportHubView({
       id: 'reviews',
       label: 'Verified Client Reviews',
       href: basePath === '/admin/reviews' ? '/admin/reviews' : '/admin/support?tab=reviews',
-      count: reviews?.length ?? 0,
+      count: totalReviewsCount ?? reviews?.length ?? 0,
     },
   ];
 
@@ -85,7 +99,7 @@ export async function SupportHubView({
               </CardDescription>
             </div>
             <form method="get" className="flex flex-wrap items-center gap-2">
-              {basePath === '/admin/support' && <input type="hidden" name="tab" value="tickets" />}
+              {basePath !== '/admin/tickets' && <input type="hidden" name="tab" value="tickets" />}
               <select
                 name="status"
                 aria-label="Filter tickets by status"
@@ -130,7 +144,7 @@ export async function SupportHubView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTickets.map((tkt) => {
+                  {pagedTickets.items.map((tkt) => {
                     const ageHours = (nowMs - new Date(tkt.last_message_at).getTime()) / 3600000;
                     const slaBreached =
                       (tkt.status === 'open' || tkt.status === 'in_progress') && ageHours >= 24;
@@ -199,6 +213,19 @@ export async function SupportHubView({
                 No support tickets match the selected filter.
               </p>
             )}
+            <AdminPagination
+              basePath={basePath}
+              page={pagedTickets.page}
+              totalPages={pagedTickets.totalPages}
+              totalItems={pagedTickets.totalItems}
+              startIndex={pagedTickets.startIndex}
+              endIndex={pagedTickets.endIndex}
+              query={{
+                tab: basePath !== '/admin/tickets' ? 'tickets' : undefined,
+                status: statusFilter || undefined,
+                priority: priorityFilter || undefined,
+              }}
+            />
           </CardContent>
         </Card>
       ) : (

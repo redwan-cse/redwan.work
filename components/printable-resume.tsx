@@ -57,6 +57,12 @@ export interface PrintableResumeProps {
       details: string[]
     }
   }
+  additionalResearch?: Array<{
+    title: string
+    url: string
+    details: string[]
+    badge?: string
+  }>
   leadership: Array<{
     title: string
     organization: string
@@ -91,6 +97,7 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
       vendorCertifications,
       professionalCertificates,
       research,
+      additionalResearch,
       leadership,
       hobbies,
       references,
@@ -699,6 +706,30 @@ export const PrintableResume = React.forwardRef<HTMLDivElement, PrintableResumeP
               ))}
             </ul>
           </div>
+
+          {(additionalResearch ?? []).map((paper, idx) => (
+            <div key={idx} className="research-item avoid-break">
+              <div>
+                <span className="research-badge">{paper.badge || 'Publication'}</span>
+              </div>
+              <div className="research-title">
+                {trySanitizeHttpUrl(paper.url) ? (
+                  <a href={trySanitizeHttpUrl(paper.url)!} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {paper.title}
+                  </a>
+                ) : (
+                  paper.title
+                )}
+              </div>
+              {paper.details.length > 0 && (
+                <ul style={{ marginTop: '4pt' }}>
+                  {paper.details.map((detail, dIdx) => (
+                    <li key={dIdx}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Leadership Experience */}

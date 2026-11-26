@@ -58,7 +58,9 @@ export default async function ClientProposalsPage() {
       <div className="space-y-4">
         {(proposals ?? []).map((prp) => {
           const pillarMeta = SERVICE_PILLARS[prp.pillar as ServicePillarKey];
-          const isExpired = Boolean(prp.valid_until && prp.valid_until < todayIso);
+          const isExpired =
+            (prp.status === 'sent' || prp.status === 'viewed') &&
+            Boolean(prp.valid_until && prp.valid_until < todayIso);
           const canRespond = (prp.status === 'sent' || prp.status === 'viewed') && !isExpired;
           const convertedOrderId = orderIdByProposalId.get(prp.id) ?? null;
           const items = Array.isArray(prp.proposal_milestones) ? prp.proposal_milestones : [];

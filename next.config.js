@@ -79,6 +79,8 @@ const supabaseImagePattern = (() => {
   }
 })();
 const nextConfig = {
+  // Keep archiver native ESM/stream plugins unbundled in Node server routes.
+  serverExternalPackages: ['archiver'],
   // Framework limit only. The hosting platform has a separate request ceiling.
   experimental: {
     serverActions: { bodySizeLimit: '12mb' },

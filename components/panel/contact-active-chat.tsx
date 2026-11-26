@@ -65,10 +65,14 @@ export function ContactActiveChat() {
             ACTIVE CONTRACT WORKSPACE
           </Badge>
           <h2 className="text-xl font-bold tracking-tight">
-            Live Contract Chat with Md. Redwan Ahmed
+            {data.viewerRole === 'admin'
+              ? 'Active Client Contract Threads'
+              : 'Live Contract Chat with Md. Redwan Ahmed'}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Your contract is active. Message directly here or open your full Contract Workspace in the Portal.
+            {data.viewerRole === 'admin'
+              ? 'Respond directly to active client contracts or open the full Admin Order Workspace.'
+              : 'Your contract is active. Message directly here or open your full Contract Workspace in the Portal.'}
           </p>
         </div>
       </div>

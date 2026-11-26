@@ -66,15 +66,17 @@ export function ProposalMilestonesEditor() {
                 className="col-span-12 h-9 sm:col-span-6"
               />
               <Input
-                aria-label={`Milestone ${idx + 1} amount in USD`}
+                aria-label={`Milestone ${idx + 1} amount`}
                 type="number"
+                min="0.01"
+                step="0.01"
                 value={row.amount_usd}
                 onChange={(e) =>
                   setRows((prev) =>
                     prev.map((item, i) => (i === idx ? { ...item, amount_usd: e.target.value } : item))
                   )
                 }
-                placeholder="USD"
+                placeholder="Amount"
                 className="col-span-5 h-9 tabular-nums sm:col-span-3"
               />
               <Input

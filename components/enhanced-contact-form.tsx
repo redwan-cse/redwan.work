@@ -54,10 +54,21 @@ import type { ServiceCatalogItem } from '@/lib/content/site';
 
 const SORTED_COUNTRIES: Country[] = [...countries].sort((a, b) => a.name.localeCompare(b.name));
 
-function formatUsDate(date: Date): string {
+function formatIsoDateLocal(date: Date): string {
+  const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${month}/${day}/${date.getFullYear()}`;
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalIsoDate(raw: string): Date | undefined {
+  if (!raw) return undefined;
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+  }
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? undefined : fallback;
 }
 const RichTextEditor = dynamic(
   () => import('@/components/ui/rich-text-editor').then((m) => m.RichTextEditor),
@@ -93,8 +104,8 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
  */
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const ACCEPTED_ATTACHMENT_EXTS = ['pdf', 'docx', 'doc', 'xlsx', 'png', 'jpg', 'zip'];
-const ATTACHMENT_ACCEPT_ATTR = '.pdf,.docx,.doc,.xlsx,.png,.jpg,.zip';
+const ACCEPTED_ATTACHMENT_EXTS = ['pdf', 'docx', 'doc', 'xlsx', 'png', 'jpg', 'jpeg', 'zip'];
+const ATTACHMENT_ACCEPT_ATTR = '.pdf,.docx,.doc,.xlsx,.png,.jpg,.jpeg,.zip';
 // Canonical mime per extension — the presign endpoint rejects mismatches
 const EXT_TO_MIME: Record<string, string> = {
   pdf: 'application/pdf',
@@ -103,6 +114,7 @@ const EXT_TO_MIME: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   png: 'image/png',
   jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
   zip: 'application/zip',
 };
 
@@ -115,7 +127,8 @@ interface AttachedFile {
 
 function attachmentExtension(filename: string): string {
   const parts = filename.toLowerCase().split('.');
-  return parts.length > 1 ? parts[parts.length - 1] : '';
+  const ext = parts.length > 1 ? parts[parts.length - 1] : '';
+  return ext === 'jpeg' ? 'jpg' : ext;
 }
 
 function attachmentMime(filename: string, browserType?: string): string {
@@ -345,6 +358,7 @@ export default function EnhancedContactForm({
   // the generation counter increments on every widget solve, identifying the
   // freshest execution even if the issued token string were ever reused.
   const turnstileTokenRef = React.useRef<string | null>(null);
+  const turnstileTokenConsumedRef = React.useRef(false);
   const turnstileGenerationRef = React.useRef(0);
   const turnstileContainerRef = React.useRef<HTMLDivElement>(null);
   const turnstileWidgetIdRef = React.useRef<string | null>(null);
@@ -359,6 +373,8 @@ export default function EnhancedContactForm({
   const serviceTypeRef = React.useRef<HTMLButtonElement>(null);
   const projectSummaryRef = React.useRef<HTMLTextAreaElement>(null);
   const urgencyRef = React.useRef<HTMLButtonElement>(null);
+  const budgetMinRef = React.useRef<HTMLInputElement>(null);
+  const budgetMaxRef = React.useRef<HTMLInputElement>(null);
   const gdprConsentRef = React.useRef<HTMLButtonElement>(null);
 
   // Auto-detect timezone, country, and WhatsApp dial code on mount
@@ -466,6 +482,7 @@ export default function EnhancedContactForm({
             if (cancelled) return;
             turnstileGenerationRef.current += 1;
             turnstileTokenRef.current = token;
+            turnstileTokenConsumedRef.current = false;
             setTurnstileToken(token);
             setIsTurnstileVerified(true);
             setTurnstileError(null);
@@ -473,6 +490,7 @@ export default function EnhancedContactForm({
           'error-callback': () => {
             if (cancelled) return;
             turnstileTokenRef.current = null;
+            turnstileTokenConsumedRef.current = true;
             setTurnstileToken(null);
             setIsTurnstileVerified(false);
             setTurnstileError('Security verification failed. Please refresh the page and try again.');
@@ -480,6 +498,7 @@ export default function EnhancedContactForm({
           'expired-callback': () => {
             if (cancelled) return;
             turnstileTokenRef.current = null;
+            turnstileTokenConsumedRef.current = true;
             setTurnstileToken(null);
             setIsTurnstileVerified(false);
             setTurnstileError('Security verification expired. The widget will automatically refresh.');
@@ -552,6 +571,17 @@ export default function EnhancedContactForm({
       pollForToken();
     });
 
+  const acquireTurnstileToken = async (): Promise<string> => {
+    const existing = turnstileTokenRef.current;
+    if (existing && !turnstileTokenConsumedRef.current) {
+      turnstileTokenConsumedRef.current = true;
+      return existing;
+    }
+    const fresh = await getFreshTurnstileToken();
+    turnstileTokenConsumedRef.current = true;
+    return fresh;
+  };
+
   /**
    * Uploads selected files: client-side pre-validation, presign via
    * /api/uploads/presign, then direct PUT of each file to its signed URL.
@@ -586,7 +616,7 @@ export default function EnhancedContactForm({
 
     setUploading(true);
     try {
-      const token = await getFreshTurnstileToken();
+      const token = TURNSTILE_SITE_KEY ? await acquireTurnstileToken() : '';
 
       const presignResponse = await fetch('/api/uploads/presign', {
         method: 'POST',
@@ -813,7 +843,7 @@ export default function EnhancedContactForm({
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
       missingFields.push('Email Address');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(formData.email.trim())) {
       newErrors.email = 'Invalid email address';
       missingFields.push('Valid Email Address');
     }
@@ -845,6 +875,9 @@ export default function EnhancedContactForm({
     } else if (formData.projectSummary.trim().length < 30) {
       newErrors.projectSummary = 'Please provide at least 30 characters describing your project';
       missingFields.push('Project Summary / Message (minimum 30 characters)');
+    } else if (formData.projectSummary.trim().length > 5000) {
+      newErrors.projectSummary = 'Project summary must be 5,000 characters or fewer';
+      missingFields.push('Project Summary / Message (maximum 5,000 characters)');
     }
 
     if (!formData.urgency) {
@@ -914,6 +947,8 @@ export default function EnhancedContactForm({
       serviceType: serviceTypeRef as React.RefObject<HTMLElement | null>,
       projectSummary: projectSummaryRef as React.RefObject<HTMLElement | null>,
       urgency: urgencyRef as React.RefObject<HTMLElement | null>,
+      budgetMin: budgetMinRef as React.RefObject<HTMLElement | null>,
+      budgetMax: budgetMaxRef as React.RefObject<HTMLElement | null>,
       gdprConsent: gdprConsentRef as React.RefObject<HTMLElement | null>,
     };
 
@@ -955,9 +990,9 @@ export default function EnhancedContactForm({
     setIsSubmitting(true);
 
     try {
-      // Every submission carries an unconsumed Turnstile token: presign calls
-      // consumed earlier widget tokens, and /api/contact enforces single-use.
-      const submitToken = TURNSTILE_SITE_KEY ? await getFreshTurnstileToken() : null;
+      // Use an unconsumed Turnstile token if already solved on mount; only force a reset
+      // when a prior presign or submit already consumed the token.
+      const submitToken = TURNSTILE_SITE_KEY ? await acquireTurnstileToken() : null;
 
       setSubmittedTicketId(null);
 
@@ -1046,7 +1081,7 @@ export default function EnhancedContactForm({
         body: formFields,
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
 
       if (response.status === 409 && result?.code === 'consent_stale') {
         // Keep all draft fields and uploaded metadata; never retry or recheck.
@@ -1063,9 +1098,13 @@ export default function EnhancedContactForm({
         return;
       }
       if (!response.ok) {
-        throw new Error('Contact submission rejected.');
+        throw new Error(
+          typeof result?.error === 'string' && result.error.trim()
+            ? result.error
+            : 'Failed to submit form. Please try again or contact us directly.'
+        );
       }
-      if (typeof result.ticketRef !== 'string' || !result.ticketRef.trim()) {
+      if (typeof result?.ticketRef !== 'string' || !result.ticketRef.trim()) {
         throw new Error('Contact reference unavailable.');
       }
       setSubmittedTicketId(result.ticketRef);
@@ -1106,6 +1145,7 @@ export default function EnhancedContactForm({
 
       // Reset Turnstile widget and state
       turnstileTokenRef.current = null;
+      turnstileTokenConsumedRef.current = true;
       setTurnstileToken(null);
       setIsTurnstileVerified(false);
       setTurnstileError(null);
@@ -1122,7 +1162,11 @@ export default function EnhancedContactForm({
 
     } catch (error) {
       console.error('❌ Form submission error:', error);
-      setErrors({ submit: 'Failed to submit form. Please try again or contact us directly.' });
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Failed to submit form. Please try again or contact us directly.';
+      setErrors({ submit: message });
       setSubmittedTicketId(null);
     } finally {
       submittingRef.current = false;
@@ -1559,14 +1603,10 @@ export default function EnhancedContactForm({
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={
-                      formData.preferredContactDate
-                        ? new Date(formData.preferredContactDate)
-                        : undefined
-                    }
+                    selected={parseLocalIsoDate(formData.preferredContactDate)}
                     onSelect={(date) => {
                       if (date) {
-                        const formattedContactDate = formatUsDate(date);
+                        const formattedContactDate = formatIsoDateLocal(date);
                         handleInputChange("preferredContactDate", formattedContactDate);
                         setIsPreferredDateOpen(false);
                       } else {
@@ -1857,6 +1897,7 @@ export default function EnhancedContactForm({
               </Label>
               <Input
                 id="budgetMin"
+                ref={budgetMinRef}
                 type="text"
                 inputMode="numeric"
                 value={formData.budgetMin}
@@ -1880,6 +1921,7 @@ export default function EnhancedContactForm({
               </Label>
               <Input
                 id="budgetMax"
+                ref={budgetMaxRef}
                 type="text"
                 inputMode="numeric"
                 value={formData.budgetMax}

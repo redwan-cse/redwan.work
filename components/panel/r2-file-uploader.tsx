@@ -124,6 +124,7 @@ export function R2FileUploader({
           id={inputId}
           type="file"
           aria-label={label}
+          accept=".pdf,.docx,.doc,.xlsx,.png,.jpg,.jpeg,.webp,.zip"
           onChange={handleFileChange}
           disabled={status === 'uploading'}
           className="h-10 min-w-0 w-full sm:min-w-[200px] sm:w-auto flex-1 cursor-pointer"

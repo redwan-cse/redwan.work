@@ -24,6 +24,7 @@ import { deleteDeliverableOrVaultFileAction } from '@/lib/crm/actions';
 import {
   CLIENT_VAULT_QUOTA_BYTES,
   isR2Configured,
+  listPrivateContactObjects,
   listPrivateVaultObjects,
   type R2ObjectSummary,
 } from '@/lib/r2';
@@ -38,50 +39,71 @@ async function OrphanR2InventoryCard({
   trackedKeys: Set<string>;
   r2Ready: boolean;
 }) {
-  const r2PrivateList = r2Ready
-    ? await listPrivateVaultObjects().catch(() => [] as R2ObjectSummary[])
-    : [];
-  const orphanObjects = r2PrivateList
-    .filter((obj) => !trackedKeys.has(obj.key))
-    .slice(0, 40);
+  let listError: string | null = null;
+  let r2PrivateList: R2ObjectSummary[] = [];
+  if (r2Ready) {
+    try {
+      const [vaultObjs, contactObjs] = await Promise.all([
+        listPrivateVaultObjects(),
+        listPrivateContactObjects(),
+      ]);
+      r2PrivateList = [...vaultObjs, ...contactObjs];
+    } catch (err) {
+      listError =
+        err instanceof Error ? err.message : 'Unable to scan private R2 bucket inventory.';
+    }
+  }
+  const allOrphans = r2PrivateList.filter((obj) => !trackedKeys.has(obj.key));
+  const orphanObjects = allOrphans.slice(0, 40);
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <ShieldAlert className="h-4 w-4 text-amber-500" />
-          Orphan R2 Storage Inventory ({orphanObjects.length})
+          Orphan R2 Storage Inventory ({allOrphans.length})
         </CardTitle>
         <CardDescription className="text-xs">
-          Objects present in R2 Private bucket without an active tracking row in PostgreSQL.
+          Objects present in R2 Private bucket (<code>private/</code> and <code>contact/</code>) without an active PostgreSQL tracking record or upload reservation.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-xs">
         {!r2Ready ? (
           <p className="text-muted-foreground">Private R2 bucket environment variables are not set.</p>
+        ) : listError ? (
+          <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
+            Failed to scan R2 private inventory: {listError}
+          </div>
         ) : orphanObjects.length > 0 ? (
-          orphanObjects.map((obj) => (
-            <div
-              key={obj.key}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2"
-            >
-              <div className="min-w-0 font-mono">
-                <div className="break-all text-[11px] font-semibold">{obj.key}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {(obj.size / 1024).toFixed(1)} KB · Last modified {obj.lastModified.toISOString()}
+          <>
+            {allOrphans.length > orphanObjects.length && (
+              <p className="text-[11px] text-muted-foreground">
+                Showing first {orphanObjects.length} of {allOrphans.length} untracked objects.
+              </p>
+            )}
+            {orphanObjects.map((obj) => (
+              <div
+                key={obj.key}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2"
+              >
+                <div className="min-w-0 font-mono">
+                  <div className="break-all text-[11px] font-semibold">{obj.key}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {(obj.size / 1024).toFixed(1)} KB · Last modified {obj.lastModified.toISOString()}
+                  </div>
                 </div>
+                <ConfirmActionButton
+                  action={purgeOrphanPrivateObjectAction}
+                  hiddenFields={{ r2_key: obj.key }}
+                  triggerLabel="Purge Orphan"
+                  confirmTitle="Purge untracked R2 object?"
+                  confirmDescription={`Deletes ${obj.key} permanently from Private R2 storage.`}
+                  destructive
+                  variant="outline"
+                />
               </div>
-              <ConfirmActionButton
-                action={purgeOrphanPrivateObjectAction}
-                hiddenFields={{ r2_key: obj.key }}
-                triggerLabel="Purge Orphan"
-                confirmTitle="Purge untracked R2 object?"
-                confirmDescription={`Deletes ${obj.key} permanently from Private R2 storage.`}
-                destructive
-                variant="outline"
-              />
-            </div>
-          ))
+            ))}
+          </>
         ) : (
           <p className="text-muted-foreground">Zero untracked orphan objects detected in R2 inventory.</p>
         )}
@@ -94,22 +116,26 @@ export default async function AdminRecoveryPage() {
   await requireAdminSession();
   const admin = getSupabaseAdmin();
   const r2Ready = isR2Configured();
+  const nowIso = new Date().toISOString();
 
-  const [{ data: allTrackedVaultFiles }, { data: clients }, { data: orders }] =
-    await Promise.all([
-      admin
-        .from('vault_files')
-        .select('id, r2_key, filename, category, owner_client_id, order_id, deliverable_id, size_bytes, retention_until, archived_at, created_at')
-        .is('archived_at', null)
-        .order('retention_until', { ascending: true, nullsFirst: false }),
-      admin.from('profiles').select('id, full_name, email').eq('role', 'client'),
-      admin
-        .from('orders')
-        .select('id, code, title, client_id')
-        .order('created_at', { ascending: false })
-        .limit(30),
-    ]);
+  const [
+    { data: allTrackedVaultFiles },
+    { data: clients },
+    { data: inquiryAttachments },
+    { data: activeReservations },
+  ] = await Promise.all([
+    admin
+      .from('vault_files')
+      .select('id, r2_key, filename, category, owner_client_id, order_id, deliverable_id, size_bytes, retention_until, archived_at, created_at')
+      .is('archived_at', null)
+      .order('retention_until', { ascending: true, nullsFirst: false })
+      .limit(2000),
+    admin.from('profiles').select('id, full_name, email').eq('role', 'client'),
+    admin.from('inquiry_attachments').select('r2_key').limit(2000),
+    admin.from('vault_upload_reservations').select('r2_key, owner_client_id, size_bytes').gt('expires_at', nowIso),
+  ]);
 
+  const totalTrackedCount = allTrackedVaultFiles?.length ?? 0;
   const vaultFiles = (allTrackedVaultFiles ?? []).slice(0, 100);
 
   const clientMap = new Map((clients ?? []).map((c) => [c.id, c.full_name || c.email]));
@@ -129,11 +155,27 @@ export default async function AdminRecoveryPage() {
       fileCountByOrder.set(vf.order_id, (fileCountByOrder.get(vf.order_id) ?? 0) + 1);
     }
   }
+  for (const att of inquiryAttachments ?? []) {
+    if (att.r2_key) trackedKeys.add(att.r2_key);
+  }
+  for (const res of activeReservations ?? []) {
+    if (res.r2_key) trackedKeys.add(res.r2_key);
+  }
+
+  const orderIdsWithFiles = Array.from(fileCountByOrder.keys());
+  const { data: orders } =
+    orderIdsWithFiles.length > 0
+      ? await admin
+          .from('orders')
+          .select('id, code, title, client_id')
+          .in('id', orderIdsWithFiles.slice(0, 100))
+          .order('created_at', { ascending: false })
+      : { data: [] as Array<{ id: string; code: string | null; title: string; client_id: string }> };
 
   const opsTabs = [
     { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops' },
     { id: 'outbox', label: 'Email Outbox & Queue', href: '/admin/emails/outbox' },
-    { id: 'recovery', label: 'R2 Vault Recovery', href: '/admin/recovery', count: vaultFiles.length },
+    { id: 'recovery', label: 'R2 Vault Recovery', href: '/admin/recovery', count: totalTrackedCount },
     { id: 'settings', label: 'Consent & Security Settings', href: '/admin/settings' },
   ];
 
@@ -240,7 +282,7 @@ export default async function AdminRecoveryPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            Encrypted Vault Objects ({vaultFiles?.length ?? 0})
+            Encrypted Vault Objects ({totalTrackedCount})
           </CardTitle>
           <CardDescription className="text-xs">
             Extend retention by +90 days or pin forever to protect critical reports from scheduled R2 cleanup.
@@ -272,11 +314,6 @@ export default async function AdminRecoveryPage() {
                         <Badge variant="secondary" className="font-mono text-[9px] uppercase">
                           {vf.category}
                         </Badge>
-                        {vf.archived_at && (
-                          <Badge variant="outline" className="font-mono text-[9px]">
-                            archived
-                          </Badge>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-xs">
@@ -296,30 +333,32 @@ export default async function AdminRecoveryPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <ActionFeedbackForm
-                          action={extendVaultRetentionAction}
-                          successMessage="Retention extended +90 days."
-                        >
-                          <input type="hidden" name="file_id" value={vf.id} />
-                          <input type="hidden" name="mode" value="extend_90d" />
-                          <Button type="submit" size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
-                            <TimerReset className="h-3 w-3" />
-                            +90d
-                          </Button>
-                        </ActionFeedbackForm>
-
                         {vf.retention_until !== null && (
-                          <ActionFeedbackForm
-                            action={extendVaultRetentionAction}
-                            successMessage="File pinned forever."
-                          >
-                            <input type="hidden" name="file_id" value={vf.id} />
-                            <input type="hidden" name="mode" value="pin_forever" />
-                            <Button type="submit" size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
-                              <Pin className="h-3 w-3" />
-                              Pin
-                            </Button>
-                          </ActionFeedbackForm>
+                          <>
+                            <ActionFeedbackForm
+                              action={extendVaultRetentionAction}
+                              successMessage="Retention extended +90 days."
+                            >
+                              <input type="hidden" name="file_id" value={vf.id} />
+                              <input type="hidden" name="mode" value="extend_90d" />
+                              <Button type="submit" size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
+                                <TimerReset className="h-3 w-3" />
+                                +90d
+                              </Button>
+                            </ActionFeedbackForm>
+
+                            <ActionFeedbackForm
+                              action={extendVaultRetentionAction}
+                              successMessage="File pinned forever."
+                            >
+                              <input type="hidden" name="file_id" value={vf.id} />
+                              <input type="hidden" name="mode" value="pin_forever" />
+                              <Button type="submit" size="sm" variant="outline" className="h-7 gap-1 text-[11px]">
+                                <Pin className="h-3 w-3" />
+                                Pin
+                              </Button>
+                            </ActionFeedbackForm>
+                          </>
                         )}
 
                         {!vf.deliverable_id && (

@@ -43,6 +43,7 @@ function LoginPageContent() {
   const tokenHash = searchParams?.get('token_hash') ?? '';
   const tokenType = searchParams?.get('type');
   const deactivated = searchParams?.get('reason') === 'deactivated';
+  const verificationFailed = searchParams?.get('verified') === '0';
 
   const [tokenState, setTokenState] = useState<'idle' | 'working' | 'failed'>(
     tokenHash && tokenType === 'magiclink' ? 'working' : 'idle'
@@ -120,6 +121,13 @@ function LoginPageContent() {
         )}
         {deactivated && (
           <FormMessage state={{ error: 'Your account has been deactivated. Contact the administrator.' }} />
+        )}
+        {verificationFailed && (
+          <FormMessage
+            state={{
+              error: 'Your email confirmation or sign-in link has expired or was already used. Request a fresh link or sign in below.',
+            }}
+          />
         )}
         {alreadyRegistered && (
           <div className="rounded-lg border border-primary/30 bg-primary/8 p-3 text-xs text-foreground">

@@ -40,6 +40,7 @@ import {
   computeInvoiceTotals,
   validatePaymentSubmission,
 } from '@/lib/finance/invariants';
+import { formatMoney } from '@/lib/format';
 import type { Database, Json } from '@/lib/supabase/database.types';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -279,7 +280,9 @@ export async function updateInquiryStatusAction(formData: FormData): Promise<voi
   const status: InquiryStatus = ALLOWED_INQUIRY_STATUSES.has(rawStatus as InquiryStatus)
     ? (rawStatus as InquiryStatus)
     : 'reviewing';
-  if (!inquiryId) return;
+  if (!inquiryId) {
+    throw new Error('Inquiry identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('inquiries').update({ status }).eq('id', inquiryId);
@@ -298,6 +301,7 @@ export async function updateInquiryStatusAction(formData: FormData): Promise<voi
   });
 
   revalidatePath('/admin/inquiries');
+  revalidatePath('/admin/pipeline');
   revalidatePath('/admin');
 }
 
@@ -311,16 +315,22 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
   const tier = (String(formData.get('tier') ?? 'standard').trim() || 'standard') as ClientTier;
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim() || null;
 
-  if (!email) return;
+  if (!email) {
+    throw new Error('Client email address is required.');
+  }
 
   const admin = getSupabaseAdmin();
 
   // Check if profile already exists
   const { data: existingProfile } = await admin
     .from('profiles')
-    .select('id, email')
+    .select('id, email, role')
     .eq('email', email)
     .maybeSingle();
+
+  if (existingProfile?.role === 'admin') {
+    throw new Error('Cannot invite or provision an administrator email as a client.');
+  }
 
   let clientId = existingProfile?.id ?? null;
   const siteOrigin = getSiteOrigin();
@@ -328,7 +338,7 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
   if (!clientId) {
     const inviteRes = await admin.auth.admin.inviteUserByEmail(email, {
       data: { full_name: fullName, role: 'client' },
-      redirectTo: `${siteOrigin}/invite/accept`,
+      redirectTo: `${siteOrigin}/auth/callback?type=invite`,
     });
 
     if (inviteRes.error) {
@@ -357,17 +367,75 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
       if (cpErr) throw new Error(cpErr.message);
     }
   } else {
-    await enqueueTransactionalEmail({
-      toEmail: email,
-      template: 'client_portal_invitation',
-      subject: 'Your redwan.work Client Portal Workspace Is Ready',
-      payload: {
-        message: `Hi ${fullName || email}, your Client Portal account on redwan.work has been updated. Sign in at ${siteOrigin}/login to access your proposals, orders, invoices, and encrypted deliverables vault.`,
-        actionUrl: `${siteOrigin}/login`,
-      },
-      entityType: 'client',
-      entityId: clientId,
-    });
+    // Determine whether this client has ever activated their account (last_sign_in_at)
+    let hasSignedIn = true;
+    try {
+      const authAdmin = admin.auth?.admin as
+        | {
+            getUserById?: (
+              id: string
+            ) => Promise<{ data?: { user?: { last_sign_in_at?: string | null } } }>;
+            updateUserById?: (
+              id: string,
+              attributes: { ban_duration?: string }
+            ) => Promise<unknown>;
+          }
+        | undefined;
+      if (typeof authAdmin?.getUserById === 'function') {
+        const userRes = await authAdmin.getUserById(clientId);
+        hasSignedIn = Boolean(userRes?.data?.user?.last_sign_in_at);
+      }
+
+      if (!hasSignedIn) {
+        // Reactivate & unban unactivated (or previously revoked) invitee before re-inviting
+        await admin
+          .from('profiles')
+          .update({ is_active: true })
+          .eq('id', clientId)
+          .eq('role', 'client');
+        if (typeof authAdmin?.updateUserById === 'function') {
+          await authAdmin.updateUserById(clientId, { ban_duration: 'none' }).catch(() => undefined);
+        }
+        const reInviteRes = await admin.auth.admin.inviteUserByEmail(email, {
+          data: { full_name: fullName, role: 'client' },
+          redirectTo: `${siteOrigin}/auth/callback?type=invite`,
+        });
+        if (reInviteRes.error) {
+          throw new Error(reInviteRes.error.message);
+        }
+      }
+    } catch (reInviteErr) {
+      if (reInviteErr instanceof Error && !hasSignedIn) {
+        throw reInviteErr;
+      }
+    }
+
+    if (hasSignedIn) {
+      await enqueueTransactionalEmail({
+        toEmail: email,
+        template: 'client_portal_invitation',
+        subject: 'Your redwan.work Client Portal Workspace Is Ready',
+        payload: {
+          message: `Hi ${fullName || email}, your Client Portal account on redwan.work has been updated. Sign in at ${siteOrigin}/login to access your proposals, orders, invoices, and encrypted deliverables vault.`,
+          actionUrl: `${siteOrigin}/login`,
+        },
+        entityType: 'client',
+        entityId: clientId,
+      });
+    }
+  }
+
+  // Supersede any existing pending ledger rows for this email so resends never duplicate pending invitations
+  try {
+    const invTbl = admin.from('client_invitations');
+    if (typeof invTbl?.update === 'function') {
+      await invTbl
+        .update({ status: 'revoked' })
+        .eq('email', email)
+        .eq('status', 'pending');
+    }
+  } catch {
+    // Non-fatal in minimal unit mocks
   }
 
   const { error: invErr } = await admin.from('client_invitations').insert({
@@ -414,6 +482,7 @@ export async function inviteOrProvisionClientAction(formData: FormData): Promise
 
   revalidatePath('/admin/clients');
   revalidatePath('/admin/inquiries');
+  revalidatePath('/admin/pipeline');
   revalidatePath('/admin');
 }
 
@@ -435,11 +504,19 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   const parsedCurrency = currencySchema.safeParse(formData.get('currency') ?? 'USD');
   const currency = parsedCurrency.success ? parsedCurrency.data : 'USD';
   const rawFxInput = formData.get('fx_rate_to_usd');
+  if (currency !== 'USD' && rawFxInput !== null && String(rawFxInput).trim() === '') {
+    throw new Error('Provide a positive FX rate to USD for non-USD proposals.');
+  }
   const parsedFx =
-    rawFxInput !== null && String(rawFxInput).trim() !== ''
-      ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
-      : { success: true as const, data: 1 };
-  const fxRate = parsedFx.success ? parsedFx.data : 1;
+    currency === 'USD'
+      ? { success: true as const, data: 1 }
+      : rawFxInput !== null && String(rawFxInput).trim() !== ''
+        ? positiveFiniteFxRateSchema.safeParse(Number(rawFxInput))
+        : { success: true as const, data: 1 };
+  if (!parsedFx.success) {
+    throw new Error('FX rate to USD must be a positive finite number.');
+  }
+  const fxRate = parsedFx.data;
   const totalUsd = Number(formData.get('total_usd') ?? 0);
   const depositPercent = Number(formData.get('deposit_percent') ?? 50);
   const deliveryDays = Number(formData.get('estimated_delivery_days') ?? 7);
@@ -451,8 +528,8 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   let clientId = String(formData.get('client_id') ?? '').trim() || null;
   const inquiryId = String(formData.get('inquiry_id') ?? '').trim() || null;
 
-  if (!recipientEmail || !recipientName || !title || !executiveSummary || totalUsd <= 0) {
-    return;
+  if (!recipientEmail || !recipientName || !title || !executiveSummary || !Number.isFinite(totalUsd) || totalUsd <= 0) {
+    throw new Error('Recipient name, email, title, executive summary, and a positive total are required.');
   }
 
   const totalCents = Math.round(totalUsd * 100);
@@ -482,6 +559,14 @@ export async function createProposalAction(formData: FormData): Promise<void> {
     } catch {
       throw new Error('Invalid custom milestone schedule JSON.');
     }
+    if (parsedCustomMilestones.length > 0) {
+      const milestoneSumCents = parsedCustomMilestones.reduce((acc, m) => acc + m.amount_cents, 0);
+      if (Math.abs(milestoneSumCents - totalCents) > 1) {
+        throw new Error(
+          `Custom milestone amounts (${formatMoney(milestoneSumCents, currency)}) must match the proposal total (${formatMoney(totalCents, currency)}).`
+        );
+      }
+    }
   }
 
   const admin = getSupabaseAdmin();
@@ -498,7 +583,7 @@ export async function createProposalAction(formData: FormData): Promise<void> {
       const siteOrigin = getSiteOrigin();
       const inviteRes = await admin.auth.admin.inviteUserByEmail(recipientEmail, {
         data: { full_name: recipientName, role: 'client' },
-        redirectTo: `${siteOrigin}/invite/accept`,
+        redirectTo: `${siteOrigin}/auth/callback?type=invite`,
       });
       if (inviteRes.data?.user?.id) {
         clientId = inviteRes.data.user.id;
@@ -626,7 +711,7 @@ export async function createProposalAction(formData: FormData): Promise<void> {
         template: 'proposal_sent',
         subject: `Proposal ${proposal.code ?? ''} — ${title}`,
         payload: {
-          message: `Hi ${recipientName}, a new project proposal (${proposal.code ?? ''}: ${title}) for $${totalUsd.toLocaleString()} USD is ready for your review in the redwan.work Client Portal.`,
+          message: `Hi ${recipientName}, a new project proposal (${proposal.code ?? ''}: ${title}) for ${formatMoney(totalCents, currency)} is ready for your review in the redwan.work Client Portal.`,
           actionUrl: `${getSiteOrigin()}/portal/proposals/${proposal.id}`,
         },
         entityType: 'proposal',
@@ -647,8 +732,11 @@ export async function createProposalAction(formData: FormData): Promise<void> {
   }
 
   revalidatePath('/admin/proposals');
+  revalidatePath('/admin/inquiries');
   revalidatePath('/admin/pipeline');
+  revalidatePath('/admin');
   revalidatePath('/portal/proposals');
+  revalidatePath('/portal');
 }
 
 export async function createOrderFromAdminAction(formData: FormData): Promise<void> {
@@ -662,6 +750,9 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const currency =
     rawCurrency === 'BDT' || rawCurrency === 'EUR' || rawCurrency === 'GBP' ? rawCurrency : 'USD';
   const rawFxInput = formData.get('fx_rate_to_usd');
+  if (currency !== 'USD' && rawFxInput !== null && String(rawFxInput).trim() === '') {
+    throw new Error('Provide a positive FX rate to USD for non-USD orders.');
+  }
   const parsedFx =
     currency === 'USD'
       ? { success: true as const, data: 1 }
@@ -677,7 +768,9 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
   const requiresRoe = parseFormBoolean(formData, 'requires_roe') || pillar === 'cybersecurity';
   const dueDays = Math.max(1, Math.round(Number(formData.get('due_days') ?? 10)));
 
-  if (!clientId || !title || !Number.isFinite(totalUsd) || totalUsd < 0) return;
+  if (!clientId || !title || !Number.isFinite(totalUsd) || totalUsd < 0) {
+    throw new Error('Client, order title, and a valid order total are required.');
+  }
 
   const totalCents = Math.round(totalUsd * 100);
   const admin = getSupabaseAdmin();
@@ -722,7 +815,7 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
         template: 'order_created',
         subject: `Order ${orderCode} Created — ${title}`,
         payload: {
-          message: `A new engagement order (${orderCode}: ${title}) for ${currency} ${totalUsd.toLocaleString()} has been initialized in your Client Portal.`,
+          message: `A new engagement order (${orderCode}: ${title}) for ${formatMoney(totalCents, currency)} has been initialized in your Client Portal.`,
           actionUrl: `${getSiteOrigin()}/portal/orders/${parsed.order_id}`,
         },
         entityType: 'order',
@@ -743,8 +836,11 @@ export async function createOrderFromAdminAction(formData: FormData): Promise<vo
     });
   }
 
+  revalidatePath('/admin');
   revalidatePath('/admin/orders');
   revalidatePath('/admin/invoices');
+  revalidatePath('/admin/billing');
+  revalidatePath('/portal');
   revalidatePath('/portal/orders');
   revalidatePath('/portal/invoices');
 }
@@ -844,7 +940,9 @@ export async function addOrderTaskAction(formData: FormData): Promise<void> {
   const title = String(formData.get('title') ?? '').trim();
   const isClientVisible = parseFormBoolean(formData, 'is_client_visible');
 
-  if (!orderId || !title) return;
+  if (!orderId || !title) {
+    throw new Error('Order identifier and task title are required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin
@@ -879,16 +977,22 @@ export async function toggleOrderTaskAction(formData: FormData): Promise<void> {
   const orderId = String(formData.get('order_id') ?? '').trim();
   const completed = parseFormBoolean(formData, 'is_completed');
 
-  if (!taskId) return;
+  if (!taskId) {
+    throw new Error('Task identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
-  const { error } = await admin
+  let query = admin
     .from('order_tasks')
     .update({
       is_completed: completed,
       completed_at: completed ? new Date().toISOString() : null,
     })
     .eq('id', taskId);
+  if (orderId) {
+    query = query.eq('order_id', orderId);
+  }
+  const { error } = await query;
   if (error) {
     throw new Error(error.message);
   }
@@ -924,7 +1028,9 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   const sizeBytes = Number(formData.get('size_bytes') ?? 0);
   const sha256Checksum = String(formData.get('sha256_checksum') ?? '').trim() || null;
 
-  if (!orderId || !clientId || !title) return;
+  if (!orderId || !clientId || !title) {
+    throw new Error('Order, client, and deliverable title are required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
@@ -961,7 +1067,9 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
   }
 
   const autoAcceptDays = order.auto_accept_days ?? 7;
-  const autoAcceptAt = new Date(Date.now() + autoAcceptDays * 86400 * 1000).toISOString();
+  const autoAcceptAt = isFinal
+    ? new Date(Date.now() + autoAcceptDays * 86400 * 1000).toISOString()
+    : null;
 
   const { data: deliverable, error: delivErr } = await admin
     .from('deliverables')
@@ -1009,13 +1117,16 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     insertedVaultFileId = vFile.id;
   }
 
+  const orderDeliveryUpdates: Database['public']['Tables']['orders']['Update'] = {
+    status: isFinal ? 'delivered' : 'in_review',
+    progress_percent: isFinal ? 95 : 80,
+  };
+  if (isFinal) {
+    orderDeliveryUpdates.delivered_at = new Date().toISOString();
+  }
   const { error: ordUpdateErr } = await admin
     .from('orders')
-    .update({
-      status: isFinal ? 'delivered' : 'in_review',
-      delivered_at: new Date().toISOString(),
-      progress_percent: isFinal ? 95 : 80,
-    })
+    .update(orderDeliveryUpdates)
     .eq('id', orderId);
   if (ordUpdateErr) {
     if (insertedVaultFileId) {
@@ -1060,7 +1171,10 @@ export async function submitOrderDeliverableAction(formData: FormData): Promise<
     metadata: { versionLabel, filename, isFinal },
   });
 
+  revalidatePath('/admin');
+  revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/portal');
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath('/portal/files');
 }
@@ -1275,13 +1389,26 @@ export async function reviewPaymentProofAction(formData: FormData): Promise<void
 export async function updateClientCrmAndNoteAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const clientId = String(formData.get('client_id') ?? '').trim();
-  const tier = (String(formData.get('tier') ?? 'standard').trim() || 'standard') as ClientTier;
+  const rawTier = String(formData.get('tier') ?? 'standard').trim();
+  const tier: ClientTier =
+    rawTier === 'enterprise' || rawTier === 'vip' || rawTier === 'retainer' ? rawTier : 'standard';
   const companyName = String(formData.get('company_name') ?? '').trim() || null;
   const relationshipSummary = String(formData.get('relationship_summary') ?? '').trim() || null;
   const nextFollowupRaw = String(formData.get('next_followup_at') ?? '').trim();
   const noteBody = String(formData.get('note_body') ?? '').trim();
 
-  if (!clientId) return;
+  if (!clientId) {
+    throw new Error('Client identifier is required.');
+  }
+
+  let nextFollowupIso: string | null = null;
+  if (nextFollowupRaw) {
+    const parsedFollowup = new Date(nextFollowupRaw);
+    if (Number.isNaN(parsedFollowup.getTime())) {
+      throw new Error('Follow-up date must be a valid date.');
+    }
+    nextFollowupIso = parsedFollowup.toISOString();
+  }
 
   const admin = getSupabaseAdmin();
   const { error: cpErr } = await admin.from('client_profiles').upsert({
@@ -1289,7 +1416,7 @@ export async function updateClientCrmAndNoteAction(formData: FormData): Promise<
     tier,
     company_name: companyName,
     relationship_summary: relationshipSummary,
-    next_followup_at: nextFollowupRaw ? new Date(nextFollowupRaw).toISOString() : null,
+    next_followup_at: nextFollowupIso,
   });
   if (cpErr) throw new Error(cpErr.message);
 
@@ -1316,22 +1443,39 @@ export async function updateClientCrmAndNoteAction(formData: FormData): Promise<
 
   revalidatePath(`/admin/clients/${clientId}`);
   revalidatePath('/admin/clients');
+  revalidatePath('/admin');
 }
 
 export async function toggleClientActiveStatusAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const clientId = String(formData.get('client_id') ?? '').trim();
   const nextActive = parseFormBoolean(formData, 'is_active');
-  if (!clientId) return;
+  if (!clientId) {
+    throw new Error('Client identifier is required.');
+  }
+  if (clientId === session.userId) {
+    throw new Error('Administrator accounts cannot be deactivated from the client management panel.');
+  }
 
   const admin = getSupabaseAdmin();
-  const nowIso = new Date().toISOString();
-  const { error } = await admin
+  const validAfterSec = Math.floor(Date.now() / 1000);
+  const updateQuery = admin
     .from('profiles')
-    .update({ is_active: nextActive, tokens_valid_after: nowIso })
+    .update({ is_active: nextActive, tokens_valid_after: validAfterSec })
     .eq('id', clientId)
     .eq('role', 'client');
+
+  const { data: updatedProfile, error } =
+    typeof updateQuery.select === 'function'
+      ? await updateQuery.select('id').maybeSingle()
+      : await (updateQuery as unknown as Promise<{
+          data?: { id: string } | null;
+          error: { message: string } | null;
+        }>);
   if (error) throw new Error(error.message);
+  if (typeof updateQuery.select === 'function' && !updatedProfile) {
+    throw new Error('Client account not found or target is not a client profile.');
+  }
 
   try {
     const authAdmin = admin.auth?.admin as
@@ -1399,7 +1543,9 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
   const isInternalNote =
     session.role === 'admin' && parseFormBoolean(formData, 'is_internal_note');
 
-  if (!ticketId || !body) return;
+  if (!ticketId || !body) {
+    throw new Error('Reply message body cannot be empty.');
+  }
 
   if (session.role !== 'admin') {
     await enforceClientMutationRateLimit(session.userId);
@@ -1412,12 +1558,20 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
     .eq('id', ticketId)
     .maybeSingle();
 
-  if (!ticket) return;
+  if (!ticket) {
+    throw new Error('Support ticket not found.');
+  }
   if (session.role !== 'admin' && ticket.client_id !== session.userId) {
     throw new Error('Forbidden.');
   }
   if (session.role !== 'admin' && ticket.status === 'closed') {
     throw new Error('Closed tickets cannot receive new client replies. Please open a new support ticket.');
+  }
+  const hasUploadAttachment = Boolean(String(formData.get('r2_key') ?? '').trim());
+  if (isInternalNote && hasUploadAttachment) {
+    throw new Error(
+      'File attachments are disabled on internal admin notes so confidential internal files are never placed in the client vault.'
+    );
   }
 
   const fileId = await registerVaultAttachmentFromForm(admin, {
@@ -1435,7 +1589,12 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
     is_internal_note: isInternalNote,
     attachment_file_ids: fileId ? [fileId] : [],
   });
-  if (msgErr) throw new Error(msgErr.message);
+  if (msgErr) {
+    if (fileId) {
+      await admin.from('vault_files').delete().eq('id', fileId).then(undefined, () => {});
+    }
+    throw new Error(msgErr.message);
+  }
 
   if (!isInternalNote) {
     if (session.role === 'admin') {
@@ -1503,6 +1662,8 @@ export async function replyTicketAction(formData: FormData): Promise<void> {
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
+  revalidatePath('/admin/support');
+  revalidatePath('/admin');
   revalidatePath(`/portal/tickets/${ticketId}`);
   revalidatePath('/portal/tickets');
 }
@@ -1511,7 +1672,9 @@ export async function updateTicketStatusAction(formData: FormData): Promise<void
   const session = await requireAdminSession();
   const ticketId = String(formData.get('ticket_id') ?? '').trim();
   const rawStatus = String(formData.get('status') ?? 'resolved').trim() as TicketStatus;
-  if (!ticketId) return;
+  if (!ticketId) {
+    throw new Error('Ticket identifier is required.');
+  }
   if (!ALLOWED_TICKET_STATUSES.has(rawStatus)) {
     throw new Error(`Invalid ticket status: ${rawStatus}`);
   }
@@ -1574,14 +1737,19 @@ export async function updateTicketStatusAction(formData: FormData): Promise<void
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath('/admin/tickets');
+  revalidatePath('/admin/support');
+  revalidatePath('/admin');
   revalidatePath(`/portal/tickets/${ticketId}`);
+  revalidatePath('/portal/tickets');
 }
 
 export async function toggleReviewPublicApprovalAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const reviewId = String(formData.get('review_id') ?? '').trim();
   const approved = parseFormBoolean(formData, 'is_public_approved');
-  if (!reviewId) return;
+  if (!reviewId) {
+    throw new Error('Review identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin
@@ -1601,6 +1769,7 @@ export async function toggleReviewPublicApprovalAction(formData: FormData): Prom
   });
 
   revalidatePath('/admin/reviews');
+  revalidatePath('/admin/support');
   revalidatePath('/');
   revalidatePath('/services');
 }
@@ -1614,7 +1783,9 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
   const monthlyUsd = Number(formData.get('monthly_usd') ?? 750);
   const hoursIncluded = Number(formData.get('hours_included') ?? 10);
 
-  if (!clientId || !title) return;
+  if (!clientId || !title || !Number.isFinite(monthlyUsd) || monthlyUsd <= 0 || !Number.isFinite(hoursIncluded) || hoursIncluded <= 0) {
+    throw new Error('Client, retainer title, positive monthly rate, and hours per month are required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('retainer_plans').insert({
@@ -1662,20 +1833,34 @@ export async function createRetainerPlanAction(formData: FormData): Promise<void
   });
 
   revalidatePath('/admin/retainers');
+  revalidatePath('/admin/billing');
+  revalidatePath('/admin');
   revalidatePath('/portal/retainers');
 }
 
 export async function updateRetainerPlanAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const retainerId = String(formData.get('retainer_id') ?? '').trim();
-  const hoursUsed = Math.max(0, Number(formData.get('hours_used_current_period') ?? 0));
+  const rawHoursUsed = Number(formData.get('hours_used_current_period') ?? 0);
+  if (!Number.isFinite(rawHoursUsed) || rawHoursUsed < 0) {
+    throw new Error('Hours used must be a non-negative number.');
+  }
+  const hoursUsed = rawHoursUsed;
   const rawStatus = String(formData.get('status') ?? 'active').trim();
   const status =
     rawStatus === 'paused' || rawStatus === 'cancelled' ? rawStatus : 'active';
 
-  if (!retainerId) return;
+  if (!retainerId) {
+    throw new Error('Retainer identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
+  const retainerTbl = admin.from('retainer_plans');
+  const existingRetainer =
+    typeof retainerTbl.select === 'function'
+      ? (await retainerTbl.select('client_id').eq('id', retainerId).maybeSingle()).data
+      : null;
+
   const { error } = await admin
     .from('retainer_plans')
     .update({
@@ -1688,6 +1873,7 @@ export async function updateRetainerPlanAction(formData: FormData): Promise<void
   await recordAuditLog({
     actorId: session.userId,
     actorRole: 'admin',
+    clientId: existingRetainer?.client_id ?? null,
     action: 'retainer.updated',
     entityType: 'retainer',
     entityId: retainerId,
@@ -1696,17 +1882,20 @@ export async function updateRetainerPlanAction(formData: FormData): Promise<void
   });
 
   revalidatePath('/admin/retainers');
+  revalidatePath('/admin/billing');
+  revalidatePath('/admin');
   revalidatePath('/portal/retainers');
 }
 
 export async function markAllNotificationsReadAction(): Promise<void> {
   const session = await requireAuthenticatedSession();
   const admin = getSupabaseAdmin();
-  await admin
+  const { error } = await admin
     .from('notifications')
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('recipient_id', session.userId)
     .eq('is_read', false);
+  if (error) throw new Error(error.message);
 
   revalidatePath('/admin', 'layout');
   revalidatePath('/portal', 'layout');
@@ -1715,15 +1904,18 @@ export async function markAllNotificationsReadAction(): Promise<void> {
 export async function markNotificationReadAction(formData: FormData): Promise<void> {
   const session = await requireAuthenticatedSession();
   const notificationId = String(formData.get('notification_id') ?? '').trim();
-  if (!notificationId) return;
+  if (!notificationId) {
+    throw new Error('Notification identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
-  await admin
+  const { error } = await admin
     .from('notifications')
     .update({ is_read: true, read_at: new Date().toISOString() })
     .eq('id', notificationId)
     .eq('recipient_id', session.userId)
     .eq('is_read', false);
+  if (error) throw new Error(error.message);
 
   revalidatePath('/admin', 'layout');
   revalidatePath('/portal', 'layout');
@@ -1735,8 +1927,11 @@ export async function markNotificationReadAction(formData: FormData): Promise<vo
 
 export async function acceptProposalClientAction(formData: FormData): Promise<void> {
   const session = await requireClientSession();
+  await enforceClientMutationRateLimit(session.userId);
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
-  if (!proposalId) return;
+  if (!proposalId) {
+    throw new Error('Proposal identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: rpcResult, error } = await admin.rpc('accept_proposal_and_create_order', {
@@ -1748,9 +1943,14 @@ export async function acceptProposalClientAction(formData: FormData): Promise<vo
     throw new Error(error.message);
   }
 
+  revalidatePath('/portal');
   revalidatePath('/portal/proposals');
+  revalidatePath(`/portal/proposals/${proposalId}`);
   revalidatePath('/portal/orders');
+  revalidatePath('/admin');
+  revalidatePath('/admin/pipeline');
   revalidatePath('/admin/proposals');
+  revalidatePath(`/admin/proposals/${proposalId}`);
   revalidatePath('/admin/orders');
 
   const resolvedOrderId =
@@ -2200,7 +2400,7 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     !signerFullName ||
     !ownershipAttested
   ) {
-    return;
+    throw new Error('All Rules of Engagement fields and ownership attestation are required.');
   }
 
   const authorizedTargets = targetsRaw
@@ -2208,7 +2408,9 @@ export async function signOrderRoeAction(formData: FormData): Promise<void> {
     .map((t) => t.trim())
     .filter(Boolean);
 
-  if (authorizedTargets.length === 0) return;
+  if (authorizedTargets.length === 0) {
+    throw new Error('Provide at least one authorized target domain, IP, or repository.');
+  }
 
   const testingWindowStartRaw = String(formData.get('testing_window_start') ?? '').trim();
   const testingWindowEndRaw = String(formData.get('testing_window_end') ?? '').trim();
@@ -2308,7 +2510,7 @@ export async function reviewDeliverableClientAction(formData: FormData): Promise
   const feedback = String(formData.get('feedback') ?? '').trim() || null;
 
   if (!deliverableId || (decision !== 'accepted' && decision !== 'revision_requested')) {
-    return;
+    throw new Error('Valid deliverable identifier and decision are required.');
   }
 
   const admin = getSupabaseAdmin();
@@ -2387,7 +2589,9 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   const providedMime = String(formData.get('mime') || formData.get('mime_type') || '').trim();
   const sizeBytes = Number(formData.get('size_bytes') ?? 0);
 
-  if (!invoiceId || !reference || amountMajor <= 0) return;
+  if (!invoiceId || !reference || !Number.isFinite(amountMajor) || amountMajor <= 0) {
+    throw new Error('Invoice, transaction reference, and a positive payment amount are required.');
+  }
 
   const { PORTAL_ALLOWED, extFromFilename, isAllowedMime, resolveMimeType, validateMagicBytes } = await import('@/lib/mime');
 
@@ -2513,7 +2717,7 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
   await notifyAllAdmins({
     category: 'payment',
     title: `Payment Submitted (${payment.code ?? ''})`,
-    body: `Invoice ${invoice.code}: ${invoice.currency} ${amountMajor.toLocaleString()} via ${method}`,
+    body: `Invoice ${invoice.code}: ${formatMoney(amountCents, invoice.currency)} via ${method}`,
     href: `/admin/invoices/${invoice.id}`,
   });
 
@@ -2522,7 +2726,7 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     template: 'payment_proof_submitted_admin',
     subject: `Payment Proof Submitted (${payment.code ?? ''}) for ${invoice.code}`,
     payload: {
-      message: `${session.email} submitted payment proof (${invoice.currency} ${amountMajor.toLocaleString()} via ${method}, Ref: ${reference}) for invoice ${invoice.code}.`,
+      message: `${session.email} submitted payment proof (${formatMoney(amountCents, invoice.currency)} via ${method}, Ref: ${reference}) for invoice ${invoice.code}.`,
       actionUrl: `${getSiteOrigin()}/admin/invoices/${invoice.id}`,
     },
     entityType: 'payment',
@@ -2541,8 +2745,11 @@ export async function submitInvoicePaymentProofAction(formData: FormData): Promi
     metadata: { amountCents, method, reference },
   });
 
+  revalidatePath('/portal');
   revalidatePath(`/portal/invoices/${invoice.id}`);
   revalidatePath('/portal/invoices');
+  revalidatePath('/admin');
+  revalidatePath('/admin/billing');
   revalidatePath(`/admin/invoices/${invoice.id}`);
   revalidatePath('/admin/invoices');
 }
@@ -2572,7 +2779,9 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     : 'general';
   const orderId = String(formData.get('order_id') ?? '').trim() || null;
 
-  if (!subject || !body) return;
+  if (!subject || !body) {
+    throw new Error('Ticket subject and message description are required.');
+  }
 
   const admin = getSupabaseAdmin();
   if (orderId) {
@@ -2603,14 +2812,20 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     throw new Error(ticketErr?.message ?? 'Could not create support ticket.');
   }
 
-  const ticketFileId = await registerVaultAttachmentFromForm(admin, {
-    formData,
-    ownerClientId: session.userId,
-    uploadedBy: session.userId,
-    category: 'ticket_attachment',
-    orderId,
-    ticketId: ticket.id,
-  });
+  let ticketFileId: string | null = null;
+  try {
+    ticketFileId = await registerVaultAttachmentFromForm(admin, {
+      formData,
+      ownerClientId: session.userId,
+      uploadedBy: session.userId,
+      category: 'ticket_attachment',
+      orderId,
+      ticketId: ticket.id,
+    });
+  } catch (attErr) {
+    await admin.from('tickets').delete().eq('id', ticket.id).then(undefined, () => {});
+    throw attErr;
+  }
 
   const { error: msgErr } = await admin.from('ticket_messages').insert({
     ticket_id: ticket.id,
@@ -2620,6 +2835,10 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     attachment_file_ids: ticketFileId ? [ticketFileId] : [],
   });
   if (msgErr) {
+    if (ticketFileId) {
+      await admin.from('vault_files').delete().eq('id', ticketFileId).then(undefined, () => {});
+    }
+    await admin.from('tickets').delete().eq('id', ticket.id).then(undefined, () => {});
     throw new Error(msgErr.message);
   }
 
@@ -2654,8 +2873,11 @@ export async function createClientTicketAction(formData: FormData): Promise<void
     metadata: { priority, category: rawCategory },
   });
 
+  revalidatePath('/portal');
   revalidatePath('/portal/tickets');
+  revalidatePath('/admin');
   revalidatePath('/admin/tickets');
+  revalidatePath('/admin/support');
   redirect(`/portal/tickets/${ticket.id}`);
 }
 
@@ -2671,7 +2893,9 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
   const headline = String(formData.get('headline') ?? '').trim() || null;
   const reviewText = String(formData.get('review_text') ?? '').trim();
 
-  if (!orderId || !reviewText) return;
+  if (!orderId || !reviewText) {
+    throw new Error('Order identifier and review feedback are required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: order } = await admin
@@ -2726,6 +2950,7 @@ export async function submitClientReviewAction(formData: FormData): Promise<void
 
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath('/admin/reviews');
+  revalidatePath('/admin/support');
 }
 
 export async function updateClientProfileAction(formData: FormData): Promise<void> {
@@ -2738,9 +2963,13 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
   const companyRole = String(formData.get('company_role') ?? '').trim() || null;
   const websiteUrl = sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim());
   const taxId = String(formData.get('tax_id') ?? '').trim() || null;
-  const preferredCurrency = String(formData.get('preferred_currency') ?? 'USD')
-    .trim()
-    .toUpperCase();
+  const parsedPrefCurrency = currencySchema.safeParse(
+    String(formData.get('preferred_currency') ?? 'USD').trim().toUpperCase()
+  );
+  if (!parsedPrefCurrency.success) {
+    throw new Error('Preferred currency must be USD, BDT, EUR, or GBP.');
+  }
+  const preferredCurrency = parsedPrefCurrency.data;
 
   const billingAddress = {
     line1: String(formData.get('billing_line1') ?? '').trim(),
@@ -2791,6 +3020,7 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
     metadata: { companyName, preferredCurrency, timezone, hasBillingAddress: hasBillingFields },
   });
 
+  revalidatePath('/portal', 'layout');
   revalidatePath('/portal/profile');
   revalidatePath('/portal/invoices');
 }
@@ -2803,7 +3033,9 @@ export async function updateClientProfileAction(formData: FormData): Promise<voi
 export async function sendDraftProposalAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
-  if (!proposalId) return;
+  if (!proposalId) {
+    throw new Error('Proposal identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: proposal, error: fetchErr } = await admin
@@ -3876,7 +4108,10 @@ export async function attachOrderRequirementFileAction(formData: FormData): Prom
     summary: `Attached file to ${order.code} requirements`,
   });
 
+  revalidatePath('/admin');
+  revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/portal');
   revalidatePath(`/portal/orders/${orderId}`);
   revalidatePath('/portal/files');
 }
@@ -3885,10 +4120,16 @@ export async function deleteOrderTaskAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const taskId = String(formData.get('task_id') ?? '').trim();
   const orderId = String(formData.get('order_id') ?? '').trim();
-  if (!taskId) return;
+  if (!taskId) {
+    throw new Error('Task identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
-  const { error } = await admin.from('order_tasks').delete().eq('id', taskId);
+  let query = admin.from('order_tasks').delete().eq('id', taskId);
+  if (orderId) {
+    query = query.eq('order_id', orderId);
+  }
+  const { error } = await query;
   if (error) throw new Error(error.message);
 
   await recordAuditLog({
@@ -3911,12 +4152,15 @@ export async function deleteDeliverableOrVaultFileAction(formData: FormData): Pr
   const session = await requireAdminSession();
   const deliverableId = String(formData.get('deliverable_id') ?? '').trim() || null;
   const vaultFileId = String(formData.get('vault_file_id') ?? '').trim() || null;
-  const orderId = String(formData.get('order_id') ?? '').trim() || null;
+  const callerOrderId = String(formData.get('order_id') ?? '').trim() || null;
 
-  if (!deliverableId && !vaultFileId) return;
+  if (!deliverableId && !vaultFileId) {
+    throw new Error('Select a deliverable or vault file to delete.');
+  }
 
   const admin = getSupabaseAdmin();
   const keysToDelete: string[] = [];
+  let resolvedOrderId: string | null = callerOrderId;
 
   if (deliverableId) {
     const { data: deliv } = await admin
@@ -3928,6 +4172,7 @@ export async function deleteDeliverableOrVaultFileAction(formData: FormData): Pr
     if (deliv.status === 'accepted') {
       throw new Error('Client-accepted deliverables cannot be deleted.');
     }
+    resolvedOrderId = deliv.order_id ?? resolvedOrderId;
 
     const { data: files } = await admin
       .from('vault_files')
@@ -3964,6 +4209,7 @@ export async function deleteDeliverableOrVaultFileAction(formData: FormData): Pr
     if (vFile.deliverable_id) {
       throw new Error('Delete the parent deliverable instead of detaching its file directly.');
     }
+    resolvedOrderId = vFile.order_id ?? resolvedOrderId;
 
     if (isR2Configured()) {
       await deletePrivateObjects([vFile.r2_key]);
@@ -3983,9 +4229,9 @@ export async function deleteDeliverableOrVaultFileAction(formData: FormData): Pr
     });
   }
 
-  if (orderId) {
-    revalidatePath(`/admin/orders/${orderId}`);
-    revalidatePath(`/portal/orders/${orderId}`);
+  if (resolvedOrderId) {
+    revalidatePath(`/admin/orders/${resolvedOrderId}`);
+    revalidatePath(`/portal/orders/${resolvedOrderId}`);
   }
   revalidatePath('/admin/recovery');
   revalidatePath('/portal/files');
@@ -4003,7 +4249,9 @@ export async function addTypedClientNoteAction(formData: FormData): Promise<void
   const isPinned = parseFormBoolean(formData, 'is_pinned');
   const followupDate = String(formData.get('followup_date') ?? '').trim() || null;
 
-  if (!clientId || !body) return;
+  if (!clientId || !body) {
+    throw new Error('Client identifier and note text are required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { error } = await admin.from('client_notes').insert({
@@ -4121,7 +4369,9 @@ export async function updateDraftProposalAction(formData: FormData): Promise<voi
 export async function voidProposalAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
-  if (!proposalId) return;
+  if (!proposalId) {
+    throw new Error('Proposal identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const { data: existing } = await admin
@@ -4168,7 +4418,9 @@ export async function voidProposalAction(formData: FormData): Promise<void> {
 export async function cloneProposalAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const proposalId = String(formData.get('proposal_id') ?? '').trim();
-  if (!proposalId) return;
+  if (!proposalId) {
+    throw new Error('Proposal identifier is required.');
+  }
 
   const admin = getSupabaseAdmin();
   const [{ data: source }, { data: sourceMilestones }] = await Promise.all([
@@ -4369,12 +4621,15 @@ export async function revokeClientInvitationAction(formData: FormData): Promise<
         }
 
         if (!hasSignedIn && (orderCount ?? 0) === 0 && (invoiceCount ?? 0) === 0) {
-          const nowIso = new Date().toISOString();
-          await admin
+          const validAfterSec = Math.floor(Date.now() / 1000);
+          const { error: deactivateErr } = await admin
             .from('profiles')
-            .update({ is_active: false, tokens_valid_after: nowIso })
+            .update({ is_active: false, tokens_valid_after: validAfterSec })
             .eq('id', targetProfileId)
             .eq('role', 'client');
+          if (deactivateErr) {
+            throw new Error(deactivateErr.message);
+          }
           if (typeof authAdmin?.updateUserById === 'function') {
             await authAdmin
               .updateUserById(targetProfileId, { ban_duration: '876000h' })

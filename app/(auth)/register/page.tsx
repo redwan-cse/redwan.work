@@ -54,9 +54,9 @@ function RegisterPageContent() {
       <CardContent className="space-y-4">
         {prefilledEmail && (
           <div className="rounded-lg border border-primary/30 bg-primary/8 p-3 text-xs text-foreground">
-            No registered client account was found for{' '}
+            Setting up a Client Portal account for{' '}
             <span className="font-mono font-semibold text-primary">{prefilledEmail}</span>.
-            Complete your registration below to continue.
+            Complete your registration below, or sign in if you already have an account.
           </div>
         )}
 

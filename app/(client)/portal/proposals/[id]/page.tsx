@@ -55,7 +55,9 @@ export default async function ClientProposalDetailPage({
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
-  const isExpired = Boolean(proposal.valid_until && proposal.valid_until < todayIso);
+  const isExpired =
+    (effectiveStatus === 'sent' || effectiveStatus === 'viewed') &&
+    Boolean(proposal.valid_until && proposal.valid_until < todayIso);
   const canRespond = (effectiveStatus === 'sent' || effectiveStatus === 'viewed') && !isExpired;
 
   return (

@@ -182,7 +182,7 @@ export default async function BlogsPage({
       {/* Main Content */}
       <section className="py-14">
         <div className="container">
-          <BlogBrowser items={enrichedPosts} currentPage={currentPage} />
+          <BlogBrowser key={currentPage} items={enrichedPosts} currentPage={currentPage} />
 
           {/* Server Pagination with Instant Transition Feedback */}
           <BlogPagination

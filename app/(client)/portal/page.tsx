@@ -145,6 +145,9 @@ export default async function ClientPortalOverviewPage() {
         const unpaidInvoicesList = (invoices ?? []).filter(
           (i) => i.status === 'issued' || i.status === 'partially_paid' || i.status === 'overdue'
         );
+        const pendingProposalsList = (proposals ?? []).filter(
+          (p) => p.status === 'sent' || p.status === 'viewed'
+        );
         const unsignedRoeOrders = (orders ?? []).filter(
           (o) =>
             o.requires_roe &&
@@ -155,12 +158,43 @@ export default async function ClientPortalOverviewPage() {
         const reviewReadyOrders = (orders ?? []).filter(
           (o) => o.status === 'in_review' || o.status === 'delivered'
         );
-        if (
-          unpaidInvoicesList.length === 0 &&
-          unsignedRoeOrders.length === 0 &&
-          reviewReadyOrders.length === 0 &&
-          (overview.pending_proposals ?? 0) === 0
-        ) {
+        const unpaidCount = overview.unpaid_invoices ?? unpaidInvoicesList.length;
+        const pendingProposalsCount = overview.pending_proposals ?? pendingProposalsList.length;
+        const readyDeliverablesCount =
+          overview.awaiting_review_deliverables ?? reviewReadyOrders.length;
+        const unsignedRoeCount = unsignedRoeOrders.length;
+
+        const attentionSummaryItems: Array<{ key: string; count: number; label: string }> = [];
+        if (unpaidCount > 0) {
+          attentionSummaryItems.push({
+            key: 'invoices',
+            count: unpaidCount,
+            label: 'open invoice(s) awaiting payment',
+          });
+        }
+        if (pendingProposalsCount > 0) {
+          attentionSummaryItems.push({
+            key: 'proposals',
+            count: pendingProposalsCount,
+            label: 'proposal(s) awaiting your review',
+          });
+        }
+        if (unsignedRoeCount > 0) {
+          attentionSummaryItems.push({
+            key: 'roe',
+            count: unsignedRoeCount,
+            label: 'engagement(s) awaiting Rules of Engagement signature',
+          });
+        }
+        if (readyDeliverablesCount > 0) {
+          attentionSummaryItems.push({
+            key: 'deliverables',
+            count: readyDeliverablesCount,
+            label: 'deliverable(s) ready for sign-off',
+          });
+        }
+
+        if (attentionSummaryItems.length === 0) {
           return null;
         }
         return (
@@ -171,31 +205,37 @@ export default async function ClientPortalOverviewPage() {
                   Needs Your Attention
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                  {unpaidInvoicesList.length > 0 && (
-                    <span>
-                      <strong className="text-foreground">{unpaidInvoicesList.length}</strong> open invoice(s) awaiting payment
+                  {attentionSummaryItems.map((item, idx) => (
+                    <span key={item.key}>
+                      {idx > 0 ? '· ' : ''}
+                      <strong className="text-foreground">{item.count}</strong> {item.label}
                     </span>
-                  )}
-                  {unsignedRoeOrders.length > 0 && (
-                    <span>
-                      · <strong className="text-foreground">{unsignedRoeOrders.length}</strong> engagement(s) awaiting Rules of Engagement signature
-                    </span>
-                  )}
-                  {reviewReadyOrders.length > 0 && (
-                    <span>
-                      · <strong className="text-foreground">{reviewReadyOrders.length}</strong> deliverable(s) ready for sign-off
-                    </span>
-                  )}
+                  ))}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {unpaidInvoicesList[0] && (
+                {unpaidInvoicesList[0] ? (
                   <Button asChild size="sm" className="h-8 rounded-full text-xs">
                     <Link href={`/portal/invoices/${unpaidInvoicesList[0].id}`}>
                       Pay {unpaidInvoicesList[0].code} →
                     </Link>
                   </Button>
-                )}
+                ) : unpaidCount > 0 ? (
+                  <Button asChild size="sm" className="h-8 rounded-full text-xs">
+                    <Link href="/portal/invoices">View Open Invoices →</Link>
+                  </Button>
+                ) : null}
+                {pendingProposalsList[0] ? (
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
+                    <Link href={`/portal/proposals/${pendingProposalsList[0].id}`}>
+                      Review {pendingProposalsList[0].code} →
+                    </Link>
+                  </Button>
+                ) : pendingProposalsCount > 0 ? (
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
+                    <Link href="/portal/proposals">Review Proposals →</Link>
+                  </Button>
+                ) : null}
                 {unsignedRoeOrders[0] && (
                   <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
                     <Link href={`/portal/orders/${unsignedRoeOrders[0].id}`}>
@@ -203,13 +243,17 @@ export default async function ClientPortalOverviewPage() {
                     </Link>
                   </Button>
                 )}
-                {reviewReadyOrders[0] && (
+                {reviewReadyOrders[0] ? (
                   <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
                     <Link href={`/portal/orders/${reviewReadyOrders[0].id}`}>
                       Review {reviewReadyOrders[0].code} →
                     </Link>
                   </Button>
-                )}
+                ) : readyDeliverablesCount > 0 ? (
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full text-xs">
+                    <Link href="/portal/files">Inspect Deliverables →</Link>
+                  </Button>
+                ) : null}
               </div>
             </CardContent>
           </Card>

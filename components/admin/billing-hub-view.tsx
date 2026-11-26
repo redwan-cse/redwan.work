@@ -50,12 +50,17 @@ export async function BillingHubView({
   const admin = getSupabaseAdmin();
   const [
     { data: invoices },
+    { count: openInvoiceExactCount },
     { data: pendingPayments },
     { data: retainers },
     { data: clients },
     { data: orders },
   ] = await Promise.all([
     admin.from('invoices').select('*').order('created_at', { ascending: false }).limit(250),
+    admin
+      .from('invoices')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['issued', 'partially_paid', 'overdue']),
     admin
       .from('payments')
       .select('*')
@@ -70,15 +75,33 @@ export async function BillingHubView({
     (clients ?? []).map((c) => [c.id, c.full_name || c.email])
   );
   const invoiceMap = new Map((invoices ?? []).map((inv) => [inv.id, inv]));
+  const missingPaymentInvoiceIds = Array.from(
+    new Set(
+      (pendingPayments ?? [])
+        .map((p) => p.invoice_id)
+        .filter((invId): invId is string => Boolean(invId) && !invoiceMap.has(invId))
+    )
+  );
+  if (missingPaymentInvoiceIds.length > 0) {
+    const { data: extraInvoices } = await admin
+      .from('invoices')
+      .select('*')
+      .in('id', missingPaymentInvoiceIds);
+    for (const inv of extraInvoices ?? []) {
+      invoiceMap.set(inv.id, inv);
+    }
+  }
 
   const filteredInvoices = (invoices ?? []).filter(
     (inv) => !statusFilter || inv.status === statusFilter
   );
   const pagedInvoices = paginateItems(filteredInvoices, pageParam);
 
-  const openInvoiceCount = (invoices ?? []).filter(
-    (i) => i.status === 'issued' || i.status === 'partially_paid' || i.status === 'overdue'
-  ).length;
+  const openInvoiceCount =
+    openInvoiceExactCount ??
+    (invoices ?? []).filter(
+      (i) => i.status === 'issued' || i.status === 'partially_paid' || i.status === 'overdue'
+    ).length;
   const activeRetainerCount = (retainers ?? []).filter((r) => r.status === 'active').length;
 
   const tabs = [
@@ -106,23 +129,40 @@ export async function BillingHubView({
         activeTab={activeTab}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <CsvExportButton
-              filename="invoices-ledger.csv"
-              headers={['Code', 'Client', 'Status', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Credited', 'FX Rate']}
-              rows={filteredInvoices.map((inv) => [
-                inv.code ?? '',
-                clientMap.get(inv.client_id) ?? 'Client',
-                inv.status,
-                inv.currency,
-                ((inv.subtotal_cents ?? inv.total_cents) / 100).toFixed(2),
-                ((inv.discount_cents ?? 0) / 100).toFixed(2),
-                ((inv.tax_cents ?? 0) / 100).toFixed(2),
-                (inv.total_cents / 100).toFixed(2),
-                (inv.amount_paid_cents / 100).toFixed(2),
-                (inv.credited_cents / 100).toFixed(2),
-                inv.fx_rate_to_usd,
-              ])}
-            />
+            {activeTab === 'invoices' ? (
+              <CsvExportButton
+                filename="invoices-ledger.csv"
+                headers={['Code', 'Client', 'Status', 'Currency', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Credited', 'FX Rate']}
+                rows={filteredInvoices.map((inv) => [
+                  inv.code ?? '',
+                  clientMap.get(inv.client_id) ?? 'Client',
+                  inv.status,
+                  inv.currency,
+                  ((inv.subtotal_cents ?? inv.total_cents) / 100).toFixed(2),
+                  ((inv.discount_cents ?? 0) / 100).toFixed(2),
+                  ((inv.tax_cents ?? 0) / 100).toFixed(2),
+                  (inv.total_cents / 100).toFixed(2),
+                  (inv.amount_paid_cents / 100).toFixed(2),
+                  (inv.credited_cents / 100).toFixed(2),
+                  inv.fx_rate_to_usd,
+                ])}
+              />
+            ) : (
+              <CsvExportButton
+                filename="retainers-export.csv"
+                headers={['Title', 'Client', 'Status', 'Currency', 'Monthly Fee', 'Hours/Mo', 'Hours Used', 'Next Invoice']}
+                rows={(retainers ?? []).map((ret) => [
+                  ret.title,
+                  clientMap.get(ret.client_id) ?? 'Client',
+                  ret.status,
+                  ret.currency,
+                  (ret.monthly_fee_cents / 100).toFixed(2),
+                  ret.hours_per_month,
+                  ret.hours_used_current_period,
+                  ret.next_invoice_date ?? '',
+                ])}
+              />
+            )}
             <Button asChild size="sm" className="gap-1.5 rounded-full">
               <Link href="/admin/invoices/new">
                 <FileSpreadsheet className="h-3.5 w-3.5" />
@@ -331,8 +371,9 @@ export async function BillingHubView({
                       name="amount_major"
                       aria-label="Invoice amount"
                       type="number"
+                      step="0.01"
                       required
-                      min="1"
+                      min="0.01"
                       defaultValue="500"
                       className="h-10 tabular-nums"
                     />
@@ -345,6 +386,7 @@ export async function BillingHubView({
                       aria-label="Exchange rate to USD"
                       type="number"
                       step="0.0001"
+                      min="0.0001"
                       defaultValue="1.0"
                       className="h-10 tabular-nums"
                     />
@@ -359,6 +401,7 @@ export async function BillingHubView({
                       name="discount_major"
                       aria-label="Discount amount"
                       type="number"
+                      step="0.01"
                       min="0"
                       defaultValue="0"
                       className="h-10 tabular-nums"
@@ -371,6 +414,8 @@ export async function BillingHubView({
                       name="tax_rate_bps"
                       aria-label="Tax rate in basis points"
                       type="number"
+                      min="0"
+                      max="10000"
                       defaultValue="0"
                       className="h-10 tabular-nums"
                     />
@@ -382,6 +427,8 @@ export async function BillingHubView({
                       name="due_days"
                       aria-label="Due days"
                       type="number"
+                      min="1"
+                      max="365"
                       defaultValue="7"
                       className="h-10 tabular-nums"
                     />
@@ -409,7 +456,7 @@ export async function BillingHubView({
                 <CardDescription className="text-xs">Click any invoice to issue credit notes, record manual cash/wire payments, or print A4.</CardDescription>
               </div>
               <form method="get" className="flex items-center gap-2">
-                {basePath === '/admin/billing' && <input type="hidden" name="tab" value="invoices" />}
+                {basePath !== '/admin/invoices' && <input type="hidden" name="tab" value="invoices" />}
                 <select
                   name="status"
                   aria-label="Filter invoices by status"
@@ -513,7 +560,7 @@ export async function BillingHubView({
                 startIndex={pagedInvoices.startIndex}
                 endIndex={pagedInvoices.endIndex}
                 query={{
-                  tab: basePath === '/admin/billing' ? 'invoices' : undefined,
+                  tab: basePath !== '/admin/invoices' ? 'invoices' : undefined,
                   status: statusFilter || undefined,
                 }}
               />
@@ -567,11 +614,11 @@ export async function BillingHubView({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="ret-usd" className="text-sm font-medium">Monthly Rate (USD)</Label>
-                    <Input id="ret-usd" name="monthly_usd" aria-label="Monthly rate in USD" type="number" defaultValue="750" className="h-10 tabular-nums" />
+                    <Input id="ret-usd" name="monthly_usd" aria-label="Monthly rate in USD" type="number" step="0.01" min="1" defaultValue="750" className="h-10 tabular-nums" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="ret-hours" className="text-sm font-medium">Hours / Month</Label>
-                    <Input id="ret-hours" name="hours_included" aria-label="Hours per month" type="number" defaultValue="10" className="h-10 tabular-nums" />
+                    <Input id="ret-hours" name="hours_included" aria-label="Hours per month" type="number" min="1" max="500" defaultValue="10" className="h-10 tabular-nums" />
                   </div>
                 </div>
                 <Button type="submit" className="w-full gap-1.5 rounded-full">

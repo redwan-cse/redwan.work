@@ -81,7 +81,11 @@ export default async function ClientInvoicesListPage() {
                   </div>
                   <Button asChild size="sm" variant="outline" className="gap-1">
                     <Link href={`/portal/invoices/${inv.id}`}>
-                      {inv.status === 'paid' ? 'Receipt' : 'Pay / Submit Proof'}
+                      {inv.status === 'paid'
+                        ? 'Receipt'
+                        : inv.status === 'void' || inv.status === 'refunded'
+                          ? 'View Invoice'
+                          : 'Pay / Submit Proof'}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>

@@ -271,7 +271,7 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
       'app/(admin)/admin/orders/[id]/page.tsx',
       'app/(admin)/admin/clients/[id]/page.tsx',
       'app/(admin)/admin/proposals/[id]/page.tsx',
-      'app/(admin)/admin/tickets/[id]/page.tsx',
+      'components/admin/admin-ticket-reply-form.tsx',
       'app/(client)/portal/orders/[id]/page.tsx',
       'components/panel/contract-live-chat.tsx',
       'components/panel/portal-order-store-form.tsx',
@@ -282,6 +282,10 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
       );
       expect(src, `${rel} should render <FormCheckbox`).toContain('<FormCheckbox');
     }
+
+    const adminTicketPageSrc = readSrc('app/(admin)/admin/tickets/[id]/page.tsx');
+    expect(adminTicketPageSrc).not.toMatch(/h-6 w-6[^\n"]*accent-primary/);
+    expect(adminTicketPageSrc).toContain('<AdminTicketReplyForm');
   });
 
   it('[UI-V5-14] fixes Pillar select truncation, Retainer inline Status label alignment, and Content Studio tier labels', () => {

@@ -50,14 +50,19 @@ export default async function AdminOrdersPage({
   const qFilter = (params.q ?? '').trim().toLowerCase();
 
   const admin = getSupabaseAdmin();
+  let ordersQuery = admin
+    .from('orders')
+    .select(
+      'id, code, client_id, title, pillar, status, progress_percent, requires_roe, roe_signed_at, total_cents, currency, due_at, created_at'
+    )
+    .order('created_at', { ascending: false })
+    .limit(250);
+  if (statusFilter) {
+    ordersQuery = ordersQuery.eq('status', statusFilter);
+  }
+
   const [{ data: orders }, { data: clients }, { data: pendingCancels }] = await Promise.all([
-    admin
-      .from('orders')
-      .select(
-        'id, code, client_id, title, pillar, status, progress_percent, requires_roe, roe_signed_at, total_cents, currency, due_at, created_at'
-      )
-      .order('created_at', { ascending: false })
-      .limit(250),
+    ordersQuery,
     admin
       .from('profiles')
       .select('id, full_name, email')
@@ -65,7 +70,7 @@ export default async function AdminOrdersPage({
       .order('created_at', { ascending: false }),
     admin
       .from('cancellation_requests')
-      .select('id, order_id, reason, created_at')
+      .select('id, order_id, reason, created_at, order:orders(code, title)')
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(10),
@@ -160,7 +165,8 @@ export default async function AdminOrdersPage({
           </CardHeader>
           <CardContent className="space-y-2.5">
             {pendingCancels.map((req) => {
-              const targetOrder = orderMap.get(req.order_id);
+              const joinedOrder = Array.isArray(req.order) ? req.order[0] : req.order;
+              const targetOrder = joinedOrder ?? orderMap.get(req.order_id);
               return (
                 <div
                   key={req.id}
@@ -228,6 +234,7 @@ export default async function AdminOrdersPage({
           <option value="pending_requirements">pending_requirements</option>
           <option value="queued">queued</option>
           <option value="in_progress">in_progress</option>
+          <option value="on_hold">on_hold</option>
           <option value="in_review">in_review</option>
           <option value="revision_requested">revision_requested</option>
           <option value="delivered">delivered</option>
@@ -319,18 +326,25 @@ export default async function AdminOrdersPage({
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="direct-order-total" className="text-sm font-medium">Total *</Label>
-                    <Input id="direct-order-total" name="total_usd" aria-label="Order total amount" type="number" required min="1" defaultValue="1000" className="h-10 tabular-nums" />
+                    <Input id="direct-order-total" name="total_usd" aria-label="Order total amount" type="number" step="0.01" required min="1" defaultValue="1000" className="h-10 tabular-nums" />
                   </div>
                   <div className="space-y-1.5">
+                    <Label htmlFor="direct-order-fx" className="text-sm font-medium">FX→USD</Label>
+                    <Input id="direct-order-fx" name="fx_rate_to_usd" aria-label="Exchange rate to USD" type="number" step="0.0001" min="0.0001" defaultValue="1.0" className="h-10 tabular-nums" />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="direct-order-deposit" className="text-sm font-medium">Deposit %</Label>
-                    <Input id="direct-order-deposit" name="deposit_percent" aria-label="Deposit percentage" type="number" defaultValue="50" className="h-10 tabular-nums" />
+                    <Input id="direct-order-deposit" name="deposit_percent" aria-label="Deposit percentage" type="number" min="0" max="100" defaultValue="50" className="h-10 tabular-nums" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="direct-order-due" className="text-sm font-medium">Due Days</Label>
-                    <Input id="direct-order-due" name="due_days" aria-label="Invoice due days" type="number" defaultValue="14" className="h-10 tabular-nums" />
+                    <Input id="direct-order-due" name="due_days" aria-label="Invoice due days" type="number" min="1" max="365" defaultValue="14" className="h-10 tabular-nums" />
                   </div>
                 </div>
 

@@ -105,11 +105,13 @@ export default async function AdminOrderDetailPage({
           .from('vault_files')
           .select('*')
           .eq('order_id', id)
+          .is('archived_at', null)
           .order('created_at', { ascending: false })
       : admin
           .from('vault_files')
           .select('id', { count: 'exact', head: true })
           .eq('order_id', id)
+          .is('archived_at', null)
           .in('category', ['requirement_attachment', 'order_attachment']),
     activeTab === 'revisions'
       ? admin
@@ -843,6 +845,7 @@ export default async function AdminOrderDetailPage({
                     name="amount_usd"
                     aria-label="New milestone amount"
                     type="number"
+                    step="0.01"
                     min="0"
                     defaultValue="250"
                     placeholder="Amount"

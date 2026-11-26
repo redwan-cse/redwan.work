@@ -73,7 +73,7 @@ export default async function AdminClientDetailPage({
     vaultFilesDataRes,
     auditLogsDataRes,
   ] = await Promise.all([
-    admin.from('profiles').select('*').eq('id', id).maybeSingle(),
+    admin.from('profiles').select('*').eq('id', id).eq('role', 'client').maybeSingle(),
     admin.from('client_profiles').select('*').eq('user_id', id).maybeSingle(),
     activeTab === 'orders'
       ? Promise.resolve({ count: null as number | null })

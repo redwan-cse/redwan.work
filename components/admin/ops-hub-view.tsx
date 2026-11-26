@@ -22,22 +22,37 @@ export async function OpsHubView({
   actionFilter = '',
   qFilter = '',
   pageParam,
+  basePath = '/admin/ops',
 }: {
   actionFilter?: string;
   qFilter?: string;
   pageParam?: string;
+  basePath?: string;
 }) {
   const admin = getSupabaseAdmin();
   const [
-    { data: logs },
+    { data: logs, count: totalAuditLogsCount },
     { count: queuedEmailsCount },
     { count: failedEmailsCount },
     { count: vaultCount },
   ] = await Promise.all([
-    admin.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(250),
-    admin.from('email_outbox').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-    admin.from('email_outbox').select('id', { count: 'exact', head: true }).in('status', ['failed', 'dead_letter']),
-    admin.from('vault_files').select('id', { count: 'exact', head: true }).is('archived_at', null),
+    admin
+      .from('audit_logs')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .limit(250),
+    admin
+      .from('email_outbox')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['pending', 'processing']),
+    admin
+      .from('email_outbox')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['failed', 'dead_letter']),
+    admin
+      .from('vault_files')
+      .select('id', { count: 'exact', head: true })
+      .is('archived_at', null),
   ]);
 
   const lowerQ = qFilter.trim().toLowerCase();
@@ -55,7 +70,12 @@ export async function OpsHubView({
   const uniqueActions = Array.from(new Set((logs ?? []).map((l) => l.action))).slice(0, 30);
 
   const tabs = [
-    { id: 'audit', label: 'Immutable Audit Log', href: '/admin/ops', count: logs?.length ?? 0 },
+    {
+      id: 'audit',
+      label: 'Immutable Audit Log',
+      href: basePath === '/admin/audit' ? '/admin/audit' : '/admin/ops',
+      count: totalAuditLogsCount ?? logs?.length ?? 0,
+    },
     {
       id: 'outbox',
       label: 'Email Outbox & Queue',
@@ -235,7 +255,7 @@ export async function OpsHubView({
             </p>
           )}
           <AdminPagination
-            basePath="/admin/ops"
+            basePath={basePath}
             page={pagedLogs.page}
             totalPages={pagedLogs.totalPages}
             totalItems={pagedLogs.totalItems}

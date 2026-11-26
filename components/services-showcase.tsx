@@ -63,6 +63,8 @@ function PillarQuerySync({
   useEffect(() => {
     if (urlPillar && urlPillar in SERVICE_PILLARS) {
       onSelect(urlPillar);
+    } else {
+      onSelect('all');
     }
   }, [urlPillar, onSelect]);
 
@@ -166,6 +168,20 @@ export function ServicesShowcase({
 
       {/* Service Catalog Blocks */}
       <div className="space-y-14">
+        {filteredServices.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border/80 bg-card/40 p-10 text-center text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">No services published in this pillar yet.</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedPillar('all')}
+              className="mt-4 rounded-full"
+            >
+              Show All 5 Pillars
+            </Button>
+          </div>
+        ) : null}
         {filteredServices.map((service) => {
           const draft = getDraft(service);
           const selectedPkg = service.packages.find(

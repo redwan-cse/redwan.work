@@ -31,9 +31,15 @@ export async function ContentAssetsPanel() {
   const r2Ready = isPublicR2Configured();
   const baseConfigured = Boolean(process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL);
 
-  const objects: R2ObjectSummary[] = r2Ready
-    ? await listPublicObjects('assets/').catch(() => [])
-    : [];
+  let objects: R2ObjectSummary[] = [];
+  let listError: string | null = null;
+  if (r2Ready) {
+    try {
+      objects = await listPublicObjects('assets/');
+    } catch (err) {
+      listError = err instanceof Error ? err.message : 'Unable to query public R2 bucket.';
+    }
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-12">
@@ -44,8 +50,8 @@ export async function ContentAssetsPanel() {
             Upload Public Asset
           </CardTitle>
           <CardDescription className="text-xs">
-            Magic-byte validated PNG, JPEG, WebP, PDF, or ZIP to the public Cloudflare R2 CDN
-            bucket. SVG uploads are blocked for XSS safety. Max 15 MB per file.
+            Magic-byte validated PNG, JPEG, WebP, AVIF, PDF, or ZIP to the public Cloudflare R2 CDN
+            bucket. SVG uploads are blocked for XSS safety. Max 10 MB per file.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -62,14 +68,14 @@ export async function ContentAssetsPanel() {
             >
               <div className="space-y-1.5">
                 <Label htmlFor="public-asset-file" className="text-sm">
-                  Select Asset File (PNG / JPG / WebP / PDF / ZIP) *
+                  Select Asset File (PNG / JPG / WebP / AVIF / PDF / ZIP) *
                 </Label>
                 <Input
                   id="public-asset-file"
                   type="file"
                   name="asset_file"
                   required
-                  accept=".png,.jpg,.jpeg,.webp,.pdf,.zip"
+                  accept=".png,.jpg,.jpeg,.webp,.avif,.pdf,.zip"
                   className="h-10 cursor-pointer"
                 />
               </div>
@@ -89,7 +95,11 @@ export async function ContentAssetsPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {objects.length > 0 ? (
+          {listError ? (
+            <div role="alert" className="m-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              Could not list public R2 objects: {listError}
+            </div>
+          ) : objects.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>

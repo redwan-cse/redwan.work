@@ -73,7 +73,7 @@ export default async function ClientOrderDetailPage({
       .order('created_at'),
     admin
       .from('vault_files')
-      .select('id, filename, size_bytes, created_at')
+      .select('id, filename, size_bytes, retention_until, archived_at, created_at')
       .eq('order_id', id)
       .in('category', ['requirement_attachment', 'order_attachment'])
       .is('archived_at', null)
@@ -110,7 +110,8 @@ export default async function ClientOrderDetailPage({
     ? order.client_reviews[0]
     : order.client_reviews;
 
-  const isReqLocked = Boolean(reqRecord?.verified_by_admin_at);
+  const isReqLocked = Boolean(reqRecord?.verified_by_admin_at) || order.status === 'cancelled';
+  const nowMs = new Date().getTime();
   const canRequestCancellation =
     session.role === 'client' &&
     order.status !== 'completed' &&
@@ -415,7 +416,14 @@ export default async function ClientOrderDetailPage({
                   release_notes: string | null;
                   client_feedback?: string | null;
                   auto_accept_at?: string | null;
-                  vault_files?: Array<{ id: string; filename: string; size_bytes: number; sha256_checksum: string | null }>;
+                  vault_files?: Array<{
+                    id: string;
+                    filename: string;
+                    size_bytes: number;
+                    sha256_checksum: string | null;
+                    retention_until?: string | null;
+                    archived_at?: string | null;
+                  }>;
                 }) => {
                   const files = Array.isArray(del.vault_files) ? del.vault_files : [];
                   return (
@@ -476,12 +484,21 @@ export default async function ClientOrderDetailPage({
                                   </div>
                                 )}
                               </div>
-                              <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs">
-                                <a href={`/api/files/${f.id}/download`}>
-                                  <Download className="h-3.5 w-3.5" />
-                                  Download ({(f.size_bytes / 1024).toFixed(1)} KB)
-                                </a>
-                              </Button>
+                              {Boolean(f.archived_at) ||
+                              (typeof f.retention_until === 'string' &&
+                                new Date(f.retention_until).getTime() <= nowMs) ? (
+                                <Button size="sm" variant="outline" disabled className="h-8 gap-1 text-xs">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  Retention Expired
+                                </Button>
+                              ) : (
+                                <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                                  <a href={`/api/files/${f.id}/download`}>
+                                    <Download className="h-3.5 w-3.5" />
+                                    Download ({(f.size_bytes / 1024).toFixed(1)} KB)
+                                  </a>
+                                </Button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -655,17 +672,27 @@ export default async function ClientOrderDetailPage({
               {requirementAttachments && requirementAttachments.length > 0 && (
                 <div className="space-y-1.5 border-t border-border/60 pt-3 text-xs">
                   <div className="font-semibold">Uploaded Intake Documents</div>
-                  {requirementAttachments.map((vf) => (
-                    <div key={vf.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-1.5">
-                      <span className="truncate font-mono">{vf.filename}</span>
-                      <a
-                        href={`/api/files/${vf.id}/download`}
-                        className="font-mono text-primary hover:underline"
-                      >
-                        Download
-                      </a>
-                    </div>
-                  ))}
+                  {requirementAttachments.map((vf) => {
+                    const expired =
+                      Boolean(vf.archived_at) ||
+                      (typeof vf.retention_until === 'string' &&
+                        new Date(vf.retention_until).getTime() <= nowMs);
+                    return (
+                      <div key={vf.id} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-1.5">
+                        <span className="truncate font-mono">{vf.filename}</span>
+                        {expired ? (
+                          <span className="font-mono text-muted-foreground">Expired</span>
+                        ) : (
+                          <a
+                            href={`/api/files/${vf.id}/download`}
+                            className="font-mono text-primary hover:underline"
+                          >
+                            Download
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

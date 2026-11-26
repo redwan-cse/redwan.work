@@ -255,7 +255,7 @@ export default async function ClientProfilePage() {
 
       <PasswordChangeCard />
 
-      <ClientMfaCard />
+      <ClientMfaCard mfaEnforced={Boolean(profile?.mfa_enforced)} />
 
       <Card className="border-border/80 bg-card/85">
         <CardHeader className="pb-3">

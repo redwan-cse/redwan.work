@@ -140,8 +140,8 @@ export async function GET(request: NextRequest) {
       group: 'Inquiries',
       id: `inquiry-${inq.id}`,
       label: `${inq.code ? `${inq.code}: ` : ''}${inq.name} — ${inq.company || inq.email}`,
-      meta: inq.status,
-      href: `/admin/pipeline`,
+      meta: [inq.email, inq.status].filter(Boolean).join(' · '),
+      href: `/admin/pipeline?tab=inquiries&inquiry_id=${inq.id}`,
     })),
   ];
 
