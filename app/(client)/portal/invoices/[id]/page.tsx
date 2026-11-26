@@ -93,7 +93,7 @@ export default async function ClientInvoiceDetailPage({
           </div>
           <div className="text-right">
             <div className="font-mono text-2xl font-extrabold">
-              {invoice.currency} {(invoice.total_cents / 100).toLocaleString()}
+              {formatMoney(invoice.total_cents, invoice.currency)}
             </div>
             <div className="font-mono text-xs text-muted-foreground">
               Balance Due: {invoice.currency} {balanceDueMajor.toLocaleString()}
@@ -181,7 +181,7 @@ export default async function ClientInvoiceDetailPage({
                         </div>
                       </div>
                       <div className="font-mono font-bold">
-                        {invoice.currency} {(computedCents / 100).toLocaleString()}
+                        {formatMoney(computedCents, invoice.currency)}
                       </div>
                     </div>
                   );
@@ -232,7 +232,7 @@ export default async function ClientInvoiceDetailPage({
                 <div className="flex justify-between border-t border-border/60 pt-1.5 text-sm font-bold">
                   <span>Balance Due:</span>
                   <span>
-                    {invoice.currency} {balanceDueMajor.toLocaleString()}
+                    {formatMoney(balanceDueCents, invoice.currency)}
                   </span>
                 </div>
                 <div className="hidden pt-1 text-[11px] uppercase print:block">
@@ -370,6 +370,7 @@ export default async function ClientInvoiceDetailPage({
                 <ActionFeedbackForm
                   action={submitInvoicePaymentProofAction}
                   successMessage="Payment proof submitted for verification."
+                  resetOnSuccess
                   className="space-y-3.5"
                 >
                   <input type="hidden" name="invoice_id" value={invoice.id} />
@@ -401,7 +402,9 @@ export default async function ClientInvoiceDetailPage({
                       name="amount_major"
                       type="number"
                       step="0.01"
-                      defaultValue={balanceDueMajor}
+                      min="0.01"
+                      max={balanceDueMajor > 0 ? balanceDueMajor.toFixed(2) : undefined}
+                      defaultValue={balanceDueMajor.toFixed(2)}
                       required
                       className="h-10 tabular-nums"
                     />

@@ -226,14 +226,27 @@ async function handleStorageRetentionCron(request: NextRequest) {
       'private/',
       vaultOrphanCutoff,
       async (keys) => {
-        const { data: trackedVaultFiles, error: trackedVaultErr } = await admin
-          .from('vault_files')
-          .select('r2_key')
-          .in('r2_key', keys);
+        const [{ data: trackedVaultFiles, error: trackedVaultErr }, activeRes] = await Promise.all([
+          admin
+            .from('vault_files')
+            .select('r2_key')
+            .in('r2_key', keys)
+            .is('archived_at', null),
+          admin
+            .from('vault_upload_reservations')
+            .select('r2_key')
+            .in('r2_key', keys)
+            .gt('expires_at', nowIso)
+            .then((res) => res, () => ({ data: [] as Array<{ r2_key: string }>, error: null })),
+        ]);
         if (trackedVaultErr || !trackedVaultFiles) {
           return { retained: new Set<string>(), ok: false };
         }
-        return { retained: new Set(trackedVaultFiles.map((r) => r.r2_key)), ok: true };
+        const retained = new Set<string>(trackedVaultFiles.map((r) => r.r2_key));
+        for (const r of activeRes?.data ?? []) {
+          if (r.r2_key) retained.add(r.r2_key);
+        }
+        return { retained, ok: true };
       }
     );
 

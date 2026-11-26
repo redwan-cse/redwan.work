@@ -52,8 +52,16 @@ export async function GET(
   }
 
   const rawAfter = request.nextUrl.searchParams.get('after')?.trim() ?? '';
+  const ISO_TIMESTAMP_RE =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
   const parsedAfterMs = rawAfter ? Date.parse(rawAfter) : Number.NaN;
-  const afterIso = Number.isFinite(parsedAfterMs) ? new Date(parsedAfterMs).toISOString() : null;
+  // Preserve Postgres 6-digit microsecond precision when present so .gt('created_at', ...) never loops on the last message.
+  const afterIso =
+    rawAfter && ISO_TIMESTAMP_RE.test(rawAfter) && Number.isFinite(parsedAfterMs)
+      ? rawAfter
+      : Number.isFinite(parsedAfterMs)
+        ? new Date(parsedAfterMs).toISOString()
+        : null;
 
   const authorSelect =
     session.role === 'admin'
@@ -188,7 +196,21 @@ export async function POST(
 
   const isInternalNote = session.role === 'admin' && parsedBody.data.is_internal_note;
 
+  if (
+    isInternalNote &&
+    (parsedBody.data.attachment || parsedBody.data.attachment_file_ids.length > 0)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'File attachments are disabled on internal admin notes to prevent exposing internal files in the client vault.',
+      },
+      { status: 400 }
+    );
+  }
+
   const attachmentIds: string[] = [];
+  let createdVaultFileId: string | null = null;
   const attachedMetadata: Array<{
     id: string;
     filename: string;
@@ -265,6 +287,7 @@ export async function POST(
         { status: 500 }
       );
     }
+    createdVaultFileId = vFile.id;
     attachmentIds.push(vFile.id);
     attachedMetadata.push(vFile);
   }
@@ -305,6 +328,9 @@ export async function POST(
     .single();
 
   if (error || !inserted) {
+    if (createdVaultFileId) {
+      await admin.from('vault_files').delete().eq('id', createdVaultFileId).then(undefined, () => {});
+    }
     console.error('[orders/messages] insert failed:', error?.message);
     return NextResponse.json(
       { error: 'Could not send message.' },
@@ -348,7 +374,7 @@ export async function POST(
         category: 'message',
         title: `Client message on contract ${order.code}`,
         body: body.slice(0, 120),
-        href: `/admin/orders/${id}`,
+        href: `/admin/orders/${id}?tab=thread`,
       });
       await enqueueTransactionalEmail({
         toEmail:
@@ -357,7 +383,7 @@ export async function POST(
         subject: `Client Message on Contract ${order.code} — ${order.title}`,
         payload: {
           message: body.slice(0, 400),
-          actionUrl: `${siteOrigin}/admin/orders/${id}`,
+          actionUrl: `${siteOrigin}/admin/orders/${id}?tab=thread`,
         },
         entityType: 'order',
         entityId: id,

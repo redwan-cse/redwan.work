@@ -94,7 +94,9 @@ export default async function ClientVaultFilesPage({
           >
             <option value="">All Categories</option>
             <option value="deliverable">Deliverables</option>
+            <option value="order_attachment">Contract Chat Attachments</option>
             <option value="requirement_attachment">Requirements / Scope</option>
+            <option value="roe_document">Rules of Engagement</option>
             <option value="ticket_attachment">Ticket Attachments</option>
             <option value="payment_proof">Payment Receipts</option>
           </select>
@@ -146,13 +148,14 @@ export default async function ClientVaultFilesPage({
                     <span>Uploaded {new Date(file.created_at).toLocaleDateString()}</span>
                     {file.retention_until ? (
                       (() => {
-                        const daysLeft = Math.max(
-                          0,
-                          Math.ceil(
-                            (new Date(file.retention_until).getTime() - nowMs) / 86_400_000
-                          )
-                        );
-                        return (
+                        const expiresMs = new Date(file.retention_until).getTime();
+                        const isExpired = expiresMs <= nowMs;
+                        const daysLeft = Math.max(0, Math.ceil((expiresMs - nowMs) / 86_400_000));
+                        return isExpired ? (
+                          <Badge variant="destructive" className="font-mono text-[10px]">
+                            Retention Expired
+                          </Badge>
+                        ) : (
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             Retained until {new Date(file.retention_until).toLocaleDateString()} ({daysLeft}d left)
@@ -167,12 +170,19 @@ export default async function ClientVaultFilesPage({
                   </div>
                 </div>
 
-                <Button asChild size="sm" className="gap-1.5">
-                  <a href={`/api/files/${file.id}/download`}>
-                    <Download className="h-3.5 w-3.5" />
-                    Secure Download
-                  </a>
-                </Button>
+                {file.retention_until && new Date(file.retention_until).getTime() <= nowMs ? (
+                  <Button size="sm" variant="outline" disabled className="gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />
+                    Retention Expired
+                  </Button>
+                ) : (
+                  <Button asChild size="sm" className="gap-1.5">
+                    <a href={`/api/files/${file.id}/download`}>
+                      <Download className="h-3.5 w-3.5" />
+                      Secure Download
+                    </a>
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );

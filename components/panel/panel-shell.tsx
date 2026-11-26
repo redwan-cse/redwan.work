@@ -112,19 +112,35 @@ export function PanelShell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  const isNavItemActive = (item: PanelNavItem) => {
-    if (item.href === '/admin' || item.href === '/portal') {
-      return pathname === item.href;
+  const activeNavHref = React.useMemo(() => {
+    if (!pathname) return null;
+    let bestHref: string | null = null;
+    let bestLength = -1;
+
+    for (const item of navItems) {
+      if (item.href === '/admin' || item.href === '/portal') {
+        if (pathname === item.href && item.href.length > bestLength) {
+          bestHref = item.href;
+          bestLength = item.href.length;
+        }
+        continue;
+      }
+
+      const candidates = [item.href, ...(item.activePrefixes ?? [])];
+      for (const prefix of candidates) {
+        if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+          if (prefix.length > bestLength) {
+            bestHref = item.href;
+            bestLength = prefix.length;
+          }
+        }
+      }
     }
-    if (pathname === item.href || pathname?.startsWith(`${item.href}/`)) {
-      return true;
-    }
-    return Boolean(
-      item.activePrefixes?.some(
-        (prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`)
-      )
-    );
-  };
+
+    return bestHref;
+  }, [navItems, pathname]);
+
+  const isNavItemActive = (item: PanelNavItem) => activeNavHref === item.href;
 
   const renderNavList = (onItemClick?: () => void) => (
     <nav aria-label={role === 'admin' ? 'Admin navigation' : 'Client portal navigation'} className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">

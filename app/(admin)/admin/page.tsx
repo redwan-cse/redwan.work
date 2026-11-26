@@ -37,8 +37,8 @@ export default async function AdminOverviewPage() {
     { data: urgentTickets },
     { data: recentInquiries },
     { data: recentAudit },
-    { data: dueFollowups },
-    { data: recentClientMessages },
+    { data: dueFollowups, count: dueFollowupsTotal },
+    { data: clientRoleProfiles },
   ] = await Promise.all([
     getAdminCommandCenterMetrics(),
     admin
@@ -82,32 +82,42 @@ export default async function AdminOverviewPage() {
       .limit(8),
     admin
       .from('client_profiles')
-      .select('user_id, company_name, tier, next_followup_at')
+      .select('user_id, company_name, tier, next_followup_at', { count: 'exact' })
       .not('next_followup_at', 'is', null)
       .lte('next_followup_at', nowIso)
       .order('next_followup_at', { ascending: true })
       .limit(6),
     admin
-      .from('order_messages')
-      .select('id, order_id, body, created_at, author:profiles!order_messages_author_id_fkey(full_name, email, role), order:orders(code, title)')
-      .eq('is_internal_note', false)
-      .order('created_at', { ascending: false })
-      .limit(12),
+      .from('profiles')
+      .select('id')
+      .eq('role', 'client')
+      .limit(1000),
   ]);
 
-  const metrics = (metricsRaw ?? {}) as Record<string, number>;
-  const actionQueueCount =
-    (metrics.submitted_payments ?? pendingPayments?.length ?? 0) +
-    (pendingCancellationsTotal ?? pendingCancellations?.length ?? 0) +
-    (metrics.overdue_invoices ?? overdueInvoices?.length ?? 0) +
-    (metrics.open_tickets ?? urgentTickets?.length ?? 0);
+  const clientIds = (clientRoleProfiles ?? []).map((p) => p.id);
+  const { data: recentClientMessages } =
+    clientIds.length > 0
+      ? await admin
+          .from('order_messages')
+          .select('id, order_id, body, created_at, author:profiles!order_messages_author_id_fkey(full_name, email, role), order:orders(code, title)')
+          .eq('is_internal_note', false)
+          .in('author_id', clientIds)
+          .order('created_at', { ascending: false })
+          .limit(5)
+      : { data: [] };
 
-  const clientAuthoredMessages = (recentClientMessages ?? [])
-    .filter((m) => {
-      const author = Array.isArray(m.author) ? m.author[0] : m.author;
-      return author?.role === 'client';
-    })
-    .slice(0, 5);
+  const metrics = (metricsRaw ?? {}) as Record<string, number>;
+  const pendingPaymentsCount = metrics.submitted_payments ?? pendingPayments?.length ?? 0;
+  const pendingCancellationsCount = pendingCancellationsTotal ?? pendingCancellations?.length ?? 0;
+  const overdueInvoicesCount = metrics.overdue_invoices ?? overdueInvoices?.length ?? 0;
+  const openTicketsCount = metrics.open_tickets ?? urgentTickets?.length ?? 0;
+  const actionQueueCount =
+    pendingPaymentsCount +
+    pendingCancellationsCount +
+    overdueInvoicesCount +
+    openTicketsCount;
+
+  const clientAuthoredMessages = (recentClientMessages ?? []).slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -250,7 +260,7 @@ export default async function AdminOverviewPage() {
             <div className="mb-2 flex items-center justify-between font-semibold">
               <span>Pending Payment Proofs</span>
               <Badge variant="secondary" className="font-mono text-[10px]">
-                {pendingPayments?.length ?? 0}
+                {pendingPaymentsCount}
               </Badge>
             </div>
             {pendingPayments && pendingPayments.length > 0 ? (
@@ -275,10 +285,10 @@ export default async function AdminOverviewPage() {
             <div className="mb-2 flex items-center justify-between font-semibold">
               <span>Cancellation Requests</span>
               <Badge
-                variant={(pendingCancellations?.length ?? 0) > 0 ? 'destructive' : 'secondary'}
+                variant={pendingCancellationsCount > 0 ? 'destructive' : 'secondary'}
                 className="font-mono text-[10px]"
               >
-                {pendingCancellations?.length ?? 0}
+                {pendingCancellationsCount}
               </Badge>
             </div>
             {pendingCancellations && pendingCancellations.length > 0 ? (
@@ -302,10 +312,10 @@ export default async function AdminOverviewPage() {
             <div className="mb-2 flex items-center justify-between font-semibold">
               <span>Overdue Invoices</span>
               <Badge
-                variant={(overdueInvoices?.length ?? 0) > 0 ? 'destructive' : 'secondary'}
+                variant={overdueInvoicesCount > 0 ? 'destructive' : 'secondary'}
                 className="font-mono text-[10px]"
               >
-                {overdueInvoices?.length ?? 0}
+                {overdueInvoicesCount}
               </Badge>
             </div>
             {overdueInvoices && overdueInvoices.length > 0 ? (
@@ -330,7 +340,7 @@ export default async function AdminOverviewPage() {
             <div className="mb-2 flex items-center justify-between font-semibold">
               <span>Open Support Tickets</span>
               <Badge variant="secondary" className="font-mono text-[10px]">
-                {urgentTickets?.length ?? 0}
+                {openTicketsCount}
               </Badge>
             </div>
             {urgentTickets && urgentTickets.length > 0 ? (
@@ -460,7 +470,7 @@ export default async function AdminOverviewPage() {
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
               <CardTitle className="text-base">
-                CRM Follow-Ups Due ({dueFollowups?.length ?? 0})
+                CRM Follow-Ups Due ({dueFollowupsTotal ?? dueFollowups?.length ?? 0})
               </CardTitle>
               <CardDescription className="text-xs">
                 Clients scheduled for outreach today or overdue.

@@ -46,41 +46,14 @@ export async function GET() {
       );
     }
 
-    const orderIds = rows.map((r) => r.id);
-    let msgQuery = admin
-      .from('order_messages')
-      .select(
-        'id, order_id, body, created_at, is_internal_note, author_id, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
-      )
-      .in('order_id', orderIds)
-      .order('created_at', { ascending: false })
-      .limit(150);
-
-    if (session.role !== 'admin') {
-      msgQuery = msgQuery.eq('is_internal_note', false);
-    }
-
-    const { data: msgRows } = await msgQuery;
-    const grouped = new Map<string, NonNullable<ActiveContractOption['initialMessages']>>();
-    for (const m of msgRows ?? []) {
-      const list = grouped.get(m.order_id) ?? [];
-      list.push({
-        id: m.id,
-        body: m.body,
-        created_at: m.created_at,
-        is_internal_note: m.is_internal_note,
-        author_id: m.author_id,
-        author: Array.isArray(m.author) ? (m.author[0] ?? null) : (m.author ?? null),
-      });
-      grouped.set(m.order_id, list);
-    }
-
+    // Omit unenriched initialMessages so ContractLiveChat fetches per-order messages
+    // through GET /api/orders/[id]/messages (with enriched attachments, ETag 304,
+    // strict client email redaction, and no cross-order 150-row truncation).
     const contracts: ActiveContractOption[] = rows.map((o) => ({
       id: o.id,
       code: o.code ?? 'ORD-XXXX',
       title: o.title,
       status: o.status,
-      initialMessages: (grouped.get(o.id) ?? []).reverse(),
     }));
 
     return NextResponse.json(

@@ -31,7 +31,8 @@ function privateClient(): S3Client {
 export function validateContactFile(f: { filename: string; mime: string; size: number }): { ok: true; ext: string } | { ok: false; error: string } {
   if (!f || typeof f.filename !== 'string' || !f.filename.trim() || f.filename.length > 255 || typeof f.mime !== 'string' || f.mime.length > 128) return { ok: false, error: 'Invalid file metadata.' };
   const parts = f.filename.toLowerCase().split('.');
-  const ext = parts.length > 1 ? parts[parts.length - 1] : '';
+  const rawExt = parts.length > 1 ? parts[parts.length - 1] : '';
+  const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
   if (!CONTACT_ALLOWED_EXT.includes(ext as (typeof CONTACT_ALLOWED_EXT)[number])) return { ok: false, error: 'File type is not allowed.' };
   if (!Number.isSafeInteger(f.size) || f.size < 1 || f.size > CONTACT_MAX_SIZE_BYTES) return { ok: false, error: 'Files must be between 1 byte and 10 MB.' };
   if (!isAllowedMime(ext, f.mime)) return { ok: false, error: 'File type does not match its extension.' };
@@ -190,7 +191,7 @@ export async function putPrivateObject(key: string, body: Buffer, contentType: s
   await new Upload({ client: privateClient(), params: { Bucket: process.env.R2_PRIVATE_BUCKET, Key: key, Body: body, ContentType: contentType } }).done();
 }
 export const ASSET_ALLOWED_EXT = ['png', 'jpg', 'webp', 'avif', 'pdf', 'zip'] as const;
-export const ASSET_MAX_BYTES = 5 * 1024 * 1024;
+export const ASSET_MAX_BYTES = 10 * 1024 * 1024;
 export const RESUME_ASSET_KEY = 'assets/resume/Md_Redwan_Ahmed_Resume.pdf';
 export const RESUME_PDF_MAX_BYTES = 10 * 1024 * 1024;
 

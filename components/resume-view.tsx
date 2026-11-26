@@ -149,10 +149,14 @@ export function ResumeView({
       ? settings.research_interests
       : ['Cyber Security', 'Machine Learning', 'Artificial Intelligence'];
   const summary = settings.executive_summary;
-  const configuredPdfUrl =
-    trySanitizeHttpUrl(settings.resume_pdf_url, { allowRelative: true }) ?? '/resume.pdf';
-  const resumeDownloadHref =
-    configuredPdfUrl === '/resume.pdf' ? '/resume.pdf?download=1' : configuredPdfUrl;
+  const resumeDownloadHref = '/resume.pdf?download=1';
+
+  const additionalResearch = researchItems.slice(2).map((item) => ({
+    title: item.title,
+    url: trySanitizeHttpUrl(item.verification_url) ?? '',
+    details: item.highlights,
+    badge: item.badge_label ?? item.organization ?? 'Publication',
+  }));
 
   const printableData = {
     personalInfo,
@@ -166,6 +170,7 @@ export function ResumeView({
     vendorCertifications,
     professionalCertificates,
     research,
+    additionalResearch,
     leadership,
     hobbies,
     references,
@@ -521,7 +526,7 @@ export function ResumeView({
                           <p className="text-sm text-muted-foreground">{cert.issuer}</p>
                           <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
                             <span className="font-mono font-semibold text-primary">
-                              Issued: 10 Nov 2026 · Valid through: 01 Dec 2027
+                              {cert.date || 'Issued: 10 Nov 2026 · Valid through: 01 Dec 2027'}
                             </span>
                             <a
                               href={cert.verificationUrl || CEH_VERIFICATION_URL}

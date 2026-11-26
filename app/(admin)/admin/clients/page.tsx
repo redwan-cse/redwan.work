@@ -303,6 +303,8 @@ export default async function AdminClientsPage({
                 query={{
                   tier: tierFilter || undefined,
                   q: params.q || undefined,
+                  sort: params.sort || undefined,
+                  followup: params.followup || undefined,
                 }}
               />
               </>

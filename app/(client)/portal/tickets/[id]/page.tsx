@@ -36,7 +36,10 @@ export default async function ClientTicketDetailPage({
       .eq('ticket_id', id)
       .eq('is_internal_note', false)
       .order('created_at', { ascending: true }),
-    admin.from('vault_files').select('id, filename, size_bytes').eq('ticket_id', id),
+    admin
+      .from('vault_files')
+      .select('id, filename, size_bytes, retention_until, archived_at')
+      .eq('ticket_id', id),
   ]);
 
   if (!ticket || (session.role !== 'admin' && ticket.client_id !== session.userId)) {
@@ -44,6 +47,7 @@ export default async function ClientTicketDetailPage({
   }
 
   const fileMap = new Map((ticketFiles ?? []).map((vf) => [vf.id, vf]));
+  const nowMs = new Date().getTime();
 
   return (
     <div className="space-y-6">
@@ -109,8 +113,20 @@ export default async function ClientTicketDetailPage({
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.body}</p>
                     {attachments.length > 0 && (
                       <div className="mt-2.5 flex flex-wrap gap-2">
-                        {attachments.map((vf) =>
-                          vf ? (
+                        {attachments.map((vf) => {
+                          if (!vf) return null;
+                          const expired =
+                            Boolean(vf.archived_at) ||
+                            (typeof vf.retention_until === 'string' &&
+                              new Date(vf.retention_until).getTime() <= nowMs);
+                          return expired ? (
+                            <span
+                              key={vf.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1 font-mono text-[11px] text-muted-foreground"
+                            >
+                              {vf.filename} (Expired)
+                            </span>
+                          ) : (
                             <a
                               key={vf.id}
                               href={`/api/files/${vf.id}/download`}
@@ -119,8 +135,8 @@ export default async function ClientTicketDetailPage({
                               <Download className="h-3 w-3" />
                               {vf.filename}
                             </a>
-                          ) : null
-                        )}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -129,29 +145,39 @@ export default async function ClientTicketDetailPage({
             )}
           </div>
 
-          <ActionFeedbackForm
-            action={replyTicketAction}
-            successMessage="Reply posted to support thread."
-            resetOnSuccess
-            className="space-y-3 border-t border-border/70 pt-4"
-          >
-            <input type="hidden" name="ticket_id" value={ticket.id} />
-            <Textarea
-              name="body"
-              aria-label="Ticket reply message"
-              rows={3}
-              required
-              placeholder="Write a reply..."
-            />
-            <R2FileUploader
-              category="ticket_attachment"
-              orderId={ticket.order_id}
-              label="Attach Log / Screenshot (Optional)"
-            />
-            <Button type="submit" size="sm">
-              Post Reply
-            </Button>
-          </ActionFeedbackForm>
+          {ticket.status === 'closed' ? (
+            <div className="rounded-xl border border-border/70 bg-muted/25 p-4 text-xs text-muted-foreground">
+              This ticket is closed and can no longer receive new replies. Please{' '}
+              <Link href="/portal/tickets" className="font-semibold text-primary underline">
+                open a new support ticket
+              </Link>{' '}
+              if you need further assistance.
+            </div>
+          ) : (
+            <ActionFeedbackForm
+              action={replyTicketAction}
+              successMessage="Reply posted to support thread."
+              resetOnSuccess
+              className="space-y-3 border-t border-border/70 pt-4"
+            >
+              <input type="hidden" name="ticket_id" value={ticket.id} />
+              <Textarea
+                name="body"
+                aria-label="Ticket reply message"
+                rows={3}
+                required
+                placeholder="Write a reply..."
+              />
+              <R2FileUploader
+                category="ticket_attachment"
+                orderId={ticket.order_id}
+                label="Attach Log / Screenshot (Optional)"
+              />
+              <Button type="submit" size="sm">
+                Post Reply
+              </Button>
+            </ActionFeedbackForm>
+          )}
         </CardContent>
       </Card>
     </div>

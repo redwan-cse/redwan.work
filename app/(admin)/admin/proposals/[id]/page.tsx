@@ -132,7 +132,7 @@ export default async function AdminProposalDetailPage({
               className="space-y-4"
             >
               <input type="hidden" name="proposal_id" value={proposal.id} />
-              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-6">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label htmlFor="draft-prop-title" className="text-sm font-medium">Title *</Label>
                   <Input id="draft-prop-title" name="title" required defaultValue={proposal.title} className="h-10" />
@@ -151,6 +151,19 @@ export default async function AdminProposalDetailPage({
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
                   </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="draft-prop-fx" className="text-sm font-medium">FX to USD</Label>
+                  <Input
+                    id="draft-prop-fx"
+                    name="fx_rate_to_usd"
+                    aria-label="FX rate to USD"
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    defaultValue={String(proposal.fx_rate_to_usd ?? 1)}
+                    className="h-10 tabular-nums"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="draft-prop-total" className="text-sm font-medium">Total *</Label>

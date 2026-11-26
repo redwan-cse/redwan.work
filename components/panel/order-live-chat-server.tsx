@@ -17,10 +17,14 @@ export async function OrderLiveChatServer({
   viewerRole: 'admin' | 'client';
 }) {
   const admin = getSupabaseAdmin();
+  const authorSelect =
+    viewerRole === 'admin'
+      ? 'author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      : 'author:profiles!order_messages_author_id_fkey(full_name, role)';
   let query = admin
     .from('order_messages')
     .select(
-      'id, body, created_at, is_internal_note, author_id, attachment_file_ids, author:profiles!order_messages_author_id_fkey(full_name, email, role)'
+      `id, body, created_at, is_internal_note, author_id, attachment_file_ids, ${authorSelect}`
     )
     .eq('order_id', orderId)
     .order('created_at', { ascending: false })

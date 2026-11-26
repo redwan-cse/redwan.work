@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; status?: string; priority?: string }>;
+  searchParams: Promise<{ tab?: string; status?: string; priority?: string; page?: string }>;
 }) {
   await requireAdminSession();
   const params = await searchParams;
@@ -16,6 +16,7 @@ export default async function AdminReviewsPage({
       activeTab={activeTab}
       statusFilter={params.status ?? ''}
       priorityFilter={params.priority ?? ''}
+      pageParam={params.page}
       basePath="/admin/reviews"
     />
   );

@@ -10,6 +10,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { AdminHubHeader } from '@/components/admin/hub-header';
+import { AdminPagination, paginateItems } from '@/components/admin/admin-pagination';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
 import { ProposalMilestonesEditor } from '@/components/admin/proposal-milestones-editor';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,48 +32,84 @@ import { formatMoney } from '@/lib/format';
 export async function PipelineHubView({
   activeTab,
   inquiryId,
+  statusFilter = '',
+  pageParam,
   basePath = '/admin/pipeline',
 }: {
   activeTab: 'inquiries' | 'proposals';
   inquiryId?: string;
+  statusFilter?: string;
+  pageParam?: string;
   basePath?: string;
 }) {
   const admin = getSupabaseAdmin();
 
-  const [{ data: inquiries }, { data: proposals }, { data: clients }, prefillInquiryRes] =
-    await Promise.all([
-      admin
-        .from('inquiries')
-        .select(
-          'id, code, ticket_number, name, email, company, country, whatsapp_e164, services, service_pillar, project_summary, budget_min, budget_max, nda_required, urgency, status, consent_policy_version, created_at, converted_client_id, attachments:inquiry_attachments(id, filename, mime, size_bytes, r2_key)'
-        )
-        .order('created_at', { ascending: false })
-        .limit(35),
-      admin
-        .from('proposals')
-        .select(
-          'id, code, recipient_name, recipient_email, title, pillar, total_cents, currency, deposit_percent, requires_roe, status, decline_reason, created_at'
-        )
-        .order('created_at', { ascending: false })
-        .limit(40),
-      admin
-        .from('profiles')
-        .select('id, full_name, email')
-        .eq('role', 'client')
-        .order('created_at', { ascending: false }),
-      inquiryId
-        ? admin
-            .from('inquiries')
-            .select(
-              'id, name, email, company, service_pillar, project_summary, budget_max, nda_required, converted_client_id'
-            )
-            .eq('id', inquiryId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+  let inquiriesQuery = admin
+    .from('inquiries')
+    .select(
+      'id, code, ticket_number, name, email, company, country, whatsapp_e164, services, service_pillar, project_summary, budget_min, budget_max, nda_required, urgency, status, consent_policy_version, created_at, converted_client_id, attachments:inquiry_attachments(id, filename, mime, size_bytes, r2_key)'
+    )
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (activeTab === 'inquiries' && statusFilter) {
+    inquiriesQuery = inquiriesQuery.eq('status', statusFilter);
+  }
+
+  let proposalsQuery = admin
+    .from('proposals')
+    .select(
+      'id, code, recipient_name, recipient_email, title, pillar, total_cents, currency, deposit_percent, requires_roe, status, decline_reason, created_at'
+    )
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (activeTab === 'proposals' && statusFilter) {
+    proposalsQuery = proposalsQuery.eq('status', statusFilter);
+  }
+
+  const [
+    { data: inquiries },
+    { data: proposals },
+    { count: newInqExactCount },
+    { count: openPropExactCount },
+    { data: clients },
+    prefillInquiryRes,
+  ] = await Promise.all([
+    inquiriesQuery,
+    proposalsQuery,
+    admin.from('inquiries').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+    admin
+      .from('proposals')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['draft', 'sent', 'viewed']),
+    admin
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('role', 'client')
+      .order('created_at', { ascending: false }),
+    inquiryId
+      ? admin
+          .from('inquiries')
+          .select(
+            'id, name, email, company, service_pillar, project_summary, budget_max, nda_required, converted_client_id'
+          )
+          .eq('id', inquiryId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const prefill = prefillInquiryRes.data;
-  const proposalIds = (proposals ?? []).map((p) => p.id);
+  const sortedInquiries = [...(inquiries ?? [])];
+  if (activeTab === 'inquiries' && inquiryId) {
+    const idx = sortedInquiries.findIndex((i) => i.id === inquiryId);
+    if (idx > 0) {
+      const [found] = sortedInquiries.splice(idx, 1);
+      sortedInquiries.unshift(found);
+    }
+  }
+  const pagedInquiries = paginateItems(sortedInquiries, activeTab === 'inquiries' ? pageParam : undefined, 15);
+  const pagedProposals = paginateItems(proposals ?? [], activeTab === 'proposals' ? pageParam : undefined, 20);
+
+  const proposalIds = pagedProposals.items.map((p) => p.id);
   const { data: proposalOrders } =
     proposalIds.length > 0
       ? await admin.from('orders').select('id, proposal_id').in('proposal_id', proposalIds)
@@ -82,10 +119,8 @@ export async function PipelineHubView({
       .filter((o) => Boolean(o.proposal_id))
       .map((o) => [o.proposal_id as string, o.id])
   );
-  const newInqCount = (inquiries ?? []).filter((i) => i.status === 'new').length;
-  const openPropCount = (proposals ?? []).filter(
-    (p) => p.status === 'sent' || p.status === 'draft'
-  ).length;
+  const newInqCount = newInqExactCount ?? 0;
+  const openPropCount = openPropExactCount ?? 0;
 
   const tabs = [
     {
@@ -114,9 +149,41 @@ export async function PipelineHubView({
 
       {activeTab === 'inquiries' ? (
         <div className="space-y-4">
-          {inquiries && inquiries.length > 0 ? (
-            inquiries.map((inq) => (
-              <Card key={inq.id} className="border-border/80">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card px-4 py-2.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Showing {pagedInquiries.totalItems} inquiry record(s)
+              {statusFilter ? ` · status: ${statusFilter}` : ` (${newInqCount} new)`}
+            </span>
+            <form method="get" className="flex items-center gap-2">
+              {basePath !== '/admin/inquiries' && <input type="hidden" name="tab" value="inquiries" />}
+              <select
+                name="status"
+                aria-label="Filter inquiries by status"
+                defaultValue={statusFilter}
+                className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
+              >
+                <option value="">All Statuses</option>
+                <option value="new">new</option>
+                <option value="reviewing">reviewing</option>
+                <option value="proposal_sent">proposal_sent</option>
+                <option value="converted">converted</option>
+                <option value="archived">archived</option>
+              </select>
+              <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+                Filter
+              </Button>
+            </form>
+          </div>
+          {pagedInquiries.items.length > 0 ? (
+            pagedInquiries.items.map((inq) => (
+              <Card
+                key={inq.id}
+                className={
+                  inquiryId && inq.id === inquiryId
+                    ? 'border-primary/60 ring-1 ring-primary/30'
+                    : 'border-border/80'
+                }
+              >
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -273,10 +340,26 @@ export async function PipelineHubView({
             <Card>
               <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
                 <Inbox className="h-6 w-6 text-muted-foreground/60" />
-                <span>No service inquiries recorded yet.</span>
+                <span>
+                  {statusFilter
+                    ? 'No inquiries match the selected status filter.'
+                    : 'No service inquiries recorded yet.'}
+                </span>
               </CardContent>
             </Card>
           )}
+          <AdminPagination
+            basePath={basePath}
+            page={pagedInquiries.page}
+            totalPages={pagedInquiries.totalPages}
+            totalItems={pagedInquiries.totalItems}
+            startIndex={pagedInquiries.startIndex}
+            endIndex={pagedInquiries.endIndex}
+            query={{
+              tab: basePath !== '/admin/inquiries' ? 'inquiries' : undefined,
+              status: statusFilter || undefined,
+            }}
+          />
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-12">
@@ -391,17 +474,31 @@ export async function PipelineHubView({
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="prop-total-usd" className="text-sm font-medium">Total *</Label>
                     <Input
                       id="prop-total-usd"
                       name="total_usd"
-                      aria-label="Proposal total in USD"
+                      aria-label="Proposal total amount"
                       type="number"
+                      step="0.01"
                       required
                       min="1"
                       defaultValue={prefill?.budget_max ?? 1200}
+                      className="h-10 tabular-nums"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prop-fx-rate" className="text-sm font-medium">FX→USD</Label>
+                    <Input
+                      id="prop-fx-rate"
+                      name="fx_rate_to_usd"
+                      aria-label="Exchange rate to USD"
+                      type="number"
+                      step="0.0001"
+                      min="0.0001"
+                      defaultValue="1.0"
                       className="h-10 tabular-nums"
                     />
                   </div>
@@ -412,6 +509,8 @@ export async function PipelineHubView({
                       name="deposit_percent"
                       aria-label="Proposal deposit percentage"
                       type="number"
+                      min="0"
+                      max="100"
                       defaultValue="50"
                       className="h-10 tabular-nums"
                     />
@@ -484,16 +583,40 @@ export async function PipelineHubView({
 
           {/* Issued Proposals List */}
           <Card className="xl:col-span-7">
-            <CardHeader>
-              <CardTitle className="text-base">Issued &amp; Draft Proposals</CardTitle>
-              <CardDescription className="text-xs">
-                Inspect milestone breakdown, send drafts, or trace declined/accepted deals.
-              </CardDescription>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">
+                  Issued &amp; Draft Proposals ({pagedProposals.totalItems})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Inspect milestone breakdown, send drafts, or trace declined/accepted deals.
+                </CardDescription>
+              </div>
+              <form method="get" className="flex items-center gap-2">
+                {basePath !== '/admin/proposals' && <input type="hidden" name="tab" value="proposals" />}
+                <select
+                  name="status"
+                  aria-label="Filter proposals by status"
+                  defaultValue={statusFilter}
+                  className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="draft">draft</option>
+                  <option value="sent">sent</option>
+                  <option value="viewed">viewed</option>
+                  <option value="accepted">accepted</option>
+                  <option value="declined">declined</option>
+                  <option value="expired">expired</option>
+                </select>
+                <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
+                  Filter
+                </Button>
+              </form>
             </CardHeader>
             <CardContent>
-              {proposals && proposals.length > 0 ? (
+              {pagedProposals.items.length > 0 ? (
                 <div className="divide-y divide-border/70">
-                  {proposals.map((prop) => (
+                  {pagedProposals.items.map((prop) => (
                     <div key={prop.id} className="space-y-2 py-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -573,9 +696,23 @@ export async function PipelineHubView({
                 </div>
               ) : (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No proposals created yet.
+                  {statusFilter
+                    ? 'No proposals match the selected status filter.'
+                    : 'No proposals created yet.'}
                 </p>
               )}
+              <AdminPagination
+                basePath={basePath}
+                page={pagedProposals.page}
+                totalPages={pagedProposals.totalPages}
+                totalItems={pagedProposals.totalItems}
+                startIndex={pagedProposals.startIndex}
+                endIndex={pagedProposals.endIndex}
+                query={{
+                  tab: basePath !== '/admin/proposals' ? 'proposals' : undefined,
+                  status: statusFilter || undefined,
+                }}
+              />
             </CardContent>
           </Card>
         </div>

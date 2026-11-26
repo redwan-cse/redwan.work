@@ -87,6 +87,13 @@ export function ContractLiveChat({
   const [error, setError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesCacheRef = useRef<Map<string, ContractChatMessage[]>>(
+    new Map(
+      contracts
+        .filter((c) => Array.isArray(c.initialMessages))
+        .map((c) => [c.id, c.initialMessages!])
+    )
+  );
   const lastCreatedAtRef = useRef<string | null>(
     (selectedContract?.initialMessages ?? []).at(-1)?.created_at ?? null
   );
@@ -129,27 +136,26 @@ export function ContractLiveChat({
         if (useDelta || data.delta) {
           if (data.messages.length === 0) return false;
           const incoming = data.messages;
-          const latest = incoming[incoming.length - 1];
+          const existing = messagesCacheRef.current.get(orderId) ?? [];
+          const seen = new Set(existing.map((m) => m.id));
+          const genuinelyNew = incoming.filter((msg) => !seen.has(msg.id));
+          if (genuinelyNew.length === 0) {
+            return false;
+          }
+          const merged = [...existing, ...genuinelyNew];
+          messagesCacheRef.current.set(orderId, merged);
+          const latest = merged[merged.length - 1];
           if (latest?.created_at) {
             lastCreatedAtRef.current = latest.created_at;
             etagRef.current = null;
           }
-          setMessages((prev) => {
-            const seen = new Set(prev.map((m) => m.id));
-            const merged = [...prev];
-            for (const msg of incoming) {
-              if (!seen.has(msg.id)) {
-                seen.add(msg.id);
-                merged.push(msg);
-              }
-            }
-            return merged;
-          });
+          setMessages(merged);
           return true;
         }
 
         const latest = data.messages[data.messages.length - 1];
         lastCreatedAtRef.current = latest?.created_at ?? null;
+        messagesCacheRef.current.set(orderId, data.messages);
         setMessages(data.messages);
         return data.messages.length > 0;
       } catch {
@@ -174,11 +180,14 @@ export function ContractLiveChat({
 
   const handleSelectContract = (orderId: string) => {
     setSelectedOrderId(orderId);
-    const nextInitial = contracts.find((c) => c.id === orderId)?.initialMessages ?? [];
+    const cached = messagesCacheRef.current.get(orderId);
+    const nextInitial = cached ?? contracts.find((c) => c.id === orderId)?.initialMessages ?? [];
     setMessages(nextInitial);
     lastCreatedAtRef.current = nextInitial.at(-1)?.created_at ?? null;
     etagRef.current = null;
     idlePollsRef.current = 0;
+    setPendingAttachment(null);
+    setError(null);
   };
 
   const hasInitialMessagesForSelected = contracts.some(
@@ -211,7 +220,9 @@ export function ContractLiveChat({
       }, getPollDelayMs());
     };
 
-    if (!hasInitialMessagesForSelected) {
+    const alreadyCached =
+      messagesCacheRef.current.has(selectedOrderId) || hasInitialMessagesForSelected;
+    if (!alreadyCached) {
       void pollMessages(selectedOrderId, { full: true }).finally(scheduleNext);
     } else {
       scheduleNext();
@@ -330,9 +341,11 @@ export function ContractLiveChat({
       }
       etagRef.current = null;
       idlePollsRef.current = 0;
-      setMessages((prev) =>
-        prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]
-      );
+      setMessages((prev) => {
+        const next = prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg];
+        messagesCacheRef.current.set(selectedOrderId, next);
+        return next;
+      });
       setDraft('');
       setPendingAttachment(null);
       setIsInternalNote(false);
@@ -490,6 +503,11 @@ export function ContractLiveChat({
       </div>
 
       {/* Composer */}
+      {viewerRole === 'client' && selectedContract.status === 'cancelled' ? (
+        <div className="border-t border-border/70 bg-muted/20 p-4 text-xs text-muted-foreground">
+          This contract has been cancelled. The message thread is read-only.
+        </div>
+      ) : (
       <form
         onSubmit={handleSend}
         className="space-y-3 border-t border-border/70 bg-muted/20 p-4"
@@ -497,7 +515,7 @@ export function ContractLiveChat({
         {error && (
           <p role="alert" className="text-xs font-medium text-destructive">{error}</p>
         )}
-        {pendingAttachment && (
+        {pendingAttachment && !isInternalNote && (
           <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 font-mono text-[11px] text-primary">
             <span className="inline-flex items-center gap-1.5 truncate">
               <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -540,6 +558,7 @@ export function ContractLiveChat({
             <input
               ref={fileInputRef}
               type="file"
+              accept=".pdf,.docx,.doc,.xlsx,.png,.jpg,.jpeg,.webp,.zip"
               onChange={handleAttachFile}
               className="hidden"
               aria-label="Attach file to contract message"
@@ -548,7 +567,7 @@ export function ContractLiveChat({
               type="button"
               variant="outline"
               size="sm"
-              disabled={uploadingFile || sending}
+              disabled={uploadingFile || sending || (viewerRole === 'admin' && isInternalNote)}
               onClick={() => fileInputRef.current?.click()}
               className="h-8 gap-1.5 rounded-full px-3 text-xs"
             >
@@ -563,7 +582,11 @@ export function ContractLiveChat({
               <label className="flex min-h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
                 <FormCheckbox
                   checked={isInternalNote}
-                  onChange={(e) => setIsInternalNote(e.target.checked)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsInternalNote(checked);
+                    if (checked) setPendingAttachment(null);
+                  }}
                 />
                 Private Internal Note (Hidden from Client)
               </label>
@@ -588,6 +611,7 @@ export function ContractLiveChat({
           </Button>
         </div>
       </form>
+      )}
     </div>
   );
 }

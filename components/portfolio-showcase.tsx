@@ -55,6 +55,8 @@ function CategoryQuerySync({
   useEffect(() => {
     if (initialCategory && FILTER_TABS.some((t) => t.key === initialCategory)) {
       onSelect(initialCategory);
+    } else {
+      onSelect('all');
     }
   }, [initialCategory, onSelect]);
 
@@ -106,6 +108,20 @@ export function PortfolioShowcase({
       </div>
 
       {/* Case Studies Grid */}
+      {filteredItems.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/80 bg-card/40 p-10 text-center text-sm text-muted-foreground">
+          <p className="font-semibold text-foreground">No case studies published in this category yet.</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedCategory('all')}
+            className="mt-4 rounded-full"
+          >
+            Show All Work
+          </Button>
+        </div>
+      ) : (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredItems.map((study, idx) => (
           <ScrollReveal key={study.id} delay={idx * 0.05} className="h-full">
@@ -182,6 +198,7 @@ export function PortfolioShowcase({
           </ScrollReveal>
         ))}
       </div>
+      )}
 
       {/* Case Study Modal Dialog */}
       <Dialog

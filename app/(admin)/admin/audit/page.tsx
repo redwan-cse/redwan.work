@@ -15,6 +15,7 @@ export default async function AdminAuditLogPage({
       actionFilter={params.action ?? ''}
       qFilter={params.q ?? ''}
       pageParam={params.page}
+      basePath="/admin/audit"
     />
   );
 }

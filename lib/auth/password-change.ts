@@ -58,7 +58,7 @@ export async function changePasswordAction(_previous: PasswordChangeState, form:
   let phase:'authority'|'verification'|'update'|'changed'='authority';
   try{
     const actor=await getCurrentSession();
-    if(!actor)return denied('An active client session is required. Sign in again.');
+    if(!actor)return denied('An active authenticated session is required. Sign in again.');
     if(!await allowAttempt(actor.userId))return denied('Too many requests or rate control is unavailable. Please try again later.');
     const raw=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if(!raw||!key?.startsWith('sb_publishable_'))return denied('Password changes are temporarily unavailable.');

@@ -80,14 +80,45 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       }
       const recProfile = await supabase
         .from('profiles')
-        .select('role, is_active')
+        .select('role, is_active, mfa_enforced, tokens_valid_after')
         .eq('id', userId)
         .maybeSingle();
       if (recProfile.error || !recProfile.data || recProfile.data.is_active !== true) {
         const logoutUrl = new URL('/api/auth/logout?reason=deactivated', request.url);
         return withNoIndex(carry(response, NextResponse.redirect(logoutUrl)));
       }
-      if (recProfile.data.role === 'admin' && claims?.aal !== 'aal2') {
+      const recTokensValidAfter = Number(
+        (recProfile.data as { tokens_valid_after?: number | null } | null)?.tokens_valid_after ?? 0
+      );
+      const recTokenRevoked =
+        recTokensValidAfter > 0 &&
+        (typeof claims?.iat !== 'number' || !Number.isFinite(claims.iat) || claims.iat < recTokensValidAfter);
+      if (recTokenRevoked) {
+        const logoutUrl = new URL('/api/auth/logout?reason=session_invalid', request.url);
+        return withNoIndex(carry(response, NextResponse.redirect(logoutUrl)));
+      }
+      let recNeedsMfa =
+        (recProfile.data.role === 'admin' || recProfile.data.mfa_enforced === true) &&
+        claims?.aal !== 'aal2';
+      if (!recNeedsMfa && recProfile.data.role === 'client') {
+        const mfaApi = (
+          supabase.auth as {
+            mfa?: {
+              getAuthenticatorAssuranceLevel?: () => Promise<{
+                data?: { currentLevel?: string | null; nextLevel?: string | null } | null;
+                error?: unknown;
+              }>;
+            };
+          }
+        ).mfa;
+        if (mfaApi?.getAuthenticatorAssuranceLevel) {
+          const aalRes = await mfaApi.getAuthenticatorAssuranceLevel();
+          if (aalRes?.data?.nextLevel === 'aal2' && aalRes.data.currentLevel !== 'aal2') {
+            recNeedsMfa = true;
+          }
+        }
+      }
+      if (recNeedsMfa) {
         const mfaUrl = new URL('/mfa', request.url);
         mfaUrl.searchParams.set('next', pathname + search);
         return withNoIndex(carry(response, NextResponse.redirect(mfaUrl)));

@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     revalidatePath('/sitemap.xml');
     revalidatePath('/llms-full.txt');
     if (typeof nextCache.revalidateTag === 'function') {
-      nextCache.revalidateTag('blogs', 'max');
+      nextCache.revalidateTag('blogs', { expire: 0 });
     }
     // Also drop the in-process Blogger TTL cache so the next render
     // fetches fresh data even before Next's data cache revalidates

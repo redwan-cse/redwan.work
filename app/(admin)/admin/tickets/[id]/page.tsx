@@ -1,17 +1,15 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Download, Lock, Send } from 'lucide-react';
+import { ArrowLeft, Download, Lock } from 'lucide-react';
+import { AdminTicketReplyForm } from '@/components/admin/admin-ticket-reply-form';
 import { ActionFeedbackForm } from '@/components/panel/action-feedback-form';
-import { R2FileUploader } from '@/components/panel/r2-file-uploader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FormCheckbox } from '@/components/ui/form-checkbox';
-import { Textarea } from '@/components/ui/textarea';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { requireAdminSession } from '@/lib/auth/session';
-import { replyTicketAction, updateTicketStatusAction } from '@/lib/crm/actions';
+import { updateTicketStatusAction } from '@/lib/crm/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,36 +164,7 @@ export default async function AdminTicketDetailPage({
             })}
           </div>
 
-          <ActionFeedbackForm
-            action={replyTicketAction}
-            successMessage="Ticket reply posted."
-            resetOnSuccess
-            className="space-y-3 border-t border-border/70 pt-4"
-          >
-            <input type="hidden" name="ticket_id" value={ticket.id} />
-            <Textarea
-              name="body"
-              aria-label="Ticket reply or internal note"
-              required
-              rows={4}
-              placeholder="Write a reply to the client or an internal note..."
-            />
-            <R2FileUploader
-              category="ticket_attachment"
-              clientId={ticket.client_id}
-              label="Attach Evidence / Patch Archive (Optional)"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex min-h-7 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <FormCheckbox name="is_internal_note" />
-                Internal Admin Note (Hidden from Client)
-              </label>
-              <Button type="submit" size="sm" className="h-9 gap-1.5 rounded-full px-4">
-                <Send className="h-3.5 w-3.5" />
-                Send Reply
-              </Button>
-            </div>
-          </ActionFeedbackForm>
+          <AdminTicketReplyForm ticketId={ticket.id} clientId={ticket.client_id} />
         </CardContent>
       </Card>
     </div>

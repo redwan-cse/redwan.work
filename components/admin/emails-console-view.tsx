@@ -38,8 +38,19 @@ export async function EmailsConsoleView({
   ]);
 
   const lowerQ = qFilter.trim().toLowerCase();
+  const isActionableStatus = (status: string) =>
+    status === 'pending' || status === 'processing' || status === 'failed' || status === 'dead_letter';
+
+  // Default Outbox Queue view shows only actionable queue items (pending/processing/failed)
+  // so its rows match the Outbox Queue (N) tab pill. Selecting "sent" or "all" explicitly reveals delivered items.
   const filteredOutbox = (outboxRows ?? []).filter((row) => {
-    if (statusFilter && row.status !== statusFilter) return false;
+    if (statusFilter === 'all') {
+      // Explicit "All Outbox Rows" filter shows all statuses including delivered rows
+    } else if (statusFilter) {
+      if (row.status !== statusFilter) return false;
+    } else if (!isActionableStatus(row.status)) {
+      return false;
+    }
     if (lowerQ && !`${row.to_email} ${row.subject} ${row.template}`.toLowerCase().includes(lowerQ)) {
       return false;
     }
@@ -47,7 +58,7 @@ export async function EmailsConsoleView({
   });
 
   const filteredLogs = (emailLogs ?? []).filter((row) => {
-    if (statusFilter && row.status !== statusFilter) return false;
+    if (statusFilter && statusFilter !== 'all' && row.status !== statusFilter) return false;
     if (lowerQ && !`${row.to_email} ${row.subject} ${row.template}`.toLowerCase().includes(lowerQ)) {
       return false;
     }
@@ -137,15 +148,26 @@ export async function EmailsConsoleView({
         />
         <select
           name="status"
-          aria-label="Filter outbox by status"
+          aria-label={activeTab === 'outbox' ? 'Filter outbox by status' : 'Filter delivery logs by status'}
           defaultValue={statusFilter}
           className="h-9 rounded-md border border-input bg-background px-2.5 text-base font-sans transition-colors hover:border-muted-foreground/45"
         >
-          <option value="">All Statuses</option>
-          <option value="pending">pending</option>
-          <option value="processing">processing</option>
-          <option value="sent">sent</option>
-          <option value="failed">failed</option>
+          {activeTab === 'outbox' ? (
+            <>
+              <option value="">Active Queue (Pending / Failed)</option>
+              <option value="pending">pending</option>
+              <option value="processing">processing</option>
+              <option value="failed">failed</option>
+              <option value="sent">sent</option>
+              <option value="all">All Statuses</option>
+            </>
+          ) : (
+            <>
+              <option value="">All Statuses</option>
+              <option value="sent">sent</option>
+              <option value="failed">failed</option>
+            </>
+          )}
         </select>
         <Button type="submit" size="sm" variant="outline" className="h-8 text-xs">
           Filter
@@ -210,7 +232,10 @@ export async function EmailsConsoleView({
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
-                        {formatDistanceToNow(new Date(row.created_at), { addSuffix: true })}
+                        {formatDistanceToNow(
+                          new Date(row.sent_at ?? row.next_attempt_at ?? row.created_at),
+                          { addSuffix: true }
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {row.status !== 'sent' && (
@@ -232,7 +257,9 @@ export async function EmailsConsoleView({
               </Table>
             ) : (
               <p className="py-12 text-center text-sm text-muted-foreground">
-                No outbox items match the selected filter.
+                {statusFilter || lowerQ
+                  ? 'No outbox items match the selected filter.'
+                  : 'Outbox queue is empty — all queued emails have been delivered. Inspect Delivery History to view sent logs.'}
               </p>
             )}
           </CardContent>

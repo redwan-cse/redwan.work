@@ -271,7 +271,15 @@ describe('Deep Audit v3 AppSec, Auth, Upload & Operations Hardening', () => {
           return {
             update: (payload: Record<string, unknown>) => {
               profileUpdates.push(payload);
-              return { eq: () => ({ eq: async () => ({ error: null }) }) };
+              return {
+                eq: () => ({
+                  eq: () => ({
+                    select: () => ({
+                      maybeSingle: async () => ({ data: { id: clientId }, error: null }),
+                    }),
+                  }),
+                }),
+              };
             },
             select: () => ({
               eq: () => ({
@@ -302,7 +310,9 @@ describe('Deep Audit v3 AppSec, Auth, Upload & Operations Hardening', () => {
     await toggleClientActiveStatusAction(fd);
 
     expect(profileUpdates[0]).toMatchObject({ is_active: false });
-    expect(typeof profileUpdates[0].tokens_valid_after).toBe('string');
+    expect(typeof profileUpdates[0].tokens_valid_after).toBe('number');
+    expect(Number.isInteger(profileUpdates[0].tokens_valid_after)).toBe(true);
+    expect(Number(profileUpdates[0].tokens_valid_after)).toBeGreaterThan(1_700_000_000);
     expect(banCalls).toEqual([{ id: clientId, attrs: { ban_duration: '876000h' } }]);
     expect(rpcCalls).toEqual([{ fn: 'revoke_auth_user_sessions', args: { p_user_id: clientId } }]);
   });

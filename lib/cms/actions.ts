@@ -58,7 +58,8 @@ export async function upsertServiceAction(formData: FormData): Promise<void> {
   const isFeatured = parseFormBoolean(formData, 'is_featured');
   const highlights = parseLines(formData.get('highlights'));
 
-  if (!title || !slug) return;
+  if (!title) throw new Error('Title is required.');
+  if (!slug) throw new Error('Provide an ASCII slug or title for the URL.');
 
   const toolsTagsRaw = formData.get('tools_tags');
   const payload: Record<string, unknown> = {
@@ -118,7 +119,7 @@ export async function deleteServiceAction(formData: FormData): Promise<void> {
   const session = await requireAdmin();
   const admin = getSupabaseAdmin();
   const id = String(formData.get('id') ?? '').trim();
-  if (!id) return;
+  if (!id) throw new Error('Missing record identifier.');
 
   const { error } = await admin.from('services').delete().eq('id', id);
   if (error) throw new Error(error.message);
@@ -165,7 +166,7 @@ export async function upsertServicePackageAction(formData: FormData): Promise<vo
   const sortOrder =
     tierName === 'Starter' ? 1 : tierName === 'Standard' ? 2 : tierName === 'Enterprise' ? 3 : 4;
 
-  if (!serviceId) return;
+  if (!serviceId) throw new Error('Missing parent service identifier.');
 
   const payload: Record<string, unknown> = {
     service_id: serviceId,
@@ -219,7 +220,7 @@ export async function deleteServicePackageAction(formData: FormData): Promise<vo
   const session = await requireAdmin();
   const admin = getSupabaseAdmin();
   const id = String(formData.get('id') ?? '').trim();
-  if (!id) return;
+  if (!id) throw new Error('Missing record identifier.');
 
   const { error } = await admin.from('service_packages').delete().eq('id', id);
   if (error) throw new Error(error.message);
@@ -284,7 +285,8 @@ export async function upsertPortfolioItemAction(formData: FormData): Promise<voi
   const isPublished = parseFormBoolean(formData, 'is_published');
   const isFeatured = parseFormBoolean(formData, 'is_featured');
 
-  if (!title || !slug) return;
+  if (!title) throw new Error('Title is required.');
+  if (!slug) throw new Error('Provide an ASCII slug or title for the URL.');
 
   const payload: Record<string, unknown> = {
     code,
@@ -340,7 +342,7 @@ export async function deletePortfolioItemAction(formData: FormData): Promise<voi
   const session = await requireAdmin();
   const admin = getSupabaseAdmin();
   const id = String(formData.get('id') ?? '').trim();
-  if (!id) return;
+  if (!id) throw new Error('Missing record identifier.');
 
   const { error } = await admin.from('portfolio_items').delete().eq('id', id);
   if (error) throw new Error(error.message);
@@ -400,10 +402,13 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
     ? (sanitizeHttpUrl(String(formData.get('website_url') ?? '').trim(), { allowRelative: true }) ??
       '')
     : undefined;
-  const rawResumePdfUrl = formData.get('resume_pdf_url');
+  const hasResumePdfUrl = formData.has('resume_pdf_url');
+  const rawResumePdfUrl = hasResumePdfUrl ? String(formData.get('resume_pdf_url') ?? '').trim() : undefined;
   const resumePdfUrl =
-    typeof rawResumePdfUrl === 'string' && rawResumePdfUrl.trim()
-      ? sanitizeHttpUrl(rawResumePdfUrl.trim(), { allowRelative: true })
+    rawResumePdfUrl !== undefined
+      ? rawResumePdfUrl
+        ? sanitizeHttpUrl(rawResumePdfUrl, { allowRelative: true })
+        : null
       : undefined;
 
   const researchInterests = parseLines(formData.get('research_interests'));
@@ -448,7 +453,7 @@ export async function updateSiteSettingsAction(formData: FormData): Promise<void
     updatePayload.website_url = websiteUrl;
   }
 
-  if (resumePdfUrl) {
+  if (resumePdfUrl !== undefined) {
     updatePayload.resume_pdf_url = resumePdfUrl;
   }
 
@@ -582,7 +587,7 @@ export async function upsertResumeItemAction(formData: FormData): Promise<void> 
   const sortOrder = Number(formData.get('sort_order') ?? 10);
   const isVisible = parseFormBoolean(formData, 'is_visible');
 
-  if (!title) return;
+  if (!title) throw new Error('Resume item title is required.');
 
   const description = String(formData.get('description') ?? '').trim() || null;
   const payload: Record<string, unknown> = {
@@ -631,7 +636,7 @@ export async function deleteResumeItemAction(formData: FormData): Promise<void> 
   const session = await requireAdmin();
   const admin = getSupabaseAdmin();
   const id = String(formData.get('id') ?? '').trim();
-  if (!id) return;
+  if (!id) throw new Error('Missing record identifier.');
 
   const { error } = await admin.from('resume_items').delete().eq('id', id);
   if (error) throw new Error(error.message);

@@ -438,7 +438,7 @@ export default async function AdminInvoiceDetailPage({
           </Card>
 
           {/* Record Manual Payment */}
-          {invoice.status !== 'void' && outstandingCents > 0 && (
+          {invoice.status !== 'void' && invoice.status !== 'draft' && outstandingCents > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">

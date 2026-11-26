@@ -44,7 +44,9 @@ export async function drainEmailOutboxAction(): Promise<void> {
 export async function retryOutboxEmailAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const parsedId = uuidSchema.safeParse(formData.get('outbox_id'));
-  if (!parsedId.success) return;
+  if (!parsedId.success) {
+    throw new Error('Invalid outbox email identifier.');
+  }
   const outboxId = parsedId.data;
 
   const admin = getSupabaseAdmin();
@@ -57,8 +59,12 @@ export async function retryOutboxEmailAction(formData: FormData): Promise<void> 
       .eq('id', outboxId)
       .maybeSingle();
 
-    if (!existing) return;
-    if (existing.status === 'sent') return;
+    if (!existing) {
+      throw new Error('Outbox email record was not found.');
+    }
+    if (existing.status === 'sent') {
+      throw new Error('This email was already delivered and cannot be retried.');
+    }
     const staleCutoffMs = Date.now() - 5 * 60_000;
     const isStaleProcessing =
       existing.status === 'processing' &&
@@ -117,21 +123,55 @@ export async function retryAllFailedOutboxEmailsAction(): Promise<void> {
   const session = await requireAdminSession();
   const admin = getSupabaseAdmin();
   const nowIso = new Date().toISOString();
+  const outboxTbl = admin.from('email_outbox');
 
-  const { data: resetRows, error } = await admin
-    .from('email_outbox')
-    .update({
-      status: 'pending',
-      attempts: 0,
-      locked_at: null,
-      last_error: null,
-      next_attempt_at: nowIso,
-    })
-    .in('status', ['failed'])
-    .select('id');
-  if (error) throw new Error(error.message);
+  let retriedCount = 0;
+  if (typeof outboxTbl.select === 'function') {
+    // Fetch failed rows so each receives a bumped _retryNonce (fresh Resend Idempotency-Key).
+    const { data: failedRows, error: fetchErr } = await outboxTbl
+      .select('id, payload')
+      .in('status', ['failed'])
+      .limit(100);
+    if (fetchErr) throw new Error(fetchErr.message);
 
-  const retriedCount = resetRows?.length ?? 0;
+    for (const row of failedRows ?? []) {
+      const basePayload =
+        row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+          ? (row.payload as Record<string, unknown>)
+          : {};
+      const nextPayload = {
+        ...basePayload,
+        _retryNonce: Number(basePayload._retryNonce ?? 0) + 1,
+      };
+      const { error: updErr } = await admin
+        .from('email_outbox')
+        .update({
+          status: 'pending',
+          attempts: 0,
+          locked_at: null,
+          last_error: null,
+          next_attempt_at: nowIso,
+          payload: nextPayload,
+        })
+        .eq('id', row.id)
+        .eq('status', 'failed');
+      if (updErr) throw new Error(updErr.message);
+      retriedCount += 1;
+    }
+  } else {
+    const { error } = await outboxTbl
+      .update({
+        status: 'pending',
+        attempts: 0,
+        locked_at: null,
+        last_error: null,
+        next_attempt_at: nowIso,
+      })
+      .in('status', ['failed']);
+    if (error) throw new Error(error.message);
+    retriedCount = 1;
+  }
+
   if (retriedCount > 0 && process.env.RESEND_API_KEY) {
     await drainEmailOutbox(20).catch(() => undefined);
   }
@@ -154,15 +194,39 @@ export async function extendVaultRetentionAction(formData: FormData): Promise<vo
   const session = await requireAdminSession();
   const parsedId = uuidSchema.safeParse(formData.get('file_id'));
   const mode = String(formData.get('mode') ?? 'extend_90d').trim();
-  if (!parsedId.success) return;
+  if (!parsedId.success) {
+    throw new Error('Invalid vault file identifier.');
+  }
   const fileId = parsedId.data;
 
+  const admin = getSupabaseAdmin();
+  const vaultTbl = admin.from('vault_files');
+  let existingRetention: string | null | undefined = undefined;
+  if (typeof vaultTbl.select === 'function') {
+    const { data: existing, error: existingErr } = await vaultTbl
+      .select('id, retention_until, archived_at')
+      .eq('id', fileId)
+      .maybeSingle();
+    if (existingErr) throw new Error(existingErr.message);
+    if (!existing || existing.archived_at !== null) {
+      throw new Error('Vault file not found or already archived.');
+    }
+    existingRetention = existing.retention_until;
+  }
+
+  if (mode !== 'pin_forever' && existingRetention === null) {
+    throw new Error('This file is already pinned forever against auto-expiration.');
+  }
+
+  const baseMs =
+    existingRetention && Number.isFinite(Date.parse(existingRetention))
+      ? Math.max(Date.now(), Date.parse(existingRetention))
+      : Date.now();
   const nextRetention =
     mode === 'pin_forever'
       ? null
-      : new Date(Date.now() + 90 * 86_400_000).toISOString();
+      : new Date(baseMs + 90 * 86_400_000).toISOString();
 
-  const admin = getSupabaseAdmin();
   const { data: fileRow, error } = await admin
     .from('vault_files')
     .update({ retention_until: nextRetention })
@@ -171,7 +235,9 @@ export async function extendVaultRetentionAction(formData: FormData): Promise<vo
     .select('filename, owner_client_id, order_id')
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!fileRow) return;
+  if (!fileRow) {
+    throw new Error('Vault file not found or already archived.');
+  }
 
   await recordAuditLog({
     actorId: session.userId,
@@ -195,7 +261,9 @@ export async function extendVaultRetentionAction(formData: FormData): Promise<vo
 export async function purgeOrphanPrivateObjectAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const r2Key = String(formData.get('r2_key') ?? '').trim();
-  if (!r2Key) return;
+  if (!r2Key) {
+    throw new Error('Missing private R2 object key.');
+  }
   if (!isPortalKey(r2Key) && !r2Key.startsWith('contact/')) {
     throw new Error('Invalid private R2 key prefix.');
   }
@@ -204,16 +272,36 @@ export async function purgeOrphanPrivateObjectAction(formData: FormData): Promis
   }
 
   const admin = getSupabaseAdmin();
-  const [{ data: vaultRefs, error: vaultRefErr }, { data: inquiryRefs, error: inqRefErr }] =
+  const nowIso = new Date().toISOString();
+  const vaultEq = admin.from('vault_files').select('id').eq('r2_key', r2Key);
+  const vaultQuery =
+    typeof vaultEq.is === 'function' ? vaultEq.is('archived_at', null).limit(1) : vaultEq.limit(1);
+  const reservationEq = admin.from('vault_upload_reservations').select('id').eq('r2_key', r2Key);
+  const reservationQuery =
+    typeof reservationEq.gt === 'function'
+      ? reservationEq
+          .gt('expires_at', nowIso)
+          .limit(1)
+          .then((res) => res, () => ({ data: [] as Array<{ id: string }>, error: null }))
+      : Promise.resolve({ data: [] as Array<{ id: string }>, error: null });
+
+  const [{ data: vaultRefs, error: vaultRefErr }, { data: inquiryRefs, error: inqRefErr }, activeRes] =
     await Promise.all([
-      admin.from('vault_files').select('id').eq('r2_key', r2Key).limit(1),
+      vaultQuery,
       admin.from('inquiry_attachments').select('id').eq('r2_key', r2Key).limit(1),
+      reservationQuery,
     ]);
   if (vaultRefErr || inqRefErr) {
     throw new Error('Could not verify whether storage object is still referenced.');
   }
-  if ((vaultRefs && vaultRefs.length > 0) || (inquiryRefs && inquiryRefs.length > 0)) {
-    throw new Error('Cannot purge storage object: key is still referenced by an active database record.');
+  if (
+    (vaultRefs && vaultRefs.length > 0) ||
+    (inquiryRefs && inquiryRefs.length > 0) ||
+    (activeRes?.data && activeRes.data.length > 0)
+  ) {
+    throw new Error(
+      'Cannot purge storage object: key is referenced by an active database record or an in-flight upload reservation.'
+    );
   }
 
   await deletePrivateObjects([r2Key]);
@@ -276,12 +364,15 @@ export async function uploadPublicAssetAction(formData: FormData): Promise<void>
   });
 
   revalidatePath('/admin/content');
+  revalidatePath('/admin/assets');
 }
 
 export async function deletePublicAssetAction(formData: FormData): Promise<void> {
   const session = await requireAdminSession();
   const key = String(formData.get('key') ?? '').trim();
-  if (!key) return;
+  if (!key) {
+    throw new Error('Missing public asset key.');
+  }
   if (!isPublicR2Configured()) {
     throw new Error('Public R2 storage is not configured.');
   }
@@ -312,17 +403,25 @@ export async function deletePublicAssetAction(formData: FormData): Promise<void>
   });
 
   revalidatePath('/admin/content');
+  revalidatePath('/admin/assets');
 }
 
 export async function syncBloggerCacheAction(): Promise<void> {
   const session = await requireAdminSession();
   clearBlogCache();
-  if (typeof nextCache.revalidateTag === 'function') {
-    nextCache.revalidateTag('blogs', 'max');
+  const cacheMod = nextCache as {
+    updateTag?: (tag: string) => void;
+    revalidateTag?: (tag: string, profile: string | { expire?: number }) => void;
+  };
+  if (typeof cacheMod.updateTag === 'function') {
+    cacheMod.updateTag('blogs');
+  } else if (typeof cacheMod.revalidateTag === 'function') {
+    cacheMod.revalidateTag('blogs', { expire: 0 });
   }
   revalidatePath('/blogs');
   revalidatePath('/');
   revalidatePath('/sitemap.xml');
+  revalidatePath('/llms-full.txt');
 
   await recordAuditLog({
     actorId: session.userId,
@@ -333,6 +432,7 @@ export async function syncBloggerCacheAction(): Promise<void> {
   });
 
   revalidatePath('/admin/content');
+  revalidatePath('/admin/blogs');
 }
 
 export async function publishConsentPolicyAction(formData: FormData): Promise<void> {

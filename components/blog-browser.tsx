@@ -160,7 +160,7 @@ export function BlogBrowser({
                   <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 text-primary" />
-                      <time>
+                      <time dateTime={featuredItem.post.published} suppressHydrationWarning>
                         {formatDistanceToNow(new Date(featuredItem.post.published), {
                           addSuffix: true,
                         })}
@@ -267,7 +267,7 @@ export function BlogBrowser({
                     <div className="mb-2.5 flex items-center justify-between font-mono text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-primary" />
-                        <time>
+                        <time dateTime={post.published} suppressHydrationWarning>
                           {formatDistanceToNow(new Date(post.published), {
                             addSuffix: true,
                           })}

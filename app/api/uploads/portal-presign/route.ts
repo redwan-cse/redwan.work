@@ -122,14 +122,20 @@ export async function POST(request: NextRequest) {
         ? body.clientId
         : session.userId;
 
-    if (orderId && (session.role !== 'admin' || !body.clientId)) {
+    if (orderId) {
       const { data: orderRow, error: orderErr } = await admin
         .from('orders')
-        .select('id, client_id')
+        .select('id, client_id, status')
         .eq('id', orderId)
         .maybeSingle();
       if (orderErr || !orderRow || (session.role !== 'admin' && orderRow.client_id !== session.userId)) {
         return NextResponse.json({ error: 'Forbidden order scope.' }, { status: 403 });
+      }
+      if (session.role !== 'admin' && orderRow.status === 'cancelled') {
+        return NextResponse.json(
+          { error: 'File uploads are disabled for cancelled orders.' },
+          { status: 409 }
+        );
       }
       if (session.role === 'admin' && !body.clientId) {
         ownerClientId = orderRow.client_id;

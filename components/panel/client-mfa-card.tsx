@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function ClientMfaCard() {
+export function ClientMfaCard({ mfaEnforced = false }: { mfaEnforced?: boolean }) {
   const [loading, setLoading] = React.useState(true);
   const [verifiedFactorId, setVerifiedFactorId] = React.useState<string | null>(null);
   const [enrolling, setEnrolling] = React.useState<{
@@ -141,14 +141,18 @@ export function ClientMfaCard() {
             ) : (
               <ShieldAlert className="h-4 w-4 text-primary" />
             )}
-            Optional Two-Factor Authentication (TOTP)
+            {mfaEnforced
+              ? 'Two-Factor Authentication (Required)'
+              : 'Optional Two-Factor Authentication (TOTP)'}
           </CardTitle>
           <Badge variant={verifiedFactorId ? 'default' : 'outline'} className="font-mono text-[10px]">
-            {loading ? 'CHECKING' : verifiedFactorId ? 'ENABLED' : 'NOT ENABLED'}
+            {loading ? 'CHECKING' : verifiedFactorId ? (mfaEnforced ? 'ENFORCED' : 'ENABLED') : 'NOT ENABLED'}
           </Badge>
         </div>
         <CardDescription className="text-xs">
-          Protect downloads, proposals, and payment submissions with a 6-digit authenticator app code.
+          {mfaEnforced
+            ? 'Two-factor authentication is enforced on your account by workspace security policy.'
+            : 'Protect downloads, proposals, and payment submissions with a 6-digit authenticator app code.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-xs">
@@ -159,17 +163,23 @@ export function ClientMfaCard() {
           </div>
         ) : verifiedFactorId ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-            <span>TOTP Authenticator is active on your account.</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={disableMfa}
-              className="text-destructive hover:text-destructive"
-            >
-              Remove 2FA
-            </Button>
+            <span>
+              {mfaEnforced
+                ? 'TOTP Authenticator is active and enforced on your account.'
+                : 'TOTP Authenticator is active on your account.'}
+            </span>
+            {!mfaEnforced && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={disableMfa}
+                className="text-destructive hover:text-destructive"
+              >
+                Remove 2FA
+              </Button>
+            )}
           </div>
         ) : enrolling ? (
           <form onSubmit={confirmEnrollment} className="space-y-3">

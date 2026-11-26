@@ -43,7 +43,42 @@ export interface NormalizedLead {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const ISO_DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const US_DATE_ONLY_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 const MAX_SUMMARY = 5000;
+
+function parsePreferredContactDate(raw: string): string | null {
+  if (!raw) return null;
+  if (ISO_DATE_ONLY_RE.test(raw)) {
+    const [y, m, d] = raw.split('-').map(Number);
+    const probe = new Date(Date.UTC(y, m - 1, d));
+    if (
+      probe.getUTCFullYear() === y &&
+      probe.getUTCMonth() === m - 1 &&
+      probe.getUTCDate() === d
+    ) {
+      return raw;
+    }
+    return null;
+  }
+  const usMatch = raw.match(US_DATE_ONLY_RE);
+  if (usMatch) {
+    const m = Number(usMatch[1]);
+    const d = Number(usMatch[2]);
+    const y = Number(usMatch[3]);
+    const probe = new Date(Date.UTC(y, m - 1, d));
+    if (
+      probe.getUTCFullYear() === y &&
+      probe.getUTCMonth() === m - 1 &&
+      probe.getUTCDate() === d
+    ) {
+      return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    return null;
+  }
+  const parsed = new Date(raw);
+  return !Number.isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
 const MAX_FILENAME = 255;
 const MAX_MIME = 128;
 export const ATTACHMENT_INVALID_ERROR =
@@ -177,10 +212,7 @@ export function parseLeadPayload(
       whatsapp_e164: whatsappE164,
       preferred_contact_method: nullable(str(formData, 'preferredContactMethod')),
       timezone: nullable(str(formData, 'timeZone')),
-      preferred_contact_date:
-        contactDate && !Number.isNaN(new Date(contactDate).getTime())
-          ? new Date(contactDate).toISOString().slice(0, 10)
-          : null,
+      preferred_contact_date: parsePreferredContactDate(contactDate),
       best_time_to_contact: nullable(str(formData, 'bestTimeToContact')),
       services,
       company: nullable(str(formData, 'company')),

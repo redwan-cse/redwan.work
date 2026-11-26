@@ -994,6 +994,11 @@ export async function startLoopbackServices(options = {}) {
           sendJson(res, 200, { rows: [] });
           return;
         }
+        if (op === 'clearRateLimits') {
+          await pg.db.query('DELETE FROM public.rate_limits');
+          sendJson(res, 200, { rows: [] });
+          return;
+        }
         if (op === 'getLatestEmailOutboxForRecipient') {
           const result = await pg.db.query(
             `SELECT id, status, attempts FROM public.email_outbox

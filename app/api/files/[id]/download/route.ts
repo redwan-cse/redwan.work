@@ -70,7 +70,7 @@ export async function GET(
           if (storedSize === null) {
             return NextResponse.json({ error: 'Stored file object not found.' }, { status: 404 });
           }
-          const signedUrl = await presignPrivateGet(att.r2_key, 60);
+          const signedUrl = await presignPrivateGet(att.r2_key, 60, att.filename);
           await recordAuditLog({
             actorId: session.userId,
             actorRole: 'admin',

@@ -91,7 +91,7 @@ export default function AdminMfaPage() {
 
       let { data: enrolled, error: enrollErr } = await supabase.auth.mfa.enroll({
         factorType: 'totp',
-        friendlyName: 'redwan.work Command Center',
+        friendlyName: 'redwan.work Workspace',
       });
 
       // Fallback if friendlyName still collides due to concurrent StrictMode mount
@@ -99,7 +99,7 @@ export default function AdminMfaPage() {
         await resetUnverifiedMfaFactorsAction().catch(() => undefined);
         const retry = await supabase.auth.mfa.enroll({
           factorType: 'totp',
-          friendlyName: `redwan.work Command Center (${Date.now().toString(36).slice(-4)})`,
+          friendlyName: `redwan.work Workspace (${Date.now().toString(36).slice(-4)})`,
         });
         enrolled = retry.data;
         enrollErr = retry.error;
@@ -285,7 +285,7 @@ export default function AdminMfaPage() {
           Multi-Factor Verification (AAL2)
         </CardTitle>
         <CardDescription>
-          Administrative access requires verified TOTP assurance before entering the Command Center.
+          Verify your 6-digit authenticator app code (AAL2) before continuing to your workspace.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -315,7 +315,7 @@ export default function AdminMfaPage() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={enrollment.qrCodeSvg}
-                      alt="Authenticator QR code for redwan.work Command Center"
+                      alt="Authenticator QR code for redwan.work Workspace"
                       className="h-44 w-44"
                     />
                   </div>

@@ -180,6 +180,9 @@ export function CookiePreferences() {
 
     try {
       window.localStorage.setItem(COOKIE_PREFERENCES_STORAGE_KEY, JSON.stringify(payload));
+      if (!nextExperience) {
+        window.localStorage.removeItem('theme');
+      }
       const secureAttr = window.location.protocol === 'https:' ? '; Secure' : '';
       const flags = ['essential'];
       if (nextExperience) flags.push('experience');
@@ -248,7 +251,7 @@ export function CookiePreferences() {
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           <strong className="font-semibold text-foreground">redwan.work</strong> enforces zero
           advertising pixels. Essential security cookies stay active, while{' '}
-          <strong className="font-medium text-foreground">Site Experience &amp; Preloading</strong>{' '}
+          <strong className="font-medium text-foreground">Site Experience &amp; Theme Memory</strong>{' '}
           and <strong className="font-medium text-foreground">Analytics &amp; UX Telemetry</strong>{' '}
           are enabled by default—keep them on or disable either option below. Read our{' '}
           <Link
@@ -338,16 +341,15 @@ export function CookiePreferences() {
                     <div className="flex flex-wrap items-center gap-2">
                       <SlidersHorizontal className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                       <span className="text-xs font-semibold text-foreground">
-                        Site Experience &amp; Preloading
+                        Site Experience &amp; Theme Memory
                       </span>
                       <span className="inline-flex items-center rounded-full border border-border/80 bg-muted px-2 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">
                         Default On · Optional
                       </span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Enables light/dark <code className="font-mono text-foreground">theme</code>{' '}
-                      memory and idle-time <code className="font-mono text-foreground">/blogs</code>{' '}
-                      pagination preloading for faster navigation.
+                      Remembers your light/dark <code className="font-mono text-foreground">theme</code>{' '}
+                      selection across visits in local browser storage. Disabling clears saved theme storage.
                     </p>
                   </div>
 
@@ -355,7 +357,7 @@ export function CookiePreferences() {
                     type="button"
                     role="switch"
                     aria-checked={experienceEnabled}
-                    aria-label="Toggle optional site experience storage and blog preloading"
+                    aria-label="Toggle optional site experience and theme memory storage"
                     onClick={() => setExperienceEnabled((prev) => !prev)}
                     className={cn(
                       'relative mt-0.5 inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
