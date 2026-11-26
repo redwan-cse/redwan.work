@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ExternalLink, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { AntigravityHeroField } from '@/components/motion/antigravity-hero-field';
@@ -27,34 +28,29 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const params = await searchParams;
   const rawPage = params.page;
-  const parsedPage = rawPage !== undefined ? Number(rawPage) : 1;
+  const parsedPage = rawPage !== undefined && rawPage.trim() !== '' ? Number(rawPage) : 1;
   const isPositiveInt = Number.isSafeInteger(parsedPage) && parsedPage > 0;
 
+  const targetPage = isPositiveInt ? parsedPage : 1;
   const { totalItems } = await getBlogPostsPage(
-    1,
+    targetPage,
     BLOG_GRID_PER_PAGE,
     BLOG_FIRST_PAGE_COUNT
   );
-  const { totalPages } = getBlogPaginationMeta(totalItems, 1);
+  const { totalPages } = getBlogPaginationMeta(totalItems, targetPage);
 
   const isInvalidOrOutOfRange =
     rawPage !== undefined && (!isPositiveInt || parsedPage > totalPages);
 
   if (isInvalidOrOutOfRange) {
-    return buildPublicMetadata({
-      title: 'Security & Engineering Blog — Md. Redwan Ahmed',
-      description:
-        'Cybersecurity research, offensive security writeups, Wazuh SIEM guides, and full-stack engineering articles by Md. Redwan Ahmed.',
-      path: '/blogs',
-      noindex: true,
-    });
+    notFound();
   }
 
   const canonicalPath = parsedPage > 1 ? `/blogs?page=${parsedPage}` : '/blogs';
   const title =
     parsedPage > 1
-      ? `Security & Engineering Blog (Page ${parsedPage}) — Insights by Md. Redwan Ahmed`
-      : 'Security & Engineering Blog — Insights by Md. Redwan Ahmed';
+      ? `Security & Engineering Blog (Page ${parsedPage})`
+      : 'Security & Engineering Blog';
 
   return buildPublicMetadata({
     title,
@@ -75,9 +71,21 @@ export default async function BlogsPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const params = await searchParams;
-  const requested = Number(params.page);
-  const currentPage =
-    Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
+  const rawPage = params.page;
+  const parsedPage = rawPage !== undefined && rawPage.trim() !== '' ? Number(rawPage) : 1;
+  const isPositiveInt = Number.isSafeInteger(parsedPage) && parsedPage > 0;
+
+  // Consolidate duplicate ?page=1 into canonical /blogs with HTTP 308
+  if (rawPage !== undefined && isPositiveInt && parsedPage === 1) {
+    permanentRedirect('/blogs');
+  }
+
+  // Reject malformed ?page=0, ?page=abc, ?page= before fetching
+  if (rawPage !== undefined && !isPositiveInt) {
+    notFound();
+  }
+
+  const currentPage = isPositiveInt ? parsedPage : 1;
 
   const {
     posts: allPosts,
@@ -86,6 +94,12 @@ export default async function BlogsPage({
   } = await getBlogPostsPage(currentPage, BLOG_GRID_PER_PAGE, BLOG_FIRST_PAGE_COUNT);
 
   const { totalPages, startIndex } = getBlogPaginationMeta(totalPosts, currentPage);
+
+  // Return true HTTP 404 (not soft-404 HTTP 200) for out-of-range pagination
+  if (rawPage !== undefined && currentPage > totalPages) {
+    notFound();
+  }
+
   const endIndex = startIndex + allPosts.length;
 
   // Strip content and precomputed metadata before crossing the RSC -> Client boundary,

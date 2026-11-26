@@ -15,6 +15,54 @@ import type {
   SiteSettingsRecord,
 } from '@/lib/cms/queries';
 
+import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
+
+const SCHEMA_MONTH_MAP: Record<string, string> = {
+  jan: '01',
+  january: '01',
+  feb: '02',
+  february: '02',
+  mar: '03',
+  march: '03',
+  apr: '04',
+  april: '04',
+  may: '05',
+  jun: '06',
+  june: '06',
+  jul: '07',
+  july: '07',
+  aug: '08',
+  august: '08',
+  sep: '09',
+  sept: '09',
+  september: '09',
+  oct: '10',
+  october: '10',
+  nov: '11',
+  november: '11',
+  dec: '12',
+  december: '12',
+};
+
+/**
+ * Normalize human-readable dates/ranges (e.g. "2024–2026", "Nov 2024")
+ * into valid Schema.org ISO-8601 date strings ("2026", "2024-11").
+ */
+export function normalizeSchemaDate(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(trimmed)) {
+    return trimmed;
+  }
+  const monthYear = trimmed.match(/\b([A-Za-z]{3,9})\s+(20\d{2})\b/);
+  if (monthYear) {
+    const mm = SCHEMA_MONTH_MAP[monthYear[1].toLowerCase()];
+    if (mm) return `${monthYear[2]}-${mm}`;
+  }
+  const years = trimmed.match(/\b(19\d{2}|20\d{2})\b/g);
+  return years ? years[years.length - 1] : undefined;
+}
+
 export interface FaqEntry {
   id: string;
   question: string;
@@ -172,7 +220,6 @@ export function buildRootSiteGraphJsonLd() {
           SITE.socials.upwork,
           SITE.socials.fiverr,
           SITE.socials.twitter,
-          'https://twitter.com/redwancse',
           SITE.socials.facebook,
           SITE.socials.instagram,
           'https://blogs.redwan.work',
@@ -182,11 +229,17 @@ export function buildRootSiteGraphJsonLd() {
         '@type': 'ProfessionalService',
         '@id': serviceId,
         name: `${SITE.name} — Security & Engineering Consulting`,
+        description: SITE.tagline,
         url: SITE.url,
         image: `${SITE.url}${SITE.profileImage}`,
         founder: { '@id': personId },
         email: SITE.email,
         telephone: SITE.phoneDisplay,
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: 'Dhaka',
+          addressCountry: 'BD',
+        },
         areaServed: 'Worldwide',
         sameAs: [SITE.company.url],
         serviceType: [
@@ -243,12 +296,13 @@ export function buildServicesOfferCatalogJsonLd(services: ServiceCatalogItem[]) 
       itemListElement: services.map((service, index) => ({
         '@type': 'Offer',
         position: index + 1,
-        url: `${SITE.url}/services?pillar=${encodeURIComponent(service.pillar)}`,
+        url: `${SITE.url}/services/${service.slug}`,
         priceCurrency: 'USD',
         price: (service.startingPriceCents / 100).toFixed(2),
         itemOffered: {
           '@type': 'Service',
           name: service.title,
+          url: `${SITE.url}/services/${service.slug}`,
           serviceType: service.pillarLabel,
           description: service.tagline || service.description,
         },
@@ -257,61 +311,158 @@ export function buildServicesOfferCatalogJsonLd(services: ServiceCatalogItem[]) 
   };
 }
 
+export function buildServiceDetailJsonLd(service: ServiceCatalogItem) {
+  const canonicalUrl = `${SITE.url}/services/${service.slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    '@id': `${canonicalUrl}#service`,
+    name: service.title,
+    description: service.description || service.tagline,
+    url: canonicalUrl,
+    provider: { '@id': `${SITE.url}/#person` },
+    areaServed: 'Worldwide',
+    serviceType: service.pillarLabel,
+    ...(service.packages.length > 0
+      ? {
+          hasOfferCatalog: {
+            '@type': 'OfferCatalog',
+            name: `${service.title} Packages`,
+            itemListElement: service.packages.map((pkg, idx) => ({
+              '@type': 'Offer',
+              position: idx + 1,
+              name: pkg.name,
+              description: pkg.summary,
+              url: canonicalUrl,
+              priceCurrency: 'USD',
+              price: (pkg.priceCents / 100).toFixed(2),
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+export function buildCaseStudyJsonLd(study: PortfolioCaseStudy & { slug?: string }) {
+  const slug = study.slug || study.id;
+  const canonicalUrl = `${SITE.url}/portfolio/${slug}`;
+  const safeExternalUrl = trySanitizeHttpUrl(study.externalUrl);
+  const isoDate = normalizeSchemaDate(study.year);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    '@id': `${canonicalUrl}#case-study`,
+    name: `${study.code}: ${study.title}`,
+    description: study.summary,
+    url: canonicalUrl,
+    ...(isoDate ? { datePublished: isoDate } : {}),
+    about: study.pillarLabel,
+    author: { '@id': `${SITE.url}/#person` },
+    creator: { '@id': `${SITE.url}/#person` },
+    keywords: study.stack.join(', '),
+    ...(safeExternalUrl ? { sameAs: safeExternalUrl } : {}),
+  };
+}
+
+export function buildContactPageJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ContactPage',
+    '@id': `${SITE.url}/contact#contactpage`,
+    name: `Contact & Project Inquiry — ${SITE.name}`,
+    url: `${SITE.url}/contact`,
+    mainEntity: { '@id': `${SITE.url}/#person` },
+  };
+}
+
+function extractPublicationVenue(pub: ResumeItemRecord): string {
+  for (const hl of pub.highlights ?? []) {
+    const match = hl.match(/^(?:Journal|Conference|Venue):\s*(.+)$/i);
+    if (match?.[1]?.trim()) return match[1].trim();
+  }
+  return pub.organization;
+}
+
+function extractPublicationDate(pub: ResumeItemRecord): string | undefined {
+  const fromPeriod = normalizeSchemaDate(pub.period);
+  if (fromPeriod) return fromPeriod;
+  for (const hl of pub.highlights ?? []) {
+    const match = hl.match(/^Date:\s*(.+)$/i);
+    if (match?.[1]) {
+      const parsed = normalizeSchemaDate(match[1]);
+      if (parsed) return parsed;
+    }
+  }
+  return undefined;
+}
+
 export function buildResumeProfileJsonLd(
   settings: SiteSettingsRecord,
   items: ResumeItemRecord[]
 ) {
   const publications = items.filter((item) => item.section === 'research');
-  const scholarlyNodes = publications.map((pub) => ({
-    '@type': 'ScholarlyArticle',
-    headline: pub.title,
-    description: pub.description ?? undefined,
-    datePublished: pub.period ?? '2024',
-    url: pub.verification_url ?? `${SITE.url}/resume`,
-    author: { '@id': `${SITE.url}/#person` },
-    isPartOf: {
-      '@type': 'PublicationIssue',
-      name: pub.organization,
-    },
-  }));
+  const scholarlyNodes = publications.map((pub, idx) => {
+    const nodeId = `${SITE.url}/resume#publication-${idx + 1}`;
+    const isoDate = extractPublicationDate(pub);
+    return {
+      '@type': 'ScholarlyArticle',
+      '@id': nodeId,
+      headline: pub.title,
+      description: pub.description ?? undefined,
+      ...(isoDate ? { datePublished: isoDate } : {}),
+      url: pub.verification_url ?? `${SITE.url}/resume`,
+      author: { '@id': `${SITE.url}/#person` },
+      isPartOf: {
+        '@type': 'PublicationIssue',
+        name: extractPublicationVenue(pub),
+      },
+    };
+  });
 
   return {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'ProfilePage',
+        '@id': `${SITE.url}/resume#profilepage`,
         name: `Curriculum Vitae — ${settings.full_name}`,
         url: `${SITE.url}/resume`,
         mainEntity: { '@id': `${SITE.url}/#person` },
-        hasPart: scholarlyNodes,
+        hasPart: scholarlyNodes.map((node) => ({ '@id': node['@id'] })),
       },
       ...scholarlyNodes,
     ],
   };
 }
 
-export function buildPortfolioCollectionJsonLd(items: PortfolioCaseStudy[]) {
+export function buildPortfolioCollectionJsonLd(items: Array<PortfolioCaseStudy & { slug?: string }>) {
   return {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
+    '@id': `${SITE.url}/portfolio#collection`,
     name: `Selected Security, Software & Research Portfolio — ${SITE.name}`,
     url: `${SITE.url}/portfolio`,
     author: { '@id': `${SITE.url}/#person` },
     mainEntity: {
       '@type': 'ItemList',
       numberOfItems: items.length,
-      itemListElement: items.map((item, idx) => ({
-        '@type': 'ListItem',
-        position: idx + 1,
-        item: {
-          '@type': 'CreativeWork',
-          name: item.title,
-          description: item.summary,
-          keywords: item.stack.join(', '),
-          url: item.externalUrl || `${SITE.url}/portfolio`,
-          creator: { '@id': `${SITE.url}/#person` },
-        },
-      })),
+      itemListElement: items.map((item, idx) => {
+        const slug = item.slug || item.id;
+        const safeExternalUrl = trySanitizeHttpUrl(item.externalUrl);
+        return {
+          '@type': 'ListItem',
+          position: idx + 1,
+          item: {
+            '@type': 'CreativeWork',
+            name: item.title,
+            description: item.summary,
+            keywords: item.stack.join(', '),
+            url: `${SITE.url}/portfolio/${slug}`,
+            ...(safeExternalUrl ? { sameAs: safeExternalUrl } : {}),
+            creator: { '@id': `${SITE.url}/#person` },
+          },
+        };
+      }),
     },
   };
 }
@@ -321,18 +472,26 @@ export function buildBlogsArchiveJsonLd(posts: BlogPost[], page: number) {
   return {
     '@context': 'https://schema.org',
     '@type': 'Blog',
+    '@id': `${SITE.url}/blogs#blog`,
     name: `Security Research & Engineering Dispatch — ${SITE.name}`,
     url: canonicalUrl,
     sameAs: 'https://blogs.redwan.work',
     author: { '@id': `${SITE.url}/#person` },
-    blogPost: posts.map((post) => ({
-      '@type': 'BlogPosting',
-      headline: post.title,
-      url: post.url,
-      datePublished: post.published,
-      description: stripHtmlToPlainText(post.content).slice(0, 180),
-      keywords: (post.labels ?? []).join(', '),
-      author: { '@id': `${SITE.url}/#person` },
-    })),
+    publisher: { '@id': `${SITE.url}/#person` },
+    blogPost: posts.map((post) => {
+      const inlineImg = post.content?.match(/<img[^>]+src="([^">]+)"/)?.[1];
+      const imageUrl = post.imageUrl || inlineImg;
+      return {
+        '@type': 'BlogPosting',
+        headline: post.title,
+        url: post.url,
+        datePublished: post.published,
+        description: (post.excerpt ?? stripHtmlToPlainText(post.content)).slice(0, 180),
+        ...(imageUrl ? { image: imageUrl } : {}),
+        keywords: (post.labels ?? []).join(', '),
+        author: { '@id': `${SITE.url}/#person` },
+        publisher: { '@id': `${SITE.url}/#person` },
+      };
+    }),
   };
 }

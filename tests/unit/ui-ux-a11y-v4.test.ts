@@ -183,9 +183,14 @@ describe('UI/UX & WCAG AA Accessibility Audit v4 (PR A) Regressions', () => {
     expect(cookieSrc).toContain('max-h-[min(38dvh,300px)]');
   });
 
-  it('[UI-V4-09] reserves /portfolio Suspense skeleton height and preserves A4 invoice print headers & full-width layout', () => {
+  it('[UI-V4-09] renders /portfolio and /services catalogs directly in SSR HTML without outer Suspense skeleton bailout and preserves A4 invoice print headers & full-width layout', () => {
     const portfolioSrc = readSrc('app/portfolio/page.tsx');
-    expect(portfolioSrc).toContain('min-h-[920px]');
+    expect(portfolioSrc).toContain('<PortfolioShowcase');
+    expect(portfolioSrc).not.toContain('Loading case studies');
+
+    const servicesSrc = readSrc('app/services/page.tsx');
+    expect(servicesSrc).toContain('<ServicesShowcase');
+    expect(servicesSrc).not.toContain('Loading service catalog');
 
     const clientInvSrc = readSrc('app/(client)/portal/invoices/[id]/page.tsx');
     expect(clientInvSrc).not.toContain('flex flex-wrap items-center justify-between gap-3 print:hidden');

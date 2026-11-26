@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, ExternalLink } from 'lucide-react'
 import { getPublicPortfolioItems } from '@/lib/cms/queries';
 import { PORTFOLIO_ITEMS, SERVICE_PILLARS, SITE } from '@/lib/content/site';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
-import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
+import { buildBreadcrumbJsonLd, buildCaseStudyJsonLd } from '@/lib/seo/structured-data';
 import { trySanitizeHttpUrl } from '@/lib/security/safe-redirect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,17 +34,18 @@ export async function generateMetadata({
   const items = await getPublicPortfolioItems();
   const study = items.find((i) => i.slug === slug);
   if (!study) {
-    return buildPublicMetadata({
-      title: 'Case Study Not Found',
-      description: 'Requested case study is unavailable.',
-      path: `/portfolio/${slug}`,
-      noindex: true,
-    });
+    notFound();
   }
   return buildPublicMetadata({
     title: `${study.code}: ${study.title}`,
     description: study.summary,
     path: `/portfolio/${study.slug}`,
+    image: {
+      url: `/portfolio/${study.slug}/opengraph-image`,
+      width: 1200,
+      height: 630,
+      alt: `${study.code}: ${study.title} — ${SITE.name}`,
+    },
   });
 }
 
@@ -65,19 +66,7 @@ export default async function PortfolioCaseStudyPage({
       { name: 'Portfolio', path: '/portfolio' },
       { name: study.title, path: `/portfolio/${study.slug}` },
     ]),
-    {
-      '@context': 'https://schema.org',
-      '@type': 'CreativeWork',
-      name: `${study.code}: ${study.title}`,
-      description: study.summary,
-      datePublished: study.year,
-      author: {
-        '@type': 'Person',
-        name: SITE.name,
-        url: SITE.url,
-      },
-      keywords: study.stack.join(', '),
-    },
+    buildCaseStudyJsonLd(study),
   ];
 
   return (

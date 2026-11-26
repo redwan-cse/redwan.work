@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -43,20 +43,30 @@ const FILTER_TABS: Array<{
   { key: 'tech_support', label: 'Incident Recovery', icon: LifeBuoy },
 ];
 
-export function PortfolioShowcase({
-  initialItems = [],
+function CategoryQuerySync({
+  onSelect,
 }: {
-  initialItems?: PortfolioCaseStudy[];
+  onSelect: (category: 'all' | ServicePillarKey) => void;
 }) {
   const searchParams = useSearchParams();
   const initialCategory = (searchParams?.get('pillar') ||
     searchParams?.get('category')) as ServicePillarKey | null;
 
-  const [selectedCategory, setSelectedCategory] = useState<'all' | ServicePillarKey>(
-    initialCategory && FILTER_TABS.some((t) => t.key === initialCategory)
-      ? initialCategory
-      : 'all'
-  );
+  useEffect(() => {
+    if (initialCategory && FILTER_TABS.some((t) => t.key === initialCategory)) {
+      onSelect(initialCategory);
+    }
+  }, [initialCategory, onSelect]);
+
+  return null;
+}
+
+export function PortfolioShowcase({
+  initialItems = [],
+}: {
+  initialItems?: PortfolioCaseStudy[];
+}) {
+  const [selectedCategory, setSelectedCategory] = useState<'all' | ServicePillarKey>('all');
   const [activeStudy, setActiveStudy] = useState<PortfolioCaseStudy | null>(null);
 
   const items = initialItems;
@@ -68,6 +78,9 @@ export function PortfolioShowcase({
 
   return (
     <div className="space-y-10">
+      <Suspense fallback={null}>
+        <CategoryQuerySync onSelect={setSelectedCategory} />
+      </Suspense>
       {/* Category Filter Pills */}
       <div className="flex flex-wrap items-center justify-center gap-2" role="group" aria-label="Filter case studies by category">
         {FILTER_TABS.map(({ key, label, icon: Icon }) => {
@@ -107,7 +120,14 @@ export function PortfolioShowcase({
                   </span>
                 </div>
 
-                <h2 className="text-xl font-bold tracking-tight">{study.title}</h2>
+                <h2 className="text-xl font-bold tracking-tight">
+                  <Link
+                    href={`/portfolio/${'slug' in study && typeof study.slug === 'string' ? study.slug : study.id}`}
+                    className="transition-colors hover:text-primary"
+                  >
+                    {study.title}
+                  </Link>
+                </h2>
                 <p className="mt-1 text-xs font-medium text-muted-foreground">
                   {study.clientSector}
                 </p>
@@ -132,18 +152,27 @@ export function PortfolioShowcase({
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between gap-2 border-t border-border/60 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full text-xs"
-                  onClick={() => setActiveStudy(study)}
-                >
-                  Read Full Case Study
-                </Button>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4">
+                <div className="flex items-center gap-1.5">
+                  <Button asChild variant="outline" size="sm" className="rounded-full text-xs">
+                    <Link
+                      href={`/portfolio/${'slug' in study && typeof study.slug === 'string' ? study.slug : study.id}`}
+                    >
+                      Read Case Study
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setActiveStudy(study)}
+                  >
+                    Quick Preview
+                  </Button>
+                </div>
                 <Button asChild variant="ghost" size="sm" className="gap-1 rounded-full text-xs text-primary">
-                  <Link href={`/services?pillar=${study.pillar}`}>
+                  <Link href={`/services/${study.relatedServiceSlug}`}>
                     Order Similar
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>

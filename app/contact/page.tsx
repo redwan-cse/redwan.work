@@ -23,12 +23,12 @@ import { getPublicContactChannels, getPublicServicesCatalog } from '@/lib/cms/qu
 import { readConsentControl } from '@/lib/contact/consent-control';
 import { ContactActiveChat } from '@/components/panel/contact-active-chat';
 import { buildPublicMetadata, serializeJsonLd } from '@/lib/seo/metadata';
-import { buildBreadcrumbJsonLd } from '@/lib/seo/structured-data';
+import { buildBreadcrumbJsonLd, buildContactPageJsonLd } from '@/lib/seo/structured-data';
 
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
-  title: 'Contact & Project Inquiry — Md. Redwan Ahmed',
+  title: 'Contact & Project Inquiry',
   description:
     'Request an offensive security penetration test, full-stack engineering proposal, cloud/Linux hardening, or emergency incident recovery.',
   path: '/contact',
@@ -45,17 +45,23 @@ export default async function Contact() {
 
   const initialConsentPolicy = consentResult.ok ? consentResult.bundle : null;
 
-  const contactBreadcrumb = buildBreadcrumbJsonLd([
-    { name: 'Home', path: '/' },
-    { name: 'Contact & Project Inquiry', path: '/contact' },
-  ]);
+  const contactSchemas = [
+    buildBreadcrumbJsonLd([
+      { name: 'Home', path: '/' },
+      { name: 'Contact & Project Inquiry', path: '/contact' },
+    ]),
+    buildContactPageJsonLd(),
+  ];
 
   return (
     <div className="flex flex-col">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: serializeJsonLd(contactBreadcrumb) }}
-      />
+      {contactSchemas.map((schema, index) => (
+        <script
+          key={`contact-schema-${index}`}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
+        />
+      ))}
       {/* Antigravity Hero Header */}
       <section className="relative overflow-hidden border-b border-border/70 py-14 md:py-20">
         <AntigravityHeroField />
@@ -115,14 +121,14 @@ export default async function Contact() {
                 </div>
                 <div className="mt-6 pt-2">
                   <Button asChild variant="outline" size="sm" className="w-full gap-1.5 rounded-full">
-                    <Link
+                    <a
                       href={`https://wa.me/${channels.whatsapp_number.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       Chat on WhatsApp
                       <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    </a>
                   </Button>
                 </div>
               </InteractiveCard>
@@ -141,14 +147,14 @@ export default async function Contact() {
                 </div>
                 <div className="mt-6 pt-2">
                   <Button asChild variant="outline" size="sm" className="w-full gap-1.5 rounded-full">
-                    <Link
+                    <a
                       href={channels.cal_com_url}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
                       Book on Cal.com
                       <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
+                    </a>
                   </Button>
                 </div>
               </InteractiveCard>

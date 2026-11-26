@@ -72,7 +72,7 @@ export function Footer() {
             <ul className="space-y-2.5 text-xs text-muted-foreground sm:text-sm">
               <li>
                 <Link
-                  href="/services?pillar=cybersecurity"
+                  href="/services/vapt-penetration-testing"
                   className="transition-colors hover:text-primary"
                 >
                   Cybersecurity &amp; Penetration Testing (VAPT)
@@ -80,7 +80,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/services?pillar=development"
+                  href="/services/fullstack-web-development"
                   className="transition-colors hover:text-primary"
                 >
                   Full-Stack Web &amp; Custom Software
@@ -88,23 +88,31 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/services?pillar=cloud_devops"
+                  href="/services/cloud-linux-devops"
                   className="transition-colors hover:text-primary"
                 >
                   Cloud, Linux &amp; DevSecOps Hardening
                 </Link>
               </li>
               <li>
-                <Link href="/services?pillar=ai_ml" className="transition-colors hover:text-primary">
+                <Link
+                  href="/services/ai-ml-automation"
+                  className="transition-colors hover:text-primary"
+                >
                   Applied AI/ML &amp; Workflow Automation
                 </Link>
               </li>
               <li>
                 <Link
-                  href="/services?pillar=tech_support"
+                  href="/services/executive-tech-support-recovery"
                   className="transition-colors hover:text-primary"
                 >
                   Incident Recovery &amp; Monthly Retainers
+                </Link>
+              </li>
+              <li>
+                <Link href="/services" className="font-medium text-foreground/80 transition-colors hover:text-primary">
+                  All Services &amp; Packages →
                 </Link>
               </li>
             </ul>

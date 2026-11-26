@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,9 +16,9 @@ import {
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPublicMetadata({
-  title: 'Portfolio & Case Studies — VAPT, Full-Stack Platforms, SIEM & AI Research',
+  title: 'Security, Full-Stack & AI Case Studies',
   description:
-    'Explore offensive security assessments, production full-stack applications, Wazuh SIEM deployments, and peer-reviewed Q1 Scopus machine learning research by Md. Redwan Ahmed.',
+    'Sanitized penetration testing assessments, full-stack platforms, Wazuh SIEM infrastructure, and Q1 Scopus AI/ML research by Md. Redwan Ahmed.',
   path: '/portfolio',
 });
 
@@ -67,33 +66,10 @@ export default async function PortfolioPage() {
           </div>
         </section>
 
-        {/* Interactive Portfolio Grid */}
+        {/* Interactive Portfolio Grid (server-rendered directly into ISR HTML) */}
         <section className="py-16">
           <div className="container">
-            <Suspense
-              fallback={
-                <div className="min-h-[920px] space-y-8" aria-busy="true" aria-label="Loading case studies">
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="h-9 w-28 animate-pulse rounded-full border border-border/60 bg-muted/60"
-                      />
-                    ))}
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <div
-                        key={idx}
-                        className="h-72 animate-pulse rounded-2xl border border-border/60 bg-card/70 p-6"
-                      />
-                    ))}
-                  </div>
-                </div>
-              }
-            >
-              <PortfolioShowcase initialItems={portfolioItems} />
-            </Suspense>
+            <PortfolioShowcase initialItems={portfolioItems} />
           </div>
         </section>
 

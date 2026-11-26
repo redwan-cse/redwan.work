@@ -16,14 +16,12 @@ export async function GET() {
 
   const serviceLines = services.map((service) => {
     const usd = Math.round(service.startingPriceCents / 100);
-    return `- [${service.title}](${SITE.url}/services?pillar=${encodeURIComponent(
-      service.pillar
-    )}): ${service.tagline} Starting at $${usd.toLocaleString('en-US')} USD (${service.deliveryDaysMin}-${service.deliveryDaysMax} days).`;
+    return `- [${service.title}](${SITE.url}/services/${service.slug}): ${service.tagline} Starting at $${usd.toLocaleString('en-US')} USD (${service.deliveryDaysMin}-${service.deliveryDaysMax} days).`;
   });
 
   const portfolioLines = portfolio.slice(0, 6).map(
     (item) =>
-      `- [${item.title}](${SITE.url}/portfolio): ${item.summary}${
+      `- [${item.title}](${SITE.url}/portfolio/${item.slug}): ${item.summary}${
         item.headlineMetric ? ` Outcome: ${item.headlineMetric}.` : ''
       }`
   );

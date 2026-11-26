@@ -13,14 +13,27 @@ import {
   allowsExperienceStorage,
 } from '@/components/cookie-preferences';
 import { clearBlogCache, getBlogPostsPage } from '@/lib/blogger';
-import { resolveVerificationToken } from '@/lib/seo/metadata';
 import {
+  buildPublicMetadata,
+  resolveVerificationToken,
+} from '@/lib/seo/metadata';
+import {
+  buildBlogsArchiveJsonLd,
+  buildCaseStudyJsonLd,
+  buildContactPageJsonLd,
   buildFaqPageJsonLd,
+  buildPortfolioCollectionJsonLd,
+  buildResumeProfileJsonLd,
   buildRootSiteGraphJsonLd,
+  buildServiceDetailJsonLd,
   buildServicesOfferCatalogJsonLd,
+  normalizeSchemaDate,
   PUBLIC_FAQS,
 } from '@/lib/seo/structured-data';
-import { getPublicServicesCatalog } from '@/lib/cms/queries';
+import {
+  getPublicPortfolioItems,
+  getPublicServicesCatalog,
+} from '@/lib/cms/queries';
 import sitemap from '@/app/sitemap';
 import robots from '@/app/robots';
 
@@ -262,5 +275,152 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it('[SEO-V6] prevents duplicate brand suffixes, configures summary_large_image OG defaults, and guards Vercel preview deployments against indexing', () => {
+    const plainMeta = buildPublicMetadata({
+      title: 'Services & Packages',
+      description: 'Cybersecurity and full-stack consulting.',
+      path: '/services',
+    });
+    expect(plainMeta.title).toBe('Services & Packages');
+    expect((plainMeta.twitter as { card?: string })?.card).toBe('summary_large_image');
+    const ogImages = (plainMeta.openGraph as { images?: Array<{ url: string }> })?.images ?? [];
+    expect(ogImages[0]?.url).toBe('/opengraph-image');
+
+    const brandedMeta = buildPublicMetadata({
+      title: `${SITE.name} — Security Consultant`,
+      description: 'Branded title should not receive a duplicate suffix.',
+      path: '/',
+    });
+    expect(brandedMeta.title).toEqual({ absolute: `${SITE.name} — Security Consultant` });
+    expect((brandedMeta.openGraph as { title?: string })?.title).toBe(
+      `${SITE.name} — Security Consultant`
+    );
+
+    const prevEnv = process.env.VERCEL_ENV;
+    try {
+      process.env.VERCEL_ENV = 'preview';
+      const previewMeta = buildPublicMetadata({
+        title: 'Services',
+        description: 'Preview deployment.',
+        path: '/services',
+      });
+      expect(previewMeta.robots).toEqual({ index: false, follow: false });
+
+      const previewRobots = robots();
+      const rules = Array.isArray(previewRobots.rules)
+        ? previewRobots.rules
+        : [previewRobots.rules];
+      expect(rules).toEqual([{ userAgent: '*', disallow: '/' }]);
+    } finally {
+      if (prevEnv === undefined) {
+        delete process.env.VERCEL_ENV;
+      } else {
+        process.env.VERCEL_ENV = prevEnv;
+      }
+    }
+  });
+
+  it('[SEO-V6] builds valid ISO-8601 JSON-LD across Service detail, CaseStudy, Resume, Contact, Portfolio, and Blogs with unified #person @id', async () => {
+    expect(normalizeSchemaDate('2024–2026')).toBe('2026');
+    expect(normalizeSchemaDate('Nov 2024')).toBe('2024-11');
+    expect(normalizeSchemaDate('2024-11-22')).toBe('2024-11-22');
+    expect(normalizeSchemaDate('November 22-23, 2024')).toBe('2024');
+    expect(normalizeSchemaDate('')).toBeUndefined();
+
+    const services = await getPublicServicesCatalog();
+    const firstService = services[0]!;
+    const svcDetail = buildServiceDetailJsonLd(firstService);
+    expect(svcDetail['@type']).toBe('Service');
+    expect(svcDetail.provider).toEqual({ '@id': `${SITE.url}/#person` });
+    expect(svcDetail.url).toBe(`${SITE.url}/services/${firstService.slug}`);
+    expect(svcDetail.hasOfferCatalog?.itemListElement.length).toBeGreaterThan(0);
+
+    const catalog = buildServicesOfferCatalogJsonLd(services);
+    expect(catalog.hasOfferCatalog.itemListElement[0]?.url).toBe(
+      `${SITE.url}/services/${firstService.slug}`
+    );
+
+    const portfolio = await getPublicPortfolioItems();
+    const firstStudy = portfolio[0]!;
+    const studySchema = buildCaseStudyJsonLd(firstStudy);
+    expect(studySchema['@type']).toBe('CreativeWork');
+    expect(studySchema.url).toBe(`${SITE.url}/portfolio/${firstStudy.slug}`);
+    expect(studySchema.author).toEqual({ '@id': `${SITE.url}/#person` });
+    expect(studySchema.datePublished).toMatch(/^\d{4}(?:-\d{2}(?:-\d{2})?)?$/);
+
+    const portfolioCollection = buildPortfolioCollectionJsonLd(portfolio);
+    expect(portfolioCollection.mainEntity.itemListElement[0]?.item.url).toBe(
+      `${SITE.url}/portfolio/${firstStudy.slug}`
+    );
+
+    const { settings, items } = await getSiteSettingsAndResume();
+    const resumeGraph = buildResumeProfileJsonLd(settings, items);
+    const scholarlyNodes = resumeGraph['@graph'].filter(
+      (n) => n['@type'] === 'ScholarlyArticle'
+    );
+    expect(scholarlyNodes.length).toBeGreaterThanOrEqual(2);
+    const profileNode = resumeGraph['@graph'].find((n) => n['@type'] === 'ProfilePage') as {
+      hasPart?: Array<{ '@id': string }>;
+    };
+    expect(profileNode.hasPart?.map((p) => p['@id'])).toEqual(
+      scholarlyNodes.map((n) => (n as { '@id': string })['@id'])
+    );
+    expect(
+      (scholarlyNodes[0] as { isPartOf?: { name?: string } }).isPartOf?.name
+    ).toBe('International Journal of Cognitive Computing in Engineering');
+
+    const contactSchema = buildContactPageJsonLd();
+    expect(contactSchema['@type']).toBe('ContactPage');
+    expect(contactSchema.mainEntity).toEqual({ '@id': `${SITE.url}/#person` });
+
+    const blogSchema = buildBlogsArchiveJsonLd(
+      [
+        {
+          id: 'p1',
+          title: 'Wazuh Hardening',
+          content: '<p>Guide</p><img src="https://cdn.redwan.work/img.png" />',
+          url: 'https://blogs.redwan.work/2026/wazuh.html',
+          published: '2026-11-01T00:00:00.000Z',
+          labels: ['SIEM'],
+        },
+      ],
+      1
+    );
+    expect(blogSchema.publisher).toEqual({ '@id': `${SITE.url}/#person` });
+    expect(blogSchema.blogPost[0]?.image).toBe('https://cdn.redwan.work/img.png');
+    expect(blogSchema.blogPost[0]?.publisher).toEqual({ '@id': `${SITE.url}/#person` });
+
+    const rootGraph = buildRootSiteGraphJsonLd();
+    const person = rootGraph['@graph'].find((n) => n['@type'] === 'Person') as {
+      sameAs?: string[];
+    };
+    expect(person.sameAs?.filter((u) => u.includes('twitter.com'))).toEqual([]);
+  });
+
+  it('[SEO-V6] isolates useSearchParams inside Suspense, keeps ScrollReveal SSR-visible, wires sitemap/llms revalidation, and allows Supabase Storage images', () => {
+    const root = process.cwd();
+    const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
+
+    expect(read('components/motion/reveal.tsx')).toContain('initial={{ opacity: 1, y: 12 }}');
+    expect(read('components/services-showcase.tsx')).toContain('PillarQuerySync');
+    expect(read('components/portfolio-showcase.tsx')).toContain('CategoryQuerySync');
+    expect(read('app/sitemap.ts')).toContain(".from('portfolio_items')");
+    expect(read('lib/cms/actions.ts')).toContain("revalidatePath('/sitemap.xml')");
+    expect(read('next.config.js')).toContain('/storage/v1/object/public/**');
+    expect(read('lib/resume/route-handler.ts')).toContain('rel="canonical"');
+    expect(read('app/not-found.tsx')).toContain("title: 'Page Not Found'");
+    expect(read('app/global-error.tsx')).toContain('<h1');
+
+    const manifest = JSON.parse(read('app/manifest.json')) as {
+      name: string;
+      start_url: string;
+      icons: Array<{ purpose?: string }>;
+    };
+    expect(manifest.name).toContain('Md. Redwan Ahmed');
+    expect(manifest.start_url).toBe('/');
+    expect(manifest.icons.some((i) => i.purpose === 'any')).toBe(true);
+    expect(manifest.icons.some((i) => i.purpose === 'maskable')).toBe(true);
   });
 });

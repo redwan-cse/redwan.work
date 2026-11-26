@@ -236,10 +236,10 @@ export function ScrollReveal({
 
   return (
     <m.div
-      initial={{ opacity: 0, y: 18 }}
+      initial={{ opacity: 1, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.5, delay, ease: EASE_OUT_EXPO }}
+      viewport={{ once: true, amount: 'some' }}
+      transition={{ duration: 0.4, delay, ease: EASE_OUT_EXPO }}
       className={className}
     >
       {children}

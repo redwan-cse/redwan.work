@@ -137,10 +137,12 @@ test.describe('Responsive Layout, Keyboard Navigation, WCAG AA Contrast & Reduce
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
 
-    // 3. Portfolio case-study modal opens via keyboard and closes on Escape
+    // 3. Portfolio exposes crawlable case-study links and opens Quick Preview modal via keyboard + Escape
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/portfolio');
-    const caseStudyBtn = page.getByRole('button', { name: /Read Full Case Study/i }).first();
+    const caseStudyLink = page.getByRole('link', { name: /Read Case Study/i }).first();
+    await expect(caseStudyLink).toBeVisible();
+    const caseStudyBtn = page.getByRole('button', { name: /Quick Preview/i }).first();
     await expect(caseStudyBtn).toBeVisible();
     await caseStudyBtn.focus();
     await page.keyboard.press('Enter');

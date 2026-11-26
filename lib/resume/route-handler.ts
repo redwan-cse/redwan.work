@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { getSiteSettingsAndResume } from '@/lib/cms/queries';
+import { SITE } from '@/lib/content/site';
 import {
   RESUME_ASSET_KEY,
   RESUME_PDF_MAX_BYTES,
@@ -142,10 +143,13 @@ export async function serveStoredResumePdf(
   const etag = `W/"${createHash('sha256').update(pdfBytes).digest('hex').slice(0, 16)}"`;
   const cacheControl = 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400';
 
+  const canonicalPdfLink = `<${SITE.url}/resume.pdf>; rel="canonical"`;
+
   if (request.headers.get('if-none-match') === etag) {
     const notModifiedHeaders = new Headers({
       ETag: etag,
       'Cache-Control': cacheControl,
+      Link: canonicalPdfLink,
       'X-Resume-Storage': 'r2-public',
     });
     if (options?.robotsTag) {
@@ -160,6 +164,7 @@ export async function serveStoredResumePdf(
     'Content-Length': String(pdfBytes.byteLength),
     ETag: etag,
     'Cache-Control': cacheControl,
+    Link: canonicalPdfLink,
     'X-Content-Type-Options': 'nosniff',
     'X-Resume-Storage': 'r2-public',
   });

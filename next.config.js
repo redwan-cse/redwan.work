@@ -63,6 +63,21 @@ const r2PublicPattern = (() => {
     return null;
   }
 })();
+const supabaseImagePattern = (() => {
+  if (!supabaseOrigin) return null;
+  try {
+    const parsed = new URL(supabaseOrigin);
+    const protocol = parsed.protocol.replace(/:$/, '');
+    if (protocol !== 'https' && protocol !== 'http') return null;
+    return {
+      protocol,
+      hostname: parsed.hostname,
+      pathname: '/storage/v1/object/public/**',
+    };
+  } catch {
+    return null;
+  }
+})();
 const nextConfig = {
   // Framework limit only. The hosting platform has a separate request ceiling.
   experimental: {
@@ -78,6 +93,7 @@ const nextConfig = {
       { protocol: 'https', hostname: '**.blogspot.com' },
       { protocol: 'https', hostname: 'cdn.jsdelivr.net' },
       { protocol: 'https', hostname: 'raw.githubusercontent.com' },
+      ...(supabaseImagePattern ? [supabaseImagePattern] : []),
       ...(r2PublicPattern ? [r2PublicPattern] : []),
     ],
   },
