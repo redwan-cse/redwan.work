@@ -371,7 +371,7 @@ test.describe.serial('RBAC & Full-Module Functional Verification (Audit v7)', ()
         adminPage.getByRole('heading', { level: 1, name: 'V7 Sent Proposal Ready For Acceptance' })
       ).toBeVisible();
       await adminPage.getByRole('button', { name: 'Send Draft to Client' }).click();
-      await expect(adminPage.getByText('Proposal sent to client.')).toBeVisible();
+      await expect(adminPage.getByText('Proposal sent to client.').first()).toBeVisible();
 
       // Cross-tenant otherClient gets Not Found on Elena's proposal
       await expectNotFoundPage(
