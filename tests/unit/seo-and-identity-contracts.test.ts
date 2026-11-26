@@ -396,7 +396,10 @@ describe('SEO Metadata, Sitemap Stability, Robots & Verified Identity Contracts'
     const person = rootGraph['@graph'].find((n) => n['@type'] === 'Person') as {
       sameAs?: string[];
     };
-    expect(person.sameAs?.filter((u) => u.includes('twitter.com'))).toEqual([]);
+    const sameAsHosts = (person.sameAs ?? []).map((u) => new URL(u).hostname.toLowerCase());
+    expect(sameAsHosts).not.toContain('twitter.com');
+    expect(sameAsHosts).not.toContain('www.twitter.com');
+    expect(sameAsHosts).toContain('x.com');
   });
 
   it('[SEO-V6] isolates useSearchParams inside Suspense, keeps ScrollReveal SSR-visible, wires sitemap/llms revalidation, and allows Supabase Storage images', () => {
