@@ -698,6 +698,57 @@ export async function getBlogPosts(maxResults: number = 20): Promise<BlogPost[]>
 }
 
 /**
+ * Match contextual technical articles from the cached Blogger snapshot for a given
+ * list of service/topic keywords. Never throws during offline builds or unconfigured runtimes.
+ */
+export async function getRelatedBlogPosts(
+  keywords: readonly string[],
+  limit: number = 3
+): Promise<BlogPost[]> {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 12) : 3;
+  try {
+    const snapshot = await getRawPostsSnapshot();
+    if (!snapshot.items || snapshot.items.length === 0) {
+      return [];
+    }
+
+    const normalizedKeywords = keywords
+      .map((k) => k.trim().toLowerCase())
+      .filter((k) => k.length > 0);
+
+    if (normalizedKeywords.length === 0) {
+      return snapshot.items.slice(0, safeLimit);
+    }
+
+    const scored = snapshot.items.map((post, index) => {
+      const titleLower = post.title.toLowerCase();
+      const labelsLower = (post.labels ?? []).map((label) => label.toLowerCase());
+      let score = 0;
+
+      for (const kw of normalizedKeywords) {
+        if (labelsLower.some((label) => label.includes(kw))) {
+          score += 3;
+        }
+        if (titleLower.includes(kw)) {
+          score += 2;
+        }
+      }
+
+      return { post, score, index };
+    });
+
+    scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.index - b.index;
+    });
+
+    return scored.slice(0, safeLimit).map((entry) => entry.post);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Extract the first image URL from HTML content
  */
 export function extractFirstImage(content: string): string {

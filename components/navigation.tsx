@@ -101,7 +101,7 @@ export function Navigation() {
             className="h-9 gap-1.5 rounded-full px-3.5 text-xs font-medium"
             title="Portal (Clients & Admin)"
           >
-            <Link href="/portal">
+            <Link href="/portal" rel="nofollow" prefetch={false}>
               <Lock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               Portal
             </Link>
@@ -175,7 +175,12 @@ export function Navigation() {
 
               <div className="mt-auto space-y-2.5 border-t border-border p-4">
                 <Button asChild variant="outline" className="w-full justify-center gap-2 rounded-full">
-                  <Link href="/portal" onClick={() => setIsOpen(false)}>
+                  <Link
+                    href="/portal"
+                    rel="nofollow"
+                    prefetch={false}
+                    onClick={() => setIsOpen(false)}
+                  >
                     <Lock className="h-4 w-4 text-primary" aria-hidden="true" />
                     Portal
                   </Link>

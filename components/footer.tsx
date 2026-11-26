@@ -69,13 +69,29 @@ export function Footer() {
             <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-foreground">
               Services
             </h2>
-            <ul className="space-y-2.5 text-xs text-muted-foreground sm:text-sm">
+            <ul className="space-y-2 text-xs text-muted-foreground sm:text-sm">
               <li>
                 <Link
                   href="/services/vapt-penetration-testing"
                   className="transition-colors hover:text-primary"
                 >
-                  Cybersecurity &amp; Penetration Testing (VAPT)
+                  Penetration Testing &amp; VAPT (C|EH)
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services/osint-threat-investigation"
+                  className="transition-colors hover:text-primary"
+                >
+                  OSINT &amp; Digital Fraud Investigation
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services/siem-security-monitoring"
+                  className="transition-colors hover:text-primary"
+                >
+                  Wazuh SIEM &amp; Security Monitoring
                 </Link>
               </li>
               <li>
@@ -83,7 +99,15 @@ export function Footer() {
                   href="/services/fullstack-web-development"
                   className="transition-colors hover:text-primary"
                 >
-                  Full-Stack Web &amp; Custom Software
+                  Full-Stack Web &amp; Portal Development
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/services/api-backend-engineering"
+                  className="transition-colors hover:text-primary"
+                >
+                  API Engineering &amp; Backend Rescue
                 </Link>
               </li>
               <li>
@@ -107,7 +131,7 @@ export function Footer() {
                   href="/services/executive-tech-support-recovery"
                   className="transition-colors hover:text-primary"
                 >
-                  Incident Recovery &amp; Monthly Retainers
+                  Incident Recovery &amp; Executive Support
                 </Link>
               </li>
               <li>

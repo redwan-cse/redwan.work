@@ -469,4 +469,91 @@ test.describe('Search Engine Optimization, Canonical Pagination, Private Noindex
       );
     }
   });
+
+  test('[SERVICE-DEPTH-AND-LINK-HYGIENE] renders unique service playbooks, FAQPage JSON-LD, sibling cross-links, and nofollow private links', async ({
+    page,
+  }) => {
+    const targetServices = [
+      {
+        slug: 'siem-security-monitoring',
+        expectedFaqSnippet: 'Wazuh',
+      },
+      {
+        slug: 'executive-tech-support-recovery',
+        expectedFaqSnippet: 'SPF/DKIM/DMARC',
+      },
+    ];
+
+    for (const target of targetServices) {
+      const res = await page.goto(`/services/${target.slug}`, { waitUntil: 'domcontentloaded' });
+      expect(res?.status(), `Status for /services/${target.slug}`).toBe(200);
+
+      await expect(
+        page.getByRole('heading', { name: 'Who This Service Is Built For' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'How Delivery Works Step by Step' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Explore Related Services' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: /Frequently Asked Questions/i })
+      ).toBeVisible();
+
+      const mainText = (await page.locator('main').textContent()) ?? '';
+      expect(mainText).toContain(target.expectedFaqSnippet);
+
+      const schemas = (
+        await page.locator('script[type="application/ld+json"]').allTextContents()
+      ).join('\n');
+      expect(schemas).toContain('"@type":"BreadcrumbList"');
+      expect(schemas).toContain('"@type":"Service"');
+      expect(schemas).toContain('"@type":"FAQPage"');
+
+      // Every public link to /portal on the service detail page must carry rel="nofollow"
+      const portalLinks = page.locator('a[href^="/portal"]');
+      const portalLinkCount = await portalLinks.count();
+      expect(portalLinkCount).toBeGreaterThanOrEqual(2);
+      for (let i = 0; i < portalLinkCount; i++) {
+        const rel = (await portalLinks.nth(i).getAttribute('rel')) ?? '';
+        expect(rel, `Portal link #${i} on /services/${target.slug} missing nofollow`).toContain(
+          'nofollow'
+        );
+      }
+
+      // Related technical articles link out cleanly without nofollow
+      const blogLinks = page.locator('a:has-text("Read on blogs.redwan.work")');
+      const blogLinkCount = await blogLinks.count();
+      expect(blogLinkCount).toBeGreaterThanOrEqual(1);
+      const firstBlogRel = (await blogLinks.first().getAttribute('rel')) ?? '';
+      expect(firstBlogRel).toContain('noopener');
+      expect(firstBlogRel).not.toContain('nofollow');
+    }
+
+    // Public header/CTA/legal links pointing to /portal or /register must carry rel="nofollow"
+    for (const check of [
+      { path: '/', selector: 'a[href^="/portal"]' },
+      { path: '/services', selector: 'a[href^="/portal"]' },
+      { path: '/contact', selector: 'a[href^="/portal"]' },
+      { path: '/privacy', selector: 'a[href^="/portal"], a[href="/register"]' },
+    ]) {
+      await page.goto(check.path, { waitUntil: 'domcontentloaded' });
+      const links = page.locator(check.selector);
+      const count = await links.count();
+      expect(count, `Expected private CTA links on ${check.path}`).toBeGreaterThanOrEqual(1);
+      for (let i = 0; i < count; i++) {
+        const rel = (await links.nth(i).getAttribute('rel')) ?? '';
+        expect(rel, `Private link #${i} on ${check.path} missing nofollow`).toContain('nofollow');
+      }
+    }
+
+    // Portfolio detail pages cross-link sibling case studies cleanly
+    await page.goto('/portfolio/vapt-fintech-api', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'More Case Studies' })).toBeVisible();
+    const siblingStudyLinks = await page
+      .locator('section[aria-labelledby="more-case-studies-heading"] a[href^="/portfolio/"]')
+      .count();
+    expect(siblingStudyLinks).toBeGreaterThanOrEqual(2);
+  });
 });

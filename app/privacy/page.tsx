@@ -46,11 +46,21 @@ export default function Privacy() {
               /contact
             </Link>
             , client account registration at{' '}
-            <Link href="/register" className="text-primary underline underline-offset-4">
+            <Link
+              href="/register"
+              rel="nofollow"
+              prefetch={false}
+              className="text-primary underline underline-offset-4"
+            >
               /register
             </Link>
             , and the authenticated Client Portal at{' '}
-            <Link href="/portal" className="text-primary underline underline-offset-4">
+            <Link
+              href="/portal"
+              rel="nofollow"
+              prefetch={false}
+              className="text-primary underline underline-offset-4"
+            >
               /portal
             </Link>
             .

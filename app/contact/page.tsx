@@ -173,7 +173,7 @@ export default async function Contact() {
                 </div>
                 <div className="mt-6 pt-2">
                   <Button asChild size="sm" className="w-full gap-1.5 rounded-full">
-                    <Link href="/portal">
+                    <Link href="/portal" rel="nofollow" prefetch={false}>
                       Open Client Portal
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>

@@ -116,7 +116,7 @@ export default async function ServicesPage() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="gap-1.5 rounded-full">
-                  <Link href="/portal">
+                  <Link href="/portal" rel="nofollow" prefetch={false}>
                     <Lock className="h-4 w-4 text-primary" />
                     Client Portal
                   </Link>
