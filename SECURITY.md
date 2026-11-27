@@ -34,12 +34,12 @@ Include, where possible:
 
 ## Scope
 
-In scope for this repository (`redwan.work` v2 — Next.js 16 App Router, React 19, Supabase PostgreSQL/Auth, Cloudflare R2, Resend):
+In scope for this repository (`redwan.work` v2.1 — Next.js 16 App Router, React 19, Supabase PostgreSQL 17/Auth, Cloudflare R2, Resend):
 
-- **Authentication, Session & MFA Gates:** `proxy.ts`, `lib/auth/`, `app/(auth)/mfa/`, AAL2 enforcement for `/admin/*`, and active-account (`account_status = 'active'`) checks.
-- **Database Trust Boundaries & RLS:** Row-Level Security policies, caller-bound `SECURITY DEFINER` RPCs, explicit function ACLs, and tenant/parent-child ownership constraints in `supabase/migrations/`.
-- **Financial & Commercial Integrity:** Proposal, order, C|EH Rules of Engagement (RoE) gates, invoice immutability after draft, payment idempotency, and settlement RPCs (`lib/crm/`, `lib/finance/invariants.ts`).
-- **File Vault & Background Processing:** Cloudflare R2 presigned upload/download flows (`lib/r2.ts`, `/api/uploads/*`, `/api/files/[id]/download`), 500 MB per-client storage quotas, retention purge (`/api/cron/r2-retention`), and atomic `FOR UPDATE SKIP LOCKED` email outbox processing (`/api/cron/email-outbox`).
+- **Authentication, Session & MFA Gates:** `proxy.ts`, `lib/auth/`, `app/(auth)/mfa/`, AAL2 enforcement for `/admin/*`, active-account (`account_status = 'active'`) & monotonic `BIGINT` `tokens_valid_after` revocation checks, strict `role = 'client'` boundary isolation, and `k-anonymity` HIBP password screening (`lib/auth/hibp.ts`).
+- **Database Trust Boundaries & RLS:** Row-Level Security policies across all 37 public tables, caller-bound `SECURITY DEFINER` RPCs, explicit function ACLs, and tenant/parent-child ownership constraints in `supabase/migrations/` (`0001`–`0031`).
+- **Financial & Commercial Integrity:** Proposal, order, C|EH Rules of Engagement (RoE) gates, non-USD FX rate validation, invoice immutability after draft, payment idempotency, and settlement RPCs (`lib/crm/`, `lib/finance/invariants.ts`).
+- **File Vault, Internal Note Isolation & Background Processing:** Cloudflare R2 presigned upload/download flows (`lib/r2.ts`, `lib/mime.ts`, `/api/uploads/*`, `/api/files/[id]/download`), internal admin ticket/chat note attachment isolation, 500 MB per-client storage quotas, hardened R2 Vault Recovery & streaming ZIP exports (`/admin/recovery`, `/api/admin/recovery/export`), retention purge (`/api/cron/r2-retention`), and atomic `FOR UPDATE SKIP LOCKED` email outbox processing with `_retryNonce` idempotency handling (`/api/cron/email-outbox`).
 - **Content & Redirect Safety:** Blogger HTML sanitization (`lib/blogger.ts`), internal redirect validation (`lib/security/safe-redirect.ts`), rate limiting (`lib/security/rate-limit.ts`), and HTTP security headers (`next.config.js`).
 
 Out of scope (report anyway if impact is severe):
